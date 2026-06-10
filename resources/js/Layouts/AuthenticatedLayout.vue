@@ -49,6 +49,7 @@ const groups = [
     {
         label: 'Account',
         links: [
+            ['notifications.index', 'Notifiche', Bell],
             ['profile.edit', 'Profilo', User],
         ],
     },
@@ -68,7 +69,38 @@ const groups = [
         <aside class="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-gray-200 bg-white lg:flex">
             <div class="flex h-14 items-center justify-between border-b border-gray-100 px-4">
                 <Link :href="route('dashboard')" class="font-semibold tracking-tight text-gray-900">Agency Hub</Link>
-                <Bell class="h-[18px] w-[18px] text-gray-400" :stroke-width="1.6" />
+                <div class="group relative">
+                    <Link
+                        :href="route('notifications.index')"
+                        class="relative inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-50 hover:text-indigo-600"
+                    >
+                        <Bell class="h-[18px] w-[18px]" :stroke-width="1.6" />
+                        <span
+                            v-if="$page.props.notifications?.unread"
+                            class="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white"
+                        >
+                            {{ $page.props.notifications.unread > 9 ? '9+' : $page.props.notifications.unread }}
+                        </span>
+                    </Link>
+
+                    <div class="invisible absolute right-0 top-9 z-40 w-80 overflow-hidden rounded-md border border-gray-200 bg-white opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
+                        <div class="flex items-center justify-between border-b border-gray-100 px-3 py-2">
+                            <span class="text-sm font-semibold text-gray-900">Notifiche</span>
+                            <Link :href="route('notifications.index')" class="text-xs font-medium text-indigo-600 hover:text-indigo-500">Vedi tutte</Link>
+                        </div>
+                        <div v-if="$page.props.notifications?.latest?.length" class="max-h-80 overflow-y-auto py-1">
+                            <Link
+                                v-for="notification in $page.props.notifications.latest"
+                                :key="notification.id"
+                                :href="notification.task_id ? route('tasks.show', notification.task_id) : route('notifications.index')"
+                                :class="['block border-l-2 px-3 py-2 text-sm hover:bg-gray-50', notification.read ? 'border-transparent text-gray-600' : 'border-indigo-600 bg-indigo-50/70 text-gray-900']"
+                            >
+                                <span class="line-clamp-2">{{ notification.message }}</span>
+                            </Link>
+                        </div>
+                        <div v-else class="px-3 py-8 text-center text-sm text-gray-500">Nessuna notifica</div>
+                    </div>
+                </div>
             </div>
 
             <div class="flex-1 overflow-y-auto p-3">
@@ -117,6 +149,18 @@ const groups = [
                         </div>
 
                         <div class="flex items-center gap-2">
+                            <Link
+                                :href="route('notifications.index')"
+                                class="relative inline-flex h-9 w-9 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-indigo-600"
+                            >
+                                <Bell class="h-[18px] w-[18px]" :stroke-width="1.6" />
+                                <span
+                                    v-if="$page.props.notifications?.unread"
+                                    class="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white"
+                                >
+                                    {{ $page.props.notifications.unread > 9 ? '9+' : $page.props.notifications.unread }}
+                                </span>
+                            </Link>
                             <!-- Settings Dropdown -->
                             <div class="relative">
                                 <Dropdown align="right" width="48">

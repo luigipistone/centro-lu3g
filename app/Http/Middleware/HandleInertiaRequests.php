@@ -34,6 +34,17 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
             ],
+            'notifications' => fn () => $request->user() ? [
+                'unread' => \Illuminate\Support\Facades\DB::table('notifications')
+                    ->where('user_id', $request->user()->id)
+                    ->where('read', false)
+                    ->count(),
+                'latest' => \Illuminate\Support\Facades\DB::table('notifications')
+                    ->where('user_id', $request->user()->id)
+                    ->latest()
+                    ->limit(8)
+                    ->get(['id', 'task_id', 'message', 'read', 'created_at']),
+            ] : ['unread' => 0, 'latest' => []],
             'flash' => [
                 'status' => fn () => $request->session()->get('status'),
             ],

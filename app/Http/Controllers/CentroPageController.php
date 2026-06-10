@@ -55,6 +55,26 @@ class CentroPageController extends Controller
         ]);
     }
 
+    public function notifications(Request $request): Response
+    {
+        return Inertia::render('Centro/Notifications', [
+            'notifications' => DB::table('notifications')
+                ->leftJoin('tasks', 'tasks.id', '=', 'notifications.task_id')
+                ->where('notifications.user_id', $request->user()->id)
+                ->latest('notifications.created_at')
+                ->limit(100)
+                ->get([
+                    'notifications.id',
+                    'notifications.task_id',
+                    'notifications.type',
+                    'notifications.message',
+                    'notifications.read',
+                    'notifications.created_at',
+                    'tasks.title as task_title',
+                ]),
+        ]);
+    }
+
     public function show(string $section, string $id): Response
     {
         $config = $this->config($section);
@@ -463,7 +483,8 @@ class CentroPageController extends Controller
 
     public function storeTaskComment(Request $request, string $id): RedirectResponse
     {
-        DB::table('tasks')->where('id', $id)->exists() || abort(404);
+        $task = DB::table('tasks')->where('id', $id)->first();
+        abort_if(! $task, 404);
 
         $payload = $request->validate([
             'content' => ['required', 'string'],
@@ -478,11 +499,21 @@ class CentroPageController extends Controller
             'updated_at' => now(),
         ]);
 
+        $this->notifyTaskPeople(
+            $id,
+            $request->user()->id,
+            'task_comment',
+            $request->user()->name.' ha commentato il task "'.$task->title.'".',
+        );
+
         return back()->with('status', 'Commento aggiunto.');
     }
 
     public function updateTaskStatus(Request $request, string $id): RedirectResponse
     {
+        $task = DB::table('tasks')->where('id', $id)->first();
+        abort_if(! $task, 404);
+
         $payload = $request->validate([
             'status' => ['required', Rule::in(['todo', 'in_progress', 'in_review', 'done'])],
         ]);
@@ -492,7 +523,53 @@ class CentroPageController extends Controller
             'updated_at' => now(),
         ]);
 
+        $this->notifyTaskPeople(
+            $id,
+            $request->user()->id,
+            'task_status',
+            $request->user()->name.' ha impostato "'.$task->title.'" su '.$payload['status'].'.',
+        );
+
         return back()->with('status', 'Stato task aggiornato.');
+    }
+
+    public function markNotificationRead(Request $request, string $id): RedirectResponse
+    {
+        DB::table('notifications')
+            ->where('user_id', $request->user()->id)
+            ->where('id', $id)
+            ->update(['read' => true, 'updated_at' => now()]);
+
+        return back()->with('status', 'Notifica letta.');
+    }
+
+    public function markAllNotificationsRead(Request $request): RedirectResponse
+    {
+        DB::table('notifications')
+            ->where('user_id', $request->user()->id)
+            ->where('read', false)
+            ->update(['read' => true, 'updated_at' => now()]);
+
+        return back()->with('status', 'Notifiche segnate come lette.');
+    }
+
+    public function destroyNotification(Request $request, string $id): RedirectResponse
+    {
+        DB::table('notifications')
+            ->where('user_id', $request->user()->id)
+            ->where('id', $id)
+            ->delete();
+
+        return back()->with('status', 'Notifica eliminata.');
+    }
+
+    public function destroyAllNotifications(Request $request): RedirectResponse
+    {
+        DB::table('notifications')
+            ->where('user_id', $request->user()->id)
+            ->delete();
+
+        return back()->with('status', 'Notifiche svuotate.');
     }
 
     public function storeDocumentLine(Request $request, string $id): RedirectResponse
@@ -598,6 +675,36 @@ class CentroPageController extends Controller
             'status' => $status,
             'updated_at' => now(),
         ]);
+    }
+
+    private function notifyTaskPeople(string $taskId, string $actorId, string $type, string $message): void
+    {
+        $task = DB::table('tasks')->where('id', $taskId)->first();
+        if (! $task) {
+            return;
+        }
+
+        $userIds = collect([$task->created_by])
+            ->merge(DB::table('task_assignees')->where('task_id', $taskId)->pluck('user_id'))
+            ->merge(DB::table('task_followers')->where('task_id', $taskId)->pluck('user_id'))
+            ->filter()
+            ->unique()
+            ->reject(fn ($userId) => $userId === $actorId)
+            ->values();
+
+        foreach ($userIds as $userId) {
+            DB::table('notifications')->insert([
+                'id' => (string) str()->uuid(),
+                'user_id' => $userId,
+                'actor_id' => $actorId,
+                'task_id' => $taskId,
+                'type' => $type,
+                'message' => $message,
+                'read' => false,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
     }
 
     private function storeServiceUpdate(Request $request, string $section): RedirectResponse

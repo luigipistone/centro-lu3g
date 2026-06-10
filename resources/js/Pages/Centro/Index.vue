@@ -156,7 +156,7 @@ function priorityClass(priority) {
                             />
 
                             <select
-                                v-else-if="['select', 'client', 'project', 'service'].includes(field.type)"
+                                v-else-if="['select', 'client', 'project', 'service', 'user'].includes(field.type)"
                                 v-model="form[field.name]"
                                 class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                                 :required="field.required"

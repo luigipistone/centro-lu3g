@@ -31,6 +31,11 @@ Route::middleware('auth')->group(function () {
     Route::patch('/tasks/{id}/status', [CentroPageController::class, 'updateTaskStatus'])->name('tasks.status.update');
     Route::delete('/tasks/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'tasks')->name('tasks.destroy');
     Route::get('/calendar', [CentroPageController::class, 'index'])->defaults('section', 'calendar')->name('calendar.index');
+    Route::get('/notifications', [CentroPageController::class, 'notifications'])->name('notifications.index');
+    Route::patch('/notifications/read-all', [CentroPageController::class, 'markAllNotificationsRead'])->name('notifications.read-all');
+    Route::patch('/notifications/{id}/read', [CentroPageController::class, 'markNotificationRead'])->name('notifications.read');
+    Route::delete('/notifications', [CentroPageController::class, 'destroyAllNotifications'])->name('notifications.destroy-all');
+    Route::delete('/notifications/{id}', [CentroPageController::class, 'destroyNotification'])->name('notifications.destroy');
     Route::get('/updates/social', [CentroPageController::class, 'index'])->defaults('section', 'updates-social')->name('updates.social');
     Route::post('/updates/social', [CentroPageController::class, 'store'])->defaults('section', 'updates-social')->name('updates-social.store');
     Route::put('/updates/social/{id}', [CentroPageController::class, 'update'])->defaults('section', 'updates-social')->name('updates-social.update');
