@@ -86,6 +86,9 @@ class CentroPageController extends Controller
                 'projects' => DB::table('projects')->where('client_id', $id)->latest()->get(),
                 'tasks' => DB::table('tasks')->where('client_id', $id)->latest()->limit(20)->get(),
                 'documents' => DB::table('documents')->where('client_id', $id)->latest()->limit(20)->get(),
+                'contacts' => DB::table('client_contacts')->where('client_id', $id)->latest()->get(),
+                'clientServices' => DB::table('client_services')->where('client_id', $id)->pluck('service_id'),
+                'services' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name', 'color']),
             ],
             'projects' => [
                 'tasks' => DB::table('tasks')->where('project_id', $id)->latest()->limit(40)->get(),
@@ -507,6 +510,70 @@ class CentroPageController extends Controller
         );
 
         return back()->with('status', 'Commento aggiunto.');
+    }
+
+    public function storeClientContact(Request $request, string $id): RedirectResponse
+    {
+        DB::table('clients')->where('id', $id)->exists() || abort(404);
+
+        $payload = $request->validate([
+            'first_name' => ['required', 'string', 'max:255'],
+            'last_name' => ['required', 'string', 'max:255'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:255'],
+            'role' => ['nullable', 'string', 'max:255'],
+            'notes' => ['nullable', 'string'],
+        ]);
+
+        foreach ($payload as $key => $value) {
+            if ($value === '') {
+                $payload[$key] = null;
+            }
+        }
+
+        DB::table('client_contacts')->insert([
+            ...$payload,
+            'id' => (string) str()->uuid(),
+            'client_id' => $id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return back()->with('status', 'Referente aggiunto.');
+    }
+
+    public function destroyClientContact(string $clientId, string $contactId): RedirectResponse
+    {
+        DB::table('client_contacts')
+            ->where('client_id', $clientId)
+            ->where('id', $contactId)
+            ->delete();
+
+        return back()->with('status', 'Referente eliminato.');
+    }
+
+    public function attachClientService(string $clientId, string $serviceId): RedirectResponse
+    {
+        DB::table('clients')->where('id', $clientId)->exists() || abort(404);
+        DB::table('services')->where('id', $serviceId)->exists() || abort(404);
+
+        DB::table('client_services')->insertOrIgnore([
+            'id' => (string) str()->uuid(),
+            'client_id' => $clientId,
+            'service_id' => $serviceId,
+        ]);
+
+        return back()->with('status', 'Servizio collegato.');
+    }
+
+    public function detachClientService(string $clientId, string $serviceId): RedirectResponse
+    {
+        DB::table('client_services')
+            ->where('client_id', $clientId)
+            ->where('service_id', $serviceId)
+            ->delete();
+
+        return back()->with('status', 'Servizio scollegato.');
     }
 
     public function updateTaskStatus(Request $request, string $id): RedirectResponse

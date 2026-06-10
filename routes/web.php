@@ -17,6 +17,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/clients', [CentroPageController::class, 'store'])->defaults('section', 'clients')->name('clients.store');
     Route::get('/clients/{id}', [CentroPageController::class, 'show'])->defaults('section', 'clients')->name('clients.show');
     Route::put('/clients/{id}', [CentroPageController::class, 'update'])->defaults('section', 'clients')->name('clients.update');
+    Route::post('/clients/{id}/contacts', [CentroPageController::class, 'storeClientContact'])->name('clients.contacts.store');
+    Route::delete('/clients/{clientId}/contacts/{contactId}', [CentroPageController::class, 'destroyClientContact'])->name('clients.contacts.destroy');
+    Route::post('/clients/{clientId}/services/{serviceId}', [CentroPageController::class, 'attachClientService'])->name('clients.services.attach');
+    Route::delete('/clients/{clientId}/services/{serviceId}', [CentroPageController::class, 'detachClientService'])->name('clients.services.detach');
     Route::delete('/clients/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'clients')->name('clients.destroy');
     Route::get('/projects', [CentroPageController::class, 'index'])->defaults('section', 'projects')->name('projects.index');
     Route::post('/projects', [CentroPageController::class, 'store'])->defaults('section', 'projects')->name('projects.store');

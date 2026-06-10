@@ -47,6 +47,14 @@ const paymentForm = useForm({
     method: '',
     notes: '',
 });
+const contactForm = useForm({
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    role: '',
+    notes: '',
+});
 
 function addComment() {
     commentForm.post(route('tasks.comments.store', props.record.id), {
@@ -82,6 +90,31 @@ function removePayment(payment) {
     if (!confirm('Eliminare questo pagamento?')) return;
     router.delete(route('billing.payments.destroy', [props.record.id, payment.id]), { preserveScroll: true });
 }
+
+function addContact() {
+    contactForm.post(route('clients.contacts.store', props.record.id), {
+        preserveScroll: true,
+        onSuccess: () => contactForm.reset(),
+    });
+}
+
+function removeContact(contact) {
+    if (!confirm('Eliminare questo referente?')) return;
+    router.delete(route('clients.contacts.destroy', [props.record.id, contact.id]), { preserveScroll: true });
+}
+
+function clientHasService(service) {
+    return (props.related.clientServices || []).includes(service.id);
+}
+
+function toggleService(service) {
+    if (clientHasService(service)) {
+        router.delete(route('clients.services.detach', [props.record.id, service.id]), { preserveScroll: true });
+        return;
+    }
+
+    router.post(route('clients.services.attach', [props.record.id, service.id]), {}, { preserveScroll: true });
+}
 </script>
 
 <template>
@@ -114,6 +147,23 @@ function removePayment(payment) {
                 </section>
 
                 <aside class="space-y-6">
+                    <section v-if="section === 'clients'" class="surface rounded-md p-5">
+                        <h3 class="text-sm font-semibold text-gray-900">Servizi collegati</h3>
+                        <div class="mt-3 flex flex-wrap gap-2">
+                            <button
+                                v-for="service in related.services"
+                                :key="service.id"
+                                type="button"
+                                :class="['inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium', clientHasService(service) ? 'border-indigo-200 bg-indigo-50 text-indigo-700' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50']"
+                                @click="toggleService(service)"
+                            >
+                                <span class="h-2 w-2 rounded-full" :style="{ backgroundColor: service.color || '#2563eb' }"></span>
+                                {{ service.name }}
+                            </button>
+                        </div>
+                        <p v-if="!related.services?.length" class="mt-3 text-sm text-gray-500">Nessun servizio configurato.</p>
+                    </section>
+
                     <section v-if="section === 'tasks'" class="surface rounded-md p-5">
                         <h3 class="text-sm font-semibold text-gray-900">Stato</h3>
                         <div class="mt-3 grid grid-cols-2 gap-2">
@@ -168,6 +218,40 @@ function removePayment(payment) {
                         </div>
                     </section>
                 </aside>
+
+                <section v-if="section === 'clients'" class="surface rounded-md p-5 lg:col-span-2">
+                    <div class="mb-5 flex items-center justify-between">
+                        <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Referenti</h3>
+                        <span class="text-xs text-gray-500">{{ related.contacts?.length || 0 }} contatti</span>
+                    </div>
+
+                    <form class="mb-5 grid gap-3 md:grid-cols-6" @submit.prevent="addContact">
+                        <input v-model="contactForm.first_name" class="form-control mt-0" placeholder="Nome" required />
+                        <input v-model="contactForm.last_name" class="form-control mt-0" placeholder="Cognome" required />
+                        <input v-model="contactForm.email" class="form-control mt-0" type="email" placeholder="Email" />
+                        <input v-model="contactForm.phone" class="form-control mt-0" placeholder="Telefono" />
+                        <input v-model="contactForm.role" class="form-control mt-0" placeholder="Ruolo" />
+                        <button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
+                    </form>
+
+                    <div v-if="related.contacts?.length" class="grid gap-3 md:grid-cols-2">
+                        <article v-for="contact in related.contacts" :key="contact.id" class="rounded-md border border-gray-100 bg-gray-50 p-4">
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <h4 class="font-medium text-gray-900">{{ contact.first_name }} {{ contact.last_name }}</h4>
+                                    <p class="text-sm text-gray-500">{{ contact.role || 'Referente' }}</p>
+                                </div>
+                                <button class="text-sm font-medium text-red-600 hover:text-red-500" @click="removeContact(contact)">Elimina</button>
+                            </div>
+                            <div class="mt-3 space-y-1 text-sm text-gray-600">
+                                <p v-if="contact.email">{{ contact.email }}</p>
+                                <p v-if="contact.phone">{{ contact.phone }}</p>
+                                <p v-if="contact.notes" class="whitespace-pre-wrap">{{ contact.notes }}</p>
+                            </div>
+                        </article>
+                    </div>
+                    <p v-else class="text-sm text-gray-500">Nessun referente inserito.</p>
+                </section>
 
                 <section v-if="section === 'tasks'" class="surface rounded-md p-5 lg:col-span-2">
                     <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Commenti</h3>
