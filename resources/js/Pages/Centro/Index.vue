@@ -1,6 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, router, useForm, usePage } from '@inertiajs/vue3';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
 const props = defineProps({
@@ -77,6 +77,11 @@ function submit() {
 function remove(row) {
     if (!confirm(`Eliminare "${row.name || row.title || row.number || row.email}"?`)) return;
     router.delete(route(`${routeBase.value}.destroy`, row.id), { preserveScroll: true });
+}
+
+function showRoute(row) {
+    if (!['clients', 'projects', 'tasks'].includes(props.section)) return null;
+    return route(`${props.section}.show`, row.id);
 }
 </script>
 
@@ -166,6 +171,13 @@ function remove(row) {
                                 <tr v-for="row in rows" :key="row.id">
                                     <td v-for="column in columns" :key="column" class="max-w-xs truncate px-4 py-3 text-gray-800">
                                         <span v-if="column === 'active'">{{ row[column] ? 'Si' : 'No' }}</span>
+                                        <Link
+                                            v-else-if="column === columns[0] && showRoute(row)"
+                                            :href="showRoute(row)"
+                                            class="font-medium text-indigo-600 hover:text-indigo-500"
+                                        >
+                                            {{ row[column] ?? '-' }}
+                                        </Link>
                                         <span v-else>{{ row[column] ?? '-' }}</span>
                                     </td>
                                     <td v-if="canWrite" class="whitespace-nowrap px-4 py-3 text-right">

@@ -20,6 +20,7 @@
         "vue": "^3.4.0"
     },
     "dependencies": {
+        "@lucide/vue": "^1.17.0",
         "axios": "^1.17.0"
     }
 }

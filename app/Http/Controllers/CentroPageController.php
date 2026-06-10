@@ -44,6 +44,37 @@ class CentroPageController extends Controller
         ]);
     }
 
+    public function show(string $section, string $id): Response
+    {
+        $config = $this->config($section);
+        $record = DB::table($config['table'])->where('id', $id)->first();
+        abort_if(! $record, 404);
+
+        $related = match ($section) {
+            'clients' => [
+                'projects' => DB::table('projects')->where('client_id', $id)->latest()->get(),
+                'tasks' => DB::table('tasks')->where('client_id', $id)->latest()->limit(20)->get(),
+                'documents' => DB::table('documents')->where('client_id', $id)->latest()->limit(20)->get(),
+            ],
+            'projects' => [
+                'tasks' => DB::table('tasks')->where('project_id', $id)->latest()->limit(40)->get(),
+                'client' => $record->client_id ? DB::table('clients')->where('id', $record->client_id)->first() : null,
+            ],
+            'tasks' => [
+                'comments' => DB::table('task_comments')->where('task_id', $id)->latest()->limit(30)->get(),
+                'project' => $record->project_id ? DB::table('projects')->where('id', $record->project_id)->first() : null,
+                'client' => $record->client_id ? DB::table('clients')->where('id', $record->client_id)->first() : null,
+            ],
+            default => [],
+        };
+
+        return Inertia::render('Centro/Show', [
+            ...$config,
+            'record' => $record,
+            'related' => $related,
+        ]);
+    }
+
     public function store(Request $request, string $section): RedirectResponse
     {
         $payload = $this->validatedPayload($request, $section);
@@ -159,8 +190,32 @@ class CentroPageController extends Controller
                     ['name' => 'active', 'label' => 'Attivo', 'type' => 'checkbox'],
                 ],
             ],
+            'calendar' => [
+                'section' => 'calendar',
+                'title' => 'Calendario',
+                'description' => 'Vista rapida delle attivita con scadenza.',
+                'table' => 'tasks',
+                'columns' => ['title', 'due_date', 'due_time', 'status', 'priority'],
+                'fields' => [],
+            ],
+            'updates-social' => $this->updatesConfig('SOCIAL', 'Social'),
+            'updates-newsletter' => $this->updatesConfig('NEWSLETTER', 'Newsletter'),
+            'updates-seo' => $this->updatesConfig('SEO', 'SEO'),
+            'updates-adv' => $this->updatesConfig('ADV', 'ADV'),
             default => abort(404),
         };
+    }
+
+    private function updatesConfig(string $service, string $title): array
+    {
+        return [
+            'section' => 'updates-'.strtolower($service),
+            'title' => $title,
+            'description' => 'Clienti collegati al servizio '.$service.' e attivita aperte.',
+            'table' => 'client_service_updates',
+            'columns' => ['cadence', 'contact', 'report_url', 'notes', 'updated_at'],
+            'fields' => [],
+        ];
     }
 
     private function validatedPayload(Request $request, string $section): array

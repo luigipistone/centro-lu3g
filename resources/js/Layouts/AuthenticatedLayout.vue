@@ -1,60 +1,124 @@
 <script setup>
 import { ref } from 'vue';
-import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
-import NavLink from '@/Components/NavLink.vue';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
 import { Link } from '@inertiajs/vue3';
+import {
+    Bell,
+    Briefcase,
+    Calendar,
+    CheckSquare,
+    LayoutDashboard,
+    LogOut,
+    Mail,
+    Megaphone,
+    Receipt,
+    RefreshCcw,
+    Search,
+    Settings,
+    Target,
+    User,
+    UserCog,
+    Users,
+} from '@lucide/vue';
 
 const showingNavigationDropdown = ref(false);
 
-const links = [
-    ['dashboard', 'Dashboard'],
-    ['clients.index', 'Clienti'],
-    ['projects.index', 'Progetti'],
-    ['tasks.index', 'Task'],
-    ['billing.index', 'Billing'],
-    ['users.index', 'Utenti'],
-    ['settings.index', 'Impostazioni'],
+const groups = [
+    {
+        label: 'Menu',
+        links: [
+            ['dashboard', 'Dashboard', LayoutDashboard],
+            ['clients.index', 'Clienti', Users],
+            ['projects.index', 'Progetti', Briefcase],
+            ['tasks.index', 'Task', CheckSquare],
+            ['calendar.index', 'Calendario', Calendar],
+        ],
+    },
+    {
+        label: 'Aggiornamenti',
+        icon: RefreshCcw,
+        links: [
+            ['updates.social', 'Social', Megaphone],
+            ['updates.newsletter', 'Newsletter', Mail],
+            ['updates.seo', 'SEO', Search],
+            ['updates.adv', 'ADV', Target],
+        ],
+    },
+    {
+        label: 'Account',
+        links: [
+            ['profile.edit', 'Profilo', User],
+        ],
+    },
+    {
+        label: 'Amministrazione',
+        links: [
+            ['billing.index', 'Fatturazione', Receipt],
+            ['users.index', 'Utenti', UserCog],
+            ['settings.index', 'Impostazioni', Settings],
+        ],
+    },
 ];
 </script>
 
 <template>
-    <div>
-        <div class="min-h-screen bg-gray-100">
-            <nav
-                class="border-b border-gray-100 bg-white"
-            >
-                <!-- Primary Navigation Menu -->
-                <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                    <div class="flex h-16 justify-between">
-                        <div class="flex">
-                            <!-- Logo -->
-                            <div class="flex shrink-0 items-center">
-                                <Link :href="route('dashboard')">
-                                    <ApplicationLogo
-                                        class="block h-9 w-auto fill-current text-gray-800"
-                                    />
-                                </Link>
-                            </div>
+    <div class="min-h-screen bg-[hsl(var(--background))]">
+        <aside class="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-gray-200 bg-white lg:flex">
+            <div class="flex h-14 items-center justify-between border-b border-gray-100 px-4">
+                <Link :href="route('dashboard')" class="font-semibold tracking-tight text-gray-900">Agency Hub</Link>
+                <Bell class="h-[18px] w-[18px] text-gray-400" :stroke-width="1.6" />
+            </div>
 
-                            <!-- Navigation Links -->
-                            <div class="hidden space-x-6 sm:-my-px sm:ms-10 sm:flex">
-                                <NavLink
-                                    v-for="[name, label] in links"
-                                    :key="name"
-                                    :href="route(name)"
-                                    :active="route().current(name)"
-                                >
-                                    {{ label }}
-                                </NavLink>
-                            </div>
+            <div class="flex-1 overflow-y-auto p-3">
+                <div v-for="group in groups" :key="group.label" class="mb-5">
+                    <div class="mb-2 flex items-center gap-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400">
+                        <component v-if="group.icon" :is="group.icon" class="h-3 w-3" :stroke-width="1.6" />
+                        {{ group.label }}
+                    </div>
+                    <div class="space-y-1">
+                        <Link
+                            v-for="[name, label, icon] in group.links"
+                            :key="name"
+                            :href="route(name)"
+                            :class="['nav-link', route().current(name) ? 'nav-link-active' : '']"
+                        >
+                            <component :is="icon" class="h-[18px] w-[18px]" :stroke-width="1.6" />
+                            <span>{{ label }}</span>
+                        </Link>
+                    </div>
+                </div>
+            </div>
+
+            <div class="border-t border-gray-100 p-3">
+                <Link :href="route('profile.edit')" class="mb-2 flex items-center gap-2 rounded-md p-2 hover:bg-gray-50">
+                    <div class="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">
+                        {{ $page.props.auth.user.name?.slice(0, 1) }}
+                    </div>
+                    <div class="min-w-0">
+                        <div class="truncate text-xs font-semibold text-gray-900">{{ $page.props.auth.user.name }}</div>
+                        <div class="truncate text-[10px] text-gray-500">{{ $page.props.auth.user.email }}</div>
+                    </div>
+                </Link>
+                <Link :href="route('logout')" method="post" as="button" class="nav-link w-full">
+                    <LogOut class="h-[18px] w-[18px]" :stroke-width="1.6" />
+                    Esci
+                </Link>
+            </div>
+        </aside>
+
+        <div class="lg:pl-64">
+            <nav class="border-b border-gray-100 bg-white lg:hidden">
+                <div class="px-4 sm:px-6">
+                    <div class="flex h-14 justify-between">
+                        <div class="flex items-center">
+                            <Link :href="route('dashboard')" class="font-semibold text-gray-900">Agency Hub</Link>
                         </div>
 
-                        <div class="hidden sm:ms-6 sm:flex sm:items-center">
+                        <div class="flex items-center gap-2">
                             <!-- Settings Dropdown -->
-                            <div class="relative ms-3">
+                            <div class="relative">
                                 <Dropdown align="right" width="48">
                                     <template #trigger>
                                         <span class="inline-flex rounded-md">
@@ -96,10 +160,7 @@ const links = [
                                     </template>
                                 </Dropdown>
                             </div>
-                        </div>
 
-                        <!-- Hamburger -->
-                        <div class="-me-2 flex items-center sm:hidden">
                             <button
                                 @click="
                                     showingNavigationDropdown =
@@ -150,14 +211,16 @@ const links = [
                     class="sm:hidden"
                 >
                     <div class="space-y-1 pb-3 pt-2">
-                        <ResponsiveNavLink
-                            v-for="[name, label] in links"
-                            :key="name"
-                            :href="route(name)"
-                            :active="route().current(name)"
-                        >
-                            {{ label }}
-                        </ResponsiveNavLink>
+                        <template v-for="group in groups" :key="group.label">
+                            <ResponsiveNavLink
+                                v-for="[name, label] in group.links"
+                                :key="name"
+                                :href="route(name)"
+                                :active="route().current(name)"
+                            >
+                                {{ label }}
+                            </ResponsiveNavLink>
+                        </template>
                     </div>
 
                     <!-- Responsive Settings Options -->
@@ -191,18 +254,14 @@ const links = [
                 </div>
             </nav>
 
-            <!-- Page Heading -->
-            <header
-                class="bg-white shadow"
-                v-if="$slots.header"
-            >
-                <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+            <header class="border-b border-gray-100 bg-white" v-if="$slots.header">
+                <div class="px-4 py-5 sm:px-6 lg:px-8">
                     <slot name="header" />
                 </div>
             </header>
 
             <!-- Page Content -->
-            <main>
+            <main class="min-h-[calc(100vh-4rem)]">
                 <slot />
             </main>
         </div>
