@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -31,6 +33,8 @@ class CentroPageController extends Controller
         $rows = DB::table($config['table'])
             ->when($config['table'] === 'projects', fn ($query) => $query->leftJoin('clients', 'clients.id', '=', 'projects.client_id')->select('projects.*', 'clients.name as client_name'))
             ->when($config['table'] === 'tasks', fn ($query) => $query->leftJoin('projects', 'projects.id', '=', 'tasks.project_id')->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')->select('tasks.*', 'projects.name as project_name', 'clients.name as client_name'))
+            ->when($config['table'] === 'documents', fn ($query) => $query->leftJoin('clients', 'clients.id', '=', 'documents.client_id')->select('documents.*', 'clients.name as client_name'))
+            ->when($config['table'] === 'users', fn ($query) => $query->leftJoin('user_roles', 'user_roles.user_id', '=', 'users.id')->select('users.*', 'user_roles.role'))
             ->latest($config['table'].'.created_at')
             ->limit(100)
             ->get();
@@ -77,6 +81,14 @@ class CentroPageController extends Controller
 
     public function store(Request $request, string $section): RedirectResponse
     {
+        if ($section === 'users') {
+            return $this->storeUser($request);
+        }
+
+        if ($section === 'billing') {
+            return $this->storeDocument($request);
+        }
+
         $payload = $this->validatedPayload($request, $section);
         $payload['id'] = (string) str()->uuid();
         $payload['created_at'] = now();
@@ -93,6 +105,14 @@ class CentroPageController extends Controller
 
     public function update(Request $request, string $section, string $id): RedirectResponse
     {
+        if ($section === 'users') {
+            return $this->updateUser($request, $id);
+        }
+
+        if ($section === 'billing') {
+            return $this->updateDocument($request, $id);
+        }
+
         $payload = $this->validatedPayload($request, $section);
         $payload['updated_at'] = now();
 
@@ -103,6 +123,12 @@ class CentroPageController extends Controller
 
     public function destroy(string $section, string $id): RedirectResponse
     {
+        if ($section === 'users') {
+            User::query()->whereKey($id)->delete();
+
+            return back()->with('status', 'Utente eliminato.');
+        }
+
         DB::table($this->config($section)['table'])->where('id', $id)->delete();
 
         return back()->with('status', 'Eliminato.');
@@ -166,16 +192,29 @@ class CentroPageController extends Controller
                 'title' => 'Billing',
                 'description' => 'Preventivi, proforma, fatture, pagamenti, abbonamenti e numerazioni.',
                 'table' => 'documents',
-                'columns' => ['number', 'doc_type', 'status', 'issue_date', 'total_amount'],
-                'fields' => [],
+                'columns' => ['number', 'client_name', 'doc_type', 'status', 'issue_date', 'total_amount'],
+                'fields' => [
+                    ['name' => 'client_id', 'label' => 'Cliente', 'type' => 'client', 'required' => true],
+                    ['name' => 'doc_type', 'label' => 'Tipo', 'type' => 'select', 'options' => ['preventivo', 'proforma', 'fattura', 'nota_credito']],
+                    ['name' => 'status', 'label' => 'Stato', 'type' => 'select', 'options' => ['draft', 'sent', 'accepted', 'rejected', 'paid', 'partially_paid', 'overdue', 'cancelled']],
+                    ['name' => 'issue_date', 'label' => 'Data emissione', 'type' => 'date', 'required' => true],
+                    ['name' => 'due_date', 'label' => 'Scadenza', 'type' => 'date'],
+                    ['name' => 'total_amount', 'label' => 'Totale', 'type' => 'number'],
+                    ['name' => 'notes', 'label' => 'Note', 'type' => 'textarea'],
+                ],
             ],
             'users' => [
                 'section' => 'users',
                 'title' => 'Utenti',
                 'description' => 'Profili e ruoli applicativi equivalenti a superadmin, admin, editor e guest.',
                 'table' => 'users',
-                'columns' => ['name', 'email', 'created_at'],
-                'fields' => [],
+                'columns' => ['name', 'email', 'role', 'created_at'],
+                'fields' => [
+                    ['name' => 'name', 'label' => 'Nome', 'type' => 'text', 'required' => true],
+                    ['name' => 'email', 'label' => 'Email', 'type' => 'email', 'required' => true],
+                    ['name' => 'role', 'label' => 'Ruolo', 'type' => 'select', 'options' => ['superadmin', 'admin', 'editor', 'guest']],
+                    ['name' => 'password', 'label' => 'Password', 'type' => 'password'],
+                ],
             ],
             'settings' => [
                 'section' => 'settings',
@@ -256,6 +295,15 @@ class CentroPageController extends Controller
                 'description' => ['nullable', 'string'],
                 'active' => ['boolean'],
             ],
+            'billing' => [
+                'client_id' => ['required', 'uuid', 'exists:clients,id'],
+                'doc_type' => ['required', Rule::in(['preventivo', 'proforma', 'fattura', 'nota_credito'])],
+                'status' => ['required', Rule::in(['draft', 'sent', 'accepted', 'rejected', 'paid', 'partially_paid', 'overdue', 'cancelled'])],
+                'issue_date' => ['required', 'date'],
+                'due_date' => ['nullable', 'date'],
+                'total_amount' => ['nullable', 'numeric', 'min:0'],
+                'notes' => ['nullable', 'string'],
+            ],
             default => abort(404),
         };
 
@@ -269,6 +317,112 @@ class CentroPageController extends Controller
 
         if ($section === 'settings') {
             $payload['active'] = $request->boolean('active');
+        }
+
+        return $payload;
+    }
+
+    private function storeUser(Request $request): RedirectResponse
+    {
+        $payload = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'role' => ['required', Rule::in(['superadmin', 'admin', 'editor', 'guest'])],
+            'password' => ['required', 'string', 'min:8'],
+        ]);
+
+        $user = User::query()->create([
+            'name' => $payload['name'],
+            'email' => $payload['email'],
+            'password' => Hash::make($payload['password']),
+        ]);
+
+        $this->syncProfileAndRole($user, $payload['role']);
+
+        return back()->with('status', 'Utente creato.');
+    }
+
+    private function updateUser(Request $request, string $id): RedirectResponse
+    {
+        $user = User::query()->findOrFail($id);
+        $payload = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+            'role' => ['required', Rule::in(['superadmin', 'admin', 'editor', 'guest'])],
+            'password' => ['nullable', 'string', 'min:8'],
+        ]);
+
+        $user->name = $payload['name'];
+        $user->email = $payload['email'];
+        if (! empty($payload['password'])) {
+            $user->password = Hash::make($payload['password']);
+        }
+        $user->save();
+
+        $this->syncProfileAndRole($user, $payload['role']);
+
+        return back()->with('status', 'Utente aggiornato.');
+    }
+
+    private function syncProfileAndRole(User $user, string $role): void
+    {
+        DB::table('profiles')->updateOrInsert(
+            ['user_id' => $user->id],
+            [
+                'id' => (string) str()->uuid(),
+                'full_name' => $user->name,
+                'updated_at' => now(),
+                'created_at' => now(),
+            ],
+        );
+
+        DB::table('user_roles')->where('user_id', $user->id)->delete();
+        DB::table('user_roles')->insert([
+            'id' => (string) str()->uuid(),
+            'user_id' => $user->id,
+            'role' => $role,
+        ]);
+    }
+
+    private function storeDocument(Request $request): RedirectResponse
+    {
+        $payload = $this->validatedPayload($request, 'billing');
+        $payload = $this->normalizeDocumentPayload($payload, $request->user()->id);
+        $payload['id'] = (string) str()->uuid();
+        $payload['created_at'] = now();
+        $payload['updated_at'] = now();
+
+        DB::table('documents')->insert($payload);
+
+        return back()->with('status', 'Documento creato.');
+    }
+
+    private function updateDocument(Request $request, string $id): RedirectResponse
+    {
+        $payload = $this->normalizeDocumentPayload($this->validatedPayload($request, 'billing'), $request->user()->id, false);
+        $payload['updated_at'] = now();
+
+        DB::table('documents')->where('id', $id)->update($payload);
+
+        return back()->with('status', 'Documento aggiornato.');
+    }
+
+    private function normalizeDocumentPayload(array $payload, string $userId, bool $withCreator = true): array
+    {
+        $amount = (float) ($payload['total_amount'] ?? 0);
+        $payload['currency'] = 'EUR';
+        $payload['total_taxable'] = $amount;
+        $payload['total_amount'] = $amount;
+        $payload['total_discount'] = 0;
+        $payload['total_vat'] = 0;
+        $payload['total_pension_fund'] = 0;
+        $payload['total_withholding'] = 0;
+        $payload['total_paid'] = 0;
+        $payload['apply_bollo'] = false;
+        $payload['year'] = $payload['issue_date'] ? (int) substr($payload['issue_date'], 0, 4) : now()->year;
+
+        if ($withCreator) {
+            $payload['created_by'] = $userId;
         }
 
         return $payload;

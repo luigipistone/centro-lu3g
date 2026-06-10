@@ -34,7 +34,13 @@ Route::middleware('auth')->group(function () {
     Route::get('/updates/seo', [CentroPageController::class, 'index'])->defaults('section', 'updates-seo')->name('updates.seo');
     Route::get('/updates/adv', [CentroPageController::class, 'index'])->defaults('section', 'updates-adv')->name('updates.adv');
     Route::get('/billing', [CentroPageController::class, 'index'])->defaults('section', 'billing')->name('billing.index');
+    Route::post('/billing', [CentroPageController::class, 'store'])->defaults('section', 'billing')->name('billing.store');
+    Route::put('/billing/{id}', [CentroPageController::class, 'update'])->defaults('section', 'billing')->name('billing.update');
+    Route::delete('/billing/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'billing')->name('billing.destroy');
     Route::get('/users', [CentroPageController::class, 'index'])->defaults('section', 'users')->name('users.index');
+    Route::post('/users', [CentroPageController::class, 'store'])->defaults('section', 'users')->name('users.store');
+    Route::put('/users/{id}', [CentroPageController::class, 'update'])->defaults('section', 'users')->name('users.update');
+    Route::delete('/users/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'users')->name('users.destroy');
     Route::get('/settings', [CentroPageController::class, 'index'])->defaults('section', 'settings')->name('settings.index');
     Route::post('/settings/services', [CentroPageController::class, 'store'])->defaults('section', 'settings')->name('settings.store');
     Route::put('/settings/services/{id}', [CentroPageController::class, 'update'])->defaults('section', 'settings')->name('settings.update');
