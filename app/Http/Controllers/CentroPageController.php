@@ -35,6 +35,12 @@ class CentroPageController extends Controller
             ->when($config['table'] === 'tasks', fn ($query) => $query->leftJoin('projects', 'projects.id', '=', 'tasks.project_id')->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')->select('tasks.*', 'projects.name as project_name', 'clients.name as client_name'))
             ->when($config['table'] === 'documents', fn ($query) => $query->leftJoin('clients', 'clients.id', '=', 'documents.client_id')->select('documents.*', 'clients.name as client_name'))
             ->when($config['table'] === 'users', fn ($query) => $query->leftJoin('user_roles', 'user_roles.user_id', '=', 'users.id')->select('users.*', 'user_roles.role'))
+            ->when($config['table'] === 'client_service_updates', fn ($query) => $query
+                ->leftJoin('clients', 'clients.id', '=', 'client_service_updates.client_id')
+                ->leftJoin('services', 'services.id', '=', 'client_service_updates.service_id')
+                ->leftJoin('users', 'users.id', '=', 'client_service_updates.responsible_user_id')
+                ->select('client_service_updates.*', 'clients.name as client_name', 'services.name as service_name', 'users.name as responsible_name')
+            )
             ->latest($config['table'].'.created_at')
             ->limit(100)
             ->get();
@@ -45,6 +51,7 @@ class CentroPageController extends Controller
             'clients' => DB::table('clients')->orderBy('name')->get(['id', 'name']),
             'projects' => DB::table('projects')->orderBy('name')->get(['id', 'name']),
             'services' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name']),
+            'users' => DB::table('users')->orderBy('name')->get(['id', 'name']),
         ]);
     }
 
@@ -99,6 +106,10 @@ class CentroPageController extends Controller
             return $this->storeDocument($request);
         }
 
+        if (str_starts_with($section, 'updates-')) {
+            return $this->storeServiceUpdate($request, $section);
+        }
+
         $payload = $this->validatedPayload($request, $section);
         $payload['id'] = (string) str()->uuid();
         $payload['created_at'] = now();
@@ -121,6 +132,10 @@ class CentroPageController extends Controller
 
         if ($section === 'billing') {
             return $this->updateDocument($request, $id);
+        }
+
+        if (str_starts_with($section, 'updates-')) {
+            return $this->updateServiceUpdate($request, $id);
         }
 
         $payload = $this->validatedPayload($request, $section);
@@ -262,8 +277,16 @@ class CentroPageController extends Controller
             'title' => $title,
             'description' => 'Clienti collegati al servizio '.$service.' e attivita aperte.',
             'table' => 'client_service_updates',
-            'columns' => ['cadence', 'contact', 'report_url', 'notes', 'updated_at'],
-            'fields' => [],
+            'columns' => ['client_name', 'service_name', 'responsible_name', 'cadence', 'contact', 'report_url', 'updated_at'],
+            'fields' => [
+                ['name' => 'client_id', 'label' => 'Cliente', 'type' => 'client', 'required' => true],
+                ['name' => 'responsible_user_id', 'label' => 'Responsabile', 'type' => 'user'],
+                ['name' => 'cadence', 'label' => 'Cadenza', 'type' => 'text'],
+                ['name' => 'contact', 'label' => 'Contatto', 'type' => 'text'],
+                ['name' => 'report_url', 'label' => 'Report URL', 'type' => 'text'],
+                ['name' => 'notes', 'label' => 'Note', 'type' => 'textarea'],
+            ],
+            'serviceName' => $service,
         ];
     }
 
@@ -575,5 +598,54 @@ class CentroPageController extends Controller
             'status' => $status,
             'updated_at' => now(),
         ]);
+    }
+
+    private function storeServiceUpdate(Request $request, string $section): RedirectResponse
+    {
+        $payload = $this->validatedServiceUpdatePayload($request, $section);
+        $payload['id'] = (string) str()->uuid();
+        $payload['created_at'] = now();
+        $payload['updated_at'] = now();
+
+        DB::table('client_service_updates')->insert($payload);
+
+        return back()->with('status', 'Aggiornamento servizio creato.');
+    }
+
+    private function updateServiceUpdate(Request $request, string $id): RedirectResponse
+    {
+        $payload = $this->validatedServiceUpdatePayload($request);
+        $payload['updated_at'] = now();
+
+        DB::table('client_service_updates')->where('id', $id)->update($payload);
+
+        return back()->with('status', 'Aggiornamento servizio salvato.');
+    }
+
+    private function validatedServiceUpdatePayload(Request $request, ?string $section = null): array
+    {
+        $payload = $request->validate([
+            'client_id' => ['required', 'uuid', 'exists:clients,id'],
+            'responsible_user_id' => ['nullable', 'uuid', 'exists:users,id'],
+            'cadence' => ['nullable', 'string', 'max:255'],
+            'contact' => ['nullable', 'string', 'max:255'],
+            'report_url' => ['nullable', 'string', 'max:255'],
+            'notes' => ['nullable', 'string'],
+        ]);
+
+        foreach ($payload as $key => $value) {
+            if ($value === '') {
+                $payload[$key] = null;
+            }
+        }
+
+        if ($section) {
+            $service = strtoupper(str_replace('updates-', '', $section));
+            $serviceId = DB::table('services')->where('name', $service)->value('id');
+            abort_if(! $serviceId, 422, 'Servizio non trovato.');
+            $payload['service_id'] = $serviceId;
+        }
+
+        return $payload;
     }
 }

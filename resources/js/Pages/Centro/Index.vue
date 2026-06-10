@@ -13,6 +13,7 @@ const props = defineProps({
     clients: Array,
     projects: Array,
     services: Array,
+    users: Array,
 });
 
 const editing = ref(null);
@@ -39,6 +40,7 @@ function optionsFor(field) {
     if (field.type === 'client') return props.clients;
     if (field.type === 'project') return props.projects;
     if (field.type === 'service') return props.services;
+    if (field.type === 'user') return props.users;
     return (field.options || []).map((value) => ({ id: value, name: value }));
 }
 
