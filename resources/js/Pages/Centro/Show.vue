@@ -1,6 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 
 const props = defineProps({
     section: String,
@@ -32,6 +32,56 @@ const visibleEntries = Object.entries(props.record).filter(([key, value]) =>
     && value !== null
     && value !== ''
 );
+
+const commentForm = useForm({ content: '' });
+const lineForm = useForm({
+    description: '',
+    quantity: 1,
+    unit_price: 0,
+    vat_rate: 22,
+    discount_pct: 0,
+});
+const paymentForm = useForm({
+    amount: props.record.total_amount || 0,
+    paid_at: new Date().toISOString().slice(0, 10),
+    method: '',
+    notes: '',
+});
+
+function addComment() {
+    commentForm.post(route('tasks.comments.store', props.record.id), {
+        preserveScroll: true,
+        onSuccess: () => commentForm.reset(),
+    });
+}
+
+function setTaskStatus(status) {
+    router.patch(route('tasks.status.update', props.record.id), { status }, { preserveScroll: true });
+}
+
+function addLine() {
+    lineForm.post(route('billing.lines.store', props.record.id), {
+        preserveScroll: true,
+        onSuccess: () => lineForm.reset(),
+    });
+}
+
+function removeLine(line) {
+    if (!confirm('Eliminare questa riga?')) return;
+    router.delete(route('billing.lines.destroy', [props.record.id, line.id]), { preserveScroll: true });
+}
+
+function addPayment() {
+    paymentForm.post(route('billing.payments.store', props.record.id), {
+        preserveScroll: true,
+        onSuccess: () => paymentForm.reset(),
+    });
+}
+
+function removePayment(payment) {
+    if (!confirm('Eliminare questo pagamento?')) return;
+    router.delete(route('billing.payments.destroy', [props.record.id, payment.id]), { preserveScroll: true });
+}
 </script>
 
 <template>
@@ -64,6 +114,21 @@ const visibleEntries = Object.entries(props.record).filter(([key, value]) =>
                 </section>
 
                 <aside class="space-y-6">
+                    <section v-if="section === 'tasks'" class="surface rounded-md p-5">
+                        <h3 class="text-sm font-semibold text-gray-900">Stato</h3>
+                        <div class="mt-3 grid grid-cols-2 gap-2">
+                            <button
+                                v-for="status in ['todo', 'in_progress', 'in_review', 'done']"
+                                :key="status"
+                                type="button"
+                                :class="['rounded-md border px-3 py-2 text-xs font-medium', record.status === status ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50']"
+                                @click="setTaskStatus(status)"
+                            >
+                                {{ status }}
+                            </button>
+                        </div>
+                    </section>
+
                     <section v-if="related.client" class="surface rounded-md p-5">
                         <h3 class="text-sm font-semibold text-gray-900">Cliente</h3>
                         <Link :href="route('clients.show', related.client.id)" class="mt-2 block text-sm font-medium text-indigo-600">
@@ -78,7 +143,7 @@ const visibleEntries = Object.entries(props.record).filter(([key, value]) =>
                         </Link>
                     </section>
 
-                    <section v-for="name in ['projects', 'tasks', 'documents', 'comments']" :key="name" v-show="related[name]?.length" class="surface rounded-md p-5">
+                    <section v-for="name in ['projects', 'tasks', 'documents']" :key="name" v-show="related[name]?.length" class="surface rounded-md p-5">
                         <h3 class="mb-3 text-sm font-semibold capitalize text-gray-900">{{ name }}</h3>
                         <div class="space-y-2">
                             <div v-for="item in related[name]" :key="item.id" class="rounded-md bg-gray-50 px-3 py-2 text-sm">
@@ -92,12 +157,88 @@ const visibleEntries = Object.entries(props.record).filter(([key, value]) =>
                                     :href="route('tasks.show', item.id)"
                                     class="font-medium text-indigo-600"
                                 >{{ item.title }}</Link>
+                                <Link
+                                    v-else-if="name === 'documents'"
+                                    :href="route('billing.show', item.id)"
+                                    class="font-medium text-indigo-600"
+                                >{{ item.number || item.doc_type }}</Link>
                                 <span v-else class="font-medium text-gray-900">{{ item.number || item.action || item.content }}</span>
                                 <div class="mt-1 text-xs text-gray-500">{{ item.status || item.created_at }}</div>
                             </div>
                         </div>
                     </section>
                 </aside>
+
+                <section v-if="section === 'tasks'" class="surface rounded-md p-5 lg:col-span-2">
+                    <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Commenti</h3>
+                    <form class="mb-5 flex gap-3" @submit.prevent="addComment">
+                        <input v-model="commentForm.content" class="form-control mt-0" placeholder="Scrivi un commento..." required />
+                        <button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Invia</button>
+                    </form>
+                    <div class="space-y-3">
+                        <div v-for="comment in related.comments" :key="comment.id" class="rounded-md bg-gray-50 px-3 py-2 text-sm">
+                            <div class="mb-1 text-xs font-medium text-gray-500">{{ comment.user_name || 'Utente' }} · {{ comment.created_at }}</div>
+                            <div class="whitespace-pre-wrap text-gray-900">{{ comment.content }}</div>
+                        </div>
+                        <p v-if="!related.comments?.length" class="text-sm text-gray-500">Nessun commento.</p>
+                    </div>
+                </section>
+
+                <section v-if="section === 'billing'" class="surface rounded-md p-5 lg:col-span-2">
+                    <div class="mb-5 flex items-center justify-between">
+                        <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Righe documento</h3>
+                        <div class="text-sm font-semibold text-gray-900">Totale: EUR {{ Number(record.total_amount || 0).toFixed(2) }}</div>
+                    </div>
+                    <form class="mb-5 grid gap-3 md:grid-cols-[1fr_90px_120px_90px_90px_auto]" @submit.prevent="addLine">
+                        <input v-model="lineForm.description" class="form-control mt-0" placeholder="Descrizione" required />
+                        <input v-model="lineForm.quantity" class="form-control mt-0" type="number" step="0.01" min="0" required />
+                        <input v-model="lineForm.unit_price" class="form-control mt-0" type="number" step="0.01" min="0" required />
+                        <input v-model="lineForm.vat_rate" class="form-control mt-0" type="number" step="0.01" min="0" required />
+                        <input v-model="lineForm.discount_pct" class="form-control mt-0" type="number" step="0.01" min="0" max="100" />
+                        <button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
+                    </form>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-3 py-2 text-left">Descrizione</th>
+                                    <th class="px-3 py-2 text-right">Qta</th>
+                                    <th class="px-3 py-2 text-right">Prezzo</th>
+                                    <th class="px-3 py-2 text-right">IVA</th>
+                                    <th class="px-3 py-2 text-right">Subtotale</th>
+                                    <th class="px-3 py-2"></th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <tr v-for="line in related.lines" :key="line.id">
+                                    <td class="px-3 py-2">{{ line.description }}</td>
+                                    <td class="px-3 py-2 text-right">{{ line.quantity }}</td>
+                                    <td class="px-3 py-2 text-right">{{ line.unit_price }}</td>
+                                    <td class="px-3 py-2 text-right">{{ line.vat_rate }}%</td>
+                                    <td class="px-3 py-2 text-right">{{ Number(line.subtotal).toFixed(2) }}</td>
+                                    <td class="px-3 py-2 text-right"><button class="text-red-600" @click="removeLine(line)">Elimina</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section v-if="section === 'billing'" class="surface rounded-md p-5 lg:col-span-2">
+                    <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Pagamenti</h3>
+                    <form class="mb-5 grid gap-3 md:grid-cols-[120px_150px_1fr_auto]" @submit.prevent="addPayment">
+                        <input v-model="paymentForm.amount" class="form-control mt-0" type="number" step="0.01" min="0" required />
+                        <input v-model="paymentForm.paid_at" class="form-control mt-0" type="date" required />
+                        <input v-model="paymentForm.method" class="form-control mt-0" placeholder="Metodo" />
+                        <button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Registra</button>
+                    </form>
+                    <div class="space-y-2">
+                        <div v-for="payment in related.payments" :key="payment.id" class="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2 text-sm">
+                            <span>EUR {{ Number(payment.amount).toFixed(2) }} · {{ payment.paid_at }} · {{ payment.method || '-' }}</span>
+                            <button class="text-red-600" @click="removePayment(payment)">Elimina</button>
+                        </div>
+                        <p v-if="!related.payments?.length" class="text-sm text-gray-500">Nessun pagamento registrato.</p>
+                    </div>
+                </section>
             </div>
         </div>
     </AuthenticatedLayout>

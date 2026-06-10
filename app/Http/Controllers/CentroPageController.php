@@ -65,9 +65,19 @@ class CentroPageController extends Controller
                 'client' => $record->client_id ? DB::table('clients')->where('id', $record->client_id)->first() : null,
             ],
             'tasks' => [
-                'comments' => DB::table('task_comments')->where('task_id', $id)->latest()->limit(30)->get(),
+                'comments' => DB::table('task_comments')
+                    ->leftJoin('users', 'users.id', '=', 'task_comments.user_id')
+                    ->where('task_id', $id)
+                    ->latest('task_comments.created_at')
+                    ->limit(30)
+                    ->get(['task_comments.*', 'users.name as user_name']),
                 'project' => $record->project_id ? DB::table('projects')->where('id', $record->project_id)->first() : null,
                 'client' => $record->client_id ? DB::table('clients')->where('id', $record->client_id)->first() : null,
+            ],
+            'billing' => [
+                'client' => DB::table('clients')->where('id', $record->client_id)->first(),
+                'lines' => DB::table('document_lines')->where('document_id', $id)->orderBy('position')->get(),
+                'payments' => DB::table('document_payments')->where('document_id', $id)->latest('paid_at')->get(),
             ],
             default => [],
         };
@@ -426,5 +436,144 @@ class CentroPageController extends Controller
         }
 
         return $payload;
+    }
+
+    public function storeTaskComment(Request $request, string $id): RedirectResponse
+    {
+        DB::table('tasks')->where('id', $id)->exists() || abort(404);
+
+        $payload = $request->validate([
+            'content' => ['required', 'string'],
+        ]);
+
+        DB::table('task_comments')->insert([
+            'id' => (string) str()->uuid(),
+            'task_id' => $id,
+            'user_id' => $request->user()->id,
+            'content' => $payload['content'],
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return back()->with('status', 'Commento aggiunto.');
+    }
+
+    public function updateTaskStatus(Request $request, string $id): RedirectResponse
+    {
+        $payload = $request->validate([
+            'status' => ['required', Rule::in(['todo', 'in_progress', 'in_review', 'done'])],
+        ]);
+
+        DB::table('tasks')->where('id', $id)->update([
+            'status' => $payload['status'],
+            'updated_at' => now(),
+        ]);
+
+        return back()->with('status', 'Stato task aggiornato.');
+    }
+
+    public function storeDocumentLine(Request $request, string $id): RedirectResponse
+    {
+        DB::table('documents')->where('id', $id)->exists() || abort(404);
+
+        $payload = $request->validate([
+            'description' => ['required', 'string'],
+            'quantity' => ['required', 'numeric', 'min:0'],
+            'unit_price' => ['required', 'numeric', 'min:0'],
+            'vat_rate' => ['required', 'numeric', 'min:0'],
+            'discount_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
+        ]);
+
+        $quantity = (float) $payload['quantity'];
+        $unitPrice = (float) $payload['unit_price'];
+        $discount = (float) ($payload['discount_pct'] ?? 0);
+        $subtotal = round($quantity * $unitPrice * (1 - ($discount / 100)), 2);
+
+        DB::table('document_lines')->insert([
+            'id' => (string) str()->uuid(),
+            'document_id' => $id,
+            'position' => DB::table('document_lines')->where('document_id', $id)->count(),
+            'description' => $payload['description'],
+            'quantity' => $quantity,
+            'unit_price' => $unitPrice,
+            'discount_pct' => $discount,
+            'vat_rate' => (float) $payload['vat_rate'],
+            'subtotal' => $subtotal,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->recalculateDocument($id);
+
+        return back()->with('status', 'Riga aggiunta.');
+    }
+
+    public function destroyDocumentLine(string $documentId, string $lineId): RedirectResponse
+    {
+        DB::table('document_lines')->where('document_id', $documentId)->where('id', $lineId)->delete();
+        $this->recalculateDocument($documentId);
+
+        return back()->with('status', 'Riga eliminata.');
+    }
+
+    public function storeDocumentPayment(Request $request, string $id): RedirectResponse
+    {
+        DB::table('documents')->where('id', $id)->exists() || abort(404);
+
+        $payload = $request->validate([
+            'amount' => ['required', 'numeric', 'min:0'],
+            'paid_at' => ['required', 'date'],
+            'method' => ['nullable', 'string', 'max:255'],
+            'notes' => ['nullable', 'string'],
+        ]);
+
+        DB::table('document_payments')->insert([
+            'id' => (string) str()->uuid(),
+            'document_id' => $id,
+            'amount' => (float) $payload['amount'],
+            'paid_at' => $payload['paid_at'],
+            'method' => $payload['method'] ?? null,
+            'notes' => $payload['notes'] ?? null,
+            'created_by' => $request->user()->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->recalculateDocument($id);
+
+        return back()->with('status', 'Pagamento registrato.');
+    }
+
+    public function destroyDocumentPayment(string $documentId, string $paymentId): RedirectResponse
+    {
+        DB::table('document_payments')->where('document_id', $documentId)->where('id', $paymentId)->delete();
+        $this->recalculateDocument($documentId);
+
+        return back()->with('status', 'Pagamento eliminato.');
+    }
+
+    private function recalculateDocument(string $id): void
+    {
+        $lines = DB::table('document_lines')->where('document_id', $id)->get();
+        $taxable = (float) $lines->sum('subtotal');
+        $vat = (float) $lines->sum(fn ($line) => ((float) $line->subtotal) * ((float) $line->vat_rate / 100));
+        $paid = (float) DB::table('document_payments')->where('document_id', $id)->sum('amount');
+        $total = round($taxable + $vat, 2);
+
+        $status = DB::table('documents')->where('id', $id)->value('status');
+        if ($paid > 0 && $paid < $total) {
+            $status = 'partially_paid';
+        } elseif ($total > 0 && $paid >= $total) {
+            $status = 'paid';
+        }
+
+        DB::table('documents')->where('id', $id)->update([
+            'total_taxable' => round($taxable, 2),
+            'total_vat' => round($vat, 2),
+            'total_amount' => $total,
+            'total_paid' => round($paid, 2),
+            'status' => $status,
+            'updated_at' => now(),
+        ]);
     }
 }

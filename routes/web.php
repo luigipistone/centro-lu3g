@@ -27,6 +27,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/tasks', [CentroPageController::class, 'store'])->defaults('section', 'tasks')->name('tasks.store');
     Route::get('/tasks/{id}', [CentroPageController::class, 'show'])->defaults('section', 'tasks')->name('tasks.show');
     Route::put('/tasks/{id}', [CentroPageController::class, 'update'])->defaults('section', 'tasks')->name('tasks.update');
+    Route::post('/tasks/{id}/comments', [CentroPageController::class, 'storeTaskComment'])->name('tasks.comments.store');
+    Route::patch('/tasks/{id}/status', [CentroPageController::class, 'updateTaskStatus'])->name('tasks.status.update');
     Route::delete('/tasks/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'tasks')->name('tasks.destroy');
     Route::get('/calendar', [CentroPageController::class, 'index'])->defaults('section', 'calendar')->name('calendar.index');
     Route::get('/updates/social', [CentroPageController::class, 'index'])->defaults('section', 'updates-social')->name('updates.social');
@@ -35,7 +37,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/updates/adv', [CentroPageController::class, 'index'])->defaults('section', 'updates-adv')->name('updates.adv');
     Route::get('/billing', [CentroPageController::class, 'index'])->defaults('section', 'billing')->name('billing.index');
     Route::post('/billing', [CentroPageController::class, 'store'])->defaults('section', 'billing')->name('billing.store');
+    Route::get('/billing/{id}', [CentroPageController::class, 'show'])->defaults('section', 'billing')->name('billing.show');
     Route::put('/billing/{id}', [CentroPageController::class, 'update'])->defaults('section', 'billing')->name('billing.update');
+    Route::post('/billing/{id}/lines', [CentroPageController::class, 'storeDocumentLine'])->name('billing.lines.store');
+    Route::delete('/billing/{documentId}/lines/{lineId}', [CentroPageController::class, 'destroyDocumentLine'])->name('billing.lines.destroy');
+    Route::post('/billing/{id}/payments', [CentroPageController::class, 'storeDocumentPayment'])->name('billing.payments.store');
+    Route::delete('/billing/{documentId}/payments/{paymentId}', [CentroPageController::class, 'destroyDocumentPayment'])->name('billing.payments.destroy');
     Route::delete('/billing/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'billing')->name('billing.destroy');
     Route::get('/users', [CentroPageController::class, 'index'])->defaults('section', 'users')->name('users.index');
     Route::post('/users', [CentroPageController::class, 'store'])->defaults('section', 'users')->name('users.store');

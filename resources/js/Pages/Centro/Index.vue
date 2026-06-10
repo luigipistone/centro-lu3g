@@ -80,8 +80,17 @@ function remove(row) {
 }
 
 function showRoute(row) {
-    if (!['clients', 'projects', 'tasks'].includes(props.section)) return null;
+    if (!['clients', 'projects', 'tasks', 'billing'].includes(props.section)) return null;
     return route(`${props.section}.show`, row.id);
+}
+
+function priorityClass(priority) {
+    return {
+        urgent: 'bg-red-100 text-red-700',
+        high: 'bg-orange-100 text-orange-700',
+        medium: 'bg-amber-100 text-amber-700',
+        low: 'bg-emerald-100 text-emerald-700',
+    }[priority] || 'bg-gray-100 text-gray-700';
 }
 </script>
 
@@ -96,7 +105,36 @@ function showRoute(row) {
             </div>
         </template>
 
-        <div class="py-8">
+        <div v-if="section === 'calendar'" class="py-8">
+            <div class="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+                <div class="surface overflow-hidden rounded-md">
+                    <div class="divide-y divide-gray-100">
+                        <Link
+                            v-for="row in rows"
+                            :key="row.id"
+                            :href="route('tasks.show', row.id)"
+                            class="grid gap-3 px-5 py-4 hover:bg-gray-50 md:grid-cols-[150px_1fr_auto]"
+                        >
+                            <div>
+                                <div class="text-sm font-semibold text-gray-900">{{ row.due_date || 'Senza data' }}</div>
+                                <div class="text-xs text-gray-500">{{ row.due_time || '' }}</div>
+                            </div>
+                            <div>
+                                <div class="font-medium text-gray-900">{{ row.title }}</div>
+                                <div class="text-sm text-gray-500">{{ row.client_name || row.project_name || '-' }}</div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span :class="['rounded-full px-2 py-1 text-xs font-medium', priorityClass(row.priority)]">{{ row.priority }}</span>
+                                <span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">{{ row.status }}</span>
+                            </div>
+                        </Link>
+                        <div v-if="!rows.length" class="px-5 py-8 text-center text-sm text-gray-500">Nessuna attivita in calendario.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div v-else class="py-8">
             <div class="mx-auto grid max-w-7xl gap-6 sm:px-6 lg:grid-cols-[360px_1fr] lg:px-8">
                 <section v-if="canWrite" class="rounded bg-white p-5 shadow-sm">
                     <div class="mb-4 flex items-center justify-between">
