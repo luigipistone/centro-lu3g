@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -24,49 +27,195 @@ class CentroPageController extends Controller
 
     public function index(string $section): Response
     {
-        $config = match ($section) {
+        $config = $this->config($section);
+        $rows = DB::table($config['table'])
+            ->when($config['table'] === 'projects', fn ($query) => $query->leftJoin('clients', 'clients.id', '=', 'projects.client_id')->select('projects.*', 'clients.name as client_name'))
+            ->when($config['table'] === 'tasks', fn ($query) => $query->leftJoin('projects', 'projects.id', '=', 'tasks.project_id')->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')->select('tasks.*', 'projects.name as project_name', 'clients.name as client_name'))
+            ->latest($config['table'].'.created_at')
+            ->limit(100)
+            ->get();
+
+        return Inertia::render('Centro/Index', [
+            ...$config,
+            'rows' => $rows,
+            'clients' => DB::table('clients')->orderBy('name')->get(['id', 'name']),
+            'projects' => DB::table('projects')->orderBy('name')->get(['id', 'name']),
+            'services' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name']),
+        ]);
+    }
+
+    public function store(Request $request, string $section): RedirectResponse
+    {
+        $payload = $this->validatedPayload($request, $section);
+        $payload['id'] = (string) str()->uuid();
+        $payload['created_at'] = now();
+        $payload['updated_at'] = now();
+
+        if (in_array($section, ['clients', 'projects', 'tasks'], true)) {
+            $payload['created_by'] = $request->user()->id;
+        }
+
+        DB::table($this->config($section)['table'])->insert($payload);
+
+        return back()->with('status', 'Creato.');
+    }
+
+    public function update(Request $request, string $section, string $id): RedirectResponse
+    {
+        $payload = $this->validatedPayload($request, $section);
+        $payload['updated_at'] = now();
+
+        DB::table($this->config($section)['table'])->where('id', $id)->update($payload);
+
+        return back()->with('status', 'Aggiornato.');
+    }
+
+    public function destroy(string $section, string $id): RedirectResponse
+    {
+        DB::table($this->config($section)['table'])->where('id', $id)->delete();
+
+        return back()->with('status', 'Eliminato.');
+    }
+
+    private function config(string $section): array
+    {
+        return match ($section) {
             'clients' => [
+                'section' => 'clients',
                 'title' => 'Clienti',
                 'description' => 'Anagrafica clienti, contatti, servizi collegati e dati di fatturazione.',
                 'table' => 'clients',
-                'columns' => ['name', 'legal_name', 'email', 'phone', 'city'],
+                'columns' => ['name', 'legal_name', 'email', 'phone', 'city', 'vat_number'],
+                'fields' => [
+                    ['name' => 'name', 'label' => 'Nome', 'type' => 'text', 'required' => true],
+                    ['name' => 'legal_name', 'label' => 'Ragione sociale', 'type' => 'text'],
+                    ['name' => 'email', 'label' => 'Email', 'type' => 'email'],
+                    ['name' => 'phone', 'label' => 'Telefono', 'type' => 'text'],
+                    ['name' => 'vat_number', 'label' => 'Partita IVA', 'type' => 'text'],
+                    ['name' => 'tax_code', 'label' => 'Codice fiscale', 'type' => 'text'],
+                    ['name' => 'city', 'label' => 'Citta', 'type' => 'text'],
+                    ['name' => 'province', 'label' => 'Provincia', 'type' => 'text'],
+                    ['name' => 'website', 'label' => 'Sito web', 'type' => 'text'],
+                    ['name' => 'notes', 'label' => 'Note', 'type' => 'textarea'],
+                ],
             ],
             'projects' => [
+                'section' => 'projects',
                 'title' => 'Progetti',
                 'description' => 'Progetti collegati ai clienti con stato, colore e attivita.',
                 'table' => 'projects',
-                'columns' => ['name', 'status', 'color', 'created_at'],
+                'columns' => ['name', 'client_name', 'status', 'color'],
+                'fields' => [
+                    ['name' => 'name', 'label' => 'Nome', 'type' => 'text', 'required' => true],
+                    ['name' => 'client_id', 'label' => 'Cliente', 'type' => 'client'],
+                    ['name' => 'status', 'label' => 'Stato', 'type' => 'select', 'options' => ['active', 'completed', 'on_hold', 'archived']],
+                    ['name' => 'color', 'label' => 'Colore', 'type' => 'color'],
+                    ['name' => 'description', 'label' => 'Descrizione', 'type' => 'textarea'],
+                ],
             ],
             'tasks' => [
+                'section' => 'tasks',
                 'title' => 'Task',
                 'description' => 'Attivita, assegnazioni, ricorrenze, priorita e calendario.',
                 'table' => 'tasks',
-                'columns' => ['title', 'status', 'priority', 'due_date', 'task_type'],
+                'columns' => ['title', 'project_name', 'client_name', 'status', 'priority', 'due_date'],
+                'fields' => [
+                    ['name' => 'title', 'label' => 'Titolo', 'type' => 'text', 'required' => true],
+                    ['name' => 'project_id', 'label' => 'Progetto', 'type' => 'project'],
+                    ['name' => 'client_id', 'label' => 'Cliente', 'type' => 'client'],
+                    ['name' => 'status', 'label' => 'Stato', 'type' => 'select', 'options' => ['todo', 'in_progress', 'in_review', 'done']],
+                    ['name' => 'priority', 'label' => 'Priorita', 'type' => 'select', 'options' => ['low', 'medium', 'high', 'urgent']],
+                    ['name' => 'due_date', 'label' => 'Scadenza', 'type' => 'date'],
+                    ['name' => 'due_time', 'label' => 'Ora', 'type' => 'time'],
+                    ['name' => 'description', 'label' => 'Descrizione', 'type' => 'textarea'],
+                ],
             ],
             'billing' => [
+                'section' => 'billing',
                 'title' => 'Billing',
                 'description' => 'Preventivi, proforma, fatture, pagamenti, abbonamenti e numerazioni.',
                 'table' => 'documents',
                 'columns' => ['number', 'doc_type', 'status', 'issue_date', 'total_amount'],
+                'fields' => [],
             ],
             'users' => [
+                'section' => 'users',
                 'title' => 'Utenti',
                 'description' => 'Profili e ruoli applicativi equivalenti a superadmin, admin, editor e guest.',
                 'table' => 'users',
                 'columns' => ['name', 'email', 'created_at'],
+                'fields' => [],
             ],
             'settings' => [
+                'section' => 'settings',
                 'title' => 'Impostazioni',
-                'description' => 'Servizi, design, numerazione documenti, dati aziendali, email e backup.',
+                'description' => 'Gestione servizi, usati anche dalle viste aggiornamenti SOCIAL, NEWSLETTER, SEO e ADV.',
                 'table' => 'services',
                 'columns' => ['name', 'active', 'color', 'created_at'],
+                'fields' => [
+                    ['name' => 'name', 'label' => 'Servizio', 'type' => 'text', 'required' => true],
+                    ['name' => 'color', 'label' => 'Colore', 'type' => 'color'],
+                    ['name' => 'description', 'label' => 'Descrizione', 'type' => 'textarea'],
+                    ['name' => 'active', 'label' => 'Attivo', 'type' => 'checkbox'],
+                ],
+            ],
+            default => abort(404),
+        };
+    }
+
+    private function validatedPayload(Request $request, string $section): array
+    {
+        $rules = match ($section) {
+            'clients' => [
+                'name' => ['required', 'string', 'max:255'],
+                'legal_name' => ['nullable', 'string', 'max:255'],
+                'email' => ['nullable', 'email', 'max:255'],
+                'phone' => ['nullable', 'string', 'max:255'],
+                'vat_number' => ['nullable', 'string', 'max:255'],
+                'tax_code' => ['nullable', 'string', 'max:255'],
+                'city' => ['nullable', 'string', 'max:255'],
+                'province' => ['nullable', 'string', 'max:255'],
+                'website' => ['nullable', 'string', 'max:255'],
+                'notes' => ['nullable', 'string'],
+            ],
+            'projects' => [
+                'name' => ['required', 'string', 'max:255'],
+                'client_id' => ['nullable', 'uuid', 'exists:clients,id'],
+                'status' => ['required', Rule::in(['active', 'completed', 'on_hold', 'archived'])],
+                'color' => ['required', 'string', 'max:20'],
+                'description' => ['nullable', 'string'],
+            ],
+            'tasks' => [
+                'title' => ['required', 'string', 'max:255'],
+                'project_id' => ['nullable', 'uuid', 'exists:projects,id'],
+                'client_id' => ['nullable', 'uuid', 'exists:clients,id'],
+                'status' => ['required', Rule::in(['todo', 'in_progress', 'in_review', 'done'])],
+                'priority' => ['required', Rule::in(['low', 'medium', 'high', 'urgent'])],
+                'due_date' => ['nullable', 'date'],
+                'due_time' => ['nullable', 'date_format:H:i'],
+                'description' => ['nullable', 'string'],
+            ],
+            'settings' => [
+                'name' => ['required', 'string', 'max:255'],
+                'color' => ['required', 'string', 'max:20'],
+                'description' => ['nullable', 'string'],
+                'active' => ['boolean'],
             ],
             default => abort(404),
         };
 
-        return Inertia::render('Centro/Index', [
-            ...$config,
-            'rows' => DB::table($config['table'])->latest()->limit(50)->get(),
-        ]);
+        $payload = $request->validate($rules);
+
+        foreach ($payload as $key => $value) {
+            if ($value === '') {
+                $payload[$key] = null;
+            }
+        }
+
+        if ($section === 'settings') {
+            $payload['active'] = $request->boolean('active');
+        }
+
+        return $payload;
     }
 }
