@@ -1272,39 +1272,44 @@ function visibleCalendarTasks(cell) {
                     </button>
                 </div>
 
-                <section class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <section class="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <article
                         v-for="project in projectRows"
                         :key="project.id"
-                        class="rounded-md border border-gray-200 bg-white p-5 shadow-sm transition hover:border-indigo-200 hover:shadow"
+                        class="group relative rounded-md border border-gray-200 bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md"
                     >
-                        <div class="flex items-start justify-between gap-3">
-                            <Link :href="route('projects.show', project.id)" class="min-w-0 flex-1">
+                        <Link :href="route('projects.show', project.id)" class="block h-full p-5 pr-14">
+                            <div class="flex items-start justify-between gap-3">
                                 <div class="flex min-w-0 items-center gap-2">
                                     <span class="h-3 w-3 shrink-0 rounded-full ring-1 ring-gray-200" :style="{ backgroundColor: project.color || '#64748b' }"></span>
                                     <h3 class="truncate text-base font-semibold text-gray-900">{{ project.name }}</h3>
                                 </div>
-                            </Link>
-                            <span :class="['shrink-0 rounded px-2 py-0.5 text-xs font-medium', projectStatusClass(project.status)]">
-                                {{ displayValue(project.status) }}
-                            </span>
-                        </div>
-
-                        <p v-if="plainText(project.description)" class="mt-3 line-clamp-2 text-sm text-gray-500">
-                            {{ plainText(project.description) }}
-                        </p>
-
-                        <div class="mt-4 flex items-center justify-between gap-3">
-                            <span v-if="project.client_name" class="rounded-full border border-gray-200 px-2 py-0.5 text-xs text-gray-600">{{ project.client_name }}</span>
-                            <span v-else class="text-xs text-gray-400">Nessun cliente</span>
-                            <div class="flex items-center gap-3">
-                                <button type="button" class="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(project)"><Pencil class="h-3.5 w-3.5" :stroke-width="1.7" />Modifica</button>
-                                <button type="button" class="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-500" @click="remove(project)"><Trash2 class="h-3.5 w-3.5" :stroke-width="1.7" />Elimina</button>
+                                <span :class="['shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', projectStatusClass(project.status)]">
+                                    {{ displayValue(project.status) }}
+                                </span>
                             </div>
-                        </div>
+
+                            <p v-if="plainText(project.description)" class="mt-3 line-clamp-2 text-sm text-gray-500">
+                                {{ plainText(project.description) }}
+                            </p>
+
+                            <div class="mt-4">
+                                <span v-if="project.client_name" class="rounded-full border border-gray-200 px-2 py-0.5 text-xs text-gray-600">{{ project.client_name }}</span>
+                                <span v-else class="text-xs text-gray-400">Nessun cliente</span>
+                            </div>
+                        </Link>
+
+                        <button
+                            type="button"
+                            class="absolute right-4 top-4 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-red-100 bg-white/90 text-red-600 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-200"
+                            :aria-label="`Elimina ${project.name}`"
+                            @click.stop.prevent="remove(project)"
+                        >
+                            <Trash2 class="h-4 w-4" :stroke-width="1.8" />
+                        </button>
                     </article>
 
-                    <div v-if="!projectRows.length" class="rounded-md border border-dashed border-gray-300 bg-white px-5 py-12 text-center text-sm text-gray-500 md:col-span-2 lg:col-span-3">
+                    <div v-if="!projectRows.length" class="rounded-md border border-dashed border-gray-300 bg-white px-5 py-12 text-center text-sm text-gray-500 sm:col-span-2 lg:col-span-4">
                         Nessun progetto
                     </div>
                 </section>

@@ -1426,14 +1426,6 @@ function remainingAmount() {
                                 <label class="block text-sm font-medium text-gray-700">Descrizione</label>
                                 <textarea v-model="projectForm.description" rows="5" class="form-control"></textarea>
                             </div>
-                            <div class="flex justify-end gap-2">
-                                <button type="button" class="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="editingProject = false">
-                                    Annulla
-                                </button>
-                                <button type="button" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50" :disabled="projectForm.processing" @click="saveProjectDetails">
-                                    Salva progetto
-                                </button>
-                            </div>
                         </div>
 
                         <dl v-else class="grid gap-4 md:grid-cols-2">
