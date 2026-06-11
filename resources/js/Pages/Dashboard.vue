@@ -552,12 +552,7 @@ watch(
                             </div>
                         </div>
 
-                        <component
-                            :is="metaFor(widget).kind === 'stat' ? Link : 'div'"
-                            v-bind="metaFor(widget).kind === 'stat' ? { href: route(metaFor(widget).route) } : {}"
-                            class="mt-10 flex items-start justify-between gap-4 rounded-2xl px-1 pb-3 pr-4 transition"
-                            :class="metaFor(widget).kind === 'stat' ? 'cursor-pointer hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_14px_34px_rgba(28,42,73,0.10)] hover:ring-1 hover:ring-indigo-100' : ''"
-                        >
+                        <div class="mt-10 flex items-start justify-between gap-4 rounded-2xl px-1 pb-3 pr-4">
                             <span class="flex min-w-0 items-start gap-3">
                                 <span :class="['metric-icon', metaFor(widget).iconClass]">
                                     <component :is="metaFor(widget).icon" class="h-5 w-5" :stroke-width="1.7" />
@@ -568,7 +563,7 @@ watch(
                                 </span>
                             </span>
                             <span v-if="metaFor(widget).kind !== 'note'" class="shrink-0 text-3xl font-bold leading-none text-gray-950">{{ widgetNumber(widget) }}</span>
-                        </component>
+                        </div>
 
                         <div v-if="metaFor(widget).kind === 'list'" class="flex flex-1 flex-col pr-3">
                             <div class="space-y-1">
