@@ -971,19 +971,11 @@ function remainingAmount() {
             <div v-else class="mx-auto grid max-w-7xl gap-6 px-4 sm:px-6 lg:grid-cols-[1fr_360px] lg:px-8">
                 <section v-if="section === 'clients'" class="space-y-6">
                     <section v-if="editingClient" class="surface rounded-md p-5">
-                        <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+                        <div class="mb-5">
                             <div>
                                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Modifica anagrafica</h3>
                                 <p class="mt-1 text-sm text-gray-500">Dati fiscali, contatti, indirizzo e note del cliente.</p>
                             </div>
-                            <button
-                                type="button"
-                                class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
-                                :disabled="clientForm.processing"
-                                @click="saveClientDetails"
-                            >
-                                Salva cliente
-                            </button>
                         </div>
 
                         <div class="space-y-6">
