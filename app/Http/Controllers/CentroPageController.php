@@ -5,11 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Dompdf\Dompdf;
 use Dompdf\Options;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -56,7 +58,130 @@ class CentroPageController extends Controller
                 ->latest('projects.updated_at')
                 ->limit(6)
                 ->get(['projects.id', 'projects.name', 'projects.color', 'clients.name as client_name']),
+            'dashboardWidgets' => $this->dashboardWidgetsFor($request->user()),
+            'availableDashboardWidgets' => $this->availableDashboardWidgets(),
         ]);
+    }
+
+    public function updateDashboardWidgets(Request $request): JsonResponse
+    {
+        $allowedTypes = array_column($this->availableDashboardWidgets(), 'type');
+
+        $data = $request->validate([
+            'widgets' => ['required', 'array'],
+            'widgets.*.widget_type' => ['required', 'string', 'distinct', Rule::in($allowedTypes)],
+            'widgets.*.position' => ['required', 'integer', 'min:0'],
+            'widgets.*.col_span' => ['required', 'integer', 'min:1', 'max:4'],
+            'widgets.*.visible' => ['required', 'boolean'],
+        ]);
+
+        DB::transaction(function () use ($request, $data) {
+            DB::table('dashboard_widgets')->where('user_id', $request->user()->id)->delete();
+
+            $now = now();
+            DB::table('dashboard_widgets')->insert(collect($data['widgets'])->map(fn ($widget, $index) => [
+                'id' => (string) Str::uuid(),
+                'user_id' => $request->user()->id,
+                'widget_type' => $widget['widget_type'],
+                'position' => $index,
+                'size' => $this->sizeFromSpan((int) $widget['col_span']),
+                'col_span' => (int) $widget['col_span'],
+                'visible' => (bool) $widget['visible'],
+                'created_at' => $now,
+                'updated_at' => $now,
+            ])->all());
+        });
+
+        return response()->json(['widgets' => $this->dashboardWidgetsFor($request->user())]);
+    }
+
+    private function dashboardWidgetsFor(User $user): array
+    {
+        $defaults = collect($this->defaultDashboardWidgets());
+        $saved = DB::table('dashboard_widgets')
+            ->where('user_id', $user->id)
+            ->orderBy('position')
+            ->get()
+            ->keyBy('widget_type');
+
+        if ($saved->isEmpty()) {
+            $now = now();
+            DB::table('dashboard_widgets')->insert($defaults->map(fn ($widget) => [
+                'id' => (string) Str::uuid(),
+                'user_id' => $user->id,
+                'widget_type' => $widget['widget_type'],
+                'position' => $widget['position'],
+                'size' => $this->sizeFromSpan($widget['col_span']),
+                'col_span' => $widget['col_span'],
+                'visible' => $widget['visible'],
+                'created_at' => $now,
+                'updated_at' => $now,
+            ])->all());
+
+            $saved = DB::table('dashboard_widgets')
+                ->where('user_id', $user->id)
+                ->orderBy('position')
+                ->get()
+                ->keyBy('widget_type');
+        }
+
+        return $defaults
+            ->map(function ($widget) use ($saved) {
+                $row = $saved[$widget['widget_type']] ?? null;
+
+                return [
+                    'widget_type' => $widget['widget_type'],
+                    'position' => (int) ($row->position ?? $widget['position']),
+                    'col_span' => max(1, min(4, (int) ($row->col_span ?? $widget['col_span']))),
+                    'visible' => (bool) ($row->visible ?? false),
+                ];
+            })
+            ->sortBy([
+                ['visible', 'desc'],
+                ['position', 'asc'],
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function defaultDashboardWidgets(): array
+    {
+        return [
+            ['widget_type' => 'stat_clients', 'position' => 0, 'col_span' => 1, 'visible' => true],
+            ['widget_type' => 'stat_projects', 'position' => 1, 'col_span' => 1, 'visible' => true],
+            ['widget_type' => 'stat_open_tasks', 'position' => 2, 'col_span' => 1, 'visible' => true],
+            ['widget_type' => 'stat_urgent_tasks', 'position' => 3, 'col_span' => 1, 'visible' => true],
+            ['widget_type' => 'upcoming_tasks', 'position' => 4, 'col_span' => 2, 'visible' => true],
+            ['widget_type' => 'my_tasks', 'position' => 5, 'col_span' => 1, 'visible' => true],
+            ['widget_type' => 'active_projects', 'position' => 6, 'col_span' => 1, 'visible' => true],
+            ['widget_type' => 'recent_clients', 'position' => 7, 'col_span' => 1, 'visible' => true],
+            ['widget_type' => 'urgent_tasks', 'position' => 8, 'col_span' => 1, 'visible' => true],
+        ];
+    }
+
+    private function availableDashboardWidgets(): array
+    {
+        return [
+            ['type' => 'stat_clients', 'label' => 'Clienti', 'description' => 'Totale anagrafiche'],
+            ['type' => 'stat_projects', 'label' => 'Progetti attivi', 'description' => 'Progetti in corso'],
+            ['type' => 'stat_open_tasks', 'label' => 'Task aperti', 'description' => 'Attivita da chiudere'],
+            ['type' => 'stat_urgent_tasks', 'label' => 'Urgenti', 'description' => 'Task ad alta priorita'],
+            ['type' => 'upcoming_tasks', 'label' => 'Task in scadenza', 'description' => 'Prossime attivita con data'],
+            ['type' => 'my_tasks', 'label' => 'I miei task', 'description' => 'Task assegnati a te'],
+            ['type' => 'active_projects', 'label' => 'Progetti attivi', 'description' => 'Elenco progetti in corso'],
+            ['type' => 'recent_clients', 'label' => 'Clienti recenti', 'description' => 'Ultime anagrafiche inserite'],
+            ['type' => 'urgent_tasks', 'label' => 'Task urgenti', 'description' => 'Attivita prioritarie'],
+        ];
+    }
+
+    private function sizeFromSpan(int $span): string
+    {
+        return match ($span) {
+            1 => 'small',
+            2 => 'medium',
+            3 => 'large',
+            default => 'full',
+        };
     }
 
     public function index(string $section): Response

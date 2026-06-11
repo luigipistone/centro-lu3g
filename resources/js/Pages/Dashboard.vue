@@ -1,7 +1,19 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
-import { AlertTriangle, Briefcase, CalendarClock, CheckSquare, ChevronRight, Clock, Users } from '@lucide/vue';
+import { computed, ref } from 'vue';
+import {
+    AlertTriangle,
+    Briefcase,
+    CalendarClock,
+    CheckSquare,
+    ChevronRight,
+    GripVertical,
+    Plus,
+    Settings2,
+    Users,
+    X,
+} from '@lucide/vue';
 
 const props = defineProps({
     stats: Object,
@@ -10,18 +22,240 @@ const props = defineProps({
     urgentTasks: Array,
     myTasks: Array,
     activeProjects: Array,
+    dashboardWidgets: Array,
+    availableDashboardWidgets: Array,
 });
 
 const page = usePage();
-const statCards = [
-    ['Clienti', 'Anagrafiche', 'clients.index', Users, 'bg-indigo-50 text-indigo-600'],
-    ['Progetti Attivi', 'Progetti in corso', 'projects.index', Briefcase, 'bg-sky-50 text-sky-600'],
-    ['Task Aperti', 'Attivita da chiudere', 'tasks.index', CheckSquare, 'bg-emerald-50 text-emerald-600'],
-    ['Urgenti', 'Priorita alta', 'tasks.index', AlertTriangle, 'bg-red-50 text-red-600'],
-];
+const dashboardGrid = ref(null);
+const widgetMenuOpen = ref(false);
+const saving = ref(false);
+const draggingType = ref(null);
+let saveTimer = null;
+let resizeState = null;
 
-function statValue(index) {
-    return [props.stats.clients, props.stats.activeProjects, props.stats.openTasks, props.stats.urgentTasks][index] ?? 0;
+const widgetMeta = {
+    stat_clients: {
+        label: 'Clienti',
+        description: 'Anagrafiche',
+        route: 'clients.index',
+        icon: Users,
+        iconClass: 'text-indigo-600',
+        kind: 'stat',
+        value: () => props.stats?.clients ?? 0,
+    },
+    stat_projects: {
+        label: 'Progetti Attivi',
+        description: 'Progetti in corso',
+        route: 'projects.index',
+        icon: Briefcase,
+        iconClass: 'text-sky-600',
+        kind: 'stat',
+        value: () => props.stats?.activeProjects ?? 0,
+    },
+    stat_open_tasks: {
+        label: 'Task Aperti',
+        description: 'Attivita da chiudere',
+        route: 'tasks.index',
+        icon: CheckSquare,
+        iconClass: 'text-emerald-600',
+        kind: 'stat',
+        value: () => props.stats?.openTasks ?? 0,
+    },
+    stat_urgent_tasks: {
+        label: 'Urgenti',
+        description: 'Priorita alta',
+        route: 'tasks.index',
+        icon: AlertTriangle,
+        iconClass: 'text-red-600',
+        kind: 'stat',
+        value: () => props.stats?.urgentTasks ?? 0,
+    },
+    upcoming_tasks: {
+        label: 'Task in scadenza',
+        description: 'Prossime attivita',
+        route: 'tasks.index',
+        icon: CalendarClock,
+        kind: 'list',
+        empty: 'Nessun task in scadenza',
+        items: () => props.upcomingTasks ?? [],
+    },
+    my_tasks: {
+        label: 'I miei task',
+        description: 'Assegnati a te',
+        route: 'tasks.index',
+        icon: CheckSquare,
+        kind: 'list',
+        empty: 'Nessun task assegnato',
+        items: () => props.myTasks ?? [],
+    },
+    active_projects: {
+        label: 'Progetti attivi',
+        description: 'In corso',
+        route: 'projects.index',
+        icon: Briefcase,
+        kind: 'list',
+        empty: 'Nessun progetto attivo',
+        items: () => props.activeProjects ?? [],
+    },
+    recent_clients: {
+        label: 'Clienti recenti',
+        description: 'Ultime anagrafiche',
+        route: 'clients.index',
+        icon: Users,
+        kind: 'list',
+        empty: 'Nessun cliente',
+        items: () => props.recentClients ?? [],
+    },
+    urgent_tasks: {
+        label: 'Task urgenti',
+        description: 'Priorita alta',
+        route: 'tasks.index',
+        icon: AlertTriangle,
+        iconClass: 'text-red-600',
+        kind: 'list',
+        empty: 'Nessun task urgente',
+        items: () => props.urgentTasks ?? [],
+    },
+};
+
+function normalizeWidgets(source = []) {
+    const saved = new Map(source.map((widget) => [widget.widget_type, widget]));
+
+    return Object.keys(widgetMeta)
+        .map((type, index) => {
+            const widget = saved.get(type);
+
+            return {
+                widget_type: type,
+                position: Number(widget?.position ?? index),
+                col_span: clampSpan(widget?.col_span ?? (type === 'upcoming_tasks' ? 2 : 1)),
+                visible: Boolean(widget?.visible ?? false),
+            };
+        })
+        .sort((a, b) => Number(b.visible) - Number(a.visible) || a.position - b.position)
+        .map((widget, index) => ({ ...widget, position: index }));
+}
+
+const widgets = ref(normalizeWidgets(props.dashboardWidgets ?? []));
+
+const visibleWidgets = computed(() => widgets.value.filter((widget) => widget.visible).sort((a, b) => a.position - b.position));
+const hiddenWidgets = computed(() => widgets.value.filter((widget) => !widget.visible).sort((a, b) => a.position - b.position));
+
+function metaFor(widget) {
+    return widgetMeta[widget.widget_type];
+}
+
+function clampSpan(value) {
+    return Math.max(1, Math.min(4, Number(value) || 1));
+}
+
+function colSpanClass(widget) {
+    return {
+        1: 'lg:col-span-1',
+        2: 'lg:col-span-2',
+        3: 'lg:col-span-3',
+        4: 'lg:col-span-4',
+    }[clampSpan(widget.col_span)];
+}
+
+function commitWidgets(nextWidgets, persist = true) {
+    widgets.value = nextWidgets.map((widget, index) => ({ ...widget, position: index, col_span: clampSpan(widget.col_span) }));
+    if (persist) scheduleSave();
+}
+
+function payload() {
+    return widgets.value.map((widget, index) => ({
+        widget_type: widget.widget_type,
+        position: index,
+        col_span: clampSpan(widget.col_span),
+        visible: Boolean(widget.visible),
+    }));
+}
+
+function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveWidgets, 350);
+}
+
+async function saveWidgets() {
+    saving.value = true;
+
+    try {
+        const { data } = await window.axios.patch(route('dashboard.widgets.update'), { widgets: payload() });
+        if (data?.widgets) {
+            widgets.value = normalizeWidgets(data.widgets);
+        }
+    } finally {
+        saving.value = false;
+    }
+}
+
+function startDrag(widget, event) {
+    draggingType.value = widget.widget_type;
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', widget.widget_type);
+}
+
+function dropWidget(targetWidget) {
+    const sourceType = draggingType.value;
+    draggingType.value = null;
+
+    if (!sourceType || sourceType === targetWidget.widget_type) return;
+
+    const current = [...visibleWidgets.value];
+    const from = current.findIndex((widget) => widget.widget_type === sourceType);
+    const to = current.findIndex((widget) => widget.widget_type === targetWidget.widget_type);
+    if (from < 0 || to < 0) return;
+
+    const [moved] = current.splice(from, 1);
+    current.splice(to, 0, moved);
+    commitWidgets([...current, ...hiddenWidgets.value]);
+}
+
+function removeWidget(widget) {
+    commitWidgets(widgets.value.map((item) => item.widget_type === widget.widget_type ? { ...item, visible: false } : item));
+}
+
+function addWidget(widget) {
+    widgetMenuOpen.value = false;
+    commitWidgets([
+        ...visibleWidgets.value,
+        { ...widget, visible: true, col_span: clampSpan(widget.col_span || 1) },
+        ...hiddenWidgets.value.filter((item) => item.widget_type !== widget.widget_type),
+    ]);
+}
+
+function startResize(widget, event) {
+    event.preventDefault();
+    event.stopPropagation();
+    resizeState = {
+        type: widget.widget_type,
+        startX: event.clientX,
+        startSpan: clampSpan(widget.col_span),
+    };
+
+    window.addEventListener('pointermove', resizeWidget);
+    window.addEventListener('pointerup', stopResize, { once: true });
+}
+
+function resizeWidget(event) {
+    if (!resizeState || !dashboardGrid.value) return;
+
+    const gridWidth = dashboardGrid.value.clientWidth || 1;
+    const columnWidth = gridWidth / 4;
+    const delta = Math.round((event.clientX - resizeState.startX) / columnWidth);
+    const nextSpan = clampSpan(resizeState.startSpan + delta);
+
+    widgets.value = widgets.value.map((widget) => (
+        widget.widget_type === resizeState.type ? { ...widget, col_span: nextSpan } : widget
+    ));
+}
+
+function stopResize() {
+    window.removeEventListener('pointermove', resizeWidget);
+    resizeState = null;
+    scheduleSave();
 }
 
 function dateShort(value) {
@@ -37,6 +271,22 @@ function priorityDot(priority) {
         urgent: 'bg-red-500',
     }[priority] || 'bg-gray-400';
 }
+
+function itemHref(widget, item) {
+    if (widget.widget_type === 'active_projects') return route('projects.show', item.id);
+    if (widget.widget_type === 'recent_clients') return route('clients.show', item.id);
+    return route('tasks.show', item.id);
+}
+
+function itemTitle(widget, item) {
+    return widget.widget_type === 'active_projects' ? item.name : item.title || item.name;
+}
+
+function itemMeta(widget, item) {
+    if (widget.widget_type === 'active_projects') return item.client_name;
+    if (widget.widget_type === 'recent_clients') return item.email || item.phone;
+    return dateShort(item.due_date);
+}
 </script>
 
 <template>
@@ -44,126 +294,149 @@ function priorityDot(priority) {
 
     <AuthenticatedLayout>
         <template #header>
-            <div class="flex flex-col gap-1">
-                <h2 class="text-xl font-semibold leading-tight text-gray-800">Dashboard</h2>
-                <p class="text-sm text-gray-500">Bentornato, {{ page.props.auth?.user?.email }}</p>
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div class="flex flex-col gap-1">
+                    <h2 class="text-xl font-semibold leading-tight text-gray-800">Dashboard</h2>
+                    <p class="text-sm text-gray-500">Bentornato, {{ page.props.auth?.user?.email }}</p>
+                </div>
+
+                <div class="relative flex items-center gap-2">
+                    <span v-if="saving" class="text-xs font-medium text-gray-400">Salvataggio...</span>
+                    <button type="button" class="btn btn-outline" @click="widgetMenuOpen = !widgetMenuOpen">
+                        <Plus class="h-4 w-4" :stroke-width="1.8" />
+                        Aggiungi widget
+                    </button>
+
+                    <div
+                        v-if="widgetMenuOpen"
+                        class="absolute right-0 top-12 z-30 w-80 overflow-hidden rounded-2xl border border-white/70 bg-white/82 p-2 shadow-[0_24px_70px_rgba(28,42,73,0.14)] backdrop-blur-2xl"
+                    >
+                        <div class="px-2 pb-2 pt-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Widget disponibili</div>
+                        <button
+                            v-for="widget in hiddenWidgets"
+                            :key="widget.widget_type"
+                            type="button"
+                            class="flex w-full items-start gap-3 rounded-2xl px-3 py-2 text-left transition hover:bg-indigo-50/80"
+                            @click="addWidget(widget)"
+                        >
+                            <span class="section-icon h-8 w-8">
+                                <component :is="metaFor(widget).icon" class="h-4 w-4" :stroke-width="1.7" />
+                            </span>
+                            <span>
+                                <span class="block text-sm font-semibold text-gray-900">{{ metaFor(widget).label }}</span>
+                                <span class="block text-xs text-gray-500">{{ metaFor(widget).description }}</span>
+                            </span>
+                        </button>
+                        <p v-if="!hiddenWidgets.length" class="px-3 py-6 text-center text-sm text-gray-500">Tutti i widget sono gia attivi.</p>
+                    </div>
+                </div>
             </div>
         </template>
 
         <div class="py-8">
-            <div class="mx-auto max-w-[1600px] space-y-8 px-4 sm:px-6 lg:px-8">
-                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <Link
-                        v-for="card in [
-                            ...statCards,
-                        ]"
-                        :key="card[0]"
-                        :href="route(card[2])"
-                        class="app-card-interactive flex items-center gap-4"
-                    >
-                        <span :class="['metric-icon', card[4]]">
-                            <component :is="card[3]" class="h-5 w-5" :stroke-width="1.7" />
-                        </span>
-                        <span class="min-w-0">
-                            <span class="block text-2xl font-semibold text-gray-900">{{ statValue(statCards.indexOf(card)) }}</span>
-                            <span class="block text-sm font-medium text-gray-700">{{ card[0] }}</span>
-                            <span class="block truncate text-xs text-gray-500">{{ card[1] }}</span>
-                        </span>
-                    </Link>
+            <div class="mx-auto max-w-[1600px] space-y-5 px-4 sm:px-6 lg:px-8">
+                <div class="toolbar justify-between">
+                    <div class="flex items-center gap-2 text-sm font-medium text-gray-600">
+                        <Settings2 class="h-4 w-4 text-indigo-500" :stroke-width="1.8" />
+                        Trascina la maniglia per spostare i widget. Usa il bordo destro per larghezza 1/4, 2/4, 3/4 o 4/4.
+                    </div>
+                    <span class="rounded-full bg-white/60 px-3 py-1 text-xs font-semibold text-gray-500">{{ visibleWidgets.length }} attivi</span>
                 </div>
 
-                <div class="grid gap-4 lg:grid-cols-3">
-                    <section class="app-card lg:col-span-2">
-                        <div class="mb-3 flex items-center justify-between">
-                            <h3 class="section-title"><span class="section-icon"><CalendarClock class="h-4 w-4" :stroke-width="1.7" /></span>Task in scadenza</h3>
-                            <Link :href="route('tasks.index')" class="action-link">Apri task <ChevronRight class="h-4 w-4" :stroke-width="1.7" /></Link>
-                        </div>
-                        <div class="space-y-1">
-                            <Link
-                                v-for="task in upcomingTasks"
-                                :key="task.id"
-                                :href="route('tasks.show', task.id)"
-                                class="flex items-center gap-3 rounded-md px-2 py-2 transition hover:bg-gray-50"
-                            >
-                                <span :class="['h-1.5 w-1.5 shrink-0 rounded-full', priorityDot(task.priority)]"></span>
-                                <span class="min-w-0 flex-1 truncate text-sm font-medium text-gray-900">
-                                    {{ task.title }}
-                                    <span v-if="task.client_name" class="font-normal text-gray-500"> - {{ task.client_name }}</span>
-                                </span>
-                                <span class="shrink-0 text-xs text-gray-500">{{ dateShort(task.due_date) }}</span>
-                            </Link>
-                            <p v-if="!upcomingTasks.length" class="py-2 text-sm text-gray-500">Nessun task in scadenza</p>
-                        </div>
-                    </section>
+                <div ref="dashboardGrid" class="grid grid-cols-1 gap-4 lg:grid-cols-4">
+                    <article
+                        v-for="widget in visibleWidgets"
+                        :key="widget.widget_type"
+                        :class="[
+                            'app-card group relative flex min-h-[154px] flex-col overflow-hidden transition',
+                            colSpanClass(widget),
+                            draggingType === widget.widget_type ? 'opacity-50 ring-2 ring-indigo-300' : '',
+                        ]"
+                        @dragover.prevent
+                        @drop.prevent="dropWidget(widget)"
+                        @dragend="draggingType = null"
+                    >
+                        <button
+                            type="button"
+                            class="absolute inset-y-0 right-0 z-20 w-3 cursor-ew-resize rounded-r-[inherit] bg-indigo-500/0 transition hover:bg-indigo-500/12"
+                            :title="`Ridimensiona ${metaFor(widget).label}`"
+                            @pointerdown="startResize(widget, $event)"
+                        >
+                            <span class="sr-only">Ridimensiona</span>
+                        </button>
 
-                    <section class="app-card">
-                        <h3 class="section-title mb-3"><span class="section-icon"><CheckSquare class="h-4 w-4" :stroke-width="1.7" /></span>I miei task</h3>
-                        <div class="space-y-1">
-                            <Link
-                                v-for="task in myTasks"
-                                :key="task.id"
-                                :href="route('tasks.show', task.id)"
-                                class="flex items-center gap-3 rounded-md px-2 py-2 transition hover:bg-gray-50"
-                            >
-                                <span :class="['h-1.5 w-1.5 shrink-0 rounded-full', priorityDot(task.priority)]"></span>
-                                <span class="min-w-0 flex-1 truncate text-sm font-medium text-gray-900">{{ task.title }}</span>
-                                <span class="shrink-0 text-xs text-gray-500">{{ dateShort(task.due_date) }}</span>
-                            </Link>
-                            <p v-if="!myTasks.length" class="py-2 text-sm text-gray-500">Nessun task assegnato</p>
-                        </div>
-                    </section>
+                        <div class="mb-3 flex items-start justify-between gap-3 pr-3">
+                            <div class="flex min-w-0 items-center gap-2">
+                                <button
+                                    type="button"
+                                    draggable="true"
+                                    class="icon-btn cursor-grab active:cursor-grabbing"
+                                    :title="`Sposta ${metaFor(widget).label}`"
+                                    @dragstart="startDrag(widget, $event)"
+                                >
+                                    <GripVertical class="h-4 w-4" :stroke-width="1.8" />
+                                    <span class="sr-only">Sposta</span>
+                                </button>
+                                <h3 v-if="metaFor(widget).kind === 'list'" class="section-title min-w-0">
+                                    <span :class="['section-icon', metaFor(widget).iconClass]">
+                                        <component :is="metaFor(widget).icon" class="h-4 w-4" :stroke-width="1.7" />
+                                    </span>
+                                    <span class="truncate">{{ metaFor(widget).label }}</span>
+                                </h3>
+                            </div>
 
-                    <section class="app-card">
-                        <h3 class="section-title mb-3"><span class="section-icon"><Briefcase class="h-4 w-4" :stroke-width="1.7" /></span>Progetti attivi</h3>
-                        <div class="space-y-1">
-                            <Link
-                                v-for="project in activeProjects"
-                                :key="project.id"
-                                :href="route('projects.show', project.id)"
-                                class="flex items-center justify-between gap-3 rounded-md px-2 py-2 transition hover:bg-gray-50"
-                            >
-                                <span class="flex min-w-0 items-center gap-2">
-                                    <span class="h-2.5 w-2.5 shrink-0 rounded-full" :style="{ backgroundColor: project.color || '#64748b' }"></span>
-                                    <span class="truncate text-sm font-medium text-gray-900">{{ project.name }}</span>
-                                </span>
-                                <span class="shrink-0 truncate text-xs text-gray-500">{{ project.client_name }}</span>
-                            </Link>
-                            <p v-if="!activeProjects.length" class="py-2 text-sm text-gray-500">Nessun progetto attivo</p>
+                            <div class="flex shrink-0 items-center gap-1">
+                                <span class="rounded-full bg-white/60 px-2 py-1 text-[11px] font-bold text-gray-500">{{ widget.col_span }}/4</span>
+                                <button type="button" class="icon-btn" :title="`Rimuovi ${metaFor(widget).label}`" @click="removeWidget(widget)">
+                                    <X class="h-4 w-4" :stroke-width="1.8" />
+                                    <span class="sr-only">Rimuovi</span>
+                                </button>
+                            </div>
                         </div>
-                    </section>
 
-                    <section class="app-card">
-                        <h3 class="section-title mb-3"><span class="section-icon"><Users class="h-4 w-4" :stroke-width="1.7" /></span>Clienti recenti</h3>
-                        <div class="space-y-1">
-                            <Link
-                                v-for="client in recentClients"
-                                :key="client.id"
-                                :href="route('clients.show', client.id)"
-                                class="flex items-center justify-between gap-3 rounded-md px-2 py-2 transition hover:bg-gray-50"
-                            >
-                                <span class="truncate text-sm font-medium text-gray-900">{{ client.name }}</span>
-                                <span class="shrink-0 truncate text-xs text-gray-500">{{ client.email || client.phone }}</span>
-                            </Link>
-                            <p v-if="!recentClients.length" class="py-2 text-sm text-gray-500">Nessun cliente</p>
-                        </div>
-                    </section>
+                        <Link
+                            v-if="metaFor(widget).kind === 'stat'"
+                            :href="route(metaFor(widget).route)"
+                            class="flex flex-1 items-center gap-4 rounded-2xl px-1 pb-1 pr-4 transition hover:bg-white/40"
+                        >
+                            <span :class="['metric-icon', metaFor(widget).iconClass]">
+                                <component :is="metaFor(widget).icon" class="h-5 w-5" :stroke-width="1.7" />
+                            </span>
+                            <span class="min-w-0">
+                                <span class="block text-3xl font-bold text-gray-950">{{ metaFor(widget).value() }}</span>
+                                <span class="block text-sm font-semibold text-gray-800">{{ metaFor(widget).label }}</span>
+                                <span class="block truncate text-xs text-gray-500">{{ metaFor(widget).description }}</span>
+                            </span>
+                        </Link>
 
-                    <section class="app-card">
-                        <h3 class="section-title mb-3"><span class="section-icon bg-red-50 text-red-600"><AlertTriangle class="h-4 w-4" :stroke-width="1.7" /></span>Task urgenti</h3>
-                        <div class="space-y-1">
-                            <Link
-                                v-for="task in urgentTasks"
-                                :key="task.id"
-                                :href="route('tasks.show', task.id)"
-                                class="flex items-center gap-3 rounded-md px-2 py-2 transition hover:bg-red-50"
-                            >
-                                <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500"></span>
-                                <span class="min-w-0 flex-1 truncate text-sm font-medium text-gray-900">{{ task.title }}</span>
-                                <span class="shrink-0 text-xs text-gray-500">{{ dateShort(task.due_date) }}</span>
+                        <div v-else class="flex flex-1 flex-col pr-3">
+                            <div class="space-y-1">
+                                <Link
+                                    v-for="item in metaFor(widget).items()"
+                                    :key="item.id"
+                                    :href="itemHref(widget, item)"
+                                    class="flex items-center gap-3 rounded-2xl px-2 py-2 transition hover:bg-white/52"
+                                >
+                                    <span
+                                        v-if="widget.widget_type === 'active_projects'"
+                                        class="h-2.5 w-2.5 shrink-0 rounded-full"
+                                        :style="{ backgroundColor: item.color || '#64748b' }"
+                                    ></span>
+                                    <span v-else :class="['h-1.5 w-1.5 shrink-0 rounded-full', priorityDot(item.priority)]"></span>
+                                    <span class="min-w-0 flex-1 truncate text-sm font-medium text-gray-900">
+                                        {{ itemTitle(widget, item) }}
+                                        <span v-if="widget.widget_type === 'upcoming_tasks' && item.client_name" class="font-normal text-gray-500"> - {{ item.client_name }}</span>
+                                    </span>
+                                    <span class="shrink-0 truncate text-xs text-gray-500">{{ itemMeta(widget, item) }}</span>
+                                </Link>
+                                <p v-if="!metaFor(widget).items().length" class="py-2 text-sm text-gray-500">{{ metaFor(widget).empty }}</p>
+                            </div>
+
+                            <Link :href="route(metaFor(widget).route)" class="action-link mt-auto pt-3">
+                                Apri <ChevronRight class="h-4 w-4" :stroke-width="1.7" />
                             </Link>
-                            <p v-if="!urgentTasks.length" class="py-2 text-sm text-gray-500">Nessun task urgente</p>
                         </div>
-                    </section>
+                    </article>
                 </div>
             </div>
         </div>
