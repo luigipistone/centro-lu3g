@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
     section: String,
@@ -27,6 +27,8 @@ const editing = ref(null);
 const formOpen = ref(false);
 const deleteTarget = ref(null);
 const deleteConfirmText = ref('');
+const updateDrafts = ref({});
+const savingUpdateKeys = ref([]);
 const page = usePage();
 const canWrite = computed(() => props.fields.length > 0);
 const billingSearch = ref('');
@@ -234,6 +236,7 @@ function shouldShowField(field) {
         if (['cadence', 'contact'].includes(field.name)) return showUpdateNewsletter.value;
     }
     if (props.section !== 'tasks') return true;
+    if (field.name === 'task_type') return false;
     if (['recurring_interval_value', 'recurring_interval_unit', 'recurring_mode', 'recurring_weekday', 'recurring_month_day'].includes(field.name)) {
         return Boolean(form.recurring_enabled) && form.task_type !== 'meeting';
     }
@@ -253,6 +256,23 @@ function toggleFormPerson(field, userId) {
         current.push(userId);
     }
     form[field] = current;
+}
+
+function setTaskFormType(type) {
+    form.task_type = type;
+    if (type === 'meeting' && !form.due_time) {
+        form.due_time = '09:00';
+    }
+    if (type === 'meeting') {
+        form.recurring_enabled = false;
+        form.project_id = '';
+    }
+    if (type === 'ongoing') {
+        form.project_id = '';
+    }
+    if (type !== 'meeting') {
+        form.location = '';
+    }
 }
 
 function openCreate(patch = {}) {
@@ -527,6 +547,79 @@ function openServiceUpdate(row) {
     });
 }
 
+function updateRowKey(row) {
+    return row.id || row.client_id;
+}
+
+function syncUpdateDrafts(rows = updateRows.value) {
+    const next = {};
+    rows.forEach((row) => {
+        next[updateRowKey(row)] = {
+            notes: row.notes || '',
+            report_url: row.report_url || '',
+            cadence: row.cadence || '',
+            contact: row.contact || '',
+            responsible_user_id: row.responsible_user_id || '',
+        };
+    });
+    updateDrafts.value = next;
+}
+
+watch(updateRows, (rows) => syncUpdateDrafts(rows), { immediate: true });
+
+function draftValue(row, field) {
+    return updateDrafts.value[updateRowKey(row)]?.[field] ?? '';
+}
+
+function setDraftValue(row, field, value) {
+    const key = updateRowKey(row);
+    updateDrafts.value = {
+        ...updateDrafts.value,
+        [key]: {
+            ...(updateDrafts.value[key] || {}),
+            [field]: value,
+        },
+    };
+}
+
+function saveServiceUpdateInline(row, patch = {}) {
+    const key = updateRowKey(row);
+    const draft = updateDrafts.value[key] || {};
+    const payload = {
+        client_id: row.client_id,
+        responsible_user_id: draft.responsible_user_id || null,
+        cadence: draft.cadence || null,
+        contact: draft.contact || null,
+        report_url: draft.report_url || null,
+        notes: draft.notes || null,
+        ...patch,
+    };
+
+    savingUpdateKeys.value = [...new Set([...savingUpdateKeys.value, key])];
+
+    const options = {
+        preserveScroll: true,
+        only: ['rows', 'errors', 'flash'],
+        onFinish: () => {
+            savingUpdateKeys.value = savingUpdateKeys.value.filter((item) => item !== key);
+        },
+    };
+
+    if (row.id) {
+        router.put(route(`${routeBase.value}.update`, row.id), payload, options);
+        return;
+    }
+
+    router.post(route(`${routeBase.value}.store`), payload, options);
+}
+
+function saveDraftField(row, field) {
+    const value = draftValue(row, field);
+    const current = row[field] || '';
+    if ((value || '') === (current || '')) return;
+    saveServiceUpdateInline(row, { [field]: value || null });
+}
+
 const taskRows = computed(() => props.rows.filter((row) => {
     const search = taskSearch.value.trim().toLowerCase();
     const matchesSearch = !search
@@ -684,6 +777,48 @@ function tasksForDay(date) {
                 </div>
 
                 <form :class="section === 'clients' || section === 'billing' ? 'grid gap-4 p-5 md:grid-cols-3' : 'space-y-4 p-5'" @submit.prevent="submit">
+                    <div v-if="section === 'tasks'" class="grid gap-2 sm:grid-cols-3">
+                        <button
+                            type="button"
+                            :class="[
+                                'rounded-md border px-3 py-2 text-left text-sm font-semibold transition',
+                                form.task_type === 'project' || form.task_type === 'task'
+                                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm'
+                                    : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50',
+                            ]"
+                            @click="setTaskFormType('project')"
+                        >
+                            <span class="block">Task</span>
+                            <span class="mt-0.5 block text-xs font-normal text-gray-500">Attivita di progetto</span>
+                        </button>
+                        <button
+                            type="button"
+                            :class="[
+                                'rounded-md border px-3 py-2 text-left text-sm font-semibold transition',
+                                form.task_type === 'ongoing'
+                                    ? 'border-amber-500 bg-amber-50 text-amber-800 shadow-sm'
+                                    : 'border-amber-200 bg-white text-amber-700 hover:bg-amber-50',
+                            ]"
+                            @click="setTaskFormType('ongoing')"
+                        >
+                            <span class="block">Continuativa</span>
+                            <span class="mt-0.5 block text-xs font-normal text-gray-500">Ricorrente o operativa</span>
+                        </button>
+                        <button
+                            type="button"
+                            :class="[
+                                'rounded-md border px-3 py-2 text-left text-sm font-semibold transition',
+                                form.task_type === 'meeting'
+                                    ? 'border-violet-500 bg-violet-50 text-violet-800 shadow-sm'
+                                    : 'border-violet-200 bg-white text-violet-700 hover:bg-violet-50',
+                            ]"
+                            @click="setTaskFormType('meeting')"
+                        >
+                            <span class="block">Meeting</span>
+                            <span class="mt-0.5 block text-xs font-normal text-gray-500">Data, ora e luogo</span>
+                        </button>
+                    </div>
+
                     <div
                         v-for="field in fields"
                         v-show="shouldShowField(field)"
@@ -1766,7 +1901,6 @@ function tasksForDay(date) {
                                     <th v-if="showUpdateNewsletter" class="px-3 py-3 text-left font-semibold text-gray-600">Cadenza</th>
                                     <th v-if="showUpdateNewsletter" class="px-3 py-3 text-left font-semibold text-gray-600">Contatto</th>
                                     <th class="px-3 py-3 text-left font-semibold text-gray-600">Responsabile</th>
-                                    <th class="px-3 py-3 text-right font-semibold text-gray-600">Azioni</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-100">
@@ -1784,28 +1918,63 @@ function tasksForDay(date) {
                                         <span v-else class="text-xs italic text-gray-500">Nessun aggiornamento</span>
                                     </td>
                                     <td class="px-3 py-3">
-                                        <span v-if="row.notes" class="line-clamp-2 max-w-[320px] text-gray-600">{{ row.notes }}</span>
-                                        <span v-else class="text-xs italic text-gray-400">Aggiungi note...</span>
+                                        <input
+                                            :value="draftValue(row, 'notes')"
+                                            class="form-control mt-0 min-w-[260px]"
+                                            placeholder="Aggiungi note..."
+                                            @input="setDraftValue(row, 'notes', $event.target.value)"
+                                            @blur="saveDraftField(row, 'notes')"
+                                        />
                                     </td>
                                     <td v-if="showUpdateReport" class="px-3 py-3">
-                                        <a v-if="row.report_url" :href="row.report_url" target="_blank" rel="noreferrer" class="max-w-[220px] truncate text-indigo-600 hover:text-indigo-500">
-                                            Apri report
-                                        </a>
-                                        <span v-else class="text-xs text-gray-400">-</span>
+                                        <div class="flex min-w-[220px] flex-col gap-1">
+                                            <input
+                                                :value="draftValue(row, 'report_url')"
+                                                class="form-control mt-0"
+                                                placeholder="https://..."
+                                                type="url"
+                                                @input="setDraftValue(row, 'report_url', $event.target.value)"
+                                                @blur="saveDraftField(row, 'report_url')"
+                                            />
+                                            <a v-if="row.report_url" :href="row.report_url" target="_blank" rel="noreferrer" class="truncate text-xs text-indigo-600 hover:text-indigo-500">
+                                                Apri report
+                                            </a>
+                                        </div>
                                     </td>
                                     <td v-if="showUpdateNewsletter" class="px-3 py-3">
-                                        {{ displayValue(row.cadence) }}
+                                        <select
+                                            :value="draftValue(row, 'cadence')"
+                                            class="form-control mt-0 min-w-[150px]"
+                                            @change="setDraftValue(row, 'cadence', $event.target.value); saveServiceUpdateInline(row, { cadence: $event.target.value || null })"
+                                        >
+                                            <option value="">-</option>
+                                            <option value="on_request">Su richiesta</option>
+                                            <option value="weekly">Settimanale</option>
+                                            <option value="biweekly">Bisettimanale</option>
+                                            <option value="monthly">Mensile</option>
+                                        </select>
                                     </td>
                                     <td v-if="showUpdateNewsletter" class="px-3 py-3">
-                                        {{ row.contact || '-' }}
+                                        <input
+                                            :value="draftValue(row, 'contact')"
+                                            class="form-control mt-0 min-w-[180px]"
+                                            placeholder="Nome / email..."
+                                            @input="setDraftValue(row, 'contact', $event.target.value)"
+                                            @blur="saveDraftField(row, 'contact')"
+                                        />
                                     </td>
                                     <td class="px-3 py-3">
-                                        {{ row.responsible_name || 'Nessuno' }}
-                                    </td>
-                                    <td class="px-3 py-3 text-right">
-                                        <button type="button" class="text-sm font-medium text-indigo-600 hover:text-indigo-500" @click="openServiceUpdate(row)">
-                                            {{ row.id ? 'Modifica' : 'Aggiorna' }}
-                                        </button>
+                                        <div class="flex min-w-[200px] items-center gap-2">
+                                            <select
+                                                :value="draftValue(row, 'responsible_user_id')"
+                                                class="form-control mt-0"
+                                                @change="setDraftValue(row, 'responsible_user_id', $event.target.value); saveServiceUpdateInline(row, { responsible_user_id: $event.target.value || null })"
+                                            >
+                                                <option value="">Nessuno</option>
+                                                <option v-for="user in users" :key="user.id" :value="user.id">{{ user.name || user.email }}</option>
+                                            </select>
+                                            <span v-if="savingUpdateKeys.includes(updateRowKey(row))" class="shrink-0 text-xs text-gray-400">Salvo...</span>
+                                        </div>
                                     </td>
                                 </tr>
                             </tbody>
