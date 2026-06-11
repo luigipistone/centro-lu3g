@@ -3,6 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import {
     Check,
+    ChevronLeft,
     Copy,
     Download,
     FileText,
@@ -640,8 +641,12 @@ function remainingAmount() {
         <template #header>
             <div class="flex items-center justify-between gap-4">
                 <div>
-                    <Link :href="route(`${section}.index`)" class="text-sm font-medium text-indigo-600 hover:text-indigo-500">
-                        {{ title }}
+                    <Link
+                        :href="route(`${section}.index`)"
+                        class="inline-flex items-center gap-1 text-xs font-medium text-gray-500 transition hover:text-indigo-600"
+                    >
+                        <ChevronLeft class="h-3.5 w-3.5" :stroke-width="1.8" />
+                        Torna a {{ title }}
                     </Link>
                     <div class="mt-1 flex items-center gap-2">
                         <span v-if="section === 'projects'" class="h-3 w-3 rounded-full" :style="{ backgroundColor: record.color || '#2563eb' }"></span>
