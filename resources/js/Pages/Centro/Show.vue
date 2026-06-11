@@ -76,6 +76,24 @@ const contactForm = useForm({
     role: '',
     notes: '',
 });
+const subscriptionDefaults = {
+    name: '',
+    description: '',
+    amount: 0,
+    vat_rate: 22,
+    vat_nature_code: '',
+    frequency_value: 1,
+    frequency_unit: 'month',
+    start_date: new Date().toISOString().slice(0, 10),
+    end_date: '',
+    next_invoice_date: new Date().toISOString().slice(0, 10),
+    payment_terms_days: props.record.payment_terms_days || 30,
+    auto_generate: true,
+    active: true,
+    notes: '',
+};
+const subscriptionForm = useForm({ ...subscriptionDefaults });
+const editingSubscription = ref(null);
 const subtaskForm = useForm({
     title: '',
     priority: 'medium',
@@ -169,6 +187,50 @@ function removeContact(contact) {
     router.delete(route('clients.contacts.destroy', [props.record.id, contact.id]), { preserveScroll: true });
 }
 
+function resetSubscriptionForm() {
+    editingSubscription.value = null;
+    subscriptionForm.clearErrors();
+    subscriptionForm.defaults({ ...subscriptionDefaults });
+    subscriptionForm.reset();
+    Object.assign(subscriptionForm, { ...subscriptionDefaults });
+}
+
+function editSubscription(subscription) {
+    editingSubscription.value = subscription;
+    subscriptionForm.clearErrors();
+    Object.keys(subscriptionDefaults).forEach((key) => {
+        subscriptionForm[key] = subscription[key] ?? subscriptionDefaults[key];
+    });
+}
+
+function saveSubscription() {
+    if (editingSubscription.value) {
+        subscriptionForm.put(route('clients.subscriptions.update', [props.record.id, editingSubscription.value.id]), {
+            preserveScroll: true,
+            onSuccess: resetSubscriptionForm,
+        });
+        return;
+    }
+
+    subscriptionForm.post(route('clients.subscriptions.store', props.record.id), {
+        preserveScroll: true,
+        onSuccess: resetSubscriptionForm,
+    });
+}
+
+function toggleSubscription(subscription) {
+    router.patch(route('clients.subscriptions.active', [props.record.id, subscription.id]), { active: !subscription.active }, { preserveScroll: true });
+}
+
+function generateSubscription(subscription) {
+    router.post(route('clients.subscriptions.generate', [props.record.id, subscription.id]));
+}
+
+function removeSubscription(subscription) {
+    if (!confirm(`Eliminare l'abbonamento "${subscription.name}"?`)) return;
+    router.delete(route('clients.subscriptions.destroy', [props.record.id, subscription.id]), { preserveScroll: true });
+}
+
 function clientHasService(service) {
     return (props.related.clientServices || []).includes(service.id);
 }
@@ -219,6 +281,12 @@ function fullClientAddress(record) {
 
 function money(value) {
     return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(Number(value || 0));
+}
+
+function subscriptionFrequency(subscription) {
+    const unit = subscription.frequency_unit === 'year' ? 'anno' : 'mese';
+    const plural = Number(subscription.frequency_value) > 1 ? (subscription.frequency_unit === 'year' ? 'anni' : 'mesi') : unit;
+    return `ogni ${subscription.frequency_value} ${plural}`;
 }
 
 function dateIt(value) {
@@ -597,6 +665,128 @@ function remainingAmount() {
                             </dl>
                         </section>
                     </div>
+
+                    <section class="surface rounded-md p-5">
+                        <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Abbonamenti</h3>
+                                <p class="mt-1 text-sm text-gray-500">{{ related.subscriptions?.length || 0 }} ricorrenze collegate al cliente</p>
+                            </div>
+                            <button v-if="editingSubscription" type="button" class="text-sm font-medium text-gray-500 hover:text-gray-800" @click="resetSubscriptionForm">
+                                Annulla modifica
+                            </button>
+                        </div>
+
+                        <form class="grid gap-3 rounded-md border border-gray-100 bg-gray-50 p-4 md:grid-cols-4" @submit.prevent="saveSubscription">
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700">Nome *</label>
+                                <input v-model="subscriptionForm.name" class="form-control" required />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Importo</label>
+                                <input v-model="subscriptionForm.amount" type="number" step="0.01" min="0" class="form-control" required />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">IVA %</label>
+                                <input v-model="subscriptionForm.vat_rate" type="number" step="0.01" min="0" class="form-control" required />
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700">Descrizione riga fattura</label>
+                                <input v-model="subscriptionForm.description" class="form-control" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Ogni</label>
+                                <input v-model="subscriptionForm.frequency_value" type="number" min="1" class="form-control" required />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Unita</label>
+                                <select v-model="subscriptionForm.frequency_unit" class="form-control">
+                                    <option value="month">Mese/i</option>
+                                    <option value="year">Anno/i</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Inizio</label>
+                                <input v-model="subscriptionForm.start_date" type="date" class="form-control" required />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Fine</label>
+                                <input v-model="subscriptionForm.end_date" type="date" class="form-control" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Prossima emissione</label>
+                                <input v-model="subscriptionForm.next_invoice_date" type="date" class="form-control" required />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Termini pagamento</label>
+                                <input v-model="subscriptionForm.payment_terms_days" type="number" min="0" class="form-control" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Natura IVA</label>
+                                <input v-model="subscriptionForm.vat_nature_code" class="form-control" placeholder="N2.2, N4..." />
+                            </div>
+                            <div class="flex items-end gap-4">
+                                <label class="mb-2 flex items-center gap-2 text-sm text-gray-700">
+                                    <input v-model="subscriptionForm.auto_generate" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
+                                    Auto
+                                </label>
+                                <label class="mb-2 flex items-center gap-2 text-sm text-gray-700">
+                                    <input v-model="subscriptionForm.active" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
+                                    Attivo
+                                </label>
+                            </div>
+                            <div class="md:col-span-3">
+                                <label class="block text-sm font-medium text-gray-700">Note interne</label>
+                                <input v-model="subscriptionForm.notes" class="form-control" />
+                            </div>
+                            <div class="flex items-end">
+                                <button type="submit" class="inline-flex w-full justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50" :disabled="subscriptionForm.processing">
+                                    {{ editingSubscription ? 'Salva' : 'Crea' }}
+                                </button>
+                            </div>
+                        </form>
+
+                        <div class="mt-5 space-y-3">
+                            <article
+                                v-for="subscription in related.subscriptions || []"
+                                :key="subscription.id"
+                                :class="['rounded-md border p-4', subscription.active ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50 opacity-70']"
+                            >
+                                <div class="flex flex-wrap items-start justify-between gap-3">
+                                    <div class="min-w-0">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <h4 class="font-semibold text-gray-900">{{ subscription.name }}</h4>
+                                            <span :class="['rounded-full px-2 py-0.5 text-xs font-medium', subscription.active ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600']">
+                                                {{ subscription.active ? 'Attivo' : 'In pausa' }}
+                                            </span>
+                                            <span v-if="subscription.auto_generate" class="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">auto</span>
+                                        </div>
+                                        <p class="mt-1 text-sm text-gray-500">
+                                            {{ money(subscription.amount) }} + IVA {{ subscription.vat_rate }}% · {{ subscriptionFrequency(subscription) }} · prossima {{ dateIt(subscription.next_invoice_date) }}
+                                        </p>
+                                        <p v-if="subscription.description" class="mt-1 text-sm text-gray-600">{{ subscription.description }}</p>
+                                    </div>
+                                    <div class="flex flex-wrap gap-2">
+                                        <button type="button" class="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50" @click="generateSubscription(subscription)">
+                                            Genera fattura
+                                        </button>
+                                        <button type="button" class="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50" @click="editSubscription(subscription)">
+                                            Modifica
+                                        </button>
+                                        <button type="button" class="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50" @click="toggleSubscription(subscription)">
+                                            {{ subscription.active ? 'Pausa' : 'Riattiva' }}
+                                        </button>
+                                        <button type="button" class="rounded-md border border-red-100 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50" @click="removeSubscription(subscription)">
+                                            Elimina
+                                        </button>
+                                    </div>
+                                </div>
+                            </article>
+                            <p v-if="!(related.subscriptions || []).length" class="rounded-md border border-dashed border-gray-300 bg-white px-4 py-8 text-center text-sm text-gray-500">
+                                Nessun abbonamento ricorrente per questo cliente.
+                            </p>
+                        </div>
+                    </section>
                 </section>
 
                 <section v-if="section !== 'clients'" class="surface rounded-md p-5">

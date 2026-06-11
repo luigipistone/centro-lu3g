@@ -136,6 +136,7 @@ class CentroPageController extends Controller
                 'contacts' => DB::table('client_contacts')->where('client_id', $id)->latest()->get(),
                 'clientServices' => DB::table('client_services')->where('client_id', $id)->pluck('service_id'),
                 'services' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name', 'color']),
+                'subscriptions' => DB::table('subscriptions')->where('client_id', $id)->latest()->get(),
             ],
             'projects' => [
                 'tasks' => DB::table('tasks')->where('project_id', $id)->latest()->limit(40)->get(),
@@ -1466,6 +1467,166 @@ class CentroPageController extends Controller
         $this->recalculateDocument($documentId);
 
         return back()->with('status', 'Pagamento eliminato.');
+    }
+
+    public function storeSubscription(Request $request, string $clientId): RedirectResponse
+    {
+        DB::table('clients')->where('id', $clientId)->exists() || abort(404);
+        $payload = $this->validatedSubscriptionPayload($request);
+        $payload['id'] = (string) str()->uuid();
+        $payload['client_id'] = $clientId;
+        $payload['created_by'] = $request->user()->id;
+        $payload['created_at'] = now();
+        $payload['updated_at'] = now();
+
+        DB::table('subscriptions')->insert($payload);
+
+        return back()->with('status', 'Abbonamento creato.');
+    }
+
+    public function updateSubscription(Request $request, string $clientId, string $subscriptionId): RedirectResponse
+    {
+        $this->subscriptionForClient($clientId, $subscriptionId);
+        $payload = $this->validatedSubscriptionPayload($request);
+        $payload['updated_at'] = now();
+
+        DB::table('subscriptions')->where('id', $subscriptionId)->update($payload);
+
+        return back()->with('status', 'Abbonamento aggiornato.');
+    }
+
+    public function toggleSubscription(Request $request, string $clientId, string $subscriptionId): RedirectResponse
+    {
+        $this->subscriptionForClient($clientId, $subscriptionId);
+
+        DB::table('subscriptions')->where('id', $subscriptionId)->update([
+            'active' => $request->boolean('active'),
+            'updated_at' => now(),
+        ]);
+
+        return back()->with('status', 'Stato abbonamento aggiornato.');
+    }
+
+    public function destroySubscription(string $clientId, string $subscriptionId): RedirectResponse
+    {
+        $this->subscriptionForClient($clientId, $subscriptionId);
+        DB::table('subscriptions')->where('id', $subscriptionId)->delete();
+
+        return back()->with('status', 'Abbonamento eliminato.');
+    }
+
+    public function generateSubscriptionDocument(Request $request, string $clientId, string $subscriptionId): RedirectResponse
+    {
+        $subscription = $this->subscriptionForClient($clientId, $subscriptionId);
+        $settings = DB::table('document_settings')->first();
+        $issueDate = now()->toDateString();
+        $terms = $subscription->payment_terms_days ?? $settings?->default_payment_terms_days ?? 30;
+        $documentId = (string) str()->uuid();
+
+        DB::table('documents')->insert([
+            'id' => $documentId,
+            'client_id' => $clientId,
+            'subscription_id' => $subscription->id,
+            'doc_type' => 'fattura',
+            'status' => 'draft',
+            'issue_date' => $issueDate,
+            'due_date' => now()->addDays((int) $terms)->toDateString(),
+            'currency' => 'EUR',
+            'payment_method' => $settings?->default_payment_method ?? null,
+            'payment_terms_days' => $terms,
+            'causale' => $subscription->name,
+            'notes' => $subscription->notes,
+            'footer_notes' => $settings?->footer_notes ?? null,
+            'withholding_pct' => $settings?->default_withholding_pct ?? 0,
+            'pension_fund_pct' => $settings?->default_pension_fund_pct ?? 0,
+            'pension_fund_label' => $settings?->default_pension_fund_label ?? null,
+            'apply_bollo' => false,
+            'total_taxable' => 0,
+            'total_discount' => 0,
+            'total_vat' => 0,
+            'total_pension_fund' => 0,
+            'total_withholding' => 0,
+            'total_amount' => 0,
+            'total_paid' => 0,
+            'year' => now()->year,
+            'created_by' => $request->user()->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('document_lines')->insert([
+            'id' => (string) str()->uuid(),
+            'document_id' => $documentId,
+            'position' => 0,
+            'description' => $subscription->description ?: $subscription->name,
+            'quantity' => 1,
+            'unit_price' => (float) $subscription->amount,
+            'discount_pct' => 0,
+            'vat_rate' => (float) $subscription->vat_rate,
+            'vat_nature_code' => $subscription->vat_nature_code,
+            'subtotal' => (float) $subscription->amount,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->recalculateDocument($documentId);
+
+        DB::table('subscriptions')->where('id', $subscriptionId)->update([
+            'next_invoice_date' => $this->nextSubscriptionDate($subscription),
+            'updated_at' => now(),
+        ]);
+
+        return redirect()->route('billing.show', $documentId)->with('status', 'Fattura generata da abbonamento.');
+    }
+
+    private function subscriptionForClient(string $clientId, string $subscriptionId): object
+    {
+        $subscription = DB::table('subscriptions')
+            ->where('client_id', $clientId)
+            ->where('id', $subscriptionId)
+            ->first();
+
+        abort_if(! $subscription, 404);
+
+        return $subscription;
+    }
+
+    private function validatedSubscriptionPayload(Request $request): array
+    {
+        $payload = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
+            'amount' => ['required', 'numeric', 'min:0'],
+            'vat_rate' => ['required', 'numeric', 'min:0'],
+            'vat_nature_code' => ['nullable', 'string', 'max:16'],
+            'frequency_value' => ['required', 'integer', 'min:1'],
+            'frequency_unit' => ['required', Rule::in(['month', 'year'])],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            'next_invoice_date' => ['required', 'date'],
+            'payment_terms_days' => ['nullable', 'integer', 'min:0', 'max:365'],
+            'auto_generate' => ['boolean'],
+            'active' => ['boolean'],
+            'notes' => ['nullable', 'string'],
+        ]);
+
+        $payload = $this->nullifyEmptyStrings($payload);
+        $payload['amount'] = (float) $payload['amount'];
+        $payload['vat_rate'] = (float) $payload['vat_rate'];
+        $payload['frequency_value'] = (int) $payload['frequency_value'];
+        $payload['payment_terms_days'] = $payload['payment_terms_days'] === null ? null : (int) $payload['payment_terms_days'];
+        $payload['auto_generate'] = $request->boolean('auto_generate');
+        $payload['active'] = $request->boolean('active', true);
+
+        return $payload;
+    }
+
+    private function nextSubscriptionDate(object $subscription): string
+    {
+        $date = \Carbon\Carbon::parse($subscription->next_invoice_date ?: now());
+        $frequency = max(1, (int) $subscription->frequency_value);
+
+        return ($subscription->frequency_unit === 'year' ? $date->addYears($frequency) : $date->addMonths($frequency))->toDateString();
     }
 
     private function recalculateDocument(string $id): void

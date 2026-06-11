@@ -21,6 +21,11 @@ Route::middleware('auth')->group(function () {
     Route::delete('/clients/{clientId}/contacts/{contactId}', [CentroPageController::class, 'destroyClientContact'])->name('clients.contacts.destroy');
     Route::post('/clients/{clientId}/services/{serviceId}', [CentroPageController::class, 'attachClientService'])->name('clients.services.attach');
     Route::delete('/clients/{clientId}/services/{serviceId}', [CentroPageController::class, 'detachClientService'])->name('clients.services.detach');
+    Route::post('/clients/{clientId}/subscriptions', [CentroPageController::class, 'storeSubscription'])->name('clients.subscriptions.store');
+    Route::put('/clients/{clientId}/subscriptions/{subscriptionId}', [CentroPageController::class, 'updateSubscription'])->name('clients.subscriptions.update');
+    Route::patch('/clients/{clientId}/subscriptions/{subscriptionId}/active', [CentroPageController::class, 'toggleSubscription'])->name('clients.subscriptions.active');
+    Route::post('/clients/{clientId}/subscriptions/{subscriptionId}/generate', [CentroPageController::class, 'generateSubscriptionDocument'])->name('clients.subscriptions.generate');
+    Route::delete('/clients/{clientId}/subscriptions/{subscriptionId}', [CentroPageController::class, 'destroySubscription'])->name('clients.subscriptions.destroy');
     Route::delete('/clients/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'clients')->name('clients.destroy');
     Route::get('/projects', [CentroPageController::class, 'index'])->defaults('section', 'projects')->name('projects.index');
     Route::post('/projects', [CentroPageController::class, 'store'])->defaults('section', 'projects')->name('projects.store');
