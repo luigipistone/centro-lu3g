@@ -7,7 +7,6 @@ import {
     Briefcase,
     CalendarClock,
     CheckSquare,
-    ChevronRight,
     GripVertical,
     Plus,
     Settings2,
@@ -342,6 +341,12 @@ function itemMeta(widget, item) {
     if (widget.widget_type === 'recent_clients') return item.email || item.phone;
     return dateShort(item.due_date);
 }
+
+function widgetNumber(widget) {
+    const meta = metaFor(widget);
+    if (meta.kind === 'stat') return meta.value();
+    return meta.items().length;
+}
 </script>
 
 <template>
@@ -364,7 +369,7 @@ function itemMeta(widget, item) {
 
                     <div
                         v-if="widgetMenuOpen"
-                        class="absolute right-0 top-12 z-30 w-80 overflow-hidden rounded-2xl border border-white/70 bg-white/82 p-2 shadow-[0_24px_70px_rgba(28,42,73,0.14)] backdrop-blur-2xl"
+                        class="absolute right-0 top-12 z-30 w-80 overflow-hidden rounded-2xl border border-white/80 bg-white/95 p-2 shadow-[0_24px_70px_rgba(28,42,73,0.14)] backdrop-blur-xl"
                     >
                         <div class="px-2 pb-2 pt-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Widget disponibili</div>
                         <button
@@ -441,29 +446,24 @@ function itemMeta(widget, item) {
                             </div>
                         </div>
 
-                        <h3 v-if="metaFor(widget).kind === 'list'" class="section-title mb-3 mt-10 min-w-0 pr-3">
-                            <span :class="['section-icon', metaFor(widget).iconClass]">
-                                <component :is="metaFor(widget).icon" class="h-4 w-4" :stroke-width="1.7" />
-                            </span>
-                            <span class="truncate">{{ metaFor(widget).label }}</span>
-                        </h3>
-
-                        <Link
-                            v-if="metaFor(widget).kind === 'stat'"
-                            :href="route(metaFor(widget).route)"
-                            class="mt-10 flex flex-1 items-center gap-4 rounded-2xl px-1 pb-1 pr-4 transition hover:bg-white/40"
+                        <component
+                            :is="metaFor(widget).kind === 'stat' ? Link : 'div'"
+                            v-bind="metaFor(widget).kind === 'stat' ? { href: route(metaFor(widget).route) } : {}"
+                            class="mt-10 flex items-start justify-between gap-4 rounded-2xl px-1 pb-3 pr-4 transition hover:bg-white/55"
                         >
-                            <span :class="['metric-icon', metaFor(widget).iconClass]">
-                                <component :is="metaFor(widget).icon" class="h-5 w-5" :stroke-width="1.7" />
+                            <span class="flex min-w-0 items-start gap-3">
+                                <span :class="['metric-icon', metaFor(widget).iconClass]">
+                                    <component :is="metaFor(widget).icon" class="h-5 w-5" :stroke-width="1.7" />
+                                </span>
+                                <span class="min-w-0 pt-0.5">
+                                    <span class="block truncate text-sm font-semibold text-gray-900">{{ metaFor(widget).label }}</span>
+                                    <span class="block truncate text-xs text-gray-500">{{ metaFor(widget).description }}</span>
+                                </span>
                             </span>
-                            <span class="min-w-0">
-                                <span class="block text-3xl font-bold text-gray-950">{{ metaFor(widget).value() }}</span>
-                                <span class="block text-sm font-semibold text-gray-800">{{ metaFor(widget).label }}</span>
-                                <span class="block truncate text-xs text-gray-500">{{ metaFor(widget).description }}</span>
-                            </span>
-                        </Link>
+                            <span class="shrink-0 text-3xl font-bold leading-none text-gray-950">{{ widgetNumber(widget) }}</span>
+                        </component>
 
-                        <div v-else class="flex flex-1 flex-col pr-3">
+                        <div v-if="metaFor(widget).kind === 'list'" class="flex flex-1 flex-col pr-3">
                             <div class="space-y-1">
                                 <Link
                                     v-for="item in metaFor(widget).items()"
@@ -485,10 +485,6 @@ function itemMeta(widget, item) {
                                 </Link>
                                 <p v-if="!metaFor(widget).items().length" class="py-2 text-sm text-gray-500">{{ metaFor(widget).empty }}</p>
                             </div>
-
-                            <Link :href="route(metaFor(widget).route)" class="action-link mt-auto pt-3">
-                                Apri <ChevronRight class="h-4 w-4" :stroke-width="1.7" />
-                            </Link>
                         </div>
                     </article>
 

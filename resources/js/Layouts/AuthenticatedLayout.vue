@@ -89,7 +89,7 @@ const groups = [
                         </span>
                     </Link>
 
-                    <div class="invisible absolute right-0 top-11 z-40 w-80 overflow-hidden rounded-2xl border border-white/70 bg-white/78 opacity-0 shadow-[0_24px_70px_rgba(28,42,73,0.14)] backdrop-blur-2xl transition group-hover:visible group-hover:opacity-100">
+                    <div class="invisible absolute right-0 top-11 z-40 w-80 overflow-hidden rounded-2xl border border-white/80 bg-white/95 opacity-0 shadow-[0_24px_70px_rgba(28,42,73,0.14)] backdrop-blur-xl transition group-hover:visible group-hover:opacity-100">
                         <div class="flex items-center justify-between border-b border-white/60 px-3 py-2">
                             <span class="text-sm font-semibold text-gray-900">Notifiche</span>
                             <Link :href="route('notifications.index')" class="text-xs font-medium text-indigo-600 hover:text-indigo-500">Vedi tutte</Link>
@@ -269,7 +269,7 @@ const groups = [
                 </div>
             </nav>
 
-            <header class="border-b border-white/60 bg-white/46 backdrop-blur-2xl" v-if="$slots.header">
+            <header class="border-b border-white/70 bg-white/72 backdrop-blur-xl" v-if="$slots.header">
                 <div class="px-4 py-6 sm:px-6 lg:px-8">
                     <slot name="header" />
                 </div>
