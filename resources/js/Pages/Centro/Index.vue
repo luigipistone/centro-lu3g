@@ -385,6 +385,12 @@ function createTaskHref(type, date) {
     return `${route('tasks.index')}?create=${type}&date=${date}`;
 }
 
+function toggleTaskDone(task) {
+    router.patch(route('tasks.status.update', task.id), {
+        status: task.status === 'done' ? 'todo' : 'done',
+    }, { preserveScroll: true });
+}
+
 function taskSpansDate(row, date) {
     if (!row.due_date) return false;
 
@@ -518,22 +524,29 @@ function tasksForDay(date) {
                                 </div>
 
                                 <div v-else class="space-y-1.5">
-                                    <Link
+                                    <div
                                         v-for="task in cell.tasks.slice(0, 4)"
                                         :key="task.id"
-                                        :href="route('tasks.show', task.id)"
                                         :class="[
-                                            'block border px-2 py-1.5 text-xs transition hover:border-indigo-300 hover:shadow-sm',
+                                            'border px-2 py-1.5 text-xs transition hover:border-indigo-300 hover:shadow-sm',
                                             taskTypeClass(task.task_type),
                                             taskSpanClass(task),
                                         ]"
                                     >
                                         <div class="flex items-start gap-1.5">
-                                            <span class="mt-1 h-2 w-2 shrink-0 rounded-full" :style="{ backgroundColor: task.project_color || task.service_color || '#2563eb' }"></span>
+                                            <button
+                                                type="button"
+                                                :class="['mt-0.5 h-3.5 w-3.5 shrink-0 rounded border', task.status === 'done' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300 bg-white hover:border-indigo-400']"
+                                                :title="task.status === 'done' ? 'Riapri task' : 'Completa task'"
+                                                @click.stop="toggleTaskDone(task)"
+                                            >
+                                                <span class="sr-only">{{ task.status === 'done' ? 'Riapri task' : 'Completa task' }}</span>
+                                            </button>
                                             <div class="min-w-0 flex-1">
                                                 <div class="flex items-center gap-1">
+                                                    <span class="h-2 w-2 shrink-0 rounded-full" :style="{ backgroundColor: task.project_color || task.service_color || '#2563eb' }"></span>
                                                     <span v-if="task.due_time" class="shrink-0 text-[10px] text-gray-500">{{ String(task.due_time).slice(0, 5) }}</span>
-                                                    <span :class="['truncate font-medium', task.status === 'done' ? 'line-through opacity-60' : '']">{{ task.title }}</span>
+                                                    <Link :href="route('tasks.show', task.id)" :class="['truncate font-medium hover:text-indigo-600', task.status === 'done' ? 'line-through opacity-60' : '']">{{ task.title }}</Link>
                                                 </div>
                                                 <div class="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-gray-500">
                                                     <span class="truncate">{{ task.client_name || task.project_name || task.service_name || taskTypeLabel(task.task_type) }}</span>
@@ -541,7 +554,7 @@ function tasksForDay(date) {
                                                 </div>
                                             </div>
                                         </div>
-                                    </Link>
+                                    </div>
                                     <div v-if="cell.tasks.length > 4" class="rounded px-2 py-1 text-[11px] font-medium text-gray-500">
                                         altre {{ cell.tasks.length - 4 }}
                                     </div>
