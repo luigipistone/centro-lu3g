@@ -1027,14 +1027,14 @@ function visibleCalendarTasks(cell) {
             <div class="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
                 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <div class="flex items-center gap-2">
-                        <button type="button" class="rounded-md p-2 text-gray-500 hover:bg-white hover:text-gray-900" @click="changeMonth(-1)">
+                        <button type="button" class="icon-btn" @click="changeMonth(-1)">
                             <span class="sr-only">Mese precedente</span>
                             <ChevronLeft class="h-4 w-4" :stroke-width="1.7" />
                         </button>
-                        <div class="min-w-[190px] text-center font-semibold text-gray-900">
+                        <div class="min-w-[190px] text-center text-lg font-bold text-gray-950">
                             {{ monthNames[calendarMonth] }} {{ calendarYear }}
                         </div>
-                        <button type="button" class="rounded-md p-2 text-gray-500 hover:bg-white hover:text-gray-900" @click="changeMonth(1)">
+                        <button type="button" class="icon-btn" @click="changeMonth(1)">
                             <span class="sr-only">Mese successivo</span>
                             <ChevronRight class="h-4 w-4" :stroke-width="1.7" />
                         </button>
@@ -1048,14 +1048,14 @@ function visibleCalendarTasks(cell) {
                             <option value="ongoing">Continuativa</option>
                             <option value="meeting">Meeting</option>
                         </select>
-                        <label class="inline-flex items-center gap-2 text-sm text-gray-600">
+                        <label class="inline-flex items-center gap-2 rounded-2xl border border-white/70 bg-white/58 px-3 py-2 text-sm font-medium text-gray-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.62)] backdrop-blur-xl">
                             <input v-model="compactWeekend" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
                             Weekend compatto
                         </label>
                         <button
                             v-if="calendarExpanded"
                             type="button"
-                            class="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                            class="btn btn-outline"
                             @click="calendarExpanded = false"
                         >
                             Compatta
@@ -1063,26 +1063,26 @@ function visibleCalendarTasks(cell) {
                     </div>
                 </div>
 
-                <div class="overflow-hidden rounded-lg border border-gray-200 bg-gray-200 shadow-sm">
-                    <div :class="['grid gap-px bg-gray-200', compactWeekend ? 'grid-cols-[repeat(5,minmax(0,1fr))_minmax(58px,0.34fr)_minmax(58px,0.34fr)]' : 'grid-cols-7']">
+                <div class="surface overflow-hidden">
+                    <div :class="['grid gap-px bg-white/42', compactWeekend ? 'grid-cols-[repeat(5,minmax(0,1fr))_minmax(58px,0.34fr)_minmax(58px,0.34fr)]' : 'grid-cols-7']">
                         <div
                             v-for="(day, index) in dayNames"
                             :key="day"
-                            :class="['bg-gray-50 px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-gray-500', compactWeekend && index >= 5 ? 'text-[10px]' : '']"
+                            :class="['bg-white/46 px-2 py-3 text-center text-xs font-bold uppercase tracking-wide text-gray-500 backdrop-blur-xl', compactWeekend && index >= 5 ? 'text-[10px]' : '']"
                         >
                             {{ compactWeekend && index >= 5 ? day.slice(0, 1) : day }}
                         </div>
                     </div>
 
-                    <div :class="['grid gap-px bg-gray-200', compactWeekend ? 'grid-cols-[repeat(5,minmax(0,1fr))_minmax(58px,0.34fr)_minmax(58px,0.34fr)]' : 'grid-cols-7']">
+                    <div :class="['grid gap-px bg-white/42', compactWeekend ? 'grid-cols-[repeat(5,minmax(0,1fr))_minmax(58px,0.34fr)_minmax(58px,0.34fr)]' : 'grid-cols-7']">
                         <div
                             v-for="cell in calendarGrid"
                             :key="cell.key"
                             :class="[
-                                'group min-h-[170px] bg-white p-2',
-                                cell.empty ? 'bg-gray-50/70' : '',
-                                cell.today ? 'ring-2 ring-inset ring-indigo-500' : '',
-                                calendarDropDate === cell.date ? 'bg-indigo-50' : '',
+                                'group min-h-[170px] bg-white/58 p-2 backdrop-blur-xl transition',
+                                cell.empty ? 'bg-white/26' : '',
+                                cell.today ? 'ring-2 ring-inset ring-indigo-500/70' : '',
+                                calendarDropDate === cell.date ? 'bg-indigo-50/80' : '',
                                 calendarDraggedTask && !cell.empty ? 'outline outline-1 outline-transparent transition hover:outline-indigo-200' : '',
                                 compactWeekend && cell.weekend ? 'min-h-[170px] px-1' : '',
                             ]"
@@ -1096,33 +1096,33 @@ function visibleCalendarTasks(cell) {
                                     <div class="relative">
                                         <button
                                             type="button"
-                                            class="rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-400 opacity-0 transition-opacity hover:bg-indigo-50 hover:text-indigo-600 group-hover:opacity-100"
+                                            class="rounded-xl bg-white/58 px-2 py-1 text-[11px] font-semibold text-gray-400 opacity-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] transition hover:bg-indigo-50/90 hover:text-indigo-600 group-hover:opacity-100"
                                             @click.stop="openCalendarCreateMenu(cell.date)"
                                         >
                                             + crea
                                         </button>
                                         <div
                                             v-if="calendarCreateDate === cell.date"
-                                            class="absolute right-0 top-6 z-20 w-44 rounded-md border border-gray-200 bg-white p-1 shadow-lg"
+                                            class="absolute right-0 top-7 z-20 w-44 overflow-hidden rounded-2xl border border-white/70 bg-white/82 p-1 shadow-[0_20px_55px_rgba(28,42,73,0.16)] backdrop-blur-2xl"
                                             @click.stop
                                         >
                                             <Link
                                                 :href="createTaskHref('project', cell.date)"
-                                                class="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                                                class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-indigo-50/80"
                                             >
                                                 <span class="h-2 w-2 rounded-full bg-blue-500"></span>
                                                 Task
                                             </Link>
                                             <Link
                                                 :href="createTaskHref('ongoing', cell.date)"
-                                                class="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                                                class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-amber-50/80"
                                             >
                                                 <span class="h-2 w-2 rounded-full bg-amber-500"></span>
                                                 Continuativa
                                             </Link>
                                             <Link
                                                 :href="createTaskHref('meeting', cell.date)"
-                                                class="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                                                class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-violet-50/80"
                                             >
                                                 <span class="h-2 w-2 rounded-full bg-violet-500"></span>
                                                 Meeting
@@ -1147,7 +1147,7 @@ function visibleCalendarTasks(cell) {
                                         v-for="task in visibleCalendarTasks(cell)"
                                         :key="task.id"
                                         :class="[
-                                            'cursor-grab border px-2 py-1.5 text-xs transition hover:border-indigo-300 hover:shadow-sm active:cursor-grabbing',
+                                            'cursor-grab border px-2 py-1.5 text-xs shadow-[inset_0_1px_0_rgba(255,255,255,0.68)] backdrop-blur-xl transition hover:border-indigo-300 hover:shadow-md active:cursor-grabbing',
                                             taskTypeClass(task.task_type),
                                             taskSpanClass(task),
                                             calendarDraggedTask?.id === task.id ? 'opacity-50' : '',
@@ -1159,7 +1159,7 @@ function visibleCalendarTasks(cell) {
                                         <div class="flex items-start gap-1.5">
                                             <button
                                                 type="button"
-                                                :class="['mt-0.5 h-3.5 w-3.5 shrink-0 rounded border', task.status === 'done' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300 bg-white hover:border-indigo-400']"
+                                                :class="['mt-0.5 h-3.5 w-3.5 shrink-0 rounded-md border shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]', task.status === 'done' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300 bg-white/78 hover:border-indigo-400']"
                                                 :title="task.status === 'done' ? 'Riapri task' : 'Completa task'"
                                                 @click.stop="toggleTaskDone(task)"
                                             >
