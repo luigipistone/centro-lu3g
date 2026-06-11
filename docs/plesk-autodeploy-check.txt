@@ -1,3 +1,0 @@
-Plesk automatic deployment check.
-
-Last verification marker: 2026-06-11 17:20 Europe/Rome.
