@@ -62,6 +62,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/billing', [CentroPageController::class, 'store'])->defaults('section', 'billing')->name('billing.store');
     Route::get('/billing/{id}', [CentroPageController::class, 'show'])->defaults('section', 'billing')->name('billing.show');
     Route::put('/billing/{id}', [CentroPageController::class, 'update'])->defaults('section', 'billing')->name('billing.update');
+    Route::put('/billing/{id}/header', [CentroPageController::class, 'updateDocumentHeader'])->name('billing.header.update');
+    Route::post('/billing/{id}/issue', [CentroPageController::class, 'issueDocument'])->name('billing.issue');
+    Route::post('/billing/{id}/duplicate', [CentroPageController::class, 'duplicateDocument'])->name('billing.duplicate');
+    Route::post('/billing/{id}/convert/{type}', [CentroPageController::class, 'convertDocument'])->name('billing.convert');
     Route::post('/billing/{id}/lines', [CentroPageController::class, 'storeDocumentLine'])->name('billing.lines.store');
     Route::delete('/billing/{documentId}/lines/{lineId}', [CentroPageController::class, 'destroyDocumentLine'])->name('billing.lines.destroy');
     Route::post('/billing/{id}/payments', [CentroPageController::class, 'storeDocumentPayment'])->name('billing.payments.store');

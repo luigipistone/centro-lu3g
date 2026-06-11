@@ -48,6 +48,19 @@ const paymentForm = useForm({
     method: '',
     notes: '',
 });
+const documentForm = useForm({
+    issue_date: props.record.issue_date || new Date().toISOString().slice(0, 10),
+    due_date: props.record.due_date || '',
+    status: props.record.status || 'draft',
+    payment_method: props.record.payment_method || '',
+    payment_terms_days: props.record.payment_terms_days || '',
+    causale: props.record.causale || '',
+    notes: props.record.notes || '',
+    footer_notes: props.record.footer_notes || '',
+    withholding_pct: props.record.withholding_pct || 0,
+    pension_fund_pct: props.record.pension_fund_pct || 0,
+    pension_fund_label: props.record.pension_fund_label || '',
+});
 const contactForm = useForm({
     first_name: '',
     last_name: '',
@@ -112,6 +125,27 @@ function removePayment(payment) {
     router.delete(route('billing.payments.destroy', [props.record.id, payment.id]), { preserveScroll: true });
 }
 
+function saveDocument() {
+    documentForm.put(route('billing.header.update', props.record.id), { preserveScroll: true });
+}
+
+function issueDocument() {
+    if (!confirm('Emettere il documento e assegnare un numero progressivo?')) return;
+    router.post(route('billing.issue', props.record.id), {}, { preserveScroll: true });
+}
+
+function duplicateDocument() {
+    router.post(route('billing.duplicate', props.record.id));
+}
+
+function convertDocument(type) {
+    router.post(route('billing.convert', [props.record.id, type]));
+}
+
+function printDocument() {
+    window.print();
+}
+
 function addContact() {
     contactForm.post(route('clients.contacts.store', props.record.id), {
         preserveScroll: true,
@@ -171,6 +205,54 @@ function fullClientAddress(record) {
         record.country,
     ].filter(Boolean).join(' - ') || record.address;
 }
+
+function money(value) {
+    return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(Number(value || 0));
+}
+
+function dateIt(value) {
+    if (!value) return '-';
+    return new Date(value).toLocaleDateString('it-IT');
+}
+
+function docTypeLabel(type) {
+    return {
+        preventivo: 'Preventivo',
+        proforma: 'Proforma',
+        fattura: 'Fattura',
+        nota_credito: 'Nota credito',
+    }[type] || type;
+}
+
+function docStatusLabel(status) {
+    return {
+        draft: 'Bozza',
+        sent: 'Inviato',
+        accepted: 'Accettato',
+        rejected: 'Rifiutato',
+        paid: 'Pagato',
+        partially_paid: 'Parziale',
+        overdue: 'Scaduto',
+        cancelled: 'Annullato',
+    }[status] || status;
+}
+
+function statusClass(status) {
+    return {
+        draft: 'bg-gray-100 text-gray-700',
+        sent: 'bg-sky-100 text-sky-700',
+        accepted: 'bg-indigo-100 text-indigo-700',
+        rejected: 'bg-red-100 text-red-700',
+        paid: 'bg-emerald-100 text-emerald-700',
+        partially_paid: 'bg-amber-100 text-amber-700',
+        overdue: 'bg-rose-100 text-rose-700',
+        cancelled: 'bg-slate-100 text-slate-600',
+    }[status] || 'bg-gray-100 text-gray-700';
+}
+
+function remainingAmount() {
+    return Number(props.record.total_amount || 0) - Number(props.record.total_paid || 0);
+}
 </script>
 
 <template>
@@ -191,7 +273,197 @@ function fullClientAddress(record) {
         </template>
 
         <div class="py-8">
-            <div class="mx-auto grid max-w-7xl gap-6 px-4 sm:px-6 lg:grid-cols-[1fr_360px] lg:px-8">
+            <div v-if="section === 'billing'" class="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
+                <div class="flex flex-wrap items-start justify-between gap-4 rounded-md bg-white p-5 shadow-sm">
+                    <div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h2 class="text-xl font-semibold text-gray-900">{{ docTypeLabel(record.doc_type) }}</h2>
+                            <span class="font-mono text-sm text-gray-500">{{ record.number || 'bozza' }}</span>
+                            <span :class="['rounded-full px-2 py-1 text-xs font-medium', statusClass(record.status)]">{{ docStatusLabel(record.status) }}</span>
+                        </div>
+                        <p class="mt-1 text-sm text-gray-500">
+                            {{ related.client?.legal_name || related.client?.name || 'Cliente' }} · {{ dateIt(record.issue_date) }}
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500" @click="saveDocument">Salva</button>
+                        <button v-if="!record.number" type="button" class="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100" @click="issueDocument">Emetti</button>
+                        <button type="button" class="rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="printDocument">Stampa/PDF</button>
+                        <button type="button" class="rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="duplicateDocument">Duplica</button>
+                        <button v-if="record.doc_type === 'preventivo'" type="button" class="rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="convertDocument('fattura')">Converti fattura</button>
+                        <button v-if="record.doc_type === 'proforma'" type="button" class="rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="convertDocument('fattura')">Converti fattura</button>
+                        <button v-if="record.doc_type === 'fattura'" type="button" class="rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="convertDocument('nota_credito')">Nota credito</button>
+                    </div>
+                </div>
+
+                <div class="grid gap-6 lg:grid-cols-[1fr_340px]">
+                    <div class="space-y-6">
+                        <section class="surface rounded-md p-5">
+                            <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Dati documento</h3>
+                            <div class="grid gap-4 md:grid-cols-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Data emissione</label>
+                                    <input v-model="documentForm.issue_date" type="date" class="form-control" required />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Scadenza</label>
+                                    <input v-model="documentForm.due_date" type="date" class="form-control" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Stato</label>
+                                    <select v-model="documentForm.status" class="form-control">
+                                        <option value="draft">Bozza</option>
+                                        <option value="sent">Inviato</option>
+                                        <option value="accepted">Accettato</option>
+                                        <option value="rejected">Rifiutato</option>
+                                        <option value="paid">Pagato</option>
+                                        <option value="partially_paid">Parziale</option>
+                                        <option value="overdue">Scaduto</option>
+                                        <option value="cancelled">Annullato</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Termini pagamento</label>
+                                    <input v-model="documentForm.payment_terms_days" type="number" min="0" class="form-control" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Metodo pagamento</label>
+                                    <input v-model="documentForm.payment_method" class="form-control" placeholder="Bonifico, MP05..." />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Cassa previdenziale %</label>
+                                    <input v-model="documentForm.pension_fund_pct" type="number" step="0.01" min="0" class="form-control" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Ritenuta %</label>
+                                    <input v-model="documentForm.withholding_pct" type="number" step="0.01" min="0" class="form-control" />
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="block text-sm font-medium text-gray-700">Causale</label>
+                                    <input v-model="documentForm.causale" class="form-control" />
+                                </div>
+                                <div class="md:col-span-3">
+                                    <label class="block text-sm font-medium text-gray-700">Note interne</label>
+                                    <textarea v-model="documentForm.notes" rows="2" class="form-control"></textarea>
+                                </div>
+                                <div class="md:col-span-3">
+                                    <label class="block text-sm font-medium text-gray-700">Note visibili al cliente</label>
+                                    <textarea v-model="documentForm.footer_notes" rows="3" class="form-control"></textarea>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="surface rounded-md p-5">
+                            <div class="mb-5 flex items-center justify-between">
+                                <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Righe documento</h3>
+                                <div class="text-sm font-semibold text-gray-900">{{ money(record.total_amount) }}</div>
+                            </div>
+                            <form class="mb-5 grid gap-3 md:grid-cols-[1fr_90px_120px_90px_90px_auto]" @submit.prevent="addLine">
+                                <input v-model="lineForm.description" class="form-control mt-0" placeholder="Descrizione" required />
+                                <input v-model="lineForm.quantity" class="form-control mt-0" type="number" step="0.01" min="0" required />
+                                <input v-model="lineForm.unit_price" class="form-control mt-0" type="number" step="0.01" min="0" required />
+                                <input v-model="lineForm.vat_rate" class="form-control mt-0" type="number" step="0.01" min="0" required />
+                                <input v-model="lineForm.discount_pct" class="form-control mt-0" type="number" step="0.01" min="0" max="100" />
+                                <button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
+                            </form>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-3 py-2 text-left">Descrizione</th>
+                                            <th class="px-3 py-2 text-right">Qta</th>
+                                            <th class="px-3 py-2 text-right">Prezzo</th>
+                                            <th class="px-3 py-2 text-right">IVA</th>
+                                            <th class="px-3 py-2 text-right">Subtotale</th>
+                                            <th class="px-3 py-2"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-100">
+                                        <tr v-for="line in related.lines" :key="line.id">
+                                            <td class="px-3 py-2">{{ line.description }}</td>
+                                            <td class="px-3 py-2 text-right">{{ line.quantity }}</td>
+                                            <td class="px-3 py-2 text-right">{{ money(line.unit_price) }}</td>
+                                            <td class="px-3 py-2 text-right">{{ line.vat_rate }}%</td>
+                                            <td class="px-3 py-2 text-right">{{ money(line.subtotal) }}</td>
+                                            <td class="px-3 py-2 text-right"><button class="text-red-600" @click="removeLine(line)">Elimina</button></td>
+                                        </tr>
+                                        <tr v-if="!related.lines?.length">
+                                            <td colspan="6" class="px-3 py-8 text-center text-gray-500">Nessuna riga.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+
+                        <section class="surface rounded-md p-5">
+                            <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Pagamenti</h3>
+                            <form class="mb-5 grid gap-3 md:grid-cols-[120px_150px_1fr_auto]" @submit.prevent="addPayment">
+                                <input v-model="paymentForm.amount" class="form-control mt-0" type="number" step="0.01" min="0" required />
+                                <input v-model="paymentForm.paid_at" class="form-control mt-0" type="date" required />
+                                <input v-model="paymentForm.method" class="form-control mt-0" placeholder="Metodo" />
+                                <button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Registra</button>
+                            </form>
+                            <div class="space-y-2">
+                                <div v-for="payment in related.payments" :key="payment.id" class="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2 text-sm">
+                                    <span>{{ money(payment.amount) }} · {{ dateIt(payment.paid_at) }} · {{ payment.method || '-' }}</span>
+                                    <button class="text-red-600" @click="removePayment(payment)">Elimina</button>
+                                </div>
+                                <p v-if="!related.payments?.length" class="text-sm text-gray-500">Nessun pagamento registrato.</p>
+                            </div>
+                        </section>
+                    </div>
+
+                    <aside class="space-y-6">
+                        <section class="surface rounded-md p-5">
+                            <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Riepilogo</h3>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex justify-between"><span>Imponibile</span><span>{{ money(record.total_taxable) }}</span></div>
+                                <div class="flex justify-between"><span>IVA</span><span>{{ money(record.total_vat) }}</span></div>
+                                <div class="flex justify-between"><span>Cassa</span><span>{{ money(record.total_pension_fund) }}</span></div>
+                                <div class="flex justify-between"><span>Ritenuta</span><span class="text-red-600">-{{ money(record.total_withholding) }}</span></div>
+                                <div class="my-3 border-t border-gray-100"></div>
+                                <div class="flex justify-between text-lg font-semibold"><span>Totale</span><span>{{ money(record.total_amount) }}</span></div>
+                                <div class="flex justify-between"><span>Pagato</span><span>{{ money(record.total_paid) }}</span></div>
+                                <div class="flex justify-between font-semibold"><span>Residuo</span><span :class="remainingAmount() > 0 ? 'text-red-600' : 'text-emerald-600'">{{ money(remainingAmount()) }}</span></div>
+                            </div>
+                        </section>
+
+                        <section class="surface rounded-md p-5">
+                            <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Anteprima</h3>
+                            <div class="rounded-md border border-gray-200 bg-white p-5 text-sm">
+                                <div class="flex justify-between gap-4">
+                                    <div>
+                                        <div class="font-semibold text-gray-900">Centro LU3G</div>
+                                        <div class="text-xs text-gray-500">Documento commerciale</div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="font-semibold text-gray-900">{{ docTypeLabel(record.doc_type) }}</div>
+                                        <div class="font-mono text-xs text-gray-500">{{ record.number || 'bozza' }}</div>
+                                    </div>
+                                </div>
+                                <div class="mt-6 rounded-md bg-gray-50 p-3">
+                                    <div class="text-xs uppercase tracking-wide text-gray-400">Cliente</div>
+                                    <div class="mt-1 font-medium text-gray-900">{{ related.client?.legal_name || related.client?.name }}</div>
+                                    <div class="text-xs text-gray-500">{{ related.client?.vat_number || related.client?.tax_code || '' }}</div>
+                                </div>
+                                <div class="mt-5 space-y-2">
+                                    <div v-for="line in related.lines?.slice(0, 4)" :key="line.id" class="flex justify-between gap-3 border-b border-gray-100 pb-2">
+                                        <span class="truncate">{{ line.description }}</span>
+                                        <span class="font-medium">{{ money(Number(line.subtotal) + (Number(line.subtotal) * Number(line.vat_rate || 0) / 100)) }}</span>
+                                    </div>
+                                    <div v-if="related.lines?.length > 4" class="text-xs text-gray-500">altre {{ related.lines.length - 4 }} righe...</div>
+                                </div>
+                                <div class="mt-5 flex justify-between border-t border-gray-200 pt-3 text-base font-semibold">
+                                    <span>Totale</span>
+                                    <span>{{ money(record.total_amount) }}</span>
+                                </div>
+                            </div>
+                        </section>
+                    </aside>
+                </div>
+            </div>
+
+            <div v-else class="mx-auto grid max-w-7xl gap-6 px-4 sm:px-6 lg:grid-cols-[1fr_360px] lg:px-8">
                 <section v-if="section === 'clients'" class="space-y-6">
                     <div class="grid gap-4 md:grid-cols-3">
                         <div class="rounded-md bg-white p-5 shadow-sm">

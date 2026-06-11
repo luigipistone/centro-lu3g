@@ -623,6 +623,162 @@ class CentroPageController extends Controller
         return back()->with('status', 'Documento aggiornato.');
     }
 
+    public function updateDocumentHeader(Request $request, string $id): RedirectResponse
+    {
+        DB::table('documents')->where('id', $id)->exists() || abort(404);
+
+        $payload = $request->validate([
+            'issue_date' => ['required', 'date'],
+            'due_date' => ['nullable', 'date'],
+            'status' => ['required', Rule::in(['draft', 'sent', 'accepted', 'rejected', 'paid', 'partially_paid', 'overdue', 'cancelled'])],
+            'payment_method' => ['nullable', 'string', 'max:255'],
+            'payment_terms_days' => ['nullable', 'integer', 'min:0'],
+            'causale' => ['nullable', 'string'],
+            'notes' => ['nullable', 'string'],
+            'footer_notes' => ['nullable', 'string'],
+            'withholding_pct' => ['nullable', 'numeric', 'min:0'],
+            'pension_fund_pct' => ['nullable', 'numeric', 'min:0'],
+            'pension_fund_label' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        foreach ($payload as $key => $value) {
+            if ($value === '') {
+                $payload[$key] = null;
+            }
+        }
+
+        DB::table('documents')->where('id', $id)->update([
+            ...$payload,
+            'year' => (int) substr($payload['issue_date'], 0, 4),
+            'updated_at' => now(),
+        ]);
+        $this->recalculateDocument($id);
+
+        return back()->with('status', 'Documento salvato.');
+    }
+
+    public function issueDocument(string $id): RedirectResponse
+    {
+        $document = DB::table('documents')->where('id', $id)->first();
+        abort_if(! $document, 404);
+
+        if ($document->number) {
+            return back()->with('status', 'Documento gia emesso.');
+        }
+
+        $year = $document->year ?: (int) substr((string) $document->issue_date, 0, 4);
+
+        DB::transaction(function () use ($document, $year) {
+            $numbering = DB::table('document_numbering')
+                ->where('doc_type', $document->doc_type)
+                ->where('year', $year)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $numbering) {
+                $numbering = (object) [
+                    'id' => (string) str()->uuid(),
+                    'doc_type' => $document->doc_type,
+                    'year' => $year,
+                    'prefix' => strtoupper(substr((string) $document->doc_type, 0, 1)),
+                    'format' => '{prefix}{year}/{seq}',
+                    'current_seq' => 0,
+                ];
+                DB::table('document_numbering')->insert([
+                    'id' => $numbering->id,
+                    'doc_type' => $numbering->doc_type,
+                    'year' => $numbering->year,
+                    'prefix' => $numbering->prefix,
+                    'format' => $numbering->format,
+                    'current_seq' => 0,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            $seq = ((int) $numbering->current_seq) + 1;
+            $number = str_replace(
+                ['{prefix}', '{year}', '{seq}'],
+                [$numbering->prefix, (string) $year, str_pad((string) $seq, 4, '0', STR_PAD_LEFT)],
+                $numbering->format,
+            );
+
+            DB::table('document_numbering')->where('id', $numbering->id)->update([
+                'current_seq' => $seq,
+                'updated_at' => now(),
+            ]);
+
+            DB::table('documents')->where('id', $document->id)->update([
+                'number' => $number,
+                'seq' => $seq,
+                'year' => $year,
+                'status' => 'sent',
+                'updated_at' => now(),
+            ]);
+        });
+
+        return back()->with('status', 'Documento emesso.');
+    }
+
+    public function duplicateDocument(Request $request, string $id): RedirectResponse
+    {
+        $newId = $this->copyDocument($id, null, $request->user()->id);
+
+        return redirect()->route('billing.show', $newId)->with('status', 'Documento duplicato.');
+    }
+
+    public function convertDocument(Request $request, string $id, string $type): RedirectResponse
+    {
+        abort_unless(in_array($type, ['proforma', 'fattura', 'nota_credito'], true), 404);
+        $newId = $this->copyDocument($id, $type, $request->user()->id);
+
+        return redirect()->route('billing.show', $newId)->with('status', 'Documento creato.');
+    }
+
+    private function copyDocument(string $id, ?string $docType, string $userId): string
+    {
+        $document = DB::table('documents')->where('id', $id)->first();
+        abort_if(! $document, 404);
+
+        $newId = (string) str()->uuid();
+        $targetType = $docType ?: $document->doc_type;
+        $sign = $targetType === 'nota_credito' ? -1 : 1;
+
+        DB::transaction(function () use ($document, $newId, $targetType, $sign, $userId) {
+            $data = (array) $document;
+            unset($data['id']);
+            $data['doc_type'] = $targetType;
+            $data['status'] = 'draft';
+            $data['number'] = null;
+            $data['seq'] = null;
+            $data['issue_date'] = now()->toDateString();
+            $data['due_date'] = null;
+            $data['parent_document_id'] = $document->id;
+            $data['year'] = now()->year;
+            $data['created_by'] = $userId;
+            $data['created_at'] = now();
+            $data['updated_at'] = now();
+
+            DB::table('documents')->insert(['id' => $newId, ...$data]);
+
+            $lines = DB::table('document_lines')->where('document_id', $document->id)->orderBy('position')->get();
+            foreach ($lines as $line) {
+                $lineData = (array) $line;
+                unset($lineData['id']);
+                $lineData['document_id'] = $newId;
+                $lineData['unit_price'] = ((float) $line->unit_price) * $sign;
+                $lineData['subtotal'] = ((float) $line->subtotal) * $sign;
+                $lineData['created_at'] = now();
+                $lineData['updated_at'] = now();
+                DB::table('document_lines')->insert(['id' => (string) str()->uuid(), ...$lineData]);
+            }
+        });
+
+        $this->recalculateDocument($newId);
+
+        return $newId;
+    }
+
     private function normalizeDocumentPayload(array $payload, string $userId, bool $withCreator = true): array
     {
         $amount = (float) ($payload['total_amount'] ?? 0);
@@ -949,13 +1105,21 @@ class CentroPageController extends Controller
 
     private function recalculateDocument(string $id): void
     {
+        $document = DB::table('documents')->where('id', $id)->first();
+        if (! $document) {
+            return;
+        }
+
         $lines = DB::table('document_lines')->where('document_id', $id)->get();
         $taxable = (float) $lines->sum('subtotal');
         $vat = (float) $lines->sum(fn ($line) => ((float) $line->subtotal) * ((float) $line->vat_rate / 100));
         $paid = (float) DB::table('document_payments')->where('document_id', $id)->sum('amount');
-        $total = round($taxable + $vat, 2);
+        $pensionFund = round($taxable * ((float) ($document->pension_fund_pct ?? 0) / 100), 2);
+        $withholding = round($taxable * ((float) ($document->withholding_pct ?? 0) / 100), 2);
+        $bollo = (bool) $document->apply_bollo ? (float) ($document->bollo_amount ?? 0) : 0;
+        $total = round($taxable + $pensionFund + $vat + $bollo - $withholding, 2);
 
-        $status = DB::table('documents')->where('id', $id)->value('status');
+        $status = $document->status;
         if ($paid > 0 && $paid < $total) {
             $status = 'partially_paid';
         } elseif ($total > 0 && $paid >= $total) {
@@ -965,6 +1129,8 @@ class CentroPageController extends Controller
         DB::table('documents')->where('id', $id)->update([
             'total_taxable' => round($taxable, 2),
             'total_vat' => round($vat, 2),
+            'total_pension_fund' => $pensionFund,
+            'total_withholding' => $withholding,
             'total_amount' => $total,
             'total_paid' => round($paid, 2),
             'status' => $status,
