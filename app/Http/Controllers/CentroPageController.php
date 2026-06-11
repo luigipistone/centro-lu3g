@@ -103,6 +103,13 @@ class CentroPageController extends Controller
                     ->latest('task_comments.created_at')
                     ->limit(30)
                     ->get(['task_comments.*', 'users.name as user_name']),
+                'assignees' => DB::table('task_assignees')->where('task_id', $id)->pluck('user_id'),
+                'followers' => DB::table('task_followers')->where('task_id', $id)->pluck('user_id'),
+                'users' => DB::table('users')->orderBy('name')->get(['id', 'name', 'email']),
+                'subtasks' => DB::table('tasks')
+                    ->where('parent_task_id', $id)
+                    ->latest()
+                    ->get(['id', 'title', 'status', 'priority', 'due_date', 'due_time']),
                 'project' => $record->project_id ? DB::table('projects')->where('id', $record->project_id)->first() : null,
                 'client' => $record->client_id ? DB::table('clients')->where('id', $record->client_id)->first() : null,
             ],
@@ -577,6 +584,74 @@ class CentroPageController extends Controller
         );
 
         return back()->with('status', 'Commento aggiunto.');
+    }
+
+    public function storeSubtask(Request $request, string $id): RedirectResponse
+    {
+        $task = DB::table('tasks')->where('id', $id)->first();
+        abort_if(! $task, 404);
+
+        $payload = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'priority' => ['required', Rule::in(['low', 'medium', 'high', 'urgent'])],
+            'due_date' => ['nullable', 'date'],
+        ]);
+
+        foreach ($payload as $key => $value) {
+            if ($value === '') {
+                $payload[$key] = null;
+            }
+        }
+
+        DB::table('tasks')->insert([
+            'id' => (string) str()->uuid(),
+            'title' => $payload['title'],
+            'priority' => $payload['priority'],
+            'due_date' => $payload['due_date'] ?? null,
+            'status' => 'todo',
+            'project_id' => $task->project_id,
+            'client_id' => $task->client_id,
+            'service_id' => $task->service_id,
+            'parent_task_id' => $id,
+            'created_by' => $request->user()->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->notifyTaskPeople(
+            $id,
+            $request->user()->id,
+            'subtask_created',
+            $request->user()->name.' ha creato una sottoattivita in "'.$task->title.'".',
+        );
+
+        return back()->with('status', 'Sottoattivita creata.');
+    }
+
+    public function syncTaskPeople(Request $request, string $id, string $type): RedirectResponse
+    {
+        DB::table('tasks')->where('id', $id)->exists() || abort(404);
+        abort_unless(in_array($type, ['assignees', 'followers'], true), 404);
+
+        $payload = $request->validate([
+            'user_ids' => ['array'],
+            'user_ids.*' => ['uuid', 'exists:users,id'],
+        ]);
+
+        $table = $type === 'assignees' ? 'task_assignees' : 'task_followers';
+        DB::table($table)->where('task_id', $id)->delete();
+
+        foreach (array_unique($payload['user_ids'] ?? []) as $userId) {
+            DB::table($table)->insert([
+                'id' => (string) str()->uuid(),
+                'task_id' => $id,
+                'user_id' => $userId,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        return back()->with('status', $type === 'assignees' ? 'Assegnatari aggiornati.' : 'Follower aggiornati.');
     }
 
     public function storeClientContact(Request $request, string $id): RedirectResponse

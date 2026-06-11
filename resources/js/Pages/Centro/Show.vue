@@ -1,6 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { ref } from 'vue';
 
 const props = defineProps({
     section: String,
@@ -55,6 +56,13 @@ const contactForm = useForm({
     role: '',
     notes: '',
 });
+const subtaskForm = useForm({
+    title: '',
+    priority: 'medium',
+    due_date: '',
+});
+const selectedAssignees = ref([...(props.related.assignees || [])]);
+const selectedFollowers = ref([...(props.related.followers || [])]);
 
 function addComment() {
     commentForm.post(route('tasks.comments.store', props.record.id), {
@@ -65,6 +73,19 @@ function addComment() {
 
 function setTaskStatus(status) {
     router.patch(route('tasks.status.update', props.record.id), { status }, { preserveScroll: true });
+}
+
+function priorityClass(priority) {
+    return {
+        urgent: 'bg-red-100 text-red-700',
+        high: 'bg-orange-100 text-orange-700',
+        medium: 'bg-amber-100 text-amber-700',
+        low: 'bg-emerald-100 text-emerald-700',
+    }[priority] || 'bg-gray-100 text-gray-700';
+}
+
+function setSubtaskStatus(subtask, done) {
+    router.patch(route('tasks.status.update', subtask.id), { status: done ? 'done' : 'todo' }, { preserveScroll: true });
 }
 
 function addLine() {
@@ -114,6 +135,28 @@ function toggleService(service) {
     }
 
     router.post(route('clients.services.attach', [props.record.id, service.id]), {}, { preserveScroll: true });
+}
+
+function togglePerson(list, userId) {
+    const index = list.value.indexOf(userId);
+    if (index >= 0) {
+        list.value.splice(index, 1);
+        return;
+    }
+
+    list.value.push(userId);
+}
+
+function saveTaskPeople(type) {
+    const list = type === 'assignees' ? selectedAssignees.value : selectedFollowers.value;
+    router.put(route('tasks.people.sync', [props.record.id, type]), { user_ids: list }, { preserveScroll: true });
+}
+
+function addSubtask() {
+    subtaskForm.post(route('tasks.subtasks.store', props.record.id), {
+        preserveScroll: true,
+        onSuccess: () => subtaskForm.reset(),
+    });
 }
 </script>
 
@@ -176,6 +219,42 @@ function toggleService(service) {
                             >
                                 {{ status }}
                             </button>
+                        </div>
+                    </section>
+
+                    <section v-if="section === 'tasks'" class="surface rounded-md p-5">
+                        <div class="mb-3 flex items-center justify-between">
+                            <h3 class="text-sm font-semibold text-gray-900">Assegnatari</h3>
+                            <button type="button" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="saveTaskPeople('assignees')">Salva</button>
+                        </div>
+                        <div class="space-y-2">
+                            <label v-for="user in related.users" :key="user.id" class="flex items-center gap-2 text-sm text-gray-700">
+                                <input
+                                    type="checkbox"
+                                    class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                                    :checked="selectedAssignees.includes(user.id)"
+                                    @change="togglePerson(selectedAssignees, user.id)"
+                                />
+                                <span class="truncate">{{ user.name }}</span>
+                            </label>
+                        </div>
+                    </section>
+
+                    <section v-if="section === 'tasks'" class="surface rounded-md p-5">
+                        <div class="mb-3 flex items-center justify-between">
+                            <h3 class="text-sm font-semibold text-gray-900">Follower</h3>
+                            <button type="button" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="saveTaskPeople('followers')">Salva</button>
+                        </div>
+                        <div class="space-y-2">
+                            <label v-for="user in related.users" :key="user.id" class="flex items-center gap-2 text-sm text-gray-700">
+                                <input
+                                    type="checkbox"
+                                    class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                                    :checked="selectedFollowers.includes(user.id)"
+                                    @change="togglePerson(selectedFollowers, user.id)"
+                                />
+                                <span class="truncate">{{ user.name }}</span>
+                            </label>
                         </div>
                     </section>
 
@@ -254,6 +333,44 @@ function toggleService(service) {
                 </section>
 
                 <section v-if="section === 'tasks'" class="surface rounded-md p-5 lg:col-span-2">
+                    <div class="mb-8">
+                        <div class="mb-4 flex items-center justify-between">
+                            <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Sottoattivita</h3>
+                            <span class="text-xs text-gray-500">{{ related.subtasks?.length || 0 }} elementi</span>
+                        </div>
+                        <form class="mb-4 grid gap-3 md:grid-cols-[1fr_150px_150px_auto]" @submit.prevent="addSubtask">
+                            <input v-model="subtaskForm.title" class="form-control mt-0" placeholder="Nuova sottoattivita..." required />
+                            <select v-model="subtaskForm.priority" class="form-control mt-0">
+                                <option value="low">low</option>
+                                <option value="medium">medium</option>
+                                <option value="high">high</option>
+                                <option value="urgent">urgent</option>
+                            </select>
+                            <input v-model="subtaskForm.due_date" class="form-control mt-0" type="date" />
+                            <button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
+                        </form>
+                        <div class="space-y-2">
+                            <div v-for="subtask in related.subtasks" :key="subtask.id" class="flex items-center justify-between gap-3 rounded-md bg-gray-50 px-3 py-2 text-sm">
+                                <label class="flex min-w-0 items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                                        :checked="subtask.status === 'done'"
+                                        @change="setSubtaskStatus(subtask, $event.target.checked)"
+                                    />
+                                    <Link :href="route('tasks.show', subtask.id)" class="truncate font-medium text-indigo-600 hover:text-indigo-500">
+                                        {{ subtask.title }}
+                                    </Link>
+                                </label>
+                                <div class="flex shrink-0 items-center gap-2">
+                                    <span :class="['rounded-full px-2 py-1 text-xs font-medium', priorityClass(subtask.priority)]">{{ subtask.priority }}</span>
+                                    <span class="text-xs text-gray-500">{{ subtask.due_date || '-' }}</span>
+                                </div>
+                            </div>
+                            <p v-if="!related.subtasks?.length" class="text-sm text-gray-500">Nessuna sottoattivita.</p>
+                        </div>
+                    </div>
+
                     <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Commenti</h3>
                     <form class="mb-5 flex gap-3" @submit.prevent="addComment">
                         <input v-model="commentForm.content" class="form-control mt-0" placeholder="Scrivi un commento..." required />
