@@ -325,6 +325,15 @@ const projectForm = useForm({
 const selectedProjectFollowers = ref([...(props.related.followers || [])]);
 const projectColors = ['#2563eb', '#7c3aed', '#db2777', '#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#475569'];
 
+function normalizeHexColor(value, fallback = '#2563eb') {
+    const color = String(value || '').trim();
+    if (/^#[0-9a-f]{6}$/i.test(color)) return color;
+    if (/^#[0-9a-f]{3}$/i.test(color)) {
+        return `#${color.slice(1).split('').map((char) => char + char).join('')}`;
+    }
+    return fallback;
+}
+
 function addComment() {
     commentForm.post(route('tasks.comments.store', props.record.id), {
         preserveScroll: true,
@@ -1420,6 +1429,11 @@ function remainingAmount() {
                                         :aria-label="`Colore ${color}`"
                                         @click="projectForm.color = color"
                                     ></button>
+                                    <label class="relative inline-flex h-8 w-8 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm ring-1 ring-gray-200 transition hover:ring-gray-300" :style="{ backgroundColor: normalizeHexColor(projectForm.color) }">
+                                        <span class="sr-only">Scegli colore custom</span>
+                                        <input v-model="projectForm.color" type="color" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+                                    </label>
+                                    <input v-model="projectForm.color" type="text" class="form-control mt-0 w-28 font-mono text-xs" />
                                 </div>
                             </div>
                             <div>
@@ -1753,8 +1767,16 @@ function remainingAmount() {
 
                     <section v-if="related.client" class="surface rounded-md p-5">
                         <h3 class="text-sm font-semibold text-gray-900">Cliente</h3>
-                        <Link :href="route('clients.show', related.client.id)" class="mt-2 block text-sm font-medium text-indigo-600">
-                            {{ related.client.name }}
+                        <Link
+                            :href="route('clients.show', related.client.id)"
+                            class="group/item mt-2 block rounded-md border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm transition duration-200 hover:-translate-y-0.5 hover:border-indigo-100 hover:bg-white hover:shadow-[0_12px_28px_rgba(28,42,73,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                        >
+                            <span class="block truncate font-semibold text-gray-900 transition group-hover/item:text-indigo-600">
+                                {{ related.client.name }}
+                            </span>
+                            <span v-if="related.client.legal_name || related.client.vat_number || related.client.tax_code" class="mt-1 block truncate text-xs text-gray-500">
+                                {{ [related.client.legal_name, related.client.vat_number || related.client.tax_code].filter(Boolean).join(' · ') }}
+                            </span>
                         </Link>
                     </section>
 

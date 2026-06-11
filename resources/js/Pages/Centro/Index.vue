@@ -172,6 +172,58 @@ const taskCreateTypeLabels = {
     meeting: 'Meeting',
 };
 const projectColors = ['#2563eb', '#7c3aed', '#db2777', '#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#475569'];
+
+function normalizeHexColor(value, fallback = '#2563eb') {
+    const color = String(value || '').trim();
+    if (/^#[0-9a-f]{6}$/i.test(color)) return color;
+    if (/^#[0-9a-f]{3}$/i.test(color)) {
+        return `#${color.slice(1).split('').map((char) => char + char).join('')}`;
+    }
+    return fallback;
+}
+
+function hexToRgb(value) {
+    const hex = normalizeHexColor(value).slice(1);
+    return {
+        r: parseInt(hex.slice(0, 2), 16),
+        g: parseInt(hex.slice(2, 4), 16),
+        b: parseInt(hex.slice(4, 6), 16),
+    };
+}
+
+function isLightColor(value) {
+    const { r, g, b } = hexToRgb(value);
+    const luminance = ((0.2126 * r) + (0.7152 * g) + (0.0722 * b)) / 255;
+    return luminance > 0.62;
+}
+
+function projectCardStyle(project) {
+    const backgroundColor = normalizeHexColor(project.color, '#64748b');
+    const light = isLightColor(backgroundColor);
+
+    return {
+        backgroundColor,
+        color: light ? '#111827' : '#ffffff',
+        borderColor: light ? 'rgba(17, 24, 39, 0.14)' : 'rgba(255, 255, 255, 0.24)',
+        boxShadow: light ? '0 18px 40px rgba(28, 42, 73, 0.12)' : '0 18px 40px rgba(15, 23, 42, 0.22)',
+    };
+}
+
+function projectCardMutedStyle(project) {
+    return {
+        color: isLightColor(project.color || '#64748b') ? 'rgba(17, 24, 39, 0.68)' : 'rgba(255, 255, 255, 0.78)',
+    };
+}
+
+function projectCardChipStyle(project) {
+    const light = isLightColor(project.color || '#64748b');
+
+    return {
+        color: light ? '#111827' : '#ffffff',
+        borderColor: light ? 'rgba(17, 24, 39, 0.14)' : 'rgba(255, 255, 255, 0.28)',
+        backgroundColor: light ? 'rgba(255, 255, 255, 0.46)' : 'rgba(255, 255, 255, 0.16)',
+    };
+}
 const settingsTabs = [
     ['personalizzazione', 'Personalizzazione', Building2],
     ['fatturazione', 'Fatturazione', Receipt],
@@ -991,6 +1043,10 @@ function visibleCalendarTasks(cell) {
                                 :aria-label="`Colore ${color}`"
                                 @click="form[field.name] = color"
                             ></button>
+                            <label class="relative inline-flex h-8 w-8 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm ring-1 ring-gray-200 transition hover:ring-gray-300" :style="{ backgroundColor: normalizeHexColor(form[field.name]) }">
+                                <span class="sr-only">Scegli colore custom</span>
+                                <input v-model="form[field.name]" type="color" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+                            </label>
                             <input v-model="form[field.name]" type="text" class="form-control mt-0 w-28 font-mono text-xs" :required="field.required" />
                         </div>
                         <label v-else-if="field.type === 'checkbox'" class="mt-2 flex items-center gap-2 text-sm text-gray-700">
@@ -1276,26 +1332,27 @@ function visibleCalendarTasks(cell) {
                     <article
                         v-for="project in projectRows"
                         :key="project.id"
-                        class="group relative rounded-md border border-gray-200 bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md"
+                        class="group relative rounded-md border shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+                        :style="projectCardStyle(project)"
                     >
-                        <Link :href="route('projects.show', project.id)" class="block h-full p-5 pr-14">
+                        <Link :href="route('projects.show', project.id)" class="flex h-full min-h-[190px] flex-col p-5 pr-14">
                             <div class="flex items-start justify-between gap-3">
                                 <div class="flex min-w-0 items-center gap-2">
-                                    <span class="h-3 w-3 shrink-0 rounded-full ring-1 ring-gray-200" :style="{ backgroundColor: project.color || '#64748b' }"></span>
-                                    <h3 class="truncate text-base font-semibold text-gray-900">{{ project.name }}</h3>
+                                    <span class="h-3 w-3 shrink-0 rounded-full bg-current opacity-80 ring-1 ring-white/40"></span>
+                                    <h3 class="truncate text-base font-semibold">{{ project.name }}</h3>
                                 </div>
-                                <span :class="['shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', projectStatusClass(project.status)]">
-                                    {{ displayValue(project.status) }}
-                                </span>
                             </div>
 
-                            <p v-if="plainText(project.description)" class="mt-3 line-clamp-2 text-sm text-gray-500">
+                            <p v-if="plainText(project.description)" class="mt-3 line-clamp-2 text-sm" :style="projectCardMutedStyle(project)">
                                 {{ plainText(project.description) }}
                             </p>
 
-                            <div class="mt-4">
-                                <span v-if="project.client_name" class="rounded-full border border-gray-200 px-2 py-0.5 text-xs text-gray-600">{{ project.client_name }}</span>
-                                <span v-else class="text-xs text-gray-400">Nessun cliente</span>
+                            <div class="mt-auto flex items-end justify-between gap-3 pt-5">
+                                <span v-if="project.client_name" class="min-w-0 truncate rounded-full border px-2 py-0.5 text-xs" :style="projectCardChipStyle(project)">{{ project.client_name }}</span>
+                                <span v-else class="text-xs" :style="projectCardMutedStyle(project)">Nessun cliente</span>
+                                <span class="shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium" :style="projectCardChipStyle(project)">
+                                    {{ displayValue(project.status) }}
+                                </span>
                             </div>
                         </Link>
 
