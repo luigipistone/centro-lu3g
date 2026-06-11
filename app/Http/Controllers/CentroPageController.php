@@ -23,7 +23,6 @@ class CentroPageController extends Controller
         return Inertia::render('Dashboard', [
             'stats' => [
                 'clients' => DB::table('clients')->count(),
-                'activeProjects' => DB::table('projects')->where('status', 'active')->count(),
                 'openTasks' => DB::table('tasks')->where('status', '!=', 'done')->count(),
                 'urgentTasks' => DB::table('tasks')->where('priority', 'urgent')->where('status', '!=', 'done')->count(),
             ],
@@ -53,7 +52,9 @@ class CentroPageController extends Controller
                 ->limit(6)
                 ->get(['tasks.id', 'tasks.title', 'tasks.status', 'tasks.priority', 'tasks.due_date', 'clients.name as client_name']),
             'activeProjects' => DB::table('projects')
+                ->join('project_followers', 'project_followers.project_id', '=', 'projects.id')
                 ->leftJoin('clients', 'clients.id', '=', 'projects.client_id')
+                ->where('project_followers.user_id', $request->user()->id)
                 ->where('projects.status', 'active')
                 ->latest('projects.updated_at')
                 ->limit(6)
@@ -177,15 +178,14 @@ class CentroPageController extends Controller
     {
         return [
             ['widget_type' => 'stat_clients', 'position' => 0, 'col_span' => 1, 'visible' => true],
-            ['widget_type' => 'stat_projects', 'position' => 1, 'col_span' => 1, 'visible' => true],
-            ['widget_type' => 'stat_open_tasks', 'position' => 2, 'col_span' => 1, 'visible' => true],
-            ['widget_type' => 'stat_urgent_tasks', 'position' => 3, 'col_span' => 1, 'visible' => true],
-            ['widget_type' => 'upcoming_tasks', 'position' => 4, 'col_span' => 2, 'visible' => true],
-            ['widget_type' => 'my_tasks', 'position' => 5, 'col_span' => 1, 'visible' => true],
-            ['widget_type' => 'active_projects', 'position' => 6, 'col_span' => 1, 'visible' => true],
-            ['widget_type' => 'recent_clients', 'position' => 7, 'col_span' => 1, 'visible' => true],
-            ['widget_type' => 'urgent_tasks', 'position' => 8, 'col_span' => 1, 'visible' => true],
-            ['widget_type' => 'notes', 'position' => 9, 'col_span' => 2, 'visible' => false],
+            ['widget_type' => 'stat_open_tasks', 'position' => 1, 'col_span' => 1, 'visible' => true],
+            ['widget_type' => 'stat_urgent_tasks', 'position' => 2, 'col_span' => 1, 'visible' => true],
+            ['widget_type' => 'upcoming_tasks', 'position' => 3, 'col_span' => 2, 'visible' => true],
+            ['widget_type' => 'my_tasks', 'position' => 4, 'col_span' => 1, 'visible' => true],
+            ['widget_type' => 'active_projects', 'position' => 5, 'col_span' => 1, 'visible' => true],
+            ['widget_type' => 'recent_clients', 'position' => 6, 'col_span' => 1, 'visible' => true],
+            ['widget_type' => 'urgent_tasks', 'position' => 7, 'col_span' => 1, 'visible' => true],
+            ['widget_type' => 'notes', 'position' => 8, 'col_span' => 2, 'visible' => false],
         ];
     }
 
@@ -193,12 +193,11 @@ class CentroPageController extends Controller
     {
         return [
             ['type' => 'stat_clients', 'label' => 'Clienti', 'description' => 'Totale anagrafiche'],
-            ['type' => 'stat_projects', 'label' => 'Progetti attivi', 'description' => 'Progetti in corso'],
             ['type' => 'stat_open_tasks', 'label' => 'Task aperti', 'description' => 'Attivita da chiudere'],
             ['type' => 'stat_urgent_tasks', 'label' => 'Urgenti', 'description' => 'Task ad alta priorita'],
             ['type' => 'upcoming_tasks', 'label' => 'Task in scadenza', 'description' => 'Prossime attivita con data'],
             ['type' => 'my_tasks', 'label' => 'I miei task', 'description' => 'Task assegnati a te'],
-            ['type' => 'active_projects', 'label' => 'Progetti attivi', 'description' => 'Elenco progetti in corso'],
+            ['type' => 'active_projects', 'label' => 'Progetti attivi', 'description' => 'Progetti assegnati a te'],
             ['type' => 'recent_clients', 'label' => 'Clienti recenti', 'description' => 'Ultime anagrafiche inserite'],
             ['type' => 'urgent_tasks', 'label' => 'Task urgenti', 'description' => 'Attivita prioritarie'],
             ['type' => 'notes', 'label' => 'Note', 'description' => 'Scrittura libera con editor completo'],

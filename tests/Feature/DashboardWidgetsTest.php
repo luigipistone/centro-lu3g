@@ -74,4 +74,76 @@ class DashboardWidgetsTest extends TestCase
         $this->assertStringContainsString('<strong>Chiamare cliente</strong>', $content['html']);
         $this->assertStringNotContainsString('<script>', $content['html']);
     }
+
+    public function test_dashboard_shows_only_active_projects_assigned_to_user(): void
+    {
+        $user = User::factory()->create();
+        $otherUser = User::factory()->create();
+
+        $assignedProjectId = (string) str()->uuid();
+        $otherProjectId = (string) str()->uuid();
+        $archivedProjectId = (string) str()->uuid();
+
+        DB::table('projects')->insert([
+            [
+                'id' => $assignedProjectId,
+                'name' => 'Portale assegnato',
+                'status' => 'active',
+                'color' => '#2563eb',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'id' => $otherProjectId,
+                'name' => 'Portale non assegnato',
+                'status' => 'active',
+                'color' => '#2563eb',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'id' => $archivedProjectId,
+                'name' => 'Portale archiviato',
+                'status' => 'archived',
+                'color' => '#2563eb',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        DB::table('project_followers')->insert([
+            [
+                'id' => (string) str()->uuid(),
+                'project_id' => $assignedProjectId,
+                'user_id' => $user->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'id' => (string) str()->uuid(),
+                'project_id' => $otherProjectId,
+                'user_id' => $otherUser->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'id' => (string) str()->uuid(),
+                'project_id' => $archivedProjectId,
+                'user_id' => $user->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $response = $this->actingAs($user)->get('/dashboard');
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->component('Dashboard')
+            ->where('activeProjects.0.id', $assignedProjectId)
+            ->where('activeProjects.0.name', 'Portale assegnato')
+            ->where('activeProjects', fn ($projects) => count($projects) === 1)
+            ->where('dashboardWidgets', fn ($widgets) => collect($widgets)->where('widget_type', 'stat_projects')->isEmpty())
+        );
+    }
 }

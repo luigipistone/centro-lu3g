@@ -66,15 +66,6 @@ const widgetMeta = {
         kind: 'stat',
         value: () => props.stats?.clients ?? 0,
     },
-    stat_projects: {
-        label: 'Progetti Attivi',
-        description: 'Progetti in corso',
-        route: 'projects.index',
-        icon: Briefcase,
-        iconClass: 'text-sky-600',
-        kind: 'stat',
-        value: () => props.stats?.activeProjects ?? 0,
-    },
     stat_open_tasks: {
         label: 'Task Aperti',
         description: 'Attivita da chiudere',
@@ -113,11 +104,11 @@ const widgetMeta = {
     },
     active_projects: {
         label: 'Progetti attivi',
-        description: 'In corso',
+        description: 'Assegnati a te',
         route: 'projects.index',
         icon: Briefcase,
         kind: 'list',
-        empty: 'Nessun progetto attivo',
+        empty: 'Nessun progetto attivo assegnato',
         items: () => props.activeProjects ?? [],
     },
     recent_clients: {
