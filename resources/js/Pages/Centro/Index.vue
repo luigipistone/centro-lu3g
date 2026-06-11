@@ -15,6 +15,7 @@ const props = defineProps({
     services: Array,
     users: Array,
     billingStats: Object,
+    clientStats: Object,
 });
 
 const editing = ref(null);
@@ -30,6 +31,8 @@ const taskSearch = ref('');
 const taskStatus = ref('all');
 const taskPriority = ref('all');
 const taskType = ref('all');
+const clientSearch = ref('');
+const clientService = ref('all');
 
 const routeBase = computed(() => {
     if (props.section === 'settings') return 'settings';
@@ -184,6 +187,20 @@ const taskRows = computed(() => props.rows.filter((row) => {
 function tasksByStatus(status) {
     return taskRows.value.filter((row) => row.status === status);
 }
+
+const clientRows = computed(() => props.rows.filter((row) => {
+    const search = clientSearch.value.trim().toLowerCase();
+    const matchesSearch = !search
+        || (row.name || '').toLowerCase().includes(search)
+        || (row.legal_name || '').toLowerCase().includes(search)
+        || (row.email || '').toLowerCase().includes(search)
+        || (row.vat_number || '').toLowerCase().includes(search)
+        || (row.city || '').toLowerCase().includes(search);
+    const matchesService = clientService.value === 'all'
+        || (row.services || []).some((service) => service.id === clientService.value);
+
+    return matchesSearch && matchesService;
+}));
 
 const monthNames = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
 const dayNames = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
@@ -376,6 +393,119 @@ function tasksForDay(date) {
                     <span class="inline-flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-orange-500"></span>Alta</span>
                     <span class="inline-flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-amber-500"></span>Media</span>
                     <span class="inline-flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-emerald-500"></span>Bassa</span>
+                </div>
+            </div>
+        </div>
+
+        <div v-else-if="section === 'clients'" class="py-8">
+            <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
+                <div class="grid gap-4 md:grid-cols-4">
+                    <div
+                        v-for="card in [
+                            ['Clienti', clientStats?.total || 0],
+                            ['Con servizi', clientStats?.withServices || 0],
+                            ['Con task aperti', clientStats?.withOpenTasks || 0],
+                            ['Con documenti', clientStats?.withDocuments || 0],
+                        ]"
+                        :key="card[0]"
+                        class="rounded-md bg-white p-5 shadow-sm"
+                    >
+                        <div class="text-xs font-medium uppercase tracking-wide text-gray-500">{{ card[0] }}</div>
+                        <div class="mt-2 text-3xl font-semibold text-gray-900">{{ card[1] }}</div>
+                    </div>
+                </div>
+
+                <div class="grid gap-3 md:grid-cols-[1fr_220px_auto]">
+                    <input v-model="clientSearch" class="form-control mt-0" placeholder="Cerca per nome, ragione sociale, email, P.IVA o citta..." />
+                    <select v-model="clientService" class="form-control mt-0">
+                        <option value="all">Tutti i servizi</option>
+                        <option v-for="service in services" :key="service.id" :value="service.id">{{ service.name }}</option>
+                    </select>
+                    <button type="button" class="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="clientSearch = ''; clientService = 'all'">Reset</button>
+                </div>
+
+                <div class="grid gap-6 xl:grid-cols-[380px_1fr]">
+                    <section class="rounded-md bg-white p-5 shadow-sm">
+                        <div class="mb-4 flex items-center justify-between">
+                            <h3 class="font-semibold text-gray-900">{{ editing ? 'Modifica cliente' : 'Nuovo cliente' }}</h3>
+                            <button v-if="editing" type="button" class="text-sm text-gray-500 hover:text-gray-800" @click="resetForm">Annulla</button>
+                        </div>
+
+                        <form class="space-y-4" @submit.prevent="submit">
+                            <div v-for="field in fields" :key="field.name">
+                                <label class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
+                                <textarea v-if="field.type === 'textarea'" v-model="form[field.name]" rows="4" class="form-control" />
+                                <select v-else-if="['select', 'client', 'project', 'service', 'user'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
+                                    <option value="">-</option>
+                                    <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ option.name }}</option>
+                                </select>
+                                <label v-else-if="field.type === 'checkbox'" class="mt-2 flex items-center gap-2 text-sm text-gray-700">
+                                    <input v-model="form[field.name]" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
+                                    Si
+                                </label>
+                                <input v-else v-model="form[field.name]" :type="field.type" class="form-control" :required="field.required" />
+                                <div v-if="form.errors[field.name]" class="mt-1 text-sm text-red-600">{{ form.errors[field.name] }}</div>
+                            </div>
+                            <button type="submit" class="inline-flex w-full justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50" :disabled="form.processing">
+                                {{ editing ? 'Salva modifiche' : 'Crea cliente' }}
+                            </button>
+                        </form>
+                    </section>
+
+                    <section class="grid min-w-0 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                        <article
+                            v-for="client in clientRows"
+                            :key="client.id"
+                            class="rounded-md border border-gray-200 bg-white p-5 shadow-sm transition hover:border-indigo-200 hover:shadow"
+                        >
+                            <div class="flex items-start justify-between gap-4">
+                                <Link :href="route('clients.show', client.id)" class="min-w-0 flex-1">
+                                    <h3 class="truncate text-base font-semibold text-gray-900">{{ client.name }}</h3>
+                                    <p v-if="client.legal_name && client.legal_name !== client.name" class="mt-0.5 truncate text-sm text-gray-500">{{ client.legal_name }}</p>
+                                </Link>
+                                <button type="button" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(client)">Modifica</button>
+                            </div>
+
+                            <div class="mt-4 grid grid-cols-3 gap-2 border-y border-gray-100 py-3 text-center">
+                                <div>
+                                    <div class="text-lg font-semibold text-gray-900">{{ client.projects_count || 0 }}</div>
+                                    <div class="text-[10px] uppercase tracking-wide text-gray-400">Progetti</div>
+                                </div>
+                                <div>
+                                    <div class="text-lg font-semibold text-gray-900">{{ client.tasks_count || 0 }}</div>
+                                    <div class="text-[10px] uppercase tracking-wide text-gray-400">Task</div>
+                                </div>
+                                <div>
+                                    <div class="text-lg font-semibold text-gray-900">{{ client.documents_count || 0 }}</div>
+                                    <div class="text-[10px] uppercase tracking-wide text-gray-400">Doc</div>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 space-y-1 text-sm text-gray-600">
+                                <p v-if="client.email" class="truncate">{{ client.email }}</p>
+                                <p v-if="client.phone" class="truncate">{{ client.phone }}</p>
+                                <p v-if="client.city || client.province" class="truncate">{{ [client.city, client.province].filter(Boolean).join(', ') }}</p>
+                                <p v-if="client.vat_number" class="truncate text-xs text-gray-500">P.IVA {{ client.vat_number }}</p>
+                            </div>
+
+                            <div class="mt-4 flex flex-wrap gap-1.5">
+                                <span
+                                    v-for="service in client.services || []"
+                                    :key="service.id"
+                                    class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium"
+                                    :style="{ borderColor: `${service.color || '#64748b'}55`, color: service.color || '#64748b', backgroundColor: `${service.color || '#64748b'}18` }"
+                                >
+                                    <span class="h-1.5 w-1.5 rounded-full" :style="{ backgroundColor: service.color || '#64748b' }"></span>
+                                    {{ service.name }}
+                                </span>
+                                <span v-if="!(client.services || []).length" class="text-xs text-gray-400">Nessun servizio collegato</span>
+                            </div>
+                        </article>
+
+                        <div v-if="!clientRows.length" class="rounded-md border border-dashed border-gray-300 bg-white px-5 py-12 text-center text-sm text-gray-500 md:col-span-2 2xl:col-span-3">
+                            Nessun cliente trovato.
+                        </div>
+                    </section>
                 </div>
             </div>
         </div>

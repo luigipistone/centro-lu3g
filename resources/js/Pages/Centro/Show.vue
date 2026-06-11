@@ -158,6 +158,19 @@ function addSubtask() {
         onSuccess: () => subtaskForm.reset(),
     });
 }
+
+function paymentTermsLabel(days) {
+    if (!days) return null;
+    return `${days} giorni`;
+}
+
+function fullClientAddress(record) {
+    return [
+        [record.street, record.street_number].filter(Boolean).join(' '),
+        [record.postal_code, record.city, record.province ? `(${record.province})` : null].filter(Boolean).join(' '),
+        record.country,
+    ].filter(Boolean).join(' - ') || record.address;
+}
 </script>
 
 <template>
@@ -179,7 +192,98 @@ function addSubtask() {
 
         <div class="py-8">
             <div class="mx-auto grid max-w-7xl gap-6 px-4 sm:px-6 lg:grid-cols-[1fr_360px] lg:px-8">
-                <section class="surface rounded-md p-5">
+                <section v-if="section === 'clients'" class="space-y-6">
+                    <div class="grid gap-4 md:grid-cols-3">
+                        <div class="rounded-md bg-white p-5 shadow-sm">
+                            <div class="text-xs font-medium uppercase tracking-wide text-gray-500">Progetti</div>
+                            <div class="mt-2 text-3xl font-semibold text-gray-900">{{ related.projects?.length || 0 }}</div>
+                        </div>
+                        <div class="rounded-md bg-white p-5 shadow-sm">
+                            <div class="text-xs font-medium uppercase tracking-wide text-gray-500">Task aperti</div>
+                            <div class="mt-2 text-3xl font-semibold text-gray-900">{{ related.tasks?.length || 0 }}</div>
+                        </div>
+                        <div class="rounded-md bg-white p-5 shadow-sm">
+                            <div class="text-xs font-medium uppercase tracking-wide text-gray-500">Documenti</div>
+                            <div class="mt-2 text-3xl font-semibold text-gray-900">{{ related.documents?.length || 0 }}</div>
+                        </div>
+                    </div>
+
+                    <div class="grid gap-6 md:grid-cols-2">
+                        <section class="surface rounded-md p-5">
+                            <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Anagrafica</h3>
+                            <dl class="grid gap-3 sm:grid-cols-2">
+                                <div>
+                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">Ragione sociale</dt>
+                                    <dd class="mt-1 text-sm font-medium text-gray-900">{{ record.legal_name || '-' }}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">Settore</dt>
+                                    <dd class="mt-1 text-sm text-gray-900">{{ record.business_sector || '-' }}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">Email</dt>
+                                    <dd class="mt-1 truncate text-sm text-gray-900">{{ record.email || '-' }}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">Telefono</dt>
+                                    <dd class="mt-1 text-sm text-gray-900">{{ record.phone || '-' }}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">Sito</dt>
+                                    <dd class="mt-1 truncate text-sm text-gray-900">{{ record.website || '-' }}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">Sorgente</dt>
+                                    <dd class="mt-1 text-sm text-gray-900">{{ record.source || '-' }}</dd>
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">Indirizzo</dt>
+                                    <dd class="mt-1 text-sm text-gray-900">{{ fullClientAddress(record) || '-' }}</dd>
+                                </div>
+                                <div v-if="record.notes" class="sm:col-span-2">
+                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">Note</dt>
+                                    <dd class="mt-1 whitespace-pre-wrap text-sm text-gray-900">{{ record.notes }}</dd>
+                                </div>
+                            </dl>
+                        </section>
+
+                        <section class="surface rounded-md p-5">
+                            <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Dati fiscali e bancari</h3>
+                            <dl class="grid gap-3 sm:grid-cols-2">
+                                <div>
+                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">Partita IVA</dt>
+                                    <dd class="mt-1 text-sm text-gray-900">{{ record.vat_number || '-' }}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">Codice fiscale</dt>
+                                    <dd class="mt-1 text-sm text-gray-900">{{ record.tax_code || '-' }}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">SDI</dt>
+                                    <dd class="mt-1 text-sm text-gray-900">{{ record.sdi_code || '-' }}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">PEC</dt>
+                                    <dd class="mt-1 truncate text-sm text-gray-900">{{ record.pec || '-' }}</dd>
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">IBAN</dt>
+                                    <dd class="mt-1 break-all text-sm text-gray-900">{{ record.iban || '-' }}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">IVA</dt>
+                                    <dd class="mt-1 text-sm text-gray-900">{{ record.vat_treatment || '-' }}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">Pagamento</dt>
+                                    <dd class="mt-1 text-sm text-gray-900">{{ paymentTermsLabel(record.payment_terms_days) || '-' }}</dd>
+                                </div>
+                            </dl>
+                        </section>
+                    </div>
+                </section>
+
+                <section v-if="section !== 'clients'" class="surface rounded-md p-5">
                     <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Dettagli</h3>
                     <dl class="grid gap-4 md:grid-cols-2">
                         <div v-for="[key, value] in visibleEntries" :key="key" class="rounded-md border border-gray-100 bg-gray-50 px-3 py-2">

@@ -67,10 +67,27 @@ class CentroPageController extends Controller
             });
         }
 
+        if ($section === 'clients') {
+            $servicesByClient = DB::table('client_services')
+                ->join('services', 'services.id', '=', 'client_services.service_id')
+                ->get(['client_services.client_id', 'services.id', 'services.name', 'services.color'])
+                ->groupBy('client_id');
+
+            $rows = $rows->map(function ($row) use ($servicesByClient) {
+                $row->services = ($servicesByClient[$row->id] ?? collect())->values();
+                $row->projects_count = DB::table('projects')->where('client_id', $row->id)->count();
+                $row->tasks_count = DB::table('tasks')->where('client_id', $row->id)->where('status', '!=', 'done')->count();
+                $row->documents_count = DB::table('documents')->where('client_id', $row->id)->count();
+
+                return $row;
+            });
+        }
+
         return Inertia::render('Centro/Index', [
             ...$config,
             'rows' => $rows,
             'billingStats' => $section === 'billing' ? $this->billingStats() : null,
+            'clientStats' => $section === 'clients' ? $this->clientStats() : null,
             'clients' => DB::table('clients')->orderBy('name')->get(['id', 'name']),
             'projects' => DB::table('projects')->orderBy('name')->get(['id', 'name']),
             'services' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name']),
@@ -228,9 +245,23 @@ class CentroPageController extends Controller
                     ['name' => 'phone', 'label' => 'Telefono', 'type' => 'text'],
                     ['name' => 'vat_number', 'label' => 'Partita IVA', 'type' => 'text'],
                     ['name' => 'tax_code', 'label' => 'Codice fiscale', 'type' => 'text'],
+                    ['name' => 'legal_form', 'label' => 'Natura giuridica', 'type' => 'text'],
+                    ['name' => 'business_sector', 'label' => 'Settore', 'type' => 'text'],
+                    ['name' => 'source', 'label' => 'Sorgente', 'type' => 'text'],
+                    ['name' => 'country', 'label' => 'Paese', 'type' => 'text'],
+                    ['name' => 'street', 'label' => 'Via', 'type' => 'text'],
+                    ['name' => 'street_number', 'label' => 'Numero', 'type' => 'text'],
+                    ['name' => 'postal_code', 'label' => 'CAP', 'type' => 'text'],
                     ['name' => 'city', 'label' => 'Citta', 'type' => 'text'],
                     ['name' => 'province', 'label' => 'Provincia', 'type' => 'text'],
+                    ['name' => 'pec', 'label' => 'PEC', 'type' => 'email'],
+                    ['name' => 'sdi_code', 'label' => 'Codice SDI', 'type' => 'text'],
                     ['name' => 'website', 'label' => 'Sito web', 'type' => 'text'],
+                    ['name' => 'iban', 'label' => 'IBAN', 'type' => 'text'],
+                    ['name' => 'bic_swift', 'label' => 'BIC/SWIFT', 'type' => 'text'],
+                    ['name' => 'vat_treatment', 'label' => 'Trattamento IVA', 'type' => 'text'],
+                    ['name' => 'payment_terms_days', 'label' => 'Termini pagamento', 'type' => 'number'],
+                    ['name' => 'is_pa', 'label' => 'Pubblica amministrazione', 'type' => 'checkbox'],
                     ['name' => 'notes', 'label' => 'Note', 'type' => 'textarea'],
                 ],
             ],
@@ -411,6 +442,16 @@ class CentroPageController extends Controller
         ];
     }
 
+    private function clientStats(): array
+    {
+        return [
+            'total' => DB::table('clients')->count(),
+            'withServices' => DB::table('client_services')->distinct('client_id')->count('client_id'),
+            'withOpenTasks' => DB::table('tasks')->where('status', '!=', 'done')->distinct('client_id')->count('client_id'),
+            'withDocuments' => DB::table('documents')->distinct('client_id')->count('client_id'),
+        ];
+    }
+
     private function validatedPayload(Request $request, string $section): array
     {
         $rules = match ($section) {
@@ -421,9 +462,23 @@ class CentroPageController extends Controller
                 'phone' => ['nullable', 'string', 'max:255'],
                 'vat_number' => ['nullable', 'string', 'max:255'],
                 'tax_code' => ['nullable', 'string', 'max:255'],
+                'legal_form' => ['nullable', 'string', 'max:255'],
+                'business_sector' => ['nullable', 'string', 'max:255'],
+                'source' => ['nullable', 'string', 'max:255'],
+                'country' => ['nullable', 'string', 'max:255'],
+                'street' => ['nullable', 'string', 'max:255'],
+                'street_number' => ['nullable', 'string', 'max:255'],
+                'postal_code' => ['nullable', 'string', 'max:255'],
                 'city' => ['nullable', 'string', 'max:255'],
                 'province' => ['nullable', 'string', 'max:255'],
+                'pec' => ['nullable', 'email', 'max:255'],
+                'sdi_code' => ['nullable', 'string', 'max:255'],
                 'website' => ['nullable', 'string', 'max:255'],
+                'iban' => ['nullable', 'string', 'max:255'],
+                'bic_swift' => ['nullable', 'string', 'max:255'],
+                'vat_treatment' => ['nullable', 'string', 'max:255'],
+                'payment_terms_days' => ['nullable', 'integer', 'min:0'],
+                'is_pa' => ['boolean'],
                 'notes' => ['nullable', 'string'],
             ],
             'projects' => [
@@ -474,6 +529,10 @@ class CentroPageController extends Controller
 
         if ($section === 'settings') {
             $payload['active'] = $request->boolean('active');
+        }
+
+        if ($section === 'clients') {
+            $payload['is_pa'] = $request->boolean('is_pa');
         }
 
         return $payload;
