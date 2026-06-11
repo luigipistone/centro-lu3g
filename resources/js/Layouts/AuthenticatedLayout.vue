@@ -9,6 +9,8 @@ import {
     Briefcase,
     Calendar,
     CheckSquare,
+    ChevronDown,
+    Menu,
     LayoutDashboard,
     LogOut,
     Mail,
@@ -21,6 +23,7 @@ import {
     User,
     UserCog,
     Users,
+    X,
 } from '@lucide/vue';
 
 const showingNavigationDropdown = ref(false);
@@ -66,13 +69,16 @@ const groups = [
 
 <template>
     <div class="min-h-screen bg-[hsl(var(--background))]">
-        <aside class="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-gray-200 bg-white lg:flex">
-            <div class="flex h-14 items-center justify-between border-b border-gray-100 px-4">
-                <Link :href="route('dashboard')" class="font-semibold tracking-tight text-gray-900">Agency Hub</Link>
+        <aside class="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-white/60 bg-white/62 shadow-[20px_0_55px_rgba(28,42,73,0.08)] backdrop-blur-2xl lg:flex">
+            <div class="flex h-16 items-center justify-between border-b border-white/60 px-4">
+                <Link :href="route('dashboard')" class="flex items-center gap-2 font-semibold tracking-tight text-gray-950">
+                    <span class="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-white/80 text-sm font-extrabold text-indigo-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_12px_24px_rgba(79,70,229,0.14)]">L</span>
+                    <span>Agency Hub</span>
+                </Link>
                 <div class="group relative">
                     <Link
                         :href="route('notifications.index')"
-                        class="relative inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-50 hover:text-indigo-600"
+                        class="relative inline-flex h-9 w-9 items-center justify-center rounded-2xl text-gray-500 transition hover:bg-white/70 hover:text-indigo-600 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]"
                     >
                         <Bell class="h-[18px] w-[18px]" :stroke-width="1.6" />
                         <span
@@ -83,8 +89,8 @@ const groups = [
                         </span>
                     </Link>
 
-                    <div class="invisible absolute right-0 top-9 z-40 w-80 overflow-hidden rounded-md border border-gray-200 bg-white opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
-                        <div class="flex items-center justify-between border-b border-gray-100 px-3 py-2">
+                    <div class="invisible absolute right-0 top-11 z-40 w-80 overflow-hidden rounded-2xl border border-white/70 bg-white/78 opacity-0 shadow-[0_24px_70px_rgba(28,42,73,0.14)] backdrop-blur-2xl transition group-hover:visible group-hover:opacity-100">
+                        <div class="flex items-center justify-between border-b border-white/60 px-3 py-2">
                             <span class="text-sm font-semibold text-gray-900">Notifiche</span>
                             <Link :href="route('notifications.index')" class="text-xs font-medium text-indigo-600 hover:text-indigo-500">Vedi tutte</Link>
                         </div>
@@ -93,7 +99,7 @@ const groups = [
                                 v-for="notification in $page.props.notifications.latest"
                                 :key="notification.id"
                                 :href="notification.task_id ? route('tasks.show', notification.task_id) : route('notifications.index')"
-                                :class="['block border-l-2 px-3 py-2 text-sm hover:bg-gray-50', notification.read ? 'border-transparent text-gray-600' : 'border-indigo-600 bg-indigo-50/70 text-gray-900']"
+                                :class="['block border-l-2 px-3 py-2 text-sm transition hover:bg-white/58', notification.read ? 'border-transparent text-gray-600' : 'border-indigo-600 bg-indigo-50/70 text-gray-900']"
                             >
                                 <span class="line-clamp-2">{{ notification.message }}</span>
                             </Link>
@@ -103,7 +109,7 @@ const groups = [
                 </div>
             </div>
 
-            <div class="flex-1 overflow-y-auto p-3">
+            <div class="flex-1 overflow-y-auto p-3 pt-4">
                 <div v-for="group in groups" :key="group.label" class="mb-5">
                     <div class="mb-2 flex items-center gap-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400">
                         <component v-if="group.icon" :is="group.icon" class="h-3 w-3" :stroke-width="1.6" />
@@ -123,9 +129,9 @@ const groups = [
                 </div>
             </div>
 
-            <div class="border-t border-gray-100 p-3">
-                <Link :href="route('profile.edit')" class="mb-2 flex items-center gap-2 rounded-md p-2 hover:bg-gray-50">
-                    <div class="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">
+            <div class="border-t border-white/60 p-3">
+                <Link :href="route('profile.edit')" class="mb-2 flex items-center gap-2 rounded-2xl p-2 transition hover:bg-white/58">
+                    <div class="flex h-9 w-9 items-center justify-center rounded-2xl bg-indigo-100/80 text-xs font-semibold text-indigo-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.76)]">
                         {{ $page.props.auth.user.name?.slice(0, 1) }}
                     </div>
                     <div class="min-w-0">
@@ -141,17 +147,20 @@ const groups = [
         </aside>
 
         <div class="lg:pl-64">
-            <nav class="border-b border-gray-100 bg-white lg:hidden">
+            <nav class="sticky top-0 z-30 border-b border-white/60 bg-white/68 shadow-[0_16px_40px_rgba(28,42,73,0.08)] backdrop-blur-2xl lg:hidden">
                 <div class="px-4 sm:px-6">
-                    <div class="flex h-14 justify-between">
+                    <div class="flex h-16 justify-between">
                         <div class="flex items-center">
-                            <Link :href="route('dashboard')" class="font-semibold text-gray-900">Agency Hub</Link>
+                            <Link :href="route('dashboard')" class="flex items-center gap-2 font-semibold text-gray-950">
+                                <span class="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-white/80 text-sm font-extrabold text-indigo-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_12px_24px_rgba(79,70,229,0.14)]">L</span>
+                                Agency Hub
+                            </Link>
                         </div>
 
                         <div class="flex items-center gap-2">
                             <Link
                                 :href="route('notifications.index')"
-                                class="relative inline-flex h-9 w-9 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-indigo-600"
+                                class="relative inline-flex h-10 w-10 items-center justify-center rounded-2xl text-gray-500 transition hover:bg-white/70 hover:text-indigo-600"
                             >
                                 <Bell class="h-[18px] w-[18px]" :stroke-width="1.6" />
                                 <span
@@ -165,25 +174,14 @@ const groups = [
                             <div class="relative">
                                 <Dropdown align="right" width="48">
                                     <template #trigger>
-                                        <span class="inline-flex rounded-md">
+                                        <span class="inline-flex rounded-2xl">
                                             <button
                                                 type="button"
-                                                class="inline-flex items-center rounded-md border border-transparent bg-white px-3 py-2 text-sm font-medium leading-4 text-gray-500 transition duration-150 ease-in-out hover:text-gray-700 focus:outline-none"
+                                                class="inline-flex items-center rounded-2xl border border-white/70 bg-white/64 px-3 py-2 text-sm font-semibold leading-4 text-gray-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] transition duration-150 ease-in-out hover:text-gray-900 focus:outline-none"
                                             >
                                                 {{ $page.props.auth.user.name }}
 
-                                                <svg
-                                                    class="-me-0.5 ms-2 h-4 w-4"
-                                                    xmlns="http://www.w3.org/2000/svg"
-                                                    viewBox="0 0 20 20"
-                                                    fill="currentColor"
-                                                >
-                                                    <path
-                                                        fill-rule="evenodd"
-                                                        d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                                                        clip-rule="evenodd"
-                                                    />
-                                                </svg>
+                                                <ChevronDown class="-me-0.5 ms-2 h-4 w-4" :stroke-width="1.8" />
                                             </button>
                                         </span>
                                     </template>
@@ -210,37 +208,10 @@ const groups = [
                                     showingNavigationDropdown =
                                         !showingNavigationDropdown
                                 "
-                                class="inline-flex items-center justify-center rounded-md p-2 text-gray-400 transition duration-150 ease-in-out hover:bg-gray-100 hover:text-gray-500 focus:bg-gray-100 focus:text-gray-500 focus:outline-none"
+                                class="inline-flex h-10 w-10 items-center justify-center rounded-2xl text-gray-500 transition duration-150 ease-in-out hover:bg-white/70 hover:text-gray-900 focus:bg-white/70 focus:text-gray-900 focus:outline-none"
                             >
-                                <svg
-                                    class="h-6 w-6"
-                                    stroke="currentColor"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        :class="{
-                                            hidden: showingNavigationDropdown,
-                                            'inline-flex':
-                                                !showingNavigationDropdown,
-                                        }"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M4 6h16M4 12h16M4 18h16"
-                                    />
-                                    <path
-                                        :class="{
-                                            hidden: !showingNavigationDropdown,
-                                            'inline-flex':
-                                                showingNavigationDropdown,
-                                        }"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M6 18L18 6M6 6l12 12"
-                                    />
-                                </svg>
+                                <X v-if="showingNavigationDropdown" class="h-5 w-5" :stroke-width="1.8" />
+                                <Menu v-else class="h-5 w-5" :stroke-width="1.8" />
                             </button>
                         </div>
                     </div>
@@ -252,7 +223,7 @@ const groups = [
                         block: showingNavigationDropdown,
                         hidden: !showingNavigationDropdown,
                     }"
-                    class="sm:hidden"
+                    class="border-t border-white/60 bg-white/70 backdrop-blur-2xl sm:hidden"
                 >
                     <div class="space-y-1 pb-3 pt-2">
                         <template v-for="group in groups" :key="group.label">
@@ -269,7 +240,7 @@ const groups = [
 
                     <!-- Responsive Settings Options -->
                     <div
-                        class="border-t border-gray-200 pb-1 pt-4"
+                        class="border-t border-white/60 pb-1 pt-4"
                     >
                         <div class="px-4">
                             <div
@@ -284,22 +255,22 @@ const groups = [
 
                         <div class="mt-3 space-y-1">
                             <ResponsiveNavLink :href="route('profile.edit')">
-                                Profile
+                                Profilo
                             </ResponsiveNavLink>
                             <ResponsiveNavLink
                                 :href="route('logout')"
                                 method="post"
                                 as="button"
                             >
-                                Log Out
+                                Esci
                             </ResponsiveNavLink>
                         </div>
                     </div>
                 </div>
             </nav>
 
-            <header class="border-b border-gray-100 bg-white" v-if="$slots.header">
-                <div class="px-4 py-5 sm:px-6 lg:px-8">
+            <header class="border-b border-white/60 bg-white/46 backdrop-blur-2xl" v-if="$slots.header">
+                <div class="px-4 py-6 sm:px-6 lg:px-8">
                     <slot name="header" />
                 </div>
             </header>
