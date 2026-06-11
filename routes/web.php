@@ -14,6 +14,7 @@ Route::get('/dashboard', [CentroPageController::class, 'dashboard'])->middleware
 
 Route::middleware('auth')->group(function () {
     Route::patch('/dashboard/widgets', [CentroPageController::class, 'updateDashboardWidgets'])->name('dashboard.widgets.update');
+    Route::patch('/dashboard/note', [CentroPageController::class, 'updateDashboardNote'])->name('dashboard.note.update');
     Route::get('/clients', [CentroPageController::class, 'index'])->defaults('section', 'clients')->name('clients.index');
     Route::post('/clients', [CentroPageController::class, 'store'])->defaults('section', 'clients')->name('clients.store');
     Route::get('/clients/{id}', [CentroPageController::class, 'show'])->defaults('section', 'clients')->name('clients.show');

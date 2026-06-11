@@ -1,15 +1,30 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import {
+    AlignCenter,
+    AlignLeft,
+    AlignRight,
     AlertTriangle,
+    Bold,
     Briefcase,
     CalendarClock,
     CheckSquare,
+    Heading1,
+    Heading2,
     GripVertical,
+    Italic,
+    Link2,
+    List,
+    ListOrdered,
     Plus,
+    Quote,
+    RemoveFormatting,
     Settings2,
+    StickyNote,
+    Strikethrough,
+    Underline,
     Users,
     X,
 } from '@lucide/vue';
@@ -23,15 +38,20 @@ const props = defineProps({
     activeProjects: Array,
     dashboardWidgets: Array,
     availableDashboardWidgets: Array,
+    dashboardNote: Object,
 });
 
 const page = usePage();
 const dashboardGrid = ref(null);
 const widgetMenuOpen = ref(false);
 const saving = ref(false);
+const savingNote = ref(false);
 const draggingType = ref(null);
 const dragOverIndex = ref(null);
+const noteEditor = ref(null);
+const noteHtml = ref(props.dashboardNote?.html || '');
 let saveTimer = null;
+let noteSaveTimer = null;
 let resizeState = null;
 let moveState = null;
 
@@ -118,7 +138,32 @@ const widgetMeta = {
         empty: 'Nessun task urgente',
         items: () => props.urgentTasks ?? [],
     },
+    notes: {
+        label: 'Note',
+        description: 'Scrittura libera',
+        route: 'dashboard',
+        icon: StickyNote,
+        iconClass: 'text-violet-600',
+        kind: 'note',
+    },
 };
+
+const noteToolbar = [
+    ['bold', Bold, 'Grassetto'],
+    ['italic', Italic, 'Corsivo'],
+    ['underline', Underline, 'Sottolineato'],
+    ['strikeThrough', Strikethrough, 'Barrato'],
+    ['formatBlock:h1', Heading1, 'Titolo 1'],
+    ['formatBlock:h2', Heading2, 'Titolo 2'],
+    ['insertUnorderedList', List, 'Lista'],
+    ['insertOrderedList', ListOrdered, 'Lista numerata'],
+    ['formatBlock:blockquote', Quote, 'Citazione'],
+    ['justifyLeft', AlignLeft, 'Allinea a sinistra'],
+    ['justifyCenter', AlignCenter, 'Allinea al centro'],
+    ['justifyRight', AlignRight, 'Allinea a destra'],
+    ['createLink', Link2, 'Link'],
+    ['removeFormat', RemoveFormatting, 'Pulisci formato'],
+];
 
 function normalizeWidgets(source = []) {
     const saved = new Map(source.map((widget) => [widget.widget_type, widget]));
@@ -189,6 +234,54 @@ async function saveWidgets() {
         }
     } finally {
         saving.value = false;
+    }
+}
+
+function applyNoteCommand(command) {
+    initializeNoteEditor();
+    noteEditor.value?.focus();
+
+    if (command.startsWith('formatBlock:')) {
+        document.execCommand('formatBlock', false, command.split(':')[1]);
+    } else if (command === 'createLink') {
+        const url = window.prompt('URL del link');
+        if (url) document.execCommand('createLink', false, url);
+    } else {
+        document.execCommand(command, false);
+    }
+
+    syncNoteContent();
+}
+
+function initializeNoteEditor() {
+    if (noteEditor.value && noteEditor.value.innerHTML !== noteHtml.value) {
+        noteEditor.value.innerHTML = noteHtml.value;
+    }
+}
+
+function syncNoteContent() {
+    noteHtml.value = noteEditor.value?.innerHTML || '';
+    scheduleNoteSave();
+}
+
+function scheduleNoteSave() {
+    clearTimeout(noteSaveTimer);
+    noteSaveTimer = setTimeout(saveNote, 500);
+}
+
+async function saveNote() {
+    savingNote.value = true;
+
+    try {
+        const { data } = await window.axios.patch(route('dashboard.note.update'), { html: noteHtml.value });
+        if (data?.note?.html !== undefined) {
+            noteHtml.value = data.note.html;
+            if (noteEditor.value && noteEditor.value.innerHTML !== data.note.html) {
+                noteEditor.value.innerHTML = data.note.html;
+            }
+        }
+    } finally {
+        savingNote.value = false;
     }
 }
 
@@ -278,6 +371,10 @@ function addWidget(widget) {
         { ...widget, visible: true, col_span: clampSpan(widget.col_span || 1) },
         ...hiddenWidgets.value.filter((item) => item.widget_type !== widget.widget_type),
     ]);
+
+    if (widget.widget_type === 'notes') {
+        nextTick(initializeNoteEditor);
+    }
 }
 
 function startResize(widget, event) {
@@ -345,8 +442,20 @@ function itemMeta(widget, item) {
 function widgetNumber(widget) {
     const meta = metaFor(widget);
     if (meta.kind === 'stat') return meta.value();
+    if (meta.kind === 'note') return noteHtml.value.replace(/<[^>]+>/g, ' ').trim().split(/\s+/).filter(Boolean).length;
     return meta.items().length;
 }
+
+onMounted(() => {
+    nextTick(initializeNoteEditor);
+});
+
+watch(
+    () => visibleWidgets.value.some((widget) => widget.widget_type === 'notes'),
+    (hasNotes) => {
+        if (hasNotes) nextTick(initializeNoteEditor);
+    },
+);
 </script>
 
 <template>
@@ -369,7 +478,7 @@ function widgetNumber(widget) {
 
                     <div
                         v-if="widgetMenuOpen"
-                        class="absolute right-0 top-12 z-30 w-80 overflow-hidden rounded-2xl border border-white bg-white p-2 shadow-[0_24px_70px_rgba(28,42,73,0.14)]"
+                        class="absolute right-0 top-12 z-[9999] w-80 overflow-hidden rounded-2xl border border-white bg-white p-2 shadow-[0_24px_70px_rgba(28,42,73,0.14)]"
                     >
                         <div class="px-2 pb-2 pt-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Widget disponibili</div>
                         <button
@@ -485,6 +594,32 @@ function widgetNumber(widget) {
                                 </Link>
                                 <p v-if="!metaFor(widget).items().length" class="py-2 text-sm text-gray-500">{{ metaFor(widget).empty }}</p>
                             </div>
+                        </div>
+
+                        <div v-if="metaFor(widget).kind === 'note'" class="flex flex-1 flex-col gap-3 pr-3">
+                            <div class="flex flex-wrap items-center gap-1 rounded-2xl border border-gray-100 bg-white/90 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">
+                                <button
+                                    v-for="[command, icon, label] in noteToolbar"
+                                    :key="command"
+                                    type="button"
+                                    class="icon-btn h-8 w-8"
+                                    :title="label"
+                                    @click="applyNoteCommand(command)"
+                                >
+                                    <component :is="icon" class="h-4 w-4" :stroke-width="1.8" />
+                                    <span class="sr-only">{{ label }}</span>
+                                </button>
+                                <span v-if="savingNote" class="ml-auto px-2 text-[11px] font-semibold text-gray-400">Salvataggio...</span>
+                            </div>
+
+                            <div
+                                ref="noteEditor"
+                                class="min-h-[180px] rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm leading-6 text-gray-800 outline-none transition focus:border-indigo-200 focus:ring-4 focus:ring-indigo-500/10 [&_blockquote]:border-l-4 [&_blockquote]:border-indigo-200 [&_blockquote]:pl-3 [&_h1]:text-2xl [&_h1]:font-bold [&_h2]:text-xl [&_h2]:font-bold [&_li]:ml-5 [&_ol]:list-decimal [&_ul]:list-disc"
+                                contenteditable="true"
+                                :data-placeholder="noteHtml ? '' : 'Scrivi una nota...'"
+                                @input="syncNoteContent"
+                                @blur="saveNote"
+                            ></div>
                         </div>
                     </article>
 

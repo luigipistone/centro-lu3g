@@ -60,6 +60,7 @@ class CentroPageController extends Controller
                 ->get(['projects.id', 'projects.name', 'projects.color', 'clients.name as client_name']),
             'dashboardWidgets' => $this->dashboardWidgetsFor($request->user()),
             'availableDashboardWidgets' => $this->availableDashboardWidgets(),
+            'dashboardNote' => $this->dashboardNoteFor($request->user()),
         ]);
     }
 
@@ -93,6 +94,34 @@ class CentroPageController extends Controller
         });
 
         return response()->json(['widgets' => $this->dashboardWidgetsFor($request->user())]);
+    }
+
+    public function updateDashboardNote(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'html' => ['nullable', 'string', 'max:100000'],
+        ]);
+
+        $content = ['html' => $this->sanitizeNoteHtml($data['html'] ?? '')];
+        $existing = DB::table('user_notes')->where('user_id', $request->user()->id)->latest('updated_at')->first();
+        $now = now();
+
+        if ($existing) {
+            DB::table('user_notes')->where('id', $existing->id)->update([
+                'content' => json_encode($content),
+                'updated_at' => $now,
+            ]);
+        } else {
+            DB::table('user_notes')->insert([
+                'id' => (string) Str::uuid(),
+                'user_id' => $request->user()->id,
+                'content' => json_encode($content),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+        }
+
+        return response()->json(['note' => $content]);
     }
 
     private function dashboardWidgetsFor(User $user): array
@@ -156,6 +185,7 @@ class CentroPageController extends Controller
             ['widget_type' => 'active_projects', 'position' => 6, 'col_span' => 1, 'visible' => true],
             ['widget_type' => 'recent_clients', 'position' => 7, 'col_span' => 1, 'visible' => true],
             ['widget_type' => 'urgent_tasks', 'position' => 8, 'col_span' => 1, 'visible' => true],
+            ['widget_type' => 'notes', 'position' => 9, 'col_span' => 2, 'visible' => false],
         ];
     }
 
@@ -171,7 +201,27 @@ class CentroPageController extends Controller
             ['type' => 'active_projects', 'label' => 'Progetti attivi', 'description' => 'Elenco progetti in corso'],
             ['type' => 'recent_clients', 'label' => 'Clienti recenti', 'description' => 'Ultime anagrafiche inserite'],
             ['type' => 'urgent_tasks', 'label' => 'Task urgenti', 'description' => 'Attivita prioritarie'],
+            ['type' => 'notes', 'label' => 'Note', 'description' => 'Scrittura libera con editor completo'],
         ];
+    }
+
+    private function dashboardNoteFor(User $user): array
+    {
+        $note = DB::table('user_notes')->where('user_id', $user->id)->latest('updated_at')->first();
+        $content = $note ? json_decode($note->content, true) : null;
+
+        return [
+            'html' => is_array($content) ? (string) ($content['html'] ?? '') : '',
+        ];
+    }
+
+    private function sanitizeNoteHtml(string $html): string
+    {
+        $html = strip_tags($html, '<p><br><strong><b><em><i><u><s><ul><ol><li><blockquote><a><h1><h2><h3><pre><code><div><span>');
+        $html = preg_replace('/\s(on\w+|style|class|id)=("[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', $html) ?? '';
+        $html = preg_replace('/href=("[^"]*"|\'[^\']*\'|[^\s>]+)/i', 'href="#"', $html) ?? '';
+
+        return trim($html);
     }
 
     private function sizeFromSpan(int $span): string
