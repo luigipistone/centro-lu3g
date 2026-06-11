@@ -817,10 +817,10 @@ function taskSpanRole(row, date) {
 }
 
 function taskSpanClass(task) {
-    if (task.spanRole === 'start') return 'rounded-r-none border-r-0';
+    if (task.spanRole === 'start') return 'rounded-l-xl rounded-r-none border-r-0';
     if (task.spanRole === 'middle') return 'rounded-none border-x-0 opacity-80';
-    if (task.spanRole === 'end') return 'rounded-l-none border-l-0';
-    return 'rounded-md';
+    if (task.spanRole === 'end') return 'rounded-l-none rounded-r-xl border-l-0';
+    return 'rounded-xl';
 }
 
 function taskTypeClass(type) {
