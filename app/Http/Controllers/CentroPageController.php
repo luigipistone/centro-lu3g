@@ -1365,10 +1365,22 @@ class CentroPageController extends Controller
             'status' => ['required', Rule::in(['todo', 'in_progress', 'in_review', 'done'])],
         ]);
 
-        DB::table('tasks')->where('id', $id)->update([
-            'status' => $payload['status'],
-            'updated_at' => now(),
-        ]);
+        DB::transaction(function () use ($id, $task, $payload, $request) {
+            DB::table('tasks')->where('id', $id)->update([
+                'status' => $payload['status'],
+                'updated_at' => now(),
+            ]);
+
+            if ($payload['status'] === 'done') {
+                DB::table('tasks')
+                    ->where('parent_task_id', $id)
+                    ->update(['status' => 'done', 'updated_at' => now()]);
+
+                if (! $task->parent_task_id && $task->recurring_enabled && $task->status !== 'done') {
+                    $this->createNextRecurringTask($task, $request->user()->id);
+                }
+            }
+        });
 
         $this->notifyTaskPeople(
             $id,
@@ -1378,6 +1390,107 @@ class CentroPageController extends Controller
         );
 
         return back()->with('status', 'Stato task aggiornato.');
+    }
+
+    private function createNextRecurringTask(object $task, string $userId): string
+    {
+        $nextDueDate = $this->nextRecurringTaskDate($task);
+        $nextStartDate = null;
+
+        if ($task->start_date && $task->due_date && $task->start_date !== $task->due_date) {
+            $duration = \Carbon\Carbon::parse($task->start_date)->diffInDays(\Carbon\Carbon::parse($task->due_date));
+            $nextStartDate = \Carbon\Carbon::parse($nextDueDate)->subDays($duration)->toDateString();
+        }
+
+        $newTaskId = (string) str()->uuid();
+        DB::table('tasks')->insert([
+            'id' => $newTaskId,
+            'title' => $task->title,
+            'description' => $task->description,
+            'project_id' => $task->project_id,
+            'client_id' => $task->client_id,
+            'service_id' => $task->service_id,
+            'parent_task_id' => null,
+            'start_date' => $nextStartDate,
+            'due_date' => $nextDueDate,
+            'due_time' => $task->due_time,
+            'location' => $task->location,
+            'priority' => $task->priority,
+            'status' => 'todo',
+            'task_type' => $task->task_type,
+            'recurring_enabled' => $task->recurring_enabled,
+            'recurring_mode' => $task->recurring_mode,
+            'recurring_interval_value' => $task->recurring_interval_value,
+            'recurring_interval_unit' => $task->recurring_interval_unit,
+            'recurring_weekday' => $task->recurring_weekday,
+            'recurring_month_day' => $task->recurring_month_day,
+            'created_by' => $userId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        foreach (['task_assignees', 'task_followers'] as $table) {
+            $rows = DB::table($table)->where('task_id', $task->id)->pluck('user_id');
+            foreach ($rows as $userIdForRelation) {
+                DB::table($table)->insert([
+                    'id' => (string) str()->uuid(),
+                    'task_id' => $newTaskId,
+                    'user_id' => $userIdForRelation,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        }
+
+        $subtasks = DB::table('tasks')->where('parent_task_id', $task->id)->get();
+        foreach ($subtasks as $subtask) {
+            DB::table('tasks')->insert([
+                'id' => (string) str()->uuid(),
+                'title' => $subtask->title,
+                'description' => $subtask->description,
+                'project_id' => $task->project_id,
+                'client_id' => $task->client_id,
+                'service_id' => $task->service_id,
+                'parent_task_id' => $newTaskId,
+                'start_date' => null,
+                'due_date' => null,
+                'due_time' => $subtask->due_time,
+                'location' => $subtask->location,
+                'priority' => $subtask->priority,
+                'status' => 'todo',
+                'task_type' => $subtask->task_type,
+                'recurring_enabled' => false,
+                'created_by' => $userId,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        return $newTaskId;
+    }
+
+    private function nextRecurringTaskDate(object $task): string
+    {
+        $base = \Carbon\Carbon::parse($task->due_date ?: now()->toDateString());
+        $interval = max(1, (int) ($task->recurring_interval_value ?: 1));
+
+        if ($task->recurring_interval_unit === 'month') {
+            $next = $base->copy()->addMonths($interval);
+            if ($task->recurring_mode === 'fixed' && $task->recurring_month_day) {
+                $maxDay = $next->copy()->endOfMonth()->day;
+                $next->day(min((int) $task->recurring_month_day, $maxDay));
+            }
+
+            return $next->toDateString();
+        }
+
+        $next = $base->copy()->addWeeks($interval);
+        if ($task->recurring_weekday) {
+            $currentWeekday = $next->dayOfWeekIso;
+            $next->addDays(((int) $task->recurring_weekday) - $currentWeekday);
+        }
+
+        return $next->toDateString();
     }
 
     public function markNotificationRead(Request $request, string $id): RedirectResponse
