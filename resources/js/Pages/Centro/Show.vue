@@ -203,6 +203,16 @@ const subtaskForm = useForm({
 });
 const selectedAssignees = ref([...(props.related.assignees || [])]);
 const selectedFollowers = ref([...(props.related.followers || [])]);
+const editingProject = ref(false);
+const projectForm = useForm({
+    name: props.record.name || '',
+    description: props.record.description || '',
+    client_id: props.record.client_id || '',
+    status: props.record.status || 'active',
+    color: props.record.color || '#2563eb',
+});
+const selectedProjectFollowers = ref([...(props.related.followers || [])]);
+const projectColors = ['#2563eb', '#7c3aed', '#db2777', '#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#475569'];
 
 function addComment() {
     commentForm.post(route('tasks.comments.store', props.record.id), {
@@ -348,6 +358,34 @@ function removeContact(contact) {
         button: 'Elimina',
         danger: true,
         action: () => router.delete(route('clients.contacts.destroy', [props.record.id, contact.id]), { preserveScroll: true, onFinish: closeConfirm }),
+    });
+}
+
+function saveProjectDetails() {
+    projectForm.put(route('projects.update', props.record.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            editingProject.value = false;
+        },
+    });
+}
+
+function saveProjectFollowers() {
+    router.put(route('projects.followers.sync', props.record.id), { user_ids: selectedProjectFollowers.value }, { preserveScroll: true });
+}
+
+function deleteProjectFromDetail() {
+    openConfirm({
+        title: 'Eliminare questo progetto?',
+        description: props.record.name || 'Progetto',
+        keyword: 'ELIMINA',
+        button: 'Elimina',
+        danger: true,
+        action: () => router.delete(route('projects.destroy', props.record.id), {
+            preserveScroll: true,
+            onFinish: closeConfirm,
+            onSuccess: () => router.visit(route('projects.index')),
+        }),
     });
 }
 
@@ -529,9 +567,12 @@ function remainingAmount() {
                     <Link :href="route(`${section}.index`)" class="text-sm font-medium text-indigo-600 hover:text-indigo-500">
                         {{ title }}
                     </Link>
-                    <h2 class="mt-1 text-xl font-semibold leading-tight text-gray-800">
-                        {{ record.name || record.title || record.number }}
-                    </h2>
+                    <div class="mt-1 flex items-center gap-2">
+                        <span v-if="section === 'projects'" class="h-3 w-3 rounded-full" :style="{ backgroundColor: record.color || '#2563eb' }"></span>
+                        <h2 class="text-xl font-semibold leading-tight text-gray-800">
+                            {{ record.name || record.title || record.number }}
+                        </h2>
+                    </div>
                 </div>
                 <div v-if="section === 'tasks'" class="flex flex-wrap justify-end gap-2">
                     <button
@@ -564,6 +605,22 @@ function remainingAmount() {
                     </template>
                     <button v-else type="button" class="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="editingClient = true">
                         Modifica
+                    </button>
+                </div>
+                <div v-else-if="section === 'projects'" class="flex flex-wrap justify-end gap-2">
+                    <template v-if="editingProject">
+                        <button type="button" class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50" :disabled="projectForm.processing" @click="saveProjectDetails">
+                            Salva
+                        </button>
+                        <button type="button" class="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="editingProject = false">
+                            Annulla
+                        </button>
+                    </template>
+                    <button v-else type="button" class="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="editingProject = true">
+                        Modifica
+                    </button>
+                    <button type="button" class="rounded-md border border-red-100 bg-white px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50" @click="deleteProjectFromDetail">
+                        Elimina
                     </button>
                 </div>
             </div>
@@ -1175,6 +1232,122 @@ function remainingAmount() {
                     </section>
                 </section>
 
+                <section v-if="section === 'projects'" class="space-y-6">
+                    <section class="surface rounded-md p-5">
+                        <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Panoramica progetto</h3>
+                                <p class="mt-1 text-sm text-gray-500">{{ related.tasks?.length || 0 }} task collegate</p>
+                            </div>
+                            <span :class="['rounded-full px-3 py-1 text-xs font-semibold', record.status === 'active' ? 'bg-emerald-100 text-emerald-700' : record.status === 'completed' ? 'bg-indigo-100 text-indigo-700' : record.status === 'on_hold' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600']">
+                                {{ displayValue(record.status) }}
+                            </span>
+                        </div>
+
+                        <div v-if="editingProject" class="space-y-5">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Nome</label>
+                                <input v-model="projectForm.name" class="form-control" required />
+                                <div v-if="projectForm.errors.name" class="mt-1 text-sm text-red-600">{{ projectForm.errors.name }}</div>
+                            </div>
+                            <div class="grid gap-4 md:grid-cols-2">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Cliente</label>
+                                    <select v-model="projectForm.client_id" class="form-control">
+                                        <option value="">Nessun cliente</option>
+                                        <option v-for="client in related.projectClients" :key="client.id" :value="client.id">{{ client.name }}</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Stato</label>
+                                    <select v-model="projectForm.status" class="form-control">
+                                        <option value="active">Attivo</option>
+                                        <option value="completed">Completato</option>
+                                        <option value="on_hold">In pausa</option>
+                                        <option value="archived">Archiviato</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Colore</label>
+                                <div class="mt-2 flex flex-wrap gap-2">
+                                    <button
+                                        v-for="color in projectColors"
+                                        :key="color"
+                                        type="button"
+                                        :class="['h-8 w-8 rounded-full border-2', projectForm.color === color ? 'border-gray-900 ring-2 ring-gray-300' : 'border-white']"
+                                        :style="{ backgroundColor: color }"
+                                        :aria-label="`Colore ${color}`"
+                                        @click="projectForm.color = color"
+                                    ></button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Descrizione</label>
+                                <textarea v-model="projectForm.description" rows="5" class="form-control"></textarea>
+                            </div>
+                            <div class="flex justify-end gap-2">
+                                <button type="button" class="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="editingProject = false">
+                                    Annulla
+                                </button>
+                                <button type="button" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50" :disabled="projectForm.processing" @click="saveProjectDetails">
+                                    Salva progetto
+                                </button>
+                            </div>
+                        </div>
+
+                        <dl v-else class="grid gap-4 md:grid-cols-2">
+                            <div class="rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
+                                <dt class="text-xs font-medium uppercase tracking-wide text-gray-400">Cliente</dt>
+                                <dd class="mt-1 text-sm font-medium text-gray-900">{{ related.client?.name || '-' }}</dd>
+                            </div>
+                            <div class="rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
+                                <dt class="text-xs font-medium uppercase tracking-wide text-gray-400">Colore</dt>
+                                <dd class="mt-1 flex items-center gap-2 text-sm text-gray-900">
+                                    <span class="h-3 w-3 rounded-full" :style="{ backgroundColor: record.color || '#2563eb' }"></span>
+                                    {{ record.color || '-' }}
+                                </dd>
+                            </div>
+                            <div class="rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
+                                <dt class="text-xs font-medium uppercase tracking-wide text-gray-400">Stato</dt>
+                                <dd class="mt-1 text-sm text-gray-900">{{ displayValue(record.status) }}</dd>
+                            </div>
+                            <div class="rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
+                                <dt class="text-xs font-medium uppercase tracking-wide text-gray-400">Task</dt>
+                                <dd class="mt-1 text-sm text-gray-900">{{ related.tasks?.length || 0 }}</dd>
+                            </div>
+                            <div class="rounded-md border border-gray-100 bg-gray-50 px-3 py-2 md:col-span-2">
+                                <dt class="text-xs font-medium uppercase tracking-wide text-gray-400">Descrizione</dt>
+                                <dd class="mt-1 whitespace-pre-wrap text-sm text-gray-900">{{ record.description || '-' }}</dd>
+                            </div>
+                        </dl>
+                    </section>
+
+                    <section class="surface rounded-md p-5">
+                        <div class="mb-5 flex items-center justify-between">
+                            <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Task progetto</h3>
+                            <span class="text-xs text-gray-500">{{ related.tasks?.length || 0 }} elementi</span>
+                        </div>
+                        <div class="space-y-2">
+                            <Link
+                                v-for="task in related.tasks || []"
+                                :key="task.id"
+                                :href="route('tasks.show', task.id)"
+                                class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-gray-100 bg-gray-50 px-3 py-2 text-sm hover:border-indigo-100 hover:bg-indigo-50"
+                            >
+                                <span class="font-medium text-indigo-700">{{ task.title }}</span>
+                                <span class="flex items-center gap-2 text-xs text-gray-500">
+                                    <span>{{ displayValue(task.status) }}</span>
+                                    <span v-if="task.due_date">{{ dateIt(task.due_date) }}</span>
+                                </span>
+                            </Link>
+                            <p v-if="!related.tasks?.length" class="rounded-md border border-dashed border-gray-300 bg-white px-4 py-8 text-center text-sm text-gray-500">
+                                Nessuna task collegata a questo progetto.
+                            </p>
+                        </div>
+                    </section>
+                </section>
+
                 <section v-if="section === 'tasks'" class="surface rounded-md p-5">
                     <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
                         <div>
@@ -1348,7 +1521,7 @@ function remainingAmount() {
                     </div>
                 </section>
 
-                <section v-if="section !== 'clients' && section !== 'tasks'" class="surface rounded-md p-5">
+                <section v-if="section !== 'clients' && section !== 'tasks' && section !== 'projects'" class="surface rounded-md p-5">
                     <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Dettagli</h3>
                     <dl class="grid gap-4 md:grid-cols-2">
                         <div v-for="[key, value] in visibleEntries" :key="key" class="rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
@@ -1427,6 +1600,25 @@ function remainingAmount() {
                         </div>
                     </section>
 
+                    <section v-if="section === 'projects'" class="surface rounded-md p-5">
+                        <div class="mb-3 flex items-center justify-between gap-3">
+                            <h3 class="text-sm font-semibold text-gray-900">Membri del progetto</h3>
+                            <button type="button" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="saveProjectFollowers">Salva</button>
+                        </div>
+                        <div class="space-y-2">
+                            <label v-for="user in related.projectUsers" :key="user.id" class="flex items-center gap-2 text-sm text-gray-700">
+                                <input
+                                    type="checkbox"
+                                    class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                                    :checked="selectedProjectFollowers.includes(user.id)"
+                                    @change="togglePerson(selectedProjectFollowers, user.id)"
+                                />
+                                <span class="truncate">{{ user.name }}</span>
+                            </label>
+                            <p v-if="!related.projectUsers?.length" class="text-sm text-gray-500">Nessun utente disponibile.</p>
+                        </div>
+                    </section>
+
                     <section v-if="related.client" class="surface rounded-md p-5">
                         <h3 class="text-sm font-semibold text-gray-900">Cliente</h3>
                         <Link :href="route('clients.show', related.client.id)" class="mt-2 block text-sm font-medium text-indigo-600">
@@ -1441,7 +1633,7 @@ function remainingAmount() {
                         </Link>
                     </section>
 
-                    <section v-for="name in ['projects', 'tasks', 'documents']" :key="name" v-show="related[name]?.length" class="surface rounded-md p-5">
+                    <section v-for="name in (section === 'projects' ? ['documents'] : ['projects', 'tasks', 'documents'])" :key="name" v-show="related[name]?.length" class="surface rounded-md p-5">
                         <h3 class="mb-3 text-sm font-semibold capitalize text-gray-900">{{ name }}</h3>
                         <div class="space-y-2">
                             <div v-for="item in related[name]" :key="item.id" class="rounded-md bg-gray-50 px-3 py-2 text-sm">

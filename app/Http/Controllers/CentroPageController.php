@@ -189,6 +189,9 @@ class CentroPageController extends Controller
             'projects' => [
                 'tasks' => DB::table('tasks')->where('project_id', $id)->latest()->limit(40)->get(),
                 'client' => $record->client_id ? DB::table('clients')->where('id', $record->client_id)->first() : null,
+                'projectClients' => DB::table('clients')->orderBy('name')->get(['id', 'name']),
+                'projectUsers' => DB::table('users')->orderBy('name')->get(['id', 'name', 'email']),
+                'followers' => DB::table('project_followers')->where('project_id', $id)->pluck('user_id'),
             ],
             'tasks' => [
                 'comments' => DB::table('task_comments')
@@ -856,6 +859,30 @@ class CentroPageController extends Controller
                 ]);
             }
         }
+    }
+
+    public function syncProjectFollowers(Request $request, string $id): RedirectResponse
+    {
+        abort_unless(DB::table('projects')->where('id', $id)->exists(), 404);
+
+        $payload = $request->validate([
+            'user_ids' => ['nullable', 'array'],
+            'user_ids.*' => ['uuid', 'exists:users,id'],
+        ]);
+
+        DB::table('project_followers')->where('project_id', $id)->delete();
+
+        foreach (array_values(array_unique($payload['user_ids'] ?? [])) as $userId) {
+            DB::table('project_followers')->insert([
+                'id' => (string) str()->uuid(),
+                'project_id' => $id,
+                'user_id' => $userId,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        return back()->with('status', 'Membri progetto aggiornati.');
     }
 
     private function storeUser(Request $request): RedirectResponse
