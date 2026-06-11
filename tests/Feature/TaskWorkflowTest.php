@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class TaskWorkflowTest extends TestCase
@@ -181,6 +182,45 @@ class TaskWorkflowTest extends TestCase
             'status' => 'in_progress',
             'priority' => 'high',
         ]);
+    }
+
+    public function test_task_index_includes_linked_service_information(): void
+    {
+        $user = User::factory()->create();
+        $serviceId = (string) Str::uuid();
+        $taskId = (string) Str::uuid();
+
+        DB::table('services')->insert([
+            'id' => $serviceId,
+            'name' => 'SEO',
+            'color' => '#22c55e',
+            'active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('tasks')->insert([
+            'id' => $taskId,
+            'title' => 'Ottimizzazione pagine',
+            'priority' => 'medium',
+            'status' => 'todo',
+            'task_type' => 'project',
+            'service_id' => $serviceId,
+            'created_by' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->get('/tasks')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Centro/Index')
+                ->where('rows.0.id', $taskId)
+                ->where('rows.0.service_name', 'SEO')
+                ->where('rows.0.service_color', '#22c55e')
+            );
     }
 
     public function test_task_can_be_duplicated_with_people_and_subtasks(): void

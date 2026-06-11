@@ -139,6 +139,7 @@ const taskCreateTypeLabels = {
     ongoing: 'Continuativa',
     meeting: 'Meeting',
 };
+const projectColors = ['#2563eb', '#7c3aed', '#db2777', '#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#475569'];
 
 const valueLabels = {
     active: 'Attivo',
@@ -628,7 +629,8 @@ const taskRows = computed(() => props.rows.filter((row) => {
     const matchesSearch = !search
         || (row.title || '').toLowerCase().includes(search)
         || (row.client_name || '').toLowerCase().includes(search)
-        || (row.project_name || '').toLowerCase().includes(search);
+        || (row.project_name || '').toLowerCase().includes(search)
+        || (row.service_name || '').toLowerCase().includes(search);
     const matchesStatus = taskStatus.value === 'all' || row.status === taskStatus.value;
     const matchesPriority = taskPriority.value === 'all' || row.priority === taskPriority.value;
     const matchesType = taskType.value === 'all' || (row.task_type || 'task') === taskType.value;
@@ -882,6 +884,18 @@ function visibleCalendarTasks(cell) {
                             <option value="">-</option>
                             <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ displayValue(option.name) }}</option>
                         </select>
+                        <div v-else-if="field.type === 'color'" class="mt-2 flex flex-wrap items-center gap-2">
+                            <button
+                                v-for="color in projectColors"
+                                :key="`${field.name}-${color}`"
+                                type="button"
+                                :class="['h-8 w-8 rounded-full border-2', form[field.name] === color ? 'border-gray-900 ring-2 ring-gray-300' : 'border-white']"
+                                :style="{ backgroundColor: color }"
+                                :aria-label="`Colore ${color}`"
+                                @click="form[field.name] = color"
+                            ></button>
+                            <input v-model="form[field.name]" type="text" class="form-control mt-0 w-28 font-mono text-xs" :required="field.required" />
+                        </div>
                         <label v-else-if="field.type === 'checkbox'" class="mt-2 flex items-center gap-2 text-sm text-gray-700">
                             <input v-model="form[field.name]" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
                             Si
@@ -1181,7 +1195,10 @@ function visibleCalendarTasks(cell) {
                         <div class="mt-4 flex items-center justify-between gap-3">
                             <span v-if="project.client_name" class="rounded-full border border-gray-200 px-2 py-0.5 text-xs text-gray-600">{{ project.client_name }}</span>
                             <span v-else class="text-xs text-gray-400">Nessun cliente</span>
-                            <button type="button" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(project)">Modifica</button>
+                            <div class="flex items-center gap-3">
+                                <button type="button" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(project)">Modifica</button>
+                                <button type="button" class="text-xs font-medium text-red-600 hover:text-red-500" @click="remove(project)">Elimina</button>
+                            </div>
                         </div>
                     </article>
 
@@ -1241,6 +1258,7 @@ function visibleCalendarTasks(cell) {
                                 <div class="mt-3 flex items-center justify-center gap-3">
                                     <span :class="['rounded px-2 py-0.5 text-[11px] font-medium', roleClass(user.role || 'guest')]">{{ user.role || 'guest' }}</span>
                                     <button type="button" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(user)">Modifica</button>
+                                    <button type="button" class="text-xs font-medium text-red-600 hover:text-red-500" @click="remove(user)">Elimina</button>
                                 </div>
                             </article>
                         </div>
@@ -1320,7 +1338,10 @@ function visibleCalendarTasks(cell) {
                                     <h3 class="truncate text-base font-semibold text-gray-900">{{ client.name }}</h3>
                                     <p v-if="client.legal_name && client.legal_name !== client.name" class="mt-0.5 truncate text-sm text-gray-500">{{ client.legal_name }}</p>
                                 </Link>
-                                <button type="button" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(client)">Modifica</button>
+                                <div class="flex shrink-0 items-center gap-3">
+                                    <button type="button" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(client)">Modifica</button>
+                                    <button type="button" class="text-xs font-medium text-red-600 hover:text-red-500" @click="remove(client)">Elimina</button>
+                                </div>
                             </div>
 
                             <div class="mt-4 grid grid-cols-3 gap-2 border-y border-gray-100 py-3 text-center">
@@ -1495,6 +1516,13 @@ function visibleCalendarTasks(cell) {
                                             <div class="mt-3 space-y-1 text-xs text-gray-500">
                                                 <div v-if="task.project_name" class="truncate">Progetto: {{ task.project_name }}</div>
                                                 <div v-if="task.client_name" class="truncate">Cliente: {{ task.client_name }}</div>
+                                                <div v-if="task.service_name" class="truncate">
+                                                    Servizio:
+                                                    <span class="inline-flex items-center gap-1">
+                                                        <span class="h-1.5 w-1.5 rounded-full" :style="{ backgroundColor: task.service_color || '#64748b' }"></span>
+                                                        {{ task.service_name }}
+                                                    </span>
+                                                </div>
                                                 <div class="flex items-center justify-between gap-2">
                                                     <span>{{ task.due_date ? dateIt(task.due_date) : 'Senza scadenza' }}</span>
                                                     <span v-if="task.due_time">{{ String(task.due_time).slice(0, 5) }}</span>

@@ -68,7 +68,12 @@ class CentroPageController extends Controller
         } else {
             $rows = DB::table($config['table'])
                 ->when($config['table'] === 'projects', fn ($query) => $query->leftJoin('clients', 'clients.id', '=', 'projects.client_id')->select('projects.*', 'clients.name as client_name'))
-                ->when($config['table'] === 'tasks' && $section !== 'calendar', fn ($query) => $query->leftJoin('projects', 'projects.id', '=', 'tasks.project_id')->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')->select('tasks.*', 'projects.name as project_name', 'clients.name as client_name'))
+                ->when($config['table'] === 'tasks' && $section !== 'calendar', fn ($query) => $query
+                    ->leftJoin('projects', 'projects.id', '=', 'tasks.project_id')
+                    ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
+                    ->leftJoin('services', 'services.id', '=', 'tasks.service_id')
+                    ->select('tasks.*', 'projects.name as project_name', 'clients.name as client_name', 'services.name as service_name', 'services.color as service_color')
+                )
                 ->when($section === 'calendar', fn ($query) => $query
                     ->leftJoin('projects', 'projects.id', '=', 'tasks.project_id')
                     ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
