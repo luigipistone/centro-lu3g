@@ -2,22 +2,35 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import {
+    AlertTriangle,
+    Banknote,
     Briefcase,
+    Building2,
     CalendarClock,
     Check,
     ChevronLeft,
     ChevronRight,
+    Clock,
+    DatabaseBackup,
+    ExternalLink,
     FileText,
     Filter,
+    Mail,
     Pencil,
     Plus,
+    Receipt,
     RefreshCw,
     RotateCcw,
     Save,
     Search,
+    Settings,
+    ShieldCheck,
+    TrendingUp,
     Trash2,
+    UserCog,
     UserPlus,
     Users,
+    Wallet,
     X,
 } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
@@ -159,6 +172,12 @@ const taskCreateTypeLabels = {
     meeting: 'Meeting',
 };
 const projectColors = ['#2563eb', '#7c3aed', '#db2777', '#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#475569'];
+const settingsTabs = [
+    ['personalizzazione', 'Personalizzazione', Building2],
+    ['fatturazione', 'Fatturazione', Receipt],
+    ['backup', 'Backup', DatabaseBackup],
+    ['gestione', 'Gestione', Settings],
+];
 
 const valueLabels = {
     active: 'Attivo',
@@ -1582,26 +1601,22 @@ function visibleCalendarTasks(cell) {
                     {{ page.props.flash.status }}
                 </div>
 
-                <div class="grid gap-2 rounded-md bg-white p-1 shadow-sm sm:grid-cols-4">
+                <div class="surface grid gap-2 p-1 sm:grid-cols-4">
                     <button
-                        v-for="tab in [
-                            ['personalizzazione', 'Personalizzazione'],
-                            ['fatturazione', 'Fatturazione'],
-                            ['backup', 'Backup'],
-                            ['gestione', 'Gestione'],
-                        ]"
+                        v-for="tab in settingsTabs"
                         :key="tab[0]"
                         type="button"
-                        :class="['rounded px-3 py-2 text-sm font-medium transition', settingsTab === tab[0] ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900']"
+                        :class="['inline-flex items-center justify-center gap-2 rounded px-3 py-2 text-sm font-medium transition', settingsTab === tab[0] ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900']"
                         @click="settingsTab = tab[0]"
                     >
+                        <component :is="tab[2]" class="h-4 w-4" :stroke-width="1.7" />
                         {{ tab[1] }}
                     </button>
                 </div>
 
                 <section v-if="settingsTab === 'personalizzazione'" class="grid gap-6 lg:grid-cols-[1fr_320px]">
-                    <form class="rounded-md bg-white p-5 shadow-sm" @submit.prevent="saveDocumentSettings">
-                        <h3 class="text-base font-semibold text-gray-900">Identita aziendale</h3>
+                    <form class="app-card" @submit.prevent="saveDocumentSettings">
+                        <h3 class="section-title"><span class="section-icon"><Building2 class="h-4 w-4" :stroke-width="1.7" /></span>Identita aziendale</h3>
                         <p class="mt-1 text-sm text-gray-500">Questi dati alimentano intestazioni, PDF, XML e firme documentali.</p>
                         <div class="mt-5 grid gap-4 md:grid-cols-2">
                             <div>
@@ -1633,13 +1648,14 @@ function visibleCalendarTasks(cell) {
                                 <textarea v-model="documentSettingsForm.footer_notes" rows="4" class="form-control" />
                             </div>
                         </div>
-                        <button type="submit" class="mt-5 inline-flex rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50" :disabled="documentSettingsForm.processing">
+                        <button type="submit" class="btn btn-primary mt-5" :disabled="documentSettingsForm.processing">
+                            <Save class="h-4 w-4" :stroke-width="1.7" />
                             Salva identita
                         </button>
                     </form>
 
-                    <aside class="rounded-md bg-white p-5 shadow-sm">
-                        <h3 class="text-base font-semibold text-gray-900">Indirizzo e banca</h3>
+                    <aside class="app-card">
+                        <h3 class="section-title"><span class="section-icon"><Banknote class="h-4 w-4" :stroke-width="1.7" /></span>Indirizzo e banca</h3>
                         <div class="mt-4 space-y-3">
                             <input v-model="documentSettingsForm.street" class="form-control mt-0" placeholder="Via" />
                             <div class="grid grid-cols-3 gap-3">
@@ -1657,8 +1673,8 @@ function visibleCalendarTasks(cell) {
                 </section>
 
                 <section v-else-if="settingsTab === 'fatturazione'" class="space-y-6">
-                    <form class="rounded-md bg-white p-5 shadow-sm" @submit.prevent="saveDocumentSettings">
-                        <h3 class="text-base font-semibold text-gray-900">Default fatturazione</h3>
+                    <form class="app-card" @submit.prevent="saveDocumentSettings">
+                        <h3 class="section-title"><span class="section-icon"><Receipt class="h-4 w-4" :stroke-width="1.7" /></span>Default fatturazione</h3>
                         <div class="mt-5 grid gap-4 md:grid-cols-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Regime fiscale</label>
@@ -1705,13 +1721,14 @@ function visibleCalendarTasks(cell) {
                                 Bollo a carico cliente
                             </label>
                         </div>
-                        <button type="submit" class="mt-5 inline-flex rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50" :disabled="documentSettingsForm.processing">
+                        <button type="submit" class="btn btn-primary mt-5" :disabled="documentSettingsForm.processing">
+                            <Save class="h-4 w-4" :stroke-width="1.7" />
                             Salva fatturazione
                         </button>
                     </form>
 
-                    <section class="rounded-md bg-white p-5 shadow-sm">
-                        <h3 class="text-base font-semibold text-gray-900">Numerazioni</h3>
+                    <section class="app-card">
+                        <h3 class="section-title"><span class="section-icon"><FileText class="h-4 w-4" :stroke-width="1.7" /></span>Numerazioni</h3>
                         <div class="mt-4 overflow-x-auto">
                             <table class="min-w-full divide-y divide-gray-200 text-sm">
                                 <thead class="bg-gray-50">
@@ -1733,15 +1750,15 @@ function visibleCalendarTasks(cell) {
                                         <td class="px-3 py-3"><input v-model="row.format" class="form-control mt-0 min-w-56" /></td>
                                         <td class="px-3 py-3"><input v-model="row.current_seq" type="number" class="form-control mt-0 w-28" /></td>
                                         <td class="px-3 py-3"><input v-model="row.yearly_reset" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" /></td>
-                                        <td class="px-3 py-3 text-right"><button type="button" class="text-sm font-medium text-indigo-600 hover:text-indigo-500" @click="saveNumbering(row)">Salva</button></td>
+                                        <td class="px-3 py-3 text-right"><button type="button" class="action-link" @click="saveNumbering(row)"><Save class="h-4 w-4" :stroke-width="1.7" />Salva</button></td>
                                     </tr>
                                 </tbody>
                             </table>
                         </div>
                     </section>
 
-                    <form class="rounded-md bg-white p-5 shadow-sm" @submit.prevent="saveEmailSettings">
-                        <h3 class="text-base font-semibold text-gray-900">Email e SMTP</h3>
+                    <form class="app-card" @submit.prevent="saveEmailSettings">
+                        <h3 class="section-title"><span class="section-icon"><Mail class="h-4 w-4" :stroke-width="1.7" /></span>Email e SMTP</h3>
                         <div class="mt-5 grid gap-4 md:grid-cols-3">
                             <label class="flex items-center gap-2 text-sm text-gray-700">
                                 <input v-model="emailSettingsForm.smtp_enabled" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
@@ -1761,23 +1778,25 @@ function visibleCalendarTasks(cell) {
                             <input v-model="emailSettingsForm.pec_username" class="form-control mt-0" placeholder="PEC username" />
                             <input v-model="emailSettingsForm.pec_password" type="password" class="form-control mt-0" placeholder="Nuova password PEC" />
                         </div>
-                        <button type="submit" class="mt-5 inline-flex rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50" :disabled="emailSettingsForm.processing">
+                        <button type="submit" class="btn btn-primary mt-5" :disabled="emailSettingsForm.processing">
+                            <Save class="h-4 w-4" :stroke-width="1.7" />
                             Salva email
                         </button>
                     </form>
                 </section>
 
                 <section v-else-if="settingsTab === 'backup'" class="grid gap-6 lg:grid-cols-[340px_1fr]">
-                    <div class="rounded-md bg-white p-5 shadow-sm">
-                        <h3 class="text-base font-semibold text-gray-900">Backup manuale</h3>
+                    <div class="app-card">
+                        <h3 class="section-title"><span class="section-icon"><DatabaseBackup class="h-4 w-4" :stroke-width="1.7" /></span>Backup manuale</h3>
                         <p class="mt-2 text-sm text-gray-500">Registra un controllo backup nel portale. Il dump fisico resta gestito dal backup Plesk del dominio.</p>
-                        <button type="button" class="mt-5 inline-flex rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500" @click="runBackup">
+                        <button type="button" class="btn btn-primary mt-5" @click="runBackup">
+                            <DatabaseBackup class="h-4 w-4" :stroke-width="1.7" />
                             Avvia controllo backup
                         </button>
                     </div>
 
-                    <div class="rounded-md bg-white p-5 shadow-sm">
-                        <h3 class="text-base font-semibold text-gray-900">Storico backup</h3>
+                    <div class="app-card">
+                        <h3 class="section-title"><span class="section-icon"><Clock class="h-4 w-4" :stroke-width="1.7" /></span>Storico backup</h3>
                         <div class="mt-4 overflow-x-auto">
                             <table class="min-w-full divide-y divide-gray-200 text-sm">
                                 <thead class="bg-gray-50">
@@ -1806,7 +1825,8 @@ function visibleCalendarTasks(cell) {
 
                 <section v-else class="space-y-4">
                     <div class="flex justify-end">
-                        <button type="button" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500" @click="openCreate()">
+                        <button type="button" class="btn btn-primary" @click="openCreate()">
+                            <Plus class="h-4 w-4" :stroke-width="1.7" />
                             Aggiungi servizio
                         </button>
                     </div>
@@ -1833,7 +1853,7 @@ function visibleCalendarTasks(cell) {
                         </form>
                     </section>
 
-                    <section class="overflow-hidden rounded-md bg-white shadow-sm">
+                    <section class="surface overflow-hidden">
                         <table class="min-w-full divide-y divide-gray-200 text-sm">
                             <thead class="bg-gray-50">
                                 <tr>
@@ -1854,8 +1874,8 @@ function visibleCalendarTasks(cell) {
                                         </span>
                                     </td>
                                     <td class="px-4 py-3 text-right">
-                                        <button type="button" class="text-sm font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(row)">Modifica</button>
-                                        <button type="button" class="ml-4 text-sm font-medium text-red-600 hover:text-red-500" @click="remove(row)">Elimina</button>
+                                        <button type="button" class="action-link" @click="editRow(row)"><Pencil class="h-4 w-4" :stroke-width="1.7" />Modifica</button>
+                                        <button type="button" class="danger-link ml-4" @click="remove(row)"><Trash2 class="h-4 w-4" :stroke-width="1.7" />Elimina</button>
                                     </td>
                                 </tr>
                             </tbody>
@@ -1870,24 +1890,29 @@ function visibleCalendarTasks(cell) {
                 <div class="grid gap-4 md:grid-cols-4">
                     <div
                         v-for="card in [
-                            ['Fatturato anno', billingStats?.totalInvoiced, null],
-                            ['Incassato anno', billingStats?.totalReceived, `${billingStats?.collectedPct || 0}% del fatturato`],
-                            ['Da incassare', billingStats?.openAmount, null],
-                            [`Scaduti (${billingStats?.overdueCount || 0})`, billingStats?.overdueAmount, 'Da sollecitare'],
+                            ['Fatturato anno', billingStats?.totalInvoiced, null, TrendingUp, 'bg-indigo-50 text-indigo-600'],
+                            ['Incassato anno', billingStats?.totalReceived, `${billingStats?.collectedPct || 0}% del fatturato`, Wallet, 'bg-emerald-50 text-emerald-600'],
+                            ['Da incassare', billingStats?.openAmount, null, Banknote, 'bg-amber-50 text-amber-700'],
+                            [`Scaduti (${billingStats?.overdueCount || 0})`, billingStats?.overdueAmount, 'Da sollecitare', AlertTriangle, 'bg-red-50 text-red-600'],
                         ]"
                         :key="card[0]"
-                        class="rounded-md bg-white p-5 shadow-sm"
+                        class="app-card flex items-center gap-4"
                     >
-                        <div class="text-xs font-medium uppercase tracking-wide text-gray-500">{{ card[0] }}</div>
-                        <div class="mt-2 text-2xl font-semibold text-gray-900">{{ money(card[1]) }}</div>
-                        <div v-if="card[2]" class="mt-1 text-xs text-gray-500">{{ card[2] }}</div>
+                        <span :class="['metric-icon', card[4]]">
+                            <component :is="card[3]" class="h-5 w-5" :stroke-width="1.7" />
+                        </span>
+                        <span class="min-w-0">
+                            <span class="block text-xs font-medium uppercase tracking-wide text-gray-500">{{ card[0] }}</span>
+                            <span class="mt-1 block text-2xl font-semibold text-gray-900">{{ money(card[1]) }}</span>
+                            <span v-if="card[2]" class="mt-0.5 block truncate text-xs text-gray-500">{{ card[2] }}</span>
+                        </span>
                     </div>
                 </div>
 
                 <div class="grid gap-6 lg:grid-cols-[2fr_1fr]">
-                    <section class="rounded-md bg-white p-5 shadow-sm">
+                    <section class="app-card">
                         <div class="mb-4 flex items-center justify-between">
-                            <h3 class="text-sm font-semibold text-gray-900">Andamento mensile {{ billingStats?.year }}</h3>
+                            <h3 class="section-title"><span class="section-icon"><TrendingUp class="h-4 w-4" :stroke-width="1.7" /></span>Andamento mensile {{ billingStats?.year }}</h3>
                             <span class="text-xs text-gray-500">Fatturato / incassato</span>
                         </div>
                         <div class="grid h-64 grid-cols-12 items-end gap-2 border-b border-gray-100 pb-2">
@@ -1905,8 +1930,8 @@ function visibleCalendarTasks(cell) {
                         </div>
                     </section>
 
-                    <section class="rounded-md bg-white p-5 shadow-sm">
-                        <h3 class="text-sm font-semibold text-gray-900">Top clienti</h3>
+                    <section class="app-card">
+                        <h3 class="section-title"><span class="section-icon"><Users class="h-4 w-4" :stroke-width="1.7" /></span>Top clienti</h3>
                         <div class="mt-4 space-y-4">
                             <div v-for="client in billingStats?.topClients || []" :key="client.name">
                                 <div class="mb-1 flex justify-between gap-3 text-xs">
@@ -1922,13 +1947,16 @@ function visibleCalendarTasks(cell) {
                     </section>
                 </div>
 
-                <section class="rounded-md bg-white p-5 shadow-sm">
+                <section class="app-card">
                     <div class="mb-4 grid gap-3 md:grid-cols-[1fr_170px_170px_auto_auto]">
-                        <input
-                            v-model="billingSearch"
-                            class="form-control mt-0"
-                            placeholder="Cerca per numero, cliente o note..."
-                        />
+                        <div class="relative">
+                            <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" :stroke-width="1.7" />
+                            <input
+                                v-model="billingSearch"
+                                class="form-control mt-0 pl-9"
+                                placeholder="Cerca per numero, cliente o note..."
+                            />
+                        </div>
                         <select v-model="billingType" class="form-control mt-0">
                             <option value="all">Tutti i tipi</option>
                             <option v-for="(label, value) in documentTypeLabels" :key="value" :value="value">{{ label }}</option>
@@ -1937,8 +1965,8 @@ function visibleCalendarTasks(cell) {
                             <option value="all">Tutti gli stati</option>
                             <option v-for="(label, value) in documentStatusLabels" :key="value" :value="value">{{ label }}</option>
                         </select>
-                        <button type="button" class="rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="billingSearch = ''; billingType = 'all'; billingStatus = 'all'">Reset</button>
-                        <button type="button" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500" @click="openCreate()">Nuovo documento</button>
+                        <button type="button" class="btn btn-outline" @click="billingSearch = ''; billingType = 'all'; billingStatus = 'all'"><RotateCcw class="h-4 w-4" :stroke-width="1.7" />Reset</button>
+                        <button type="button" class="btn btn-primary" @click="openCreate()"><Plus class="h-4 w-4" :stroke-width="1.7" />Nuovo documento</button>
                     </div>
 
                     <div class="overflow-x-auto">
@@ -1973,8 +2001,8 @@ function visibleCalendarTasks(cell) {
                                         <span :class="['rounded-full px-2 py-1 text-xs font-medium', statusClass(row.status)]">{{ displayValue(row.status) }}</span>
                                     </td>
                                     <td class="whitespace-nowrap px-3 py-3 text-right">
-                                        <button type="button" class="text-sm font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(row)">Modifica</button>
-                                        <button type="button" class="ml-4 text-sm font-medium text-red-600 hover:text-red-500" @click="remove(row)">Elimina</button>
+                                        <button type="button" class="action-link" @click="editRow(row)"><Pencil class="h-4 w-4" :stroke-width="1.7" />Modifica</button>
+                                        <button type="button" class="danger-link ml-4" @click="remove(row)"><Trash2 class="h-4 w-4" :stroke-width="1.7" />Elimina</button>
                                     </td>
                                 </tr>
                                 <tr v-if="!billingRows.length">
@@ -2014,10 +2042,13 @@ function visibleCalendarTasks(cell) {
 
         <div v-else-if="isUpdatesSection" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
-                <div class="rounded-md border border-gray-200 bg-white p-5 shadow-sm">
+                <div class="app-card">
                     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                         <div>
-                            <h3 class="text-base font-semibold text-gray-900">{{ updateRows.length }} clienti</h3>
+                            <h3 class="section-title">
+                                <span class="section-icon"><RefreshCw class="h-4 w-4" :stroke-width="1.7" /></span>
+                                {{ updateRows.length }} clienti
+                            </h3>
                             <p class="mt-1 text-sm text-gray-500">Clienti con il servizio {{ serviceName }} attivo.</p>
                         </div>
                     </div>
@@ -2068,7 +2099,8 @@ function visibleCalendarTasks(cell) {
                                                 @input="setDraftValue(row, 'report_url', $event.target.value)"
                                                 @blur="saveDraftField(row, 'report_url')"
                                             />
-                                            <a v-if="row.report_url" :href="row.report_url" target="_blank" rel="noreferrer" class="truncate text-xs text-indigo-600 hover:text-indigo-500">
+                                            <a v-if="row.report_url" :href="row.report_url" target="_blank" rel="noreferrer" class="inline-flex items-center gap-1 truncate text-xs text-indigo-600 hover:text-indigo-500">
+                                                <ExternalLink class="h-3.5 w-3.5" :stroke-width="1.7" />
                                                 Apri report
                                             </a>
                                         </div>
@@ -2105,7 +2137,10 @@ function visibleCalendarTasks(cell) {
                                                 <option value="">Nessuno</option>
                                                 <option v-for="user in users" :key="user.id" :value="user.id">{{ user.name || user.email }}</option>
                                             </select>
-                                            <span v-if="savingUpdateKeys.includes(updateRowKey(row))" class="shrink-0 text-xs text-gray-400">Salvo...</span>
+                                            <span v-if="savingUpdateKeys.includes(updateRowKey(row))" class="inline-flex shrink-0 items-center gap-1 text-xs text-indigo-500">
+                                                <Save class="h-3.5 w-3.5" :stroke-width="1.7" />
+                                                Salvo...
+                                            </span>
                                         </div>
                                     </td>
                                 </tr>

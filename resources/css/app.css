@@ -40,6 +40,38 @@
         box-shadow: var(--shadow-soft);
     }
 
+    .app-card {
+        @apply surface p-5;
+    }
+
+    .app-card-interactive {
+        @apply surface p-5 hover-lift transition-colors hover:border-indigo-200;
+    }
+
+    .section-title {
+        @apply flex items-center gap-2 text-base font-semibold text-gray-900;
+    }
+
+    .section-icon {
+        @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-indigo-50 text-indigo-600;
+    }
+
+    .metric-icon {
+        @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-indigo-50 text-indigo-600;
+    }
+
+    .toolbar {
+        @apply surface flex flex-wrap items-center gap-3 p-3;
+    }
+
+    .action-link {
+        @apply inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 transition hover:text-indigo-500;
+    }
+
+    .danger-link {
+        @apply inline-flex items-center gap-1.5 text-sm font-medium text-red-600 transition hover:text-red-500;
+    }
+
     .hover-lift {
         @apply transition-all duration-200 ease-out;
     }

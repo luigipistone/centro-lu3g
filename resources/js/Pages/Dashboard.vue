@@ -1,8 +1,9 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
+import { AlertTriangle, Briefcase, CalendarClock, CheckSquare, ChevronRight, Clock, Users } from '@lucide/vue';
 
-defineProps({
+const props = defineProps({
     stats: Object,
     recentClients: Array,
     upcomingTasks: Array,
@@ -12,6 +13,16 @@ defineProps({
 });
 
 const page = usePage();
+const statCards = [
+    ['Clienti', 'Anagrafiche', 'clients.index', Users, 'bg-indigo-50 text-indigo-600'],
+    ['Progetti Attivi', 'Progetti in corso', 'projects.index', Briefcase, 'bg-sky-50 text-sky-600'],
+    ['Task Aperti', 'Attivita da chiudere', 'tasks.index', CheckSquare, 'bg-emerald-50 text-emerald-600'],
+    ['Urgenti', 'Priorita alta', 'tasks.index', AlertTriangle, 'bg-red-50 text-red-600'],
+];
+
+function statValue(index) {
+    return [props.stats.clients, props.stats.activeProjects, props.stats.openTasks, props.stats.urgentTasks][index] ?? 0;
+}
 
 function dateShort(value) {
     if (!value) return '';
@@ -44,25 +55,28 @@ function priorityDot(priority) {
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <Link
                         v-for="card in [
-                            ['Clienti', stats.clients, 'clients.index'],
-                            ['Progetti Attivi', stats.activeProjects, 'projects.index'],
-                            ['Task Aperti', stats.openTasks, 'tasks.index'],
-                            ['Urgenti', stats.urgentTasks, 'tasks.index'],
+                            ...statCards,
                         ]"
                         :key="card[0]"
                         :href="route(card[2])"
-                        class="rounded-md border border-gray-200 bg-white p-5 shadow-sm transition hover:border-indigo-200 hover:shadow"
+                        class="app-card-interactive flex items-center gap-4"
                     >
-                        <div class="text-sm text-gray-500">{{ card[0] }}</div>
-                        <div class="mt-2 text-3xl font-semibold text-gray-900">{{ card[1] }}</div>
+                        <span :class="['metric-icon', card[4]]">
+                            <component :is="card[3]" class="h-5 w-5" :stroke-width="1.7" />
+                        </span>
+                        <span class="min-w-0">
+                            <span class="block text-2xl font-semibold text-gray-900">{{ statValue(statCards.indexOf(card)) }}</span>
+                            <span class="block text-sm font-medium text-gray-700">{{ card[0] }}</span>
+                            <span class="block truncate text-xs text-gray-500">{{ card[1] }}</span>
+                        </span>
                     </Link>
                 </div>
 
                 <div class="grid gap-4 lg:grid-cols-3">
-                    <section class="rounded-md border border-gray-200 bg-white p-5 shadow-sm lg:col-span-2">
+                    <section class="app-card lg:col-span-2">
                         <div class="mb-3 flex items-center justify-between">
-                            <h3 class="text-base font-semibold text-gray-900">Task in scadenza</h3>
-                            <Link :href="route('tasks.index')" class="text-sm font-medium text-indigo-600 hover:text-indigo-500">Apri task</Link>
+                            <h3 class="section-title"><span class="section-icon"><CalendarClock class="h-4 w-4" :stroke-width="1.7" /></span>Task in scadenza</h3>
+                            <Link :href="route('tasks.index')" class="action-link">Apri task <ChevronRight class="h-4 w-4" :stroke-width="1.7" /></Link>
                         </div>
                         <div class="space-y-1">
                             <Link
@@ -82,8 +96,8 @@ function priorityDot(priority) {
                         </div>
                     </section>
 
-                    <section class="rounded-md border border-gray-200 bg-white p-5 shadow-sm">
-                        <h3 class="mb-3 text-base font-semibold text-gray-900">I miei task</h3>
+                    <section class="app-card">
+                        <h3 class="section-title mb-3"><span class="section-icon"><CheckSquare class="h-4 w-4" :stroke-width="1.7" /></span>I miei task</h3>
                         <div class="space-y-1">
                             <Link
                                 v-for="task in myTasks"
@@ -99,8 +113,8 @@ function priorityDot(priority) {
                         </div>
                     </section>
 
-                    <section class="rounded-md border border-gray-200 bg-white p-5 shadow-sm">
-                        <h3 class="mb-3 text-base font-semibold text-gray-900">Progetti attivi</h3>
+                    <section class="app-card">
+                        <h3 class="section-title mb-3"><span class="section-icon"><Briefcase class="h-4 w-4" :stroke-width="1.7" /></span>Progetti attivi</h3>
                         <div class="space-y-1">
                             <Link
                                 v-for="project in activeProjects"
@@ -118,8 +132,8 @@ function priorityDot(priority) {
                         </div>
                     </section>
 
-                    <section class="rounded-md border border-gray-200 bg-white p-5 shadow-sm">
-                        <h3 class="mb-3 text-base font-semibold text-gray-900">Clienti recenti</h3>
+                    <section class="app-card">
+                        <h3 class="section-title mb-3"><span class="section-icon"><Users class="h-4 w-4" :stroke-width="1.7" /></span>Clienti recenti</h3>
                         <div class="space-y-1">
                             <Link
                                 v-for="client in recentClients"
@@ -134,8 +148,8 @@ function priorityDot(priority) {
                         </div>
                     </section>
 
-                    <section class="rounded-md border border-gray-200 bg-white p-5 shadow-sm">
-                        <h3 class="mb-3 text-base font-semibold text-gray-900">Task urgenti</h3>
+                    <section class="app-card">
+                        <h3 class="section-title mb-3"><span class="section-icon bg-red-50 text-red-600"><AlertTriangle class="h-4 w-4" :stroke-width="1.7" /></span>Task urgenti</h3>
                         <div class="space-y-1">
                             <Link
                                 v-for="task in urgentTasks"
