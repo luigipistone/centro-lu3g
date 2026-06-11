@@ -269,14 +269,14 @@ const groups = [
                 </div>
             </nav>
 
-            <header class="border-b border-white/70 bg-white/72 backdrop-blur-xl" v-if="$slots.header">
-                <div class="px-4 py-6 sm:px-6 lg:px-8">
+            <header class="relative z-[2000] overflow-visible border-b border-white/70 bg-white/72 backdrop-blur-xl" v-if="$slots.header">
+                <div class="relative z-[2001] overflow-visible px-4 py-6 sm:px-6 lg:px-8">
                     <slot name="header" />
                 </div>
             </header>
 
             <!-- Page Content -->
-            <main class="min-h-[calc(100vh-4rem)]">
+            <main class="relative z-0 min-h-[calc(100vh-4rem)]">
                 <slot />
             </main>
         </div>
