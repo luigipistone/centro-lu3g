@@ -212,6 +212,50 @@ const valueLabels = {
     weekly: 'Settimanale',
     biweekly: 'Bisettimanale',
     monthly: 'Mensile',
+    srl: 'SRL',
+    srls: 'SRLS',
+    spa: 'SPA',
+    sas: 'SAS',
+    snc: 'SNC',
+    ditta_individuale: 'Ditta individuale',
+    libero_professionista: 'Libero professionista',
+    associazione: 'Associazione',
+    ente_pubblico: 'Ente pubblico',
+    ecommerce: 'E-commerce',
+    retail: 'Retail',
+    servizi: 'Servizi',
+    immobiliare: 'Immobiliare',
+    turismo: 'Turismo',
+    ristorazione: 'Ristorazione',
+    salute_benessere: 'Salute e benessere',
+    formazione: 'Formazione',
+    industria: 'Industria',
+    no_profit: 'No profit',
+    passaparola: 'Passaparola',
+    sito_web: 'Sito web',
+    social: 'Social',
+    campagna_adv: 'Campagna ADV',
+    evento: 'Evento',
+    partner: 'Partner',
+    chiamata: 'Chiamata',
+    ordinario: 'IVA ordinaria',
+    split_payment: 'Split payment',
+    reverse_charge: 'Reverse charge',
+    esente: 'Esente IVA',
+    non_imponibile: 'Non imponibile',
+    fuori_campo: 'Fuori campo IVA',
+    forfettario: 'Regime forfettario',
+    altro: 'Altro',
+    IT: 'Italia',
+    SM: 'San Marino',
+    VA: 'Citta del Vaticano',
+    FR: 'Francia',
+    DE: 'Germania',
+    ES: 'Spagna',
+    CH: 'Svizzera',
+    AT: 'Austria',
+    GB: 'Regno Unito',
+    US: 'Stati Uniti',
 };
 
 const columnLabels = {
@@ -270,6 +314,14 @@ function optionsFor(field) {
     if (field.type === 'service') return props.services;
     if (field.type === 'user') return props.users;
     return (field.options || []).map((value) => ({ id: value, name: value }));
+}
+
+function optionLabel(field, option) {
+    if (field.name === 'payment_terms_days') {
+        return Number(option.name) === 0 ? 'A vista' : `${option.name} giorni`;
+    }
+
+    return displayValue(option.name);
 }
 
 function shouldShowField(field) {
@@ -864,7 +916,7 @@ function visibleCalendarTasks(cell) {
             </div>
         </template>
 
-        <div v-if="formOpen && canWrite" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 px-4 py-6" @click.self="resetForm">
+        <div v-if="formOpen && canWrite" class="fixed inset-0 z-[5000] flex items-center justify-center bg-gray-900/40 px-4 py-6" @click.self="resetForm">
             <div class="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-md bg-white shadow-xl">
                 <div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
                     <h3 class="font-semibold text-gray-900">{{ formTitle }}</h3>
@@ -927,7 +979,7 @@ function visibleCalendarTasks(cell) {
                         <textarea v-if="field.type === 'textarea'" v-model="form[field.name]" rows="4" class="form-control" />
                         <select v-else-if="['select', 'client', 'project', 'service', 'user'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
                             <option value="">-</option>
-                            <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ displayValue(option.name) }}</option>
+                            <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ optionLabel(field, option) }}</option>
                         </select>
                         <div v-else-if="field.type === 'color'" class="mt-2 flex flex-wrap items-center gap-2">
                             <button
@@ -1004,7 +1056,7 @@ function visibleCalendarTasks(cell) {
             </div>
         </div>
 
-        <div v-if="deleteTarget" class="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/40 px-4 py-6" @click.self="cancelDelete">
+        <div v-if="deleteTarget" class="fixed inset-0 z-[5100] flex items-center justify-center bg-gray-900/40 px-4 py-6" @click.self="cancelDelete">
             <div class="w-full max-w-md rounded-md bg-white p-5 shadow-xl">
                 <h3 class="text-base font-semibold text-gray-900">Conferma eliminazione</h3>
                 <p class="mt-2 text-sm text-gray-600">

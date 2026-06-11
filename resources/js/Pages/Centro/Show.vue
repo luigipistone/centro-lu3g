@@ -84,14 +84,75 @@ const valueLabels = {
     month: 'Mese',
     fixed: 'Fissa',
     relative: 'Relativa',
+    srl: 'SRL',
+    srls: 'SRLS',
+    spa: 'SPA',
+    sas: 'SAS',
+    snc: 'SNC',
+    ditta_individuale: 'Ditta individuale',
+    libero_professionista: 'Libero professionista',
+    associazione: 'Associazione',
+    ente_pubblico: 'Ente pubblico',
+    ecommerce: 'E-commerce',
+    retail: 'Retail',
+    servizi: 'Servizi',
+    immobiliare: 'Immobiliare',
+    turismo: 'Turismo',
+    ristorazione: 'Ristorazione',
+    salute_benessere: 'Salute e benessere',
+    formazione: 'Formazione',
+    industria: 'Industria',
+    no_profit: 'No profit',
+    passaparola: 'Passaparola',
+    sito_web: 'Sito web',
+    social: 'Social',
+    campagna_adv: 'Campagna ADV',
+    evento: 'Evento',
+    partner: 'Partner',
+    chiamata: 'Chiamata',
+    ordinario: 'IVA ordinaria',
+    split_payment: 'Split payment',
+    reverse_charge: 'Reverse charge',
+    esente: 'Esente IVA',
+    non_imponibile: 'Non imponibile',
+    fuori_campo: 'Fuori campo IVA',
+    forfettario: 'Regime forfettario',
+    altro: 'Altro',
+    IT: 'Italia',
+    SM: 'San Marino',
+    VA: 'Citta del Vaticano',
+    FR: 'Francia',
+    DE: 'Germania',
+    ES: 'Spagna',
+    CH: 'Svizzera',
+    AT: 'Austria',
+    GB: 'Regno Unito',
+    US: 'Stati Uniti',
     0: 'No',
     1: 'Si',
+};
+
+const clientSelectOptions = {
+    legal_form: ['srl', 'srls', 'spa', 'sas', 'snc', 'ditta_individuale', 'libero_professionista', 'associazione', 'ente_pubblico', 'altro'],
+    business_sector: ['ecommerce', 'retail', 'servizi', 'immobiliare', 'turismo', 'ristorazione', 'salute_benessere', 'formazione', 'industria', 'no_profit', 'altro'],
+    source: ['passaparola', 'sito_web', 'social', 'campagna_adv', 'evento', 'partner', 'chiamata', 'email', 'altro'],
+    country: ['IT', 'SM', 'VA', 'FR', 'DE', 'ES', 'CH', 'AT', 'GB', 'US', 'altro'],
+    vat_treatment: ['ordinario', 'split_payment', 'reverse_charge', 'esente', 'non_imponibile', 'fuori_campo', 'forfettario'],
+    payment_terms_days: [0, 15, 30, 45, 60, 90, 120],
 };
 
 function displayValue(value) {
     if (value === true) return 'Si';
     if (value === false) return 'No';
     return valueLabels[value] || value || '-';
+}
+
+function clientOptionLabel(field, value) {
+    if (field === 'payment_terms_days') {
+        return Number(value) === 0 ? 'A vista' : `${value} giorni`;
+    }
+
+    return displayValue(value);
 }
 
 const visibleEntries = Object.entries(props.record).filter(([key, value]) =>
@@ -652,7 +713,7 @@ function remainingAmount() {
             </div>
         </template>
 
-        <div v-if="confirmAction" class="fixed inset-0 z-[70] flex items-center justify-center bg-gray-900/40 px-4 py-6" @click.self="closeConfirm">
+        <div v-if="confirmAction" class="fixed inset-0 z-[5100] flex items-center justify-center bg-gray-900/40 px-4 py-6" @click.self="closeConfirm">
             <div class="w-full max-w-md rounded-md bg-white p-5 shadow-xl">
                 <h3 class="text-base font-semibold text-gray-900">{{ confirmAction.title }}</h3>
                 <p class="mt-2 text-sm text-gray-600">
@@ -948,15 +1009,24 @@ function remainingAmount() {
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Natura giuridica</label>
-                                        <input v-model="clientForm.legal_form" class="form-control" />
+                                        <select v-model="clientForm.legal_form" class="form-control">
+                                            <option value="">-</option>
+                                            <option v-for="option in clientSelectOptions.legal_form" :key="`legal-form-${option}`" :value="option">{{ clientOptionLabel('legal_form', option) }}</option>
+                                        </select>
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Settore</label>
-                                        <input v-model="clientForm.business_sector" class="form-control" />
+                                        <select v-model="clientForm.business_sector" class="form-control">
+                                            <option value="">-</option>
+                                            <option v-for="option in clientSelectOptions.business_sector" :key="`business-sector-${option}`" :value="option">{{ clientOptionLabel('business_sector', option) }}</option>
+                                        </select>
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Sorgente</label>
-                                        <input v-model="clientForm.source" class="form-control" />
+                                        <select v-model="clientForm.source" class="form-control">
+                                            <option value="">-</option>
+                                            <option v-for="option in clientSelectOptions.source" :key="`source-${option}`" :value="option">{{ clientOptionLabel('source', option) }}</option>
+                                        </select>
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Sito web</label>
@@ -979,7 +1049,10 @@ function remainingAmount() {
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Paese</label>
-                                        <input v-model="clientForm.country" class="form-control" />
+                                        <select v-model="clientForm.country" class="form-control">
+                                            <option value="">-</option>
+                                            <option v-for="option in clientSelectOptions.country" :key="`country-${option}`" :value="option">{{ clientOptionLabel('country', option) }}</option>
+                                        </select>
                                     </div>
                                     <div class="grid gap-3 grid-cols-[1fr_110px]">
                                         <div>
@@ -1030,11 +1103,17 @@ function remainingAmount() {
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Trattamento IVA</label>
-                                        <input v-model="clientForm.vat_treatment" class="form-control" />
+                                        <select v-model="clientForm.vat_treatment" class="form-control">
+                                            <option value="">-</option>
+                                            <option v-for="option in clientSelectOptions.vat_treatment" :key="`vat-treatment-${option}`" :value="option">{{ clientOptionLabel('vat_treatment', option) }}</option>
+                                        </select>
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Termini pagamento</label>
-                                        <input v-model="clientForm.payment_terms_days" type="number" min="0" class="form-control" />
+                                        <select v-model="clientForm.payment_terms_days" class="form-control">
+                                            <option value="">-</option>
+                                            <option v-for="option in clientSelectOptions.payment_terms_days" :key="`payment-terms-${option}`" :value="option">{{ clientOptionLabel('payment_terms_days', option) }}</option>
+                                        </select>
                                     </div>
                                     <label class="mt-7 flex items-center gap-2 text-sm text-gray-700">
                                         <input v-model="clientForm.is_pa" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />

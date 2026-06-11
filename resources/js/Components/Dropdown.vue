@@ -53,7 +53,7 @@ const open = ref(false);
         <!-- Full Screen Dropdown Overlay -->
         <div
             v-show="open"
-            class="fixed inset-0 z-40"
+            class="fixed inset-0 z-[4990]"
             @click="open = false"
         ></div>
 
@@ -67,7 +67,7 @@ const open = ref(false);
         >
             <div
                 v-show="open"
-                class="absolute z-50 mt-2 rounded-2xl shadow-[0_24px_70px_rgba(28,42,73,0.14)]"
+                class="absolute z-[5000] mt-2 rounded-2xl shadow-[0_24px_70px_rgba(28,42,73,0.14)]"
                 :class="[widthClass, alignmentClasses]"
                 style="display: none"
                 @click="open = false"
