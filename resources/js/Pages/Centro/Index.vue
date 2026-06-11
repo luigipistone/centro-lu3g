@@ -26,6 +26,10 @@ const billingStatus = ref('all');
 const currentCalendarDate = ref(new Date());
 const calendarType = ref('all');
 const compactWeekend = ref(false);
+const taskSearch = ref('');
+const taskStatus = ref('all');
+const taskPriority = ref('all');
+const taskType = ref('all');
 
 const routeBase = computed(() => {
     if (props.section === 'settings') return 'settings';
@@ -37,6 +41,7 @@ const defaults = computed(() => Object.fromEntries(props.fields.map((field) => {
     if (field.name === 'status' && props.section === 'projects') return [field.name, 'active'];
     if (field.name === 'status' && props.section === 'tasks') return [field.name, 'todo'];
     if (field.name === 'priority') return [field.name, 'medium'];
+    if (field.name === 'task_type') return [field.name, 'task'];
     if (field.name === 'color') return [field.name, '#2563eb'];
     return [field.name, ''];
 })));
@@ -156,6 +161,29 @@ const billingRows = computed(() => props.rows.filter((row) => {
 
 const maxMonthly = computed(() => Math.max(1, ...((props.billingStats?.monthly || []).map((row) => Math.max(row.invoiced, row.paid)))));
 const maxTopClient = computed(() => Math.max(1, ...((props.billingStats?.topClients || []).map((row) => row.total))));
+const taskColumns = [
+    ['todo', 'Da fare'],
+    ['in_progress', 'In corso'],
+    ['in_review', 'Review'],
+    ['done', 'Fatte'],
+];
+
+const taskRows = computed(() => props.rows.filter((row) => {
+    const search = taskSearch.value.trim().toLowerCase();
+    const matchesSearch = !search
+        || (row.title || '').toLowerCase().includes(search)
+        || (row.client_name || '').toLowerCase().includes(search)
+        || (row.project_name || '').toLowerCase().includes(search);
+    const matchesStatus = taskStatus.value === 'all' || row.status === taskStatus.value;
+    const matchesPriority = taskPriority.value === 'all' || row.priority === taskPriority.value;
+    const matchesType = taskType.value === 'all' || (row.task_type || 'task') === taskType.value;
+
+    return matchesSearch && matchesStatus && matchesPriority && matchesType;
+}));
+
+function tasksByStatus(status) {
+    return taskRows.value.filter((row) => row.status === status);
+}
 
 const monthNames = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
 const dayNames = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
@@ -348,6 +376,105 @@ function tasksForDay(date) {
                     <span class="inline-flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-orange-500"></span>Alta</span>
                     <span class="inline-flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-amber-500"></span>Media</span>
                     <span class="inline-flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-emerald-500"></span>Bassa</span>
+                </div>
+            </div>
+        </div>
+
+        <div v-else-if="section === 'tasks'" class="py-8">
+            <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
+                <div class="grid gap-3 md:grid-cols-[1fr_150px_150px_150px_auto]">
+                    <input v-model="taskSearch" class="form-control mt-0" placeholder="Cerca task, cliente o progetto..." />
+                    <select v-model="taskStatus" class="form-control mt-0">
+                        <option value="all">Tutti gli stati</option>
+                        <option value="todo">Da fare</option>
+                        <option value="in_progress">In corso</option>
+                        <option value="in_review">Review</option>
+                        <option value="done">Fatte</option>
+                    </select>
+                    <select v-model="taskPriority" class="form-control mt-0">
+                        <option value="all">Tutte priorita</option>
+                        <option value="urgent">Urgente</option>
+                        <option value="high">Alta</option>
+                        <option value="medium">Media</option>
+                        <option value="low">Bassa</option>
+                    </select>
+                    <select v-model="taskType" class="form-control mt-0">
+                        <option value="all">Tutti i tipi</option>
+                        <option value="task">Task</option>
+                        <option value="project">Progetto</option>
+                        <option value="ongoing">Continuativa</option>
+                        <option value="meeting">Meeting</option>
+                    </select>
+                    <button type="button" class="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="taskSearch = ''; taskStatus = 'all'; taskPriority = 'all'; taskType = 'all'">Reset</button>
+                </div>
+
+                <div class="grid gap-4 xl:grid-cols-[360px_1fr]">
+                    <section class="rounded-md bg-white p-5 shadow-sm">
+                        <div class="mb-4 flex items-center justify-between">
+                            <h3 class="font-semibold text-gray-900">{{ editing ? 'Modifica task' : 'Nuovo task' }}</h3>
+                            <button v-if="editing" type="button" class="text-sm text-gray-500 hover:text-gray-800" @click="resetForm">Annulla</button>
+                        </div>
+
+                        <form class="space-y-4" @submit.prevent="submit">
+                            <div v-for="field in fields" :key="field.name">
+                                <label class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
+                                <textarea v-if="field.type === 'textarea'" v-model="form[field.name]" rows="4" class="form-control" />
+                                <select v-else-if="['select', 'client', 'project', 'service', 'user'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
+                                    <option value="">-</option>
+                                    <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ option.name }}</option>
+                                </select>
+                                <input v-else v-model="form[field.name]" :type="field.type" class="form-control" :required="field.required" />
+                                <div v-if="form.errors[field.name]" class="mt-1 text-sm text-red-600">{{ form.errors[field.name] }}</div>
+                            </div>
+                            <button type="submit" class="inline-flex w-full justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50" :disabled="form.processing">
+                                {{ editing ? 'Salva modifiche' : 'Crea task' }}
+                            </button>
+                        </form>
+                    </section>
+
+                    <section class="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        <div v-for="[status, label] in taskColumns" :key="status" class="min-h-[520px] rounded-md border border-gray-200 bg-gray-50">
+                            <div class="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+                                <h3 class="text-sm font-semibold text-gray-800">{{ label }}</h3>
+                                <span class="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-gray-500">{{ tasksByStatus(status).length }}</span>
+                            </div>
+                            <div class="space-y-3 p-3">
+                                <article
+                                    v-for="task in tasksByStatus(status)"
+                                    :key="task.id"
+                                    class="rounded-md border border-gray-200 bg-white p-3 shadow-sm transition hover:border-indigo-200 hover:shadow"
+                                >
+                                    <div class="flex items-start justify-between gap-3">
+                                        <Link :href="route('tasks.show', task.id)" class="min-w-0 flex-1">
+                                            <div class="flex items-center gap-2">
+                                                <span :class="['h-2 w-2 shrink-0 rounded-full', priorityClass(task.priority)]"></span>
+                                                <h4 :class="['truncate text-sm font-semibold text-gray-900', task.status === 'done' ? 'line-through opacity-60' : '']">{{ task.title }}</h4>
+                                            </div>
+                                            <div class="mt-2 flex flex-wrap gap-1.5">
+                                                <span :class="['rounded-full border px-2 py-0.5 text-[10px] font-medium', taskTypeClass(task.task_type)]">{{ taskTypeLabel(task.task_type) }}</span>
+                                                <span class="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">{{ task.priority }}</span>
+                                            </div>
+                                            <div class="mt-3 space-y-1 text-xs text-gray-500">
+                                                <div v-if="task.project_name" class="truncate">Progetto: {{ task.project_name }}</div>
+                                                <div v-if="task.client_name" class="truncate">Cliente: {{ task.client_name }}</div>
+                                                <div class="flex items-center justify-between gap-2">
+                                                    <span>{{ task.due_date ? dateIt(task.due_date) : 'Senza scadenza' }}</span>
+                                                    <span v-if="task.due_time">{{ String(task.due_time).slice(0, 5) }}</span>
+                                                </div>
+                                            </div>
+                                        </Link>
+                                    </div>
+                                    <div class="mt-3 flex justify-end gap-3 border-t border-gray-100 pt-2">
+                                        <button type="button" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(task)">Modifica</button>
+                                        <button type="button" class="text-xs font-medium text-red-600 hover:text-red-500" @click="remove(task)">Elimina</button>
+                                    </div>
+                                </article>
+                                <div v-if="!tasksByStatus(status).length" class="rounded-md border border-dashed border-gray-300 bg-white px-3 py-8 text-center text-xs text-gray-500">
+                                    Nessun task.
+                                </div>
+                            </div>
+                        </div>
+                    </section>
                 </div>
             </div>
         </div>
