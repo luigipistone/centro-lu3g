@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import {
     AlignCenter,
     AlignLeft,
@@ -43,6 +43,7 @@ const props = defineProps({
 
 const page = usePage();
 const dashboardGrid = ref(null);
+const widgetMenu = ref(null);
 const widgetMenuOpen = ref(false);
 const saving = ref(false);
 const savingNote = ref(false);
@@ -446,9 +447,18 @@ function widgetNumber(widget) {
     return meta.items().length;
 }
 
+function closeWidgetMenuOnOutside(event) {
+    if (!widgetMenuOpen.value || widgetMenu.value?.contains(event.target)) return;
+
+    widgetMenuOpen.value = false;
+}
+
 onMounted(() => {
     nextTick(initializeNoteEditor);
+    document.addEventListener('click', closeWidgetMenuOnOutside);
 });
+
+onUnmounted(() => document.removeEventListener('click', closeWidgetMenuOnOutside));
 
 watch(
     () => visibleWidgets.value.some((widget) => widget.widget_type === 'notes'),
@@ -469,25 +479,16 @@ watch(
                     <p class="text-sm text-gray-500">Bentornato, {{ page.props.auth?.user?.email }}</p>
                 </div>
 
-                <div class="relative flex items-center gap-2">
+                <div ref="widgetMenu" class="relative flex items-center gap-2">
                     <span v-if="saving" class="text-xs font-medium text-gray-400">Salvataggio...</span>
                     <button type="button" class="btn btn-outline" @click="widgetMenuOpen = !widgetMenuOpen">
                         <Plus class="h-4 w-4" :stroke-width="1.8" />
                         Aggiungi widget
                     </button>
 
-                    <button
-                        v-if="widgetMenuOpen"
-                        type="button"
-                        class="fixed inset-0 z-[2147483646] cursor-default bg-transparent"
-                        aria-label="Chiudi menu widget"
-                        @click="widgetMenuOpen = false"
-                    ></button>
-
                     <div
                         v-if="widgetMenuOpen"
                         class="app-popover absolute right-0 top-12 z-[2147483647] w-80 overflow-hidden rounded-2xl border border-white bg-white p-2 shadow-[0_24px_70px_rgba(28,42,73,0.14)]"
-                        @click.stop
                     >
                         <div class="px-2 pb-2 pt-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Widget disponibili</div>
                         <button
