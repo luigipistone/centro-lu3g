@@ -34,6 +34,7 @@ const draggingType = ref(null);
 const dragOverIndex = ref(null);
 let saveTimer = null;
 let resizeState = null;
+let moveState = null;
 
 const widgetMeta = {
     stat_clients: {
@@ -192,17 +193,23 @@ async function saveWidgets() {
     }
 }
 
-function startDrag(widget, event) {
+function startMove(widget, event) {
+    event.preventDefault();
+    event.stopPropagation();
+
     draggingType.value = widget.widget_type;
-    dragOverIndex.value = widget.position;
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', widget.widget_type);
+    dragOverIndex.value = visibleWidgets.value.findIndex((item) => item.widget_type === widget.widget_type);
+    moveState = { type: widget.widget_type };
+    document.body.style.cursor = 'grabbing';
+    document.body.style.userSelect = 'none';
+
+    window.addEventListener('pointermove', moveWidget);
+    window.addEventListener('pointerup', stopMove, { once: true });
 }
 
-function trackGridDrop(event) {
-    if (!draggingType.value || !dashboardGrid.value) return;
+function moveWidget(event) {
+    if (!moveState || !dashboardGrid.value) return;
 
-    event.dataTransfer.dropEffect = 'move';
     dragOverIndex.value = resolveDropIndex(event);
 }
 
@@ -237,6 +244,14 @@ function resolveDropIndex(event) {
     return belowPointer ? belowPointer.index : ordered.length;
 }
 
+function stopMove() {
+    window.removeEventListener('pointermove', moveWidget);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    dropOnGrid();
+    moveState = null;
+}
+
 function dropOnGrid() {
     const sourceType = draggingType.value;
     const to = dragOverIndex.value;
@@ -250,34 +265,6 @@ function dropOnGrid() {
     if (!moved) return;
 
     current.splice(Math.max(0, Math.min(to, current.length)), 0, moved);
-    commitWidgets([...current, ...hiddenWidgets.value]);
-}
-
-function endDrag() {
-    draggingType.value = null;
-    dragOverIndex.value = null;
-}
-
-function clearGridDrop(event) {
-    if (!dashboardGrid.value?.contains(event.relatedTarget)) {
-        dragOverIndex.value = null;
-    }
-}
-
-function dropWidget(targetWidget) {
-    const sourceType = draggingType.value;
-    draggingType.value = null;
-    dragOverIndex.value = null;
-
-    if (!sourceType || sourceType === targetWidget.widget_type) return;
-
-    const current = [...visibleWidgets.value];
-    const from = current.findIndex((widget) => widget.widget_type === sourceType);
-    const to = current.findIndex((widget) => widget.widget_type === targetWidget.widget_type);
-    if (from < 0 || to < 0) return;
-
-    const [moved] = current.splice(from, 1);
-    current.splice(to, 0, moved);
     commitWidgets([...current, ...hiddenWidgets.value]);
 }
 
@@ -414,9 +401,6 @@ function itemMeta(widget, item) {
                 <div
                     ref="dashboardGrid"
                     class="grid grid-cols-1 gap-4 lg:grid-cols-4"
-                    @dragover.prevent="trackGridDrop"
-                    @drop.prevent="dropOnGrid"
-                    @dragleave="clearGridDrop"
                 >
                     <article
                         v-for="widget in visibleWidgets"
@@ -428,7 +412,6 @@ function itemMeta(widget, item) {
                             draggingType === widget.widget_type ? 'opacity-45 ring-2 ring-indigo-300' : '',
                             draggingType && dragOverIndex === visibleWidgets.findIndex((item) => item.widget_type === widget.widget_type) ? 'ring-2 ring-indigo-300' : '',
                         ]"
-                        @dragend="endDrag"
                     >
                         <button
                             type="button"
@@ -442,10 +425,9 @@ function itemMeta(widget, item) {
                         <div class="absolute left-4 right-5 top-4 z-10 flex items-center justify-between gap-2">
                             <button
                                 type="button"
-                                draggable="true"
                                 class="icon-btn h-7 w-7 cursor-grab active:cursor-grabbing"
                                 :title="`Sposta ${metaFor(widget).label}`"
-                                @dragstart="startDrag(widget, $event)"
+                                @pointerdown="startMove(widget, $event)"
                             >
                                 <GripVertical class="h-4 w-4" :stroke-width="1.8" />
                                 <span class="sr-only">Sposta</span>
