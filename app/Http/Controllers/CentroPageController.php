@@ -30,6 +30,7 @@ class CentroPageController extends Controller
     public function index(string $section): Response
     {
         $config = $this->config($section);
+        $limit = $section === 'billing' ? 500 : 100;
         $rows = DB::table($config['table'])
             ->when($config['table'] === 'projects', fn ($query) => $query->leftJoin('clients', 'clients.id', '=', 'projects.client_id')->select('projects.*', 'clients.name as client_name'))
             ->when($config['table'] === 'tasks', fn ($query) => $query->leftJoin('projects', 'projects.id', '=', 'tasks.project_id')->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')->select('tasks.*', 'projects.name as project_name', 'clients.name as client_name'))
@@ -42,12 +43,13 @@ class CentroPageController extends Controller
                 ->select('client_service_updates.*', 'clients.name as client_name', 'services.name as service_name', 'users.name as responsible_name')
             )
             ->latest($config['table'].'.created_at')
-            ->limit(100)
+            ->limit($limit)
             ->get();
 
         return Inertia::render('Centro/Index', [
             ...$config,
             'rows' => $rows,
+            'billingStats' => $section === 'billing' ? $this->billingStats() : null,
             'clients' => DB::table('clients')->orderBy('name')->get(['id', 'name']),
             'projects' => DB::table('projects')->orderBy('name')->get(['id', 'name']),
             'services' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name']),
@@ -310,6 +312,71 @@ class CentroPageController extends Controller
                 ['name' => 'notes', 'label' => 'Note', 'type' => 'textarea'],
             ],
             'serviceName' => $service,
+        ];
+    }
+
+    private function billingStats(): array
+    {
+        $year = (int) now()->format('Y');
+        $today = now()->toDateString();
+        $documents = DB::table('documents')
+            ->leftJoin('clients', 'clients.id', '=', 'documents.client_id')
+            ->select('documents.*', 'clients.name as client_name', 'clients.legal_name as client_legal_name')
+            ->whereYear('issue_date', $year)
+            ->get();
+
+        $invoices = $documents->where('doc_type', 'fattura');
+        $totalInvoiced = (float) $invoices->sum('total_amount');
+        $totalReceived = (float) $invoices->sum('total_paid');
+        $overdue = $invoices->filter(fn ($document) => $document->due_date && $document->due_date < $today && (float) $document->total_paid < (float) $document->total_amount);
+        $overdueAmount = (float) $overdue->sum(fn ($document) => (float) $document->total_amount - (float) $document->total_paid);
+
+        $months = collect(range(1, 12))->map(function (int $month) use ($invoices) {
+            $docs = $invoices->filter(fn ($document) => (int) substr((string) $document->issue_date, 5, 2) === $month);
+
+            return [
+                'month' => ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'][$month - 1],
+                'invoiced' => round((float) $docs->sum('total_amount'), 2),
+                'paid' => round((float) $docs->sum('total_paid'), 2),
+                'open' => round((float) $docs->sum(fn ($document) => max(0, (float) $document->total_amount - (float) $document->total_paid)), 2),
+            ];
+        })->values();
+
+        $topClients = $invoices
+            ->groupBy('client_id')
+            ->map(function ($docs) {
+                $first = $docs->first();
+
+                return [
+                    'name' => $first->client_legal_name ?: ($first->client_name ?: '-'),
+                    'total' => round((float) $docs->sum('total_amount'), 2),
+                    'paid' => round((float) $docs->sum('total_paid'), 2),
+                ];
+            })
+            ->sortByDesc('total')
+            ->values()
+            ->take(5);
+
+        $statusBreakdown = $invoices
+            ->groupBy('status')
+            ->map(fn ($docs, $status) => [
+                'status' => $status,
+                'total' => round((float) $docs->sum('total_amount'), 2),
+                'count' => $docs->count(),
+            ])
+            ->values();
+
+        return [
+            'year' => $year,
+            'totalInvoiced' => round($totalInvoiced, 2),
+            'totalReceived' => round($totalReceived, 2),
+            'openAmount' => round(max(0, $totalInvoiced - $totalReceived), 2),
+            'overdueAmount' => round($overdueAmount, 2),
+            'overdueCount' => $overdue->count(),
+            'collectedPct' => $totalInvoiced > 0 ? round(($totalReceived / $totalInvoiced) * 100) : 0,
+            'monthly' => $months,
+            'topClients' => $topClients,
+            'statusBreakdown' => $statusBreakdown,
         ];
     }
 
