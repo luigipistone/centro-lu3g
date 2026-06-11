@@ -156,6 +156,40 @@ function clientOptionLabel(field, value) {
     return displayValue(value);
 }
 
+function relatedSectionLabel(name) {
+    return {
+        projects: 'Progetti',
+        tasks: 'Task',
+        documents: 'Documenti',
+    }[name] || displayValue(name);
+}
+
+function relatedItemHref(name, item) {
+    if (name === 'projects') return route('projects.show', item.id);
+    if (name === 'tasks') return route('tasks.show', item.id);
+    if (name === 'documents') return route('billing.show', item.id);
+
+    return '#';
+}
+
+function relatedItemTitle(name, item) {
+    if (name === 'projects') return item.name;
+    if (name === 'tasks') return item.title;
+    if (name === 'documents') return item.number || docTypeLabel(item.doc_type);
+
+    return item.number || item.action || item.content || '-';
+}
+
+function relatedItemMeta(name, item) {
+    if (name === 'documents') {
+        return [docTypeLabel(item.doc_type), item.status ? docStatusLabel(item.status) : null, item.issue_date ? dateIt(item.issue_date) : null]
+            .filter(Boolean)
+            .join(' - ');
+    }
+
+    return item.status ? displayValue(item.status) : (item.created_at ? dateIt(item.created_at) : '-');
+}
+
 const visibleEntries = Object.entries(props.record).filter(([key, value]) =>
     !['id', 'created_by', 'updated_at', 'created_at', 'password', 'remember_token'].includes(key)
     && value !== null
@@ -567,7 +601,8 @@ function addSubtask() {
 }
 
 function paymentTermsLabel(days) {
-    if (!days) return null;
+    if (days === null || days === undefined || days === '') return null;
+    if (Number(days) === 0) return 'A vista';
     return `${days} giorni`;
 }
 
@@ -1150,7 +1185,7 @@ function remainingAmount() {
                                 </div>
                                 <div>
                                     <dt class="text-[11px] uppercase tracking-wide text-gray-400">Settore</dt>
-                                    <dd class="mt-1 text-sm text-gray-900">{{ record.business_sector || '-' }}</dd>
+                                    <dd class="mt-1 text-sm text-gray-900">{{ displayValue(record.business_sector) }}</dd>
                                 </div>
                                 <div>
                                     <dt class="text-[11px] uppercase tracking-wide text-gray-400">Email</dt>
@@ -1166,7 +1201,7 @@ function remainingAmount() {
                                 </div>
                                 <div>
                                     <dt class="text-[11px] uppercase tracking-wide text-gray-400">Sorgente</dt>
-                                    <dd class="mt-1 text-sm text-gray-900">{{ record.source || '-' }}</dd>
+                                    <dd class="mt-1 text-sm text-gray-900">{{ displayValue(record.source) }}</dd>
                                 </div>
                                 <div class="sm:col-span-2">
                                     <dt class="text-[11px] uppercase tracking-wide text-gray-400">Indirizzo</dt>
@@ -1204,7 +1239,7 @@ function remainingAmount() {
                                 </div>
                                 <div>
                                     <dt class="text-[11px] uppercase tracking-wide text-gray-400">IVA</dt>
-                                    <dd class="mt-1 text-sm text-gray-900">{{ record.vat_treatment || '-' }}</dd>
+                                    <dd class="mt-1 text-sm text-gray-900">{{ displayValue(record.vat_treatment) }}</dd>
                                 </div>
                                 <div>
                                     <dt class="text-[11px] uppercase tracking-wide text-gray-400">Pagamento</dt>
@@ -1247,7 +1282,7 @@ function remainingAmount() {
                                 <input v-model="subscriptionForm.frequency_value" type="number" min="1" class="form-control" required />
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700">Unita</label>
+                                <label class="block text-sm font-medium text-gray-700">Unita'</label>
                                 <select v-model="subscriptionForm.frequency_unit" class="form-control">
                                     <option value="month">Mese/i</option>
                                     <option value="year">Anno/i</option>
@@ -1307,7 +1342,7 @@ function remainingAmount() {
                                             <span :class="['rounded-full px-2 py-0.5 text-xs font-medium', subscription.active ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600']">
                                                 {{ subscription.active ? 'Attivo' : 'In pausa' }}
                                             </span>
-                                            <span v-if="subscription.auto_generate" class="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">auto</span>
+                                            <span v-if="subscription.auto_generate" class="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">automatico</span>
                                         </div>
                                         <p class="mt-1 text-sm text-gray-500">
                                             {{ money(subscription.amount) }} + IVA {{ subscription.vat_rate }}% · {{ subscriptionFrequency(subscription) }} · prossima {{ dateIt(subscription.next_invoice_date) }}
@@ -1739,27 +1774,21 @@ function remainingAmount() {
                     </section>
 
                     <section v-for="name in (section === 'projects' ? ['documents'] : ['projects', 'tasks', 'documents'])" :key="name" v-show="related[name]?.length" class="surface rounded-md p-5">
-                        <h3 class="mb-3 text-sm font-semibold capitalize text-gray-900">{{ name }}</h3>
+                        <h3 class="mb-3 text-sm font-semibold text-gray-900">{{ relatedSectionLabel(name) }}</h3>
                         <div class="space-y-2">
-                            <div v-for="item in related[name]" :key="item.id" class="rounded-md bg-gray-50 px-3 py-2 text-sm">
-                                <Link
-                                    v-if="name === 'projects'"
-                                    :href="route('projects.show', item.id)"
-                                    class="font-medium text-indigo-600"
-                                >{{ item.name }}</Link>
-                                <Link
-                                    v-else-if="name === 'tasks'"
-                                    :href="route('tasks.show', item.id)"
-                                    class="font-medium text-indigo-600"
-                                >{{ item.title }}</Link>
-                                <Link
-                                    v-else-if="name === 'documents'"
-                                    :href="route('billing.show', item.id)"
-                                    class="font-medium text-indigo-600"
-                                >{{ item.number || item.doc_type }}</Link>
-                                <span v-else class="font-medium text-gray-900">{{ item.number || item.action || item.content }}</span>
-                                <div class="mt-1 text-xs text-gray-500">{{ item.status ? displayValue(item.status) : item.created_at }}</div>
-                            </div>
+                            <Link
+                                v-for="item in related[name]"
+                                :key="item.id"
+                                :href="relatedItemHref(name, item)"
+                                class="group/item block rounded-md border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm transition duration-200 hover:-translate-y-0.5 hover:border-indigo-100 hover:bg-white hover:shadow-[0_12px_28px_rgba(28,42,73,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                            >
+                                <span class="block truncate font-semibold text-gray-900 transition group-hover/item:text-indigo-600">
+                                    {{ relatedItemTitle(name, item) }}
+                                </span>
+                                <span class="mt-1 block truncate text-xs text-gray-500">
+                                    {{ relatedItemMeta(name, item) }}
+                                </span>
+                            </Link>
                         </div>
                     </section>
                 </aside>
@@ -1807,10 +1836,10 @@ function remainingAmount() {
                         <form class="mb-4 grid gap-3 md:grid-cols-[1fr_150px_150px_auto]" @submit.prevent="addSubtask">
                             <input v-model="subtaskForm.title" class="form-control mt-0" placeholder="Nuova sottoattivita..." required />
                             <select v-model="subtaskForm.priority" class="form-control mt-0">
-                                <option value="low">low</option>
-                                <option value="medium">medium</option>
-                                <option value="high">high</option>
-                                <option value="urgent">urgent</option>
+                                <option value="low">Bassa</option>
+                                <option value="medium">Media</option>
+                                <option value="high">Alta</option>
+                                <option value="urgent">Urgente</option>
                             </select>
                             <input v-model="subtaskForm.due_date" class="form-control mt-0" type="date" />
                             <button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
