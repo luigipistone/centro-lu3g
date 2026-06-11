@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -735,6 +738,102 @@ class CentroPageController extends Controller
         return redirect()->route('billing.show', $newId)->with('status', 'Documento creato.');
     }
 
+    public function downloadDocumentPdf(string $id): \Illuminate\Http\Response
+    {
+        $bundle = $this->documentBundle($id);
+        $pdf = $this->documentPdf($bundle);
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$this->documentFilename($bundle['document'], 'pdf').'"',
+        ]);
+    }
+
+    public function downloadDocumentXml(string $id): \Illuminate\Http\Response
+    {
+        $bundle = $this->documentBundle($id);
+        $xml = $this->documentXml($bundle);
+
+        DB::table('documents')->where('id', $id)->update([
+            'xml_generated_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return response($xml, 200, [
+            'Content-Type' => 'application/xml; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="'.$this->documentFilename($bundle['document'], 'xml').'"',
+        ]);
+    }
+
+    public function sendDocumentEmail(Request $request, string $id): RedirectResponse
+    {
+        $payload = $request->validate([
+            'recipient' => ['required', 'email', 'max:255'],
+            'cc' => ['nullable', 'string', 'max:500'],
+            'subject' => ['nullable', 'string', 'max:255'],
+            'message' => ['nullable', 'string'],
+            'include_xml' => ['boolean'],
+        ]);
+        $bundle = $this->documentBundle($id);
+        $document = $bundle['document'];
+        $client = $bundle['client'];
+        $documentNumber = $document->number ?: 'bozza';
+        $subject = $payload['subject'] ?: $this->documentTypeLabel($document->doc_type).' '.$documentNumber;
+        $body = nl2br(e($payload['message'] ?: "Buongiorno,\n\nin allegato trova il documento richiesto.\n\nCordiali saluti."));
+        $pdf = $this->documentPdf($bundle);
+        $includeXml = $request->boolean('include_xml') && in_array($document->doc_type, ['fattura', 'nota_credito'], true);
+
+        try {
+            Mail::html($body, function ($message) use ($payload, $subject, $pdf, $bundle, $includeXml) {
+                $message->to($payload['recipient'])->subject($subject);
+                if (! empty($payload['cc'])) {
+                    $message->cc(array_map('trim', explode(',', $payload['cc'])));
+                }
+                $message->attachData($pdf, $this->documentFilename($bundle['document'], 'pdf'), [
+                    'mime' => 'application/pdf',
+                ]);
+                if ($includeXml) {
+                    $message->attachData($this->documentXml($bundle), $this->documentFilename($bundle['document'], 'xml'), [
+                        'mime' => 'application/xml',
+                    ]);
+                }
+            });
+
+            DB::table('document_emails')->insert([
+                'id' => (string) str()->uuid(),
+                'document_id' => $id,
+                'sent_by' => $request->user()->id,
+                'channel' => 'smtp',
+                'recipient' => $payload['recipient'],
+                'cc' => $payload['cc'] ?? null,
+                'subject' => $subject,
+                'status' => 'sent',
+                'sent_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        } catch (\Throwable $exception) {
+            DB::table('document_emails')->insert([
+                'id' => (string) str()->uuid(),
+                'document_id' => $id,
+                'sent_by' => $request->user()->id,
+                'channel' => 'smtp',
+                'recipient' => $payload['recipient'],
+                'cc' => $payload['cc'] ?? null,
+                'subject' => $subject,
+                'status' => 'failed',
+                'error' => $exception->getMessage(),
+                'sent_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            return back()->with('status', 'Invio non riuscito: '.$exception->getMessage());
+        }
+
+        return back()->with('status', 'Email inviata.');
+    }
+
     private function copyDocument(string $id, ?string $docType, string $userId): string
     {
         $document = DB::table('documents')->where('id', $id)->first();
@@ -777,6 +876,142 @@ class CentroPageController extends Controller
         $this->recalculateDocument($newId);
 
         return $newId;
+    }
+
+    private function documentBundle(string $id): array
+    {
+        $document = DB::table('documents')->where('id', $id)->first();
+        abort_if(! $document, 404);
+
+        return [
+            'document' => $document,
+            'client' => DB::table('clients')->where('id', $document->client_id)->first(),
+            'settings' => DB::table('document_settings')->first(),
+            'lines' => DB::table('document_lines')->where('document_id', $id)->orderBy('position')->get(),
+            'payments' => DB::table('document_payments')->where('document_id', $id)->orderByDesc('paid_at')->get(),
+        ];
+    }
+
+    private function documentPdf(array $bundle): string
+    {
+        $options = new Options();
+        $options->set('isRemoteEnabled', true);
+        $options->set('defaultFont', 'DejaVu Sans');
+
+        $dompdf = new Dompdf($options);
+        $html = view('documents.pdf', [
+            ...$bundle,
+            'typeLabel' => $this->documentTypeLabel($bundle['document']->doc_type),
+        ])->render();
+        $dompdf->loadHtml($html, 'UTF-8');
+        $dompdf->setPaper('A4');
+        $dompdf->render();
+
+        return $dompdf->output();
+    }
+
+    private function documentXml(array $bundle): string
+    {
+        $document = $bundle['document'];
+        $client = $bundle['client'];
+        $settings = $bundle['settings'];
+        $lines = $bundle['lines'];
+        $doc = new \DOMDocument('1.0', 'UTF-8');
+        $doc->formatOutput = true;
+
+        $root = $doc->createElement('p:FatturaElettronica');
+        $root->setAttribute('versione', 'FPR12');
+        $root->setAttribute('xmlns:p', 'http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2');
+        $root->setAttribute('xmlns:ds', 'http://www.w3.org/2000/09/xmldsig#');
+        $root->setAttribute('xmlns:xsi', 'http://www.w3.org/2001/XMLSchema-instance');
+        $doc->appendChild($root);
+
+        $header = $root->appendChild($doc->createElement('FatturaElettronicaHeader'));
+        $transmission = $header->appendChild($doc->createElement('DatiTrasmissione'));
+        $idTrasmittente = $transmission->appendChild($doc->createElement('IdTrasmittente'));
+        $idTrasmittente->appendChild($doc->createElement('IdPaese', 'IT'));
+        $idTrasmittente->appendChild($doc->createElement('IdCodice', preg_replace('/\D+/', '', (string) ($settings->vat_number ?? '00000000000')) ?: '00000000000'));
+        $transmission->appendChild($doc->createElement('ProgressivoInvio', str_pad((string) ($document->seq ?: 1), 5, '0', STR_PAD_LEFT)));
+        $transmission->appendChild($doc->createElement('FormatoTrasmissione', 'FPR12'));
+        $transmission->appendChild($doc->createElement('CodiceDestinatario', $client->sdi_code ?: '0000000'));
+
+        $supplier = $header->appendChild($doc->createElement('CedentePrestatore'));
+        $supplierData = $supplier->appendChild($doc->createElement('DatiAnagrafici'));
+        $supplierVat = $supplierData->appendChild($doc->createElement('IdFiscaleIVA'));
+        $supplierVat->appendChild($doc->createElement('IdPaese', 'IT'));
+        $supplierVat->appendChild($doc->createElement('IdCodice', preg_replace('/\D+/', '', (string) ($settings->vat_number ?? '00000000000')) ?: '00000000000'));
+        $supplierData->appendChild($doc->createElement('Anagrafica'))->appendChild($doc->createElement('Denominazione', $settings->company_name ?? config('app.name')));
+        $supplierData->appendChild($doc->createElement('RegimeFiscale', $settings->tax_regime ?: 'RF01'));
+        $supplierAddress = $supplier->appendChild($doc->createElement('Sede'));
+        $supplierAddress->appendChild($doc->createElement('Indirizzo', $settings->street ?: '-'));
+        $supplierAddress->appendChild($doc->createElement('CAP', $settings->postal_code ?: '00000'));
+        $supplierAddress->appendChild($doc->createElement('Comune', $settings->city ?: '-'));
+        $supplierAddress->appendChild($doc->createElement('Provincia', $settings->province ?: 'NA'));
+        $supplierAddress->appendChild($doc->createElement('Nazione', $settings->country ?: 'IT'));
+
+        $customer = $header->appendChild($doc->createElement('CessionarioCommittente'));
+        $customerData = $customer->appendChild($doc->createElement('DatiAnagrafici'));
+        if ($client->vat_number) {
+            $customerVat = $customerData->appendChild($doc->createElement('IdFiscaleIVA'));
+            $customerVat->appendChild($doc->createElement('IdPaese', 'IT'));
+            $customerVat->appendChild($doc->createElement('IdCodice', preg_replace('/\D+/', '', (string) $client->vat_number)));
+        }
+        if ($client->tax_code) {
+            $customerData->appendChild($doc->createElement('CodiceFiscale', $client->tax_code));
+        }
+        $customerData->appendChild($doc->createElement('Anagrafica'))->appendChild($doc->createElement('Denominazione', $client->legal_name ?: $client->name));
+        $customerAddress = $customer->appendChild($doc->createElement('Sede'));
+        $customerAddress->appendChild($doc->createElement('Indirizzo', trim(($client->street ?: $client->address ?: '-').' '.($client->street_number ?: ''))));
+        $customerAddress->appendChild($doc->createElement('CAP', $client->postal_code ?: '00000'));
+        $customerAddress->appendChild($doc->createElement('Comune', $client->city ?: '-'));
+        $customerAddress->appendChild($doc->createElement('Provincia', $client->province ?: 'NA'));
+        $customerAddress->appendChild($doc->createElement('Nazione', $client->country ?: 'IT'));
+
+        $body = $root->appendChild($doc->createElement('FatturaElettronicaBody'));
+        $general = $body->appendChild($doc->createElement('DatiGenerali'))->appendChild($doc->createElement('DatiGeneraliDocumento'));
+        $general->appendChild($doc->createElement('TipoDocumento', $document->doc_type === 'nota_credito' ? 'TD04' : 'TD01'));
+        $general->appendChild($doc->createElement('Divisa', $document->currency ?: 'EUR'));
+        $general->appendChild($doc->createElement('Data', $document->issue_date));
+        $general->appendChild($doc->createElement('Numero', $document->number ?: 'BOZZA-'.$document->id));
+        $general->appendChild($doc->createElement('ImportoTotaleDocumento', number_format((float) $document->total_amount, 2, '.', '')));
+
+        $goods = $body->appendChild($doc->createElement('DatiBeniServizi'));
+        foreach ($lines as $index => $line) {
+            $detail = $goods->appendChild($doc->createElement('DettaglioLinee'));
+            $detail->appendChild($doc->createElement('NumeroLinea', (string) ($index + 1)));
+            $detail->appendChild($doc->createElement('Descrizione', $line->description));
+            $detail->appendChild($doc->createElement('Quantita', number_format((float) $line->quantity, 2, '.', '')));
+            $detail->appendChild($doc->createElement('PrezzoUnitario', number_format((float) $line->unit_price, 2, '.', '')));
+            $detail->appendChild($doc->createElement('PrezzoTotale', number_format((float) $line->subtotal, 2, '.', '')));
+            $detail->appendChild($doc->createElement('AliquotaIVA', number_format((float) $line->vat_rate, 2, '.', '')));
+            if ((float) $line->vat_rate === 0.0 && $line->vat_nature_code) {
+                $detail->appendChild($doc->createElement('Natura', $line->vat_nature_code));
+            }
+        }
+
+        $summary = $goods->appendChild($doc->createElement('DatiRiepilogo'));
+        $summary->appendChild($doc->createElement('AliquotaIVA', '22.00'));
+        $summary->appendChild($doc->createElement('ImponibileImporto', number_format((float) $document->total_taxable, 2, '.', '')));
+        $summary->appendChild($doc->createElement('Imposta', number_format((float) $document->total_vat, 2, '.', '')));
+
+        return $doc->saveXML();
+    }
+
+    private function documentFilename(object $document, string $extension): string
+    {
+        $number = preg_replace('/[^A-Za-z0-9_-]+/', '-', (string) ($document->number ?: 'bozza-'.$document->id));
+
+        return strtolower($document->doc_type.'-'.$number.'.'.$extension);
+    }
+
+    private function documentTypeLabel(string $type): string
+    {
+        return [
+            'preventivo' => 'Preventivo',
+            'proforma' => 'Proforma',
+            'fattura' => 'Fattura',
+            'nota_credito' => 'Nota credito',
+        ][$type] ?? $type;
     }
 
     private function normalizeDocumentPayload(array $payload, string $userId, bool $withCreator = true): array

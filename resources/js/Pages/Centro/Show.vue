@@ -61,6 +61,13 @@ const documentForm = useForm({
     pension_fund_pct: props.record.pension_fund_pct || 0,
     pension_fund_label: props.record.pension_fund_label || '',
 });
+const emailForm = useForm({
+    recipient: props.related?.client?.pec || props.related?.client?.email || '',
+    cc: '',
+    subject: '',
+    message: '',
+    include_xml: ['fattura', 'nota_credito'].includes(props.record.doc_type),
+});
 const contactForm = useForm({
     first_name: '',
     last_name: '',
@@ -144,6 +151,10 @@ function convertDocument(type) {
 
 function printDocument() {
     window.print();
+}
+
+function sendDocumentEmail() {
+    emailForm.post(route('billing.email', props.record.id), { preserveScroll: true });
 }
 
 function addContact() {
@@ -288,7 +299,9 @@ function remainingAmount() {
                     <div class="flex flex-wrap gap-2">
                         <button type="button" class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500" @click="saveDocument">Salva</button>
                         <button v-if="!record.number" type="button" class="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100" @click="issueDocument">Emetti</button>
-                        <button type="button" class="rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="printDocument">Stampa/PDF</button>
+                        <a :href="route('billing.pdf', record.id)" class="rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Scarica PDF</a>
+                        <a v-if="['fattura', 'nota_credito'].includes(record.doc_type)" :href="route('billing.xml', record.id)" class="rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Scarica XML</a>
+                        <button type="button" class="rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="printDocument">Stampa</button>
                         <button type="button" class="rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="duplicateDocument">Duplica</button>
                         <button v-if="record.doc_type === 'preventivo'" type="button" class="rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="convertDocument('fattura')">Converti fattura</button>
                         <button v-if="record.doc_type === 'proforma'" type="button" class="rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="convertDocument('fattura')">Converti fattura</button>
@@ -458,6 +471,37 @@ function remainingAmount() {
                                     <span>{{ money(record.total_amount) }}</span>
                                 </div>
                             </div>
+                        </section>
+
+                        <section class="surface rounded-md p-5">
+                            <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Invio email</h3>
+                            <form class="space-y-3" @submit.prevent="sendDocumentEmail">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Destinatario</label>
+                                    <input v-model="emailForm.recipient" type="email" class="form-control" required />
+                                    <div v-if="emailForm.errors.recipient" class="mt-1 text-sm text-red-600">{{ emailForm.errors.recipient }}</div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">CC</label>
+                                    <input v-model="emailForm.cc" class="form-control" placeholder="email1, email2" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Oggetto</label>
+                                    <input v-model="emailForm.subject" class="form-control" :placeholder="`${docTypeLabel(record.doc_type)} ${record.number || 'bozza'}`" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Messaggio</label>
+                                    <textarea v-model="emailForm.message" rows="4" class="form-control" placeholder="Messaggio opzionale..."></textarea>
+                                </div>
+                                <label v-if="['fattura', 'nota_credito'].includes(record.doc_type)" class="flex items-center gap-2 text-sm text-gray-700">
+                                    <input v-model="emailForm.include_xml" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
+                                    Allega XML
+                                </label>
+                                <p class="text-xs text-gray-500">Viene sempre allegato il PDF. L'invio usa il mailer configurato in Laravel/Plesk.</p>
+                                <button type="submit" class="inline-flex w-full justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50" :disabled="emailForm.processing">
+                                    Invia documento
+                                </button>
+                            </form>
                         </section>
                     </aside>
                 </div>

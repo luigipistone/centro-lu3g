@@ -66,6 +66,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/billing/{id}/issue', [CentroPageController::class, 'issueDocument'])->name('billing.issue');
     Route::post('/billing/{id}/duplicate', [CentroPageController::class, 'duplicateDocument'])->name('billing.duplicate');
     Route::post('/billing/{id}/convert/{type}', [CentroPageController::class, 'convertDocument'])->name('billing.convert');
+    Route::get('/billing/{id}/pdf', [CentroPageController::class, 'downloadDocumentPdf'])->name('billing.pdf');
+    Route::get('/billing/{id}/xml', [CentroPageController::class, 'downloadDocumentXml'])->name('billing.xml');
+    Route::post('/billing/{id}/email', [CentroPageController::class, 'sendDocumentEmail'])->name('billing.email');
     Route::post('/billing/{id}/lines', [CentroPageController::class, 'storeDocumentLine'])->name('billing.lines.store');
     Route::delete('/billing/{documentId}/lines/{lineId}', [CentroPageController::class, 'destroyDocumentLine'])->name('billing.lines.destroy');
     Route::post('/billing/{id}/payments', [CentroPageController::class, 'storeDocumentPayment'])->name('billing.payments.store');
