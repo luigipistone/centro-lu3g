@@ -365,39 +365,38 @@ function itemMeta(widget, item) {
                             <span class="sr-only">Ridimensiona</span>
                         </button>
 
-                        <div class="mb-3 flex items-start justify-between gap-3 pr-3">
-                            <div class="flex min-w-0 items-center gap-2">
-                                <button
-                                    type="button"
-                                    draggable="true"
-                                    class="icon-btn cursor-grab active:cursor-grabbing"
-                                    :title="`Sposta ${metaFor(widget).label}`"
-                                    @dragstart="startDrag(widget, $event)"
-                                >
-                                    <GripVertical class="h-4 w-4" :stroke-width="1.8" />
-                                    <span class="sr-only">Sposta</span>
-                                </button>
-                                <h3 v-if="metaFor(widget).kind === 'list'" class="section-title min-w-0">
-                                    <span :class="['section-icon', metaFor(widget).iconClass]">
-                                        <component :is="metaFor(widget).icon" class="h-4 w-4" :stroke-width="1.7" />
-                                    </span>
-                                    <span class="truncate">{{ metaFor(widget).label }}</span>
-                                </h3>
-                            </div>
+                        <div class="absolute left-4 right-5 top-4 z-10 flex items-center justify-between gap-2">
+                            <button
+                                type="button"
+                                draggable="true"
+                                class="icon-btn h-7 w-7 cursor-grab active:cursor-grabbing"
+                                :title="`Sposta ${metaFor(widget).label}`"
+                                @dragstart="startDrag(widget, $event)"
+                            >
+                                <GripVertical class="h-4 w-4" :stroke-width="1.8" />
+                                <span class="sr-only">Sposta</span>
+                            </button>
 
                             <div class="flex shrink-0 items-center gap-1">
                                 <span class="rounded-full bg-white/60 px-2 py-1 text-[11px] font-bold text-gray-500">{{ widget.col_span }}/4</span>
-                                <button type="button" class="icon-btn" :title="`Rimuovi ${metaFor(widget).label}`" @click="removeWidget(widget)">
+                                <button type="button" class="icon-btn h-7 w-7" :title="`Rimuovi ${metaFor(widget).label}`" @click="removeWidget(widget)">
                                     <X class="h-4 w-4" :stroke-width="1.8" />
                                     <span class="sr-only">Rimuovi</span>
                                 </button>
                             </div>
                         </div>
 
+                        <h3 v-if="metaFor(widget).kind === 'list'" class="section-title mb-3 mt-10 min-w-0 pr-3">
+                            <span :class="['section-icon', metaFor(widget).iconClass]">
+                                <component :is="metaFor(widget).icon" class="h-4 w-4" :stroke-width="1.7" />
+                            </span>
+                            <span class="truncate">{{ metaFor(widget).label }}</span>
+                        </h3>
+
                         <Link
                             v-if="metaFor(widget).kind === 'stat'"
                             :href="route(metaFor(widget).route)"
-                            class="flex flex-1 items-center gap-4 rounded-2xl px-1 pb-1 pr-4 transition hover:bg-white/40"
+                            class="mt-10 flex flex-1 items-center gap-4 rounded-2xl px-1 pb-1 pr-4 transition hover:bg-white/40"
                         >
                             <span :class="['metric-icon', metaFor(widget).iconClass]">
                                 <component :is="metaFor(widget).icon" class="h-5 w-5" :stroke-width="1.7" />
