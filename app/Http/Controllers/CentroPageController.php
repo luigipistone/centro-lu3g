@@ -40,9 +40,10 @@ class CentroPageController extends Controller
             ->when($section === 'calendar', fn ($query) => $query
                 ->leftJoin('projects', 'projects.id', '=', 'tasks.project_id')
                 ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
+                ->leftJoin('services', 'services.id', '=', 'tasks.service_id')
                 ->whereNull('tasks.parent_task_id')
                 ->whereNotNull('tasks.due_date')
-                ->select('tasks.*', 'projects.name as project_name', 'projects.color as project_color', 'clients.name as client_name')
+                ->select('tasks.*', 'projects.name as project_name', 'projects.color as project_color', 'clients.name as client_name', 'services.name as service_name', 'services.color as service_color')
             )
             ->when($config['table'] === 'documents', fn ($query) => $query->leftJoin('clients', 'clients.id', '=', 'documents.client_id')->select('documents.*', 'clients.name as client_name'))
             ->when($config['table'] === 'users', fn ($query) => $query->leftJoin('user_roles', 'user_roles.user_id', '=', 'users.id')->select('users.*', 'user_roles.role'))
@@ -421,15 +422,22 @@ class CentroPageController extends Controller
                 'columns' => ['title', 'project_name', 'client_name', 'status', 'priority', 'due_date'],
                 'fields' => [
                     ['name' => 'title', 'label' => 'Titolo', 'type' => 'text', 'required' => true],
-                    ['name' => 'task_type', 'label' => 'Tipo', 'type' => 'select', 'options' => ['task', 'ongoing', 'meeting']],
+                    ['name' => 'task_type', 'label' => 'Tipo', 'type' => 'select', 'options' => ['project', 'task', 'ongoing', 'meeting']],
                     ['name' => 'project_id', 'label' => 'Progetto', 'type' => 'project'],
                     ['name' => 'client_id', 'label' => 'Cliente', 'type' => 'client'],
+                    ['name' => 'service_id', 'label' => 'Servizio', 'type' => 'service'],
                     ['name' => 'status', 'label' => 'Stato', 'type' => 'select', 'options' => ['todo', 'in_progress', 'in_review', 'done']],
                     ['name' => 'priority', 'label' => 'Priorita', 'type' => 'select', 'options' => ['low', 'medium', 'high', 'urgent']],
                     ['name' => 'start_date', 'label' => 'Inizio', 'type' => 'date'],
                     ['name' => 'due_date', 'label' => 'Scadenza', 'type' => 'date'],
                     ['name' => 'due_time', 'label' => 'Ora', 'type' => 'time'],
                     ['name' => 'location', 'label' => 'Luogo/link', 'type' => 'text'],
+                    ['name' => 'recurring_enabled', 'label' => 'Ricorrente', 'type' => 'checkbox'],
+                    ['name' => 'recurring_interval_value', 'label' => 'Ogni', 'type' => 'number'],
+                    ['name' => 'recurring_interval_unit', 'label' => 'Unita ricorrenza', 'type' => 'select', 'options' => ['week', 'month']],
+                    ['name' => 'recurring_mode', 'label' => 'Modalita ricorrenza', 'type' => 'select', 'options' => ['fixed', 'relative']],
+                    ['name' => 'recurring_weekday', 'label' => 'Giorno settimana', 'type' => 'number'],
+                    ['name' => 'recurring_month_day', 'label' => 'Giorno mese', 'type' => 'number'],
                     ['name' => 'description', 'label' => 'Descrizione', 'type' => 'textarea'],
                 ],
             ],
@@ -626,6 +634,7 @@ class CentroPageController extends Controller
                 'title' => ['required', 'string', 'max:255'],
                 'project_id' => ['nullable', 'uuid', 'exists:projects,id'],
                 'client_id' => ['nullable', 'uuid', 'exists:clients,id'],
+                'service_id' => ['nullable', 'uuid', 'exists:services,id'],
                 'task_type' => ['required', Rule::in(['task', 'project', 'ongoing', 'meeting'])],
                 'status' => ['required', Rule::in(['todo', 'in_progress', 'in_review', 'done'])],
                 'priority' => ['required', Rule::in(['low', 'medium', 'high', 'urgent'])],
@@ -633,6 +642,12 @@ class CentroPageController extends Controller
                 'due_date' => ['nullable', 'date'],
                 'due_time' => ['nullable', 'date_format:H:i'],
                 'location' => ['nullable', 'string', 'max:255'],
+                'recurring_enabled' => ['boolean'],
+                'recurring_interval_value' => ['nullable', 'integer', 'min:1', 'max:365'],
+                'recurring_interval_unit' => ['nullable', Rule::in(['week', 'month'])],
+                'recurring_mode' => ['nullable', Rule::in(['fixed', 'relative'])],
+                'recurring_weekday' => ['nullable', 'integer', 'min:1', 'max:7'],
+                'recurring_month_day' => ['nullable', 'integer', 'min:1', 'max:31'],
                 'description' => ['nullable', 'string'],
             ],
             'settings' => [
@@ -667,6 +682,21 @@ class CentroPageController extends Controller
 
         if ($section === 'clients') {
             $payload['is_pa'] = $request->boolean('is_pa');
+        }
+
+        if ($section === 'tasks') {
+            $payload['recurring_enabled'] = $request->boolean('recurring_enabled');
+            if (! $payload['recurring_enabled']) {
+                $payload['recurring_interval_value'] = null;
+                $payload['recurring_interval_unit'] = null;
+                $payload['recurring_mode'] = null;
+                $payload['recurring_weekday'] = null;
+                $payload['recurring_month_day'] = null;
+            } else {
+                $payload['recurring_interval_value'] = $payload['recurring_interval_value'] ?: 1;
+                $payload['recurring_interval_unit'] = $payload['recurring_interval_unit'] ?: 'week';
+                $payload['recurring_mode'] = $payload['recurring_mode'] ?: 'fixed';
+            }
         }
 
         return $payload;

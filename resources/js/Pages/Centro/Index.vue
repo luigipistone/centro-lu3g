@@ -98,16 +98,29 @@ const routeBase = computed(() => {
 });
 
 const defaults = computed(() => Object.fromEntries(props.fields.map((field) => {
-    if (field.type === 'checkbox') return [field.name, true];
+    if (field.type === 'checkbox') return [field.name, field.name === 'recurring_enabled' ? false : true];
     if (field.name === 'status' && props.section === 'projects') return [field.name, 'active'];
     if (field.name === 'status' && props.section === 'tasks') return [field.name, 'todo'];
     if (field.name === 'priority') return [field.name, 'medium'];
-    if (field.name === 'task_type') return [field.name, 'task'];
+    if (field.name === 'task_type') return [field.name, 'project'];
+    if (field.name === 'recurring_interval_value') return [field.name, 1];
+    if (field.name === 'recurring_interval_unit') return [field.name, 'week'];
+    if (field.name === 'recurring_mode') return [field.name, 'fixed'];
+    if (field.name === 'recurring_weekday') return [field.name, 1];
+    if (field.name === 'recurring_month_day') return [field.name, 1];
     if (field.name === 'color') return [field.name, '#2563eb'];
     return [field.name, ''];
 })));
 
 const form = useForm({ ...defaults.value });
+const taskCreateTypeLabels = {
+    project: 'Task',
+    task: 'Task',
+    ongoing: 'Continuativa',
+    meeting: 'Meeting',
+};
+
+hydrateTaskCreateFromUrl();
 
 function optionsFor(field) {
     if (field.type === 'client') return props.clients;
@@ -117,12 +130,50 @@ function optionsFor(field) {
     return (field.options || []).map((value) => ({ id: value, name: value }));
 }
 
+function shouldShowField(field) {
+    if (props.section !== 'tasks') return true;
+    if (['recurring_interval_value', 'recurring_interval_unit', 'recurring_mode', 'recurring_weekday', 'recurring_month_day'].includes(field.name)) {
+        return Boolean(form.recurring_enabled) && form.task_type !== 'meeting';
+    }
+    if (field.name === 'location') return form.task_type === 'meeting';
+    if (field.name === 'due_time') return form.task_type === 'meeting' || Boolean(form.due_date);
+    if (field.name === 'project_id') return ['project', 'task'].includes(form.task_type);
+    if (field.name === 'recurring_enabled') return form.task_type !== 'meeting';
+    return true;
+}
+
 function resetForm() {
     editing.value = null;
     form.clearErrors();
     form.defaults({ ...defaults.value });
     form.reset();
     Object.assign(form, { ...defaults.value });
+}
+
+function hydrateTaskCreateFromUrl() {
+    if (props.section !== 'tasks' || typeof window === 'undefined') return;
+
+    const params = new URLSearchParams(window.location.search);
+    const create = params.get('create');
+    const date = params.get('date');
+    const allowedTypes = ['project', 'task', 'ongoing', 'meeting'];
+
+    if (!allowedTypes.includes(create)) return;
+
+    editing.value = null;
+    form.task_type = create;
+    form.due_date = date || '';
+    form.start_date = '';
+    form.status = 'todo';
+    form.priority = 'medium';
+    if (create === 'meeting') {
+        form.due_time = form.due_time || '09:00';
+    }
+
+    params.delete('create');
+    params.delete('date');
+    const nextQuery = params.toString();
+    window.history.replaceState({}, '', `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}`);
 }
 
 function editRow(row) {
@@ -330,6 +381,32 @@ function taskTypeLabel(type) {
     }[type || 'task'] || type;
 }
 
+function createTaskHref(type, date) {
+    return `${route('tasks.index')}?create=${type}&date=${date}`;
+}
+
+function taskSpansDate(row, date) {
+    if (!row.due_date) return false;
+
+    const start = row.start_date && row.start_date <= row.due_date ? row.start_date : row.due_date;
+    return start <= date && row.due_date >= date;
+}
+
+function taskSpanRole(row, date) {
+    const start = row.start_date && row.start_date <= row.due_date ? row.start_date : row.due_date;
+    if (start === row.due_date) return 'single';
+    if (date === start) return 'start';
+    if (date === row.due_date) return 'end';
+    return 'middle';
+}
+
+function taskSpanClass(task) {
+    if (task.spanRole === 'start') return 'rounded-r-none border-r-0';
+    if (task.spanRole === 'middle') return 'rounded-none border-x-0 opacity-80';
+    if (task.spanRole === 'end') return 'rounded-l-none border-l-0';
+    return 'rounded-md';
+}
+
 function taskTypeClass(type) {
     return {
         meeting: 'border-violet-200 bg-violet-50 text-violet-800',
@@ -341,8 +418,9 @@ function taskTypeClass(type) {
 
 function tasksForDay(date) {
     return props.rows
-        .filter((row) => row.due_date === date)
+        .filter((row) => taskSpansDate(row, date))
         .filter((row) => calendarType.value === 'all' || (row.task_type || 'task') === calendarType.value)
+        .map((row) => ({ ...row, spanRole: taskSpanRole(row, date) }))
         .sort((a, b) => `${a.due_time || '99:99'}${a.title}`.localeCompare(`${b.due_time || '99:99'}${b.title}`));
 }
 </script>
@@ -415,12 +493,17 @@ function tasksForDay(date) {
                             <template v-if="!cell.empty">
                                 <div class="mb-2 flex items-center justify-between">
                                     <span :class="['text-sm font-semibold', cell.today ? 'text-indigo-600' : 'text-gray-500']">{{ cell.day }}</span>
-                                    <Link
-                                        :href="route('tasks.index')"
-                                        class="opacity-0 text-[11px] font-medium text-gray-400 hover:text-indigo-600 group-hover:opacity-100"
-                                    >
-                                        + crea
-                                    </Link>
+                                    <div class="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                                        <Link
+                                            v-for="quickType in ['project', 'ongoing', 'meeting']"
+                                            :key="quickType"
+                                            :href="createTaskHref(quickType, cell.date)"
+                                            class="rounded px-1.5 py-0.5 text-[10px] font-medium text-gray-400 hover:bg-indigo-50 hover:text-indigo-600"
+                                            :title="`Crea ${taskTypeLabel(quickType)} il ${dateIt(cell.date)}`"
+                                        >
+                                            {{ quickType === 'project' ? '+' : quickType === 'ongoing' ? 'R' : 'M' }}
+                                        </Link>
+                                    </div>
                                 </div>
 
                                 <div v-if="compactWeekend && cell.weekend" class="flex flex-wrap justify-center gap-1">
@@ -439,17 +522,21 @@ function tasksForDay(date) {
                                         v-for="task in cell.tasks.slice(0, 4)"
                                         :key="task.id"
                                         :href="route('tasks.show', task.id)"
-                                        :class="['block rounded-md border px-2 py-1.5 text-xs transition hover:border-indigo-300 hover:shadow-sm', taskTypeClass(task.task_type)]"
+                                        :class="[
+                                            'block border px-2 py-1.5 text-xs transition hover:border-indigo-300 hover:shadow-sm',
+                                            taskTypeClass(task.task_type),
+                                            taskSpanClass(task),
+                                        ]"
                                     >
                                         <div class="flex items-start gap-1.5">
-                                            <span class="mt-1 h-2 w-2 shrink-0 rounded-full" :style="{ backgroundColor: task.project_color || '#2563eb' }"></span>
+                                            <span class="mt-1 h-2 w-2 shrink-0 rounded-full" :style="{ backgroundColor: task.project_color || task.service_color || '#2563eb' }"></span>
                                             <div class="min-w-0 flex-1">
                                                 <div class="flex items-center gap-1">
                                                     <span v-if="task.due_time" class="shrink-0 text-[10px] text-gray-500">{{ String(task.due_time).slice(0, 5) }}</span>
                                                     <span :class="['truncate font-medium', task.status === 'done' ? 'line-through opacity-60' : '']">{{ task.title }}</span>
                                                 </div>
                                                 <div class="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-gray-500">
-                                                    <span class="truncate">{{ task.client_name || task.project_name || taskTypeLabel(task.task_type) }}</span>
+                                                    <span class="truncate">{{ task.client_name || task.project_name || task.service_name || taskTypeLabel(task.task_type) }}</span>
                                                     <span v-if="task.subtask_count">{{ task.subtask_count }} sub</span>
                                                 </div>
                                             </div>
@@ -625,13 +712,17 @@ function tasksForDay(date) {
                         </div>
 
                         <form class="space-y-4" @submit.prevent="submit">
-                            <div v-for="field in fields" :key="field.name">
+                            <div v-for="field in fields" v-show="shouldShowField(field)" :key="field.name">
                                 <label class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
                                 <textarea v-if="field.type === 'textarea'" v-model="form[field.name]" rows="4" class="form-control" />
                                 <select v-else-if="['select', 'client', 'project', 'service', 'user'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
                                     <option value="">-</option>
                                     <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ option.name }}</option>
                                 </select>
+                                <label v-else-if="field.type === 'checkbox'" class="mt-2 flex items-center gap-2 text-sm text-gray-700">
+                                    <input v-model="form[field.name]" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
+                                    Si
+                                </label>
                                 <input v-else v-model="form[field.name]" :type="field.type" class="form-control" :required="field.required" />
                                 <div v-if="form.errors[field.name]" class="mt-1 text-sm text-red-600">{{ form.errors[field.name] }}</div>
                             </div>
