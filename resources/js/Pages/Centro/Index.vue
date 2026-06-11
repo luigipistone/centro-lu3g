@@ -23,6 +23,7 @@ const props = defineProps({
 });
 
 const editing = ref(null);
+const formOpen = ref(false);
 const page = usePage();
 const canWrite = computed(() => props.fields.length > 0);
 const billingSearch = ref('');
@@ -129,6 +130,23 @@ const taskCreateTypeLabels = {
     meeting: 'Meeting',
 };
 
+const createButtonLabel = computed(() => ({
+    clients: 'Nuovo Cliente',
+    projects: 'Nuovo Progetto',
+    tasks: 'Nuovo Task',
+    billing: 'Nuovo documento',
+    users: 'Nuovo utente',
+    settings: 'Aggiungi servizio',
+}[props.section] || 'Nuovo'));
+
+const formTitle = computed(() => {
+    if (props.section === 'tasks' && !editing.value) {
+        return `Nuova ${taskCreateTypeLabels[form.task_type] || 'Task'}`;
+    }
+
+    return editing.value ? `Modifica ${createButtonLabel.value.replace(/^Nuovo |^Nuova /, '').toLowerCase()}` : createButtonLabel.value;
+});
+
 hydrateTaskCreateFromUrl();
 
 function optionsFor(field) {
@@ -162,8 +180,18 @@ function toggleFormPerson(field, userId) {
     form[field] = current;
 }
 
+function openCreate(patch = {}) {
+    editing.value = null;
+    form.clearErrors();
+    form.defaults({ ...defaults.value });
+    form.reset();
+    Object.assign(form, { ...defaults.value, ...patch });
+    formOpen.value = true;
+}
+
 function resetForm() {
     editing.value = null;
+    formOpen.value = false;
     form.clearErrors();
     form.defaults({ ...defaults.value });
     form.reset();
@@ -180,15 +208,14 @@ function hydrateTaskCreateFromUrl() {
 
     if (!allowedTypes.includes(create)) return;
 
-    editing.value = null;
-    form.task_type = create;
-    form.due_date = date || '';
-    form.start_date = '';
-    form.status = 'todo';
-    form.priority = 'medium';
-    if (create === 'meeting') {
-        form.due_time = form.due_time || '09:00';
-    }
+    openCreate({
+        task_type: create,
+        due_date: date || '',
+        start_date: '',
+        status: 'todo',
+        priority: 'medium',
+        due_time: create === 'meeting' ? '09:00' : '',
+    });
 
     params.delete('create');
     params.delete('date');
@@ -198,6 +225,7 @@ function hydrateTaskCreateFromUrl() {
 
 function editRow(row) {
     editing.value = row;
+    formOpen.value = true;
     form.clearErrors();
     props.fields.forEach((field) => {
         form[field.name] = row[field.name] ?? (field.type === 'checkbox' ? false : '');
@@ -466,6 +494,90 @@ function tasksForDay(date) {
             </div>
         </template>
 
+        <div v-if="formOpen && canWrite && section !== 'settings'" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 px-4 py-6">
+            <div class="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-md bg-white shadow-xl">
+                <div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+                    <h3 class="font-semibold text-gray-900">{{ formTitle }}</h3>
+                    <button type="button" class="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700" @click="resetForm">
+                        <span class="sr-only">Chiudi</span>
+                        x
+                    </button>
+                </div>
+
+                <form :class="section === 'clients' || section === 'billing' ? 'grid gap-4 p-5 md:grid-cols-3' : 'space-y-4 p-5'" @submit.prevent="submit">
+                    <div
+                        v-for="field in fields"
+                        v-show="shouldShowField(field)"
+                        :key="field.name"
+                        :class="field.type === 'textarea' || ['description', 'notes', 'footer_notes'].includes(field.name) ? 'md:col-span-3' : ''"
+                    >
+                        <label class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
+                        <textarea v-if="field.type === 'textarea'" v-model="form[field.name]" rows="4" class="form-control" />
+                        <select v-else-if="['select', 'client', 'project', 'service', 'user'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
+                            <option value="">-</option>
+                            <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ option.name }}</option>
+                        </select>
+                        <label v-else-if="field.type === 'checkbox'" class="mt-2 flex items-center gap-2 text-sm text-gray-700">
+                            <input v-model="form[field.name]" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
+                            Si
+                        </label>
+                        <input v-else v-model="form[field.name]" :type="field.type" class="form-control" :required="field.required" />
+                        <div v-if="form.errors[field.name]" class="mt-1 text-sm text-red-600">{{ form.errors[field.name] }}</div>
+                    </div>
+
+                    <div v-if="section === 'tasks'" class="rounded-md border border-gray-100 bg-gray-50 p-3 md:col-span-3">
+                        <div class="mb-3 flex items-center justify-between">
+                            <h4 class="text-sm font-semibold text-gray-900">{{ form.task_type === 'meeting' ? 'Partecipanti' : 'Persone' }}</h4>
+                            <span class="text-xs text-gray-500">{{ (form.assignee_ids || []).length }} assegnati</span>
+                        </div>
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <div>
+                                <div class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">{{ form.task_type === 'meeting' ? 'Partecipanti' : 'Assegnatari' }}</div>
+                                <div class="max-h-40 space-y-1 overflow-y-auto pr-1">
+                                    <label v-for="user in users" :key="`modal-assignee-${user.id}`" class="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-700 hover:bg-white">
+                                        <input
+                                            type="checkbox"
+                                            class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                                            :checked="(form.assignee_ids || []).includes(user.id)"
+                                            @change="toggleFormPerson('assignee_ids', user.id)"
+                                        />
+                                        <span class="min-w-0">
+                                            <span class="block truncate font-medium">{{ user.name }}</span>
+                                            <span v-if="user.email" class="block truncate text-xs text-gray-400">{{ user.email }}</span>
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Follower</div>
+                                <div class="max-h-40 space-y-1 overflow-y-auto pr-1">
+                                    <label v-for="user in users" :key="`modal-follower-${user.id}`" class="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-700 hover:bg-white">
+                                        <input
+                                            type="checkbox"
+                                            class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                                            :checked="(form.follower_ids || []).includes(user.id)"
+                                            @change="toggleFormPerson('follower_ids', user.id)"
+                                        />
+                                        <span class="min-w-0">
+                                            <span class="block truncate font-medium">{{ user.name }}</span>
+                                            <span v-if="user.email" class="block truncate text-xs text-gray-400">{{ user.email }}</span>
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end gap-2 border-t border-gray-100 pt-4 md:col-span-3">
+                        <button type="button" class="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="resetForm">Annulla</button>
+                        <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50" :disabled="form.processing">
+                            {{ editing ? 'Salva modifiche' : 'Crea' }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <div v-if="section === 'calendar'" class="py-8">
             <div class="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
                 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -618,17 +730,18 @@ function tasksForDay(date) {
                     </div>
                 </div>
 
-                <div class="grid gap-3 md:grid-cols-[1fr_220px_auto]">
+                <div class="grid gap-3 md:grid-cols-[1fr_220px_auto_auto]">
                     <input v-model="clientSearch" class="form-control mt-0" placeholder="Cerca per nome, ragione sociale, email, P.IVA o citta..." />
                     <select v-model="clientService" class="form-control mt-0">
                         <option value="all">Tutti i servizi</option>
                         <option v-for="service in services" :key="service.id" :value="service.id">{{ service.name }}</option>
                     </select>
                     <button type="button" class="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="clientSearch = ''; clientService = 'all'">Reset</button>
+                    <button type="button" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500" @click="openCreate()">Nuovo Cliente</button>
                 </div>
 
-                <div class="grid gap-6 xl:grid-cols-[380px_1fr]">
-                    <section class="rounded-md bg-white p-5 shadow-sm">
+                <div class="grid gap-6">
+                    <section v-if="false" class="rounded-md bg-white p-5 shadow-sm">
                         <div class="mb-4 flex items-center justify-between">
                             <h3 class="font-semibold text-gray-900">{{ editing ? 'Modifica cliente' : 'Nuovo cliente' }}</h3>
                             <button v-if="editing" type="button" class="text-sm text-gray-500 hover:text-gray-800" @click="resetForm">Annulla</button>
@@ -715,7 +828,7 @@ function tasksForDay(date) {
 
         <div v-else-if="section === 'tasks'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
-                <div class="grid gap-3 md:grid-cols-[1fr_150px_150px_150px_auto]">
+                <div class="grid gap-3 md:grid-cols-[1fr_150px_150px_150px_auto_auto_auto_auto]">
                     <input v-model="taskSearch" class="form-control mt-0" placeholder="Cerca task, cliente o progetto..." />
                     <select v-model="taskStatus" class="form-control mt-0">
                         <option value="all">Tutti gli stati</option>
@@ -739,10 +852,13 @@ function tasksForDay(date) {
                         <option value="meeting">Meeting</option>
                     </select>
                     <button type="button" class="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="taskSearch = ''; taskStatus = 'all'; taskPriority = 'all'; taskType = 'all'">Reset</button>
+                    <button type="button" class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500" @click="openCreate({ task_type: 'project' })">Task</button>
+                    <button type="button" class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100" @click="openCreate({ task_type: 'ongoing' })">Continuativa</button>
+                    <button type="button" class="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-700 hover:bg-violet-100" @click="openCreate({ task_type: 'meeting', due_time: '09:00' })">Meeting</button>
                 </div>
 
-                <div class="grid gap-4 xl:grid-cols-[360px_1fr]">
-                    <section class="rounded-md bg-white p-5 shadow-sm">
+                <div class="grid gap-4">
+                    <section v-if="false" class="rounded-md bg-white p-5 shadow-sm">
                         <div class="mb-4 flex items-center justify-between">
                             <h3 class="font-semibold text-gray-900">{{ editing ? 'Modifica task' : 'Nuovo task' }}</h3>
                             <button v-if="editing" type="button" class="text-sm text-gray-500 hover:text-gray-800" @click="resetForm">Annulla</button>
@@ -1201,7 +1317,7 @@ function tasksForDay(date) {
                 </div>
 
                 <section class="rounded-md bg-white p-5 shadow-sm">
-                    <div class="mb-4 grid gap-3 md:grid-cols-[1fr_170px_170px_auto]">
+                    <div class="mb-4 grid gap-3 md:grid-cols-[1fr_170px_170px_auto_auto]">
                         <input
                             v-model="billingSearch"
                             class="form-control mt-0"
@@ -1216,6 +1332,7 @@ function tasksForDay(date) {
                             <option v-for="(label, value) in documentStatusLabels" :key="value" :value="value">{{ label }}</option>
                         </select>
                         <button type="button" class="rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="billingSearch = ''; billingType = 'all'; billingStatus = 'all'">Reset</button>
+                        <button type="button" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500" @click="openCreate()">Nuovo documento</button>
                     </div>
 
                     <div class="overflow-x-auto">
@@ -1262,7 +1379,7 @@ function tasksForDay(date) {
                     </div>
                 </section>
 
-                <section class="rounded-md bg-white p-5 shadow-sm">
+                <section v-if="false" class="rounded-md bg-white p-5 shadow-sm">
                     <div class="mb-4 flex items-center justify-between">
                         <h3 class="font-semibold text-gray-900">{{ editing ? 'Modifica documento' : 'Nuovo documento' }}</h3>
                         <button v-if="editing" type="button" class="text-sm text-gray-500 hover:text-gray-800" @click="resetForm">Annulla</button>
@@ -1290,8 +1407,15 @@ function tasksForDay(date) {
         </div>
 
         <div v-else class="py-8">
-            <div class="mx-auto grid max-w-7xl gap-6 sm:px-6 lg:grid-cols-[360px_1fr] lg:px-8">
-                <section v-if="canWrite" class="rounded bg-white p-5 shadow-sm">
+            <div class="mx-auto max-w-7xl space-y-4 px-4 sm:px-6 lg:px-8">
+                <div v-if="canWrite" class="flex justify-end">
+                    <button type="button" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500" @click="openCreate()">
+                        {{ createButtonLabel }}
+                    </button>
+                </div>
+
+                <div class="grid gap-6 lg:grid-cols-1">
+                <section v-if="false" class="rounded bg-white p-5 shadow-sm">
                     <div class="mb-4 flex items-center justify-between">
                         <h3 class="font-semibold text-gray-900">{{ editing ? 'Modifica' : 'Nuovo' }}</h3>
                         <button v-if="editing" type="button" class="text-sm text-gray-500 hover:text-gray-800" @click="resetForm">Annulla</button>
@@ -1387,6 +1511,7 @@ function tasksForDay(date) {
                         </table>
                     </div>
                 </section>
+                </div>
             </div>
         </div>
     </AuthenticatedLayout>
