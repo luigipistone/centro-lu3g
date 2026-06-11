@@ -32,6 +32,7 @@ const billingStatus = ref('all');
 const currentCalendarDate = ref(new Date());
 const calendarType = ref('all');
 const compactWeekend = ref(false);
+const calendarCreateDate = ref(null);
 const taskSearch = ref('');
 const taskStatus = ref('all');
 const taskPriority = ref('all');
@@ -353,6 +354,28 @@ const taskColumns = [
     ['done', 'Fatte'],
 ];
 
+const projectStatusLabels = {
+    active: 'Attivo',
+    completed: 'Completato',
+    on_hold: 'In Pausa',
+    archived: 'Archiviato',
+};
+
+function projectStatusClass(status) {
+    return {
+        active: 'bg-green-100 text-green-700',
+        completed: 'bg-blue-100 text-blue-700',
+        on_hold: 'bg-amber-100 text-amber-700',
+        archived: 'bg-gray-100 text-gray-700',
+    }[status] || 'bg-gray-100 text-gray-700';
+}
+
+function plainText(value) {
+    return String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+const projectRows = computed(() => props.rows);
+
 const taskRows = computed(() => props.rows.filter((row) => {
     const search = taskSearch.value.trim().toLowerCase();
     const matchesSearch = !search
@@ -421,6 +444,7 @@ function isCalendarToday(day) {
 }
 
 function changeMonth(delta) {
+    calendarCreateDate.value = null;
     currentCalendarDate.value = new Date(calendarYear.value, calendarMonth.value + delta, 1);
 }
 
@@ -435,6 +459,10 @@ function taskTypeLabel(type) {
 
 function createTaskHref(type, date) {
     return `${route('tasks.index')}?create=${type}&date=${date}`;
+}
+
+function openCalendarCreateMenu(date) {
+    calendarCreateDate.value = calendarCreateDate.value === date ? null : date;
 }
 
 function toggleTaskDone(task) {
@@ -635,16 +663,41 @@ function tasksForDay(date) {
                             <template v-if="!cell.empty">
                                 <div class="mb-2 flex items-center justify-between">
                                     <span :class="['text-sm font-semibold', cell.today ? 'text-indigo-600' : 'text-gray-500']">{{ cell.day }}</span>
-                                    <div class="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                                        <Link
-                                            v-for="quickType in ['project', 'ongoing', 'meeting']"
-                                            :key="quickType"
-                                            :href="createTaskHref(quickType, cell.date)"
-                                            class="rounded px-1.5 py-0.5 text-[10px] font-medium text-gray-400 hover:bg-indigo-50 hover:text-indigo-600"
-                                            :title="`Crea ${taskTypeLabel(quickType)} il ${dateIt(cell.date)}`"
+                                    <div class="relative">
+                                        <button
+                                            type="button"
+                                            class="rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-400 opacity-0 transition-opacity hover:bg-indigo-50 hover:text-indigo-600 group-hover:opacity-100"
+                                            @click.stop="openCalendarCreateMenu(cell.date)"
                                         >
-                                            {{ quickType === 'project' ? '+' : quickType === 'ongoing' ? 'R' : 'M' }}
-                                        </Link>
+                                            + crea
+                                        </button>
+                                        <div
+                                            v-if="calendarCreateDate === cell.date"
+                                            class="absolute right-0 top-6 z-20 w-44 rounded-md border border-gray-200 bg-white p-1 shadow-lg"
+                                            @click.stop
+                                        >
+                                            <Link
+                                                :href="createTaskHref('project', cell.date)"
+                                                class="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                                            >
+                                                <span class="h-2 w-2 rounded-full bg-blue-500"></span>
+                                                Task
+                                            </Link>
+                                            <Link
+                                                :href="createTaskHref('ongoing', cell.date)"
+                                                class="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                                            >
+                                                <span class="h-2 w-2 rounded-full bg-amber-500"></span>
+                                                Continuativa
+                                            </Link>
+                                            <Link
+                                                :href="createTaskHref('meeting', cell.date)"
+                                                class="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                                            >
+                                                <span class="h-2 w-2 rounded-full bg-violet-500"></span>
+                                                Meeting
+                                            </Link>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -709,6 +762,50 @@ function tasksForDay(date) {
                     <span class="inline-flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-amber-500"></span>Media</span>
                     <span class="inline-flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-emerald-500"></span>Bassa</span>
                 </div>
+            </div>
+        </div>
+
+        <div v-else-if="section === 'projects'" class="py-8">
+            <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-end">
+                    <button type="button" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500" @click="openCreate()">
+                        Nuovo Progetto
+                    </button>
+                </div>
+
+                <section class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    <article
+                        v-for="project in projectRows"
+                        :key="project.id"
+                        class="rounded-md border border-gray-200 bg-white p-5 shadow-sm transition hover:border-indigo-200 hover:shadow"
+                    >
+                        <div class="flex items-start justify-between gap-3">
+                            <Link :href="route('projects.show', project.id)" class="min-w-0 flex-1">
+                                <div class="flex min-w-0 items-center gap-2">
+                                    <span class="h-3 w-3 shrink-0 rounded-full ring-1 ring-gray-200" :style="{ backgroundColor: project.color || '#64748b' }"></span>
+                                    <h3 class="truncate text-base font-semibold text-gray-900">{{ project.name }}</h3>
+                                </div>
+                            </Link>
+                            <span :class="['shrink-0 rounded px-2 py-0.5 text-xs font-medium', projectStatusClass(project.status)]">
+                                {{ projectStatusLabels[project.status] || project.status }}
+                            </span>
+                        </div>
+
+                        <p v-if="plainText(project.description)" class="mt-3 line-clamp-2 text-sm text-gray-500">
+                            {{ plainText(project.description) }}
+                        </p>
+
+                        <div class="mt-4 flex items-center justify-between gap-3">
+                            <span v-if="project.client_name" class="rounded-full border border-gray-200 px-2 py-0.5 text-xs text-gray-600">{{ project.client_name }}</span>
+                            <span v-else class="text-xs text-gray-400">Nessun cliente</span>
+                            <button type="button" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(project)">Modifica</button>
+                        </div>
+                    </article>
+
+                    <div v-if="!projectRows.length" class="rounded-md border border-dashed border-gray-300 bg-white px-5 py-12 text-center text-sm text-gray-500 md:col-span-2 lg:col-span-3">
+                        Nessun progetto
+                    </div>
+                </section>
             </div>
         </div>
 
