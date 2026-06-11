@@ -301,7 +301,7 @@ const groups = [
             </header>
 
             <!-- Page Content -->
-            <main class="relative z-0 min-h-[calc(100vh-4rem)]">
+            <main class="relative min-h-[calc(100vh-4rem)]">
                 <slot />
             </main>
         </div>
