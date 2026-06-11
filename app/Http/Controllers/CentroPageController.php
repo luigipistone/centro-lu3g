@@ -582,7 +582,7 @@ class CentroPageController extends Controller
 
     private function serviceUpdateRows(string $serviceName)
     {
-        $service = DB::table('services')->where('name', $serviceName)->first(['id', 'name']);
+        $service = $this->serviceByName($serviceName);
         if (! $service) {
             return collect();
         }
@@ -631,6 +631,13 @@ class CentroPageController extends Controller
 
             return $row;
         });
+    }
+
+    private function serviceByName(string $serviceName)
+    {
+        return DB::table('services')
+            ->whereRaw('UPPER(TRIM(name)) = ?', [strtoupper(trim($serviceName))])
+            ->first(['id', 'name']);
     }
 
     private function billingStats(): array
@@ -2024,9 +2031,9 @@ class CentroPageController extends Controller
 
         if ($section) {
             $service = strtoupper(str_replace('updates-', '', $section));
-            $serviceId = DB::table('services')->where('name', $service)->value('id');
-            abort_if(! $serviceId, 422, 'Servizio non trovato.');
-            $payload['service_id'] = $serviceId;
+            $serviceRecord = $this->serviceByName($service);
+            abort_if(! $serviceRecord, 422, 'Servizio non trovato.');
+            $payload['service_id'] = $serviceRecord->id;
         }
 
         return $payload;

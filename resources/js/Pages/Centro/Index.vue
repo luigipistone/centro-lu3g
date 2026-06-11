@@ -25,6 +25,8 @@ const props = defineProps({
 
 const editing = ref(null);
 const formOpen = ref(false);
+const deleteTarget = ref(null);
+const deleteConfirmText = ref('');
 const page = usePage();
 const canWrite = computed(() => props.fields.length > 0);
 const billingSearch = ref('');
@@ -132,6 +134,72 @@ const taskCreateTypeLabels = {
     ongoing: 'Continuativa',
     meeting: 'Meeting',
 };
+
+const valueLabels = {
+    active: 'Attivo',
+    completed: 'Completato',
+    on_hold: 'In pausa',
+    archived: 'Archiviato',
+    todo: 'Da fare',
+    in_progress: 'In corso',
+    in_review: 'Review',
+    done: 'Fatte',
+    low: 'Bassa',
+    medium: 'Media',
+    high: 'Alta',
+    urgent: 'Urgente',
+    project: 'Task',
+    task: 'Task',
+    ongoing: 'Continuativa',
+    meeting: 'Meeting',
+    draft: 'Bozza',
+    sent: 'Inviato',
+    accepted: 'Accettato',
+    rejected: 'Rifiutato',
+    paid: 'Pagato',
+    partially_paid: 'Parziale',
+    overdue: 'Scaduto',
+    cancelled: 'Annullato',
+    week: 'Settimana',
+    month: 'Mese',
+    fixed: 'Fissa',
+    relative: 'Relativa',
+    on_request: 'Su richiesta',
+    weekly: 'Settimanale',
+    biweekly: 'Bisettimanale',
+    monthly: 'Mensile',
+};
+
+const columnLabels = {
+    name: 'Nome',
+    title: 'Titolo',
+    email: 'Email',
+    phone: 'Telefono',
+    website: 'Sito web',
+    status: 'Stato',
+    priority: 'Priorita',
+    task_type: 'Tipo',
+    start_date: 'Inizio',
+    due_date: 'Scadenza',
+    due_time: 'Ora',
+    active: 'Attivo',
+    project_name: 'Progetto',
+    client_name: 'Cliente',
+    service_name: 'Servizio',
+    responsible_name: 'Responsabile',
+    created_at: 'Creato il',
+    updated_at: 'Aggiornato il',
+};
+
+function displayValue(value) {
+    if (value === true) return 'Si';
+    if (value === false) return 'No';
+    return valueLabels[value] || value || '-';
+}
+
+function displayColumn(column) {
+    return columnLabels[column] || column.replaceAll('_', ' ');
+}
 
 const createButtonLabel = computed(() => ({
     clients: 'Nuovo Cliente',
@@ -281,8 +349,25 @@ function runBackup() {
 }
 
 function remove(row) {
-    if (!confirm(`Eliminare "${row.name || row.title || row.number || row.email}"?`)) return;
-    router.delete(route(`${routeBase.value}.destroy`, row.id), { preserveScroll: true });
+    deleteTarget.value = row;
+    deleteConfirmText.value = '';
+}
+
+function deleteTargetName() {
+    return deleteTarget.value?.name || deleteTarget.value?.title || deleteTarget.value?.number || deleteTarget.value?.email || deleteTarget.value?.client_name || 'elemento';
+}
+
+function cancelDelete() {
+    deleteTarget.value = null;
+    deleteConfirmText.value = '';
+}
+
+function confirmDelete() {
+    if (!deleteTarget.value || deleteConfirmText.value !== 'ELIMINA') return;
+    router.delete(route(`${routeBase.value}.destroy`, deleteTarget.value.id), {
+        preserveScroll: true,
+        onFinish: cancelDelete,
+    });
 }
 
 function showRoute(row) {
@@ -609,7 +694,7 @@ function tasksForDay(date) {
                         <textarea v-if="field.type === 'textarea'" v-model="form[field.name]" rows="4" class="form-control" />
                         <select v-else-if="['select', 'client', 'project', 'service', 'user'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
                             <option value="">-</option>
-                            <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ option.name }}</option>
+                            <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ displayValue(option.name) }}</option>
                         </select>
                         <label v-else-if="field.type === 'checkbox'" class="mt-2 flex items-center gap-2 text-sm text-gray-700">
                             <input v-model="form[field.name]" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
@@ -669,6 +754,30 @@ function tasksForDay(date) {
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        <div v-if="deleteTarget" class="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/40 px-4 py-6">
+            <div class="w-full max-w-md rounded-md bg-white p-5 shadow-xl">
+                <h3 class="text-base font-semibold text-gray-900">Conferma eliminazione</h3>
+                <p class="mt-2 text-sm text-gray-600">
+                    Questa azione e' irreversibile: <span class="font-medium text-gray-900">{{ deleteTargetName() }}</span>.
+                    Digita <span class="font-mono font-semibold text-gray-900">ELIMINA</span> per confermare.
+                </p>
+                <input v-model="deleteConfirmText" class="form-control font-mono" placeholder="ELIMINA" autocomplete="off" />
+                <div class="mt-5 flex justify-end gap-2">
+                    <button type="button" class="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="cancelDelete">
+                        Annulla
+                    </button>
+                    <button
+                        type="button"
+                        class="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        :disabled="deleteConfirmText !== 'ELIMINA'"
+                        @click="confirmDelete"
+                    >
+                        Elimina
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -853,7 +962,7 @@ function tasksForDay(date) {
                                 </div>
                             </Link>
                             <span :class="['shrink-0 rounded px-2 py-0.5 text-xs font-medium', projectStatusClass(project.status)]">
-                                {{ projectStatusLabels[project.status] || project.status }}
+                                {{ displayValue(project.status) }}
                             </span>
                         </div>
 
@@ -1172,8 +1281,8 @@ function tasksForDay(date) {
                                                 <h4 :class="['truncate text-sm font-semibold text-gray-900', task.status === 'done' ? 'line-through opacity-60' : '']">{{ task.title }}</h4>
                                             </div>
                                             <div class="mt-2 flex flex-wrap gap-1.5">
-                                                <span :class="['rounded-full border px-2 py-0.5 text-[10px] font-medium', taskTypeClass(task.task_type)]">{{ taskTypeLabel(task.task_type) }}</span>
-                                                <span class="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">{{ task.priority }}</span>
+                                                <span :class="['rounded-full border px-2 py-0.5 text-[10px] font-medium', taskTypeClass(task.task_type)]">{{ displayValue(task.task_type || 'task') }}</span>
+                                                <span class="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">{{ displayValue(task.priority) }}</span>
                                             </div>
                                             <div class="mt-3 space-y-1 text-xs text-gray-500">
                                                 <div v-if="task.project_name" class="truncate">Progetto: {{ task.project_name }}</div>
@@ -1416,7 +1525,7 @@ function tasksForDay(date) {
                                     <tr v-for="run in backupRuns || []" :key="run.id">
                                         <td class="px-3 py-3">{{ dateIt(run.started_at) }}</td>
                                         <td class="px-3 py-3">{{ run.frequency }}</td>
-                                        <td class="px-3 py-3">{{ run.status }}</td>
+                                    <td class="px-3 py-3">{{ displayValue(run.status) }}</td>
                                         <td class="px-3 py-3">{{ run.tables_count || '-' }}</td>
                                     </tr>
                                     <tr v-if="!(backupRuns || []).length">
@@ -1587,14 +1696,14 @@ function tasksForDay(date) {
                                             {{ row.number || 'bozza' }}
                                         </Link>
                                     </td>
-                                    <td class="px-3 py-3">{{ documentTypeLabels[row.doc_type] || row.doc_type }}</td>
+                                    <td class="px-3 py-3">{{ documentTypeLabels[row.doc_type] || displayValue(row.doc_type) }}</td>
                                     <td class="px-3 py-3">{{ row.client_name || '-' }}</td>
                                     <td class="px-3 py-3">{{ dateIt(row.issue_date) }}</td>
                                     <td class="px-3 py-3">{{ dateIt(row.due_date) }}</td>
                                     <td class="px-3 py-3 text-right font-medium">{{ money(row.total_amount) }}</td>
                                     <td class="px-3 py-3 text-right text-gray-500">{{ money(row.total_paid) }}</td>
                                     <td class="px-3 py-3">
-                                        <span :class="['rounded-full px-2 py-1 text-xs font-medium', statusClass(row.status)]">{{ documentStatusLabels[row.status] || row.status }}</span>
+                                        <span :class="['rounded-full px-2 py-1 text-xs font-medium', statusClass(row.status)]">{{ displayValue(row.status) }}</span>
                                     </td>
                                     <td class="whitespace-nowrap px-3 py-3 text-right">
                                         <button type="button" class="text-sm font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(row)">Modifica</button>
@@ -1621,7 +1730,7 @@ function tasksForDay(date) {
                             <textarea v-if="field.type === 'textarea'" v-model="form[field.name]" rows="3" class="form-control" />
                             <select v-else-if="['select', 'client', 'project', 'service', 'user'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
                                 <option value="">-</option>
-                                <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ option.name }}</option>
+                                <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ displayValue(option.name) }}</option>
                             </select>
                             <input v-else v-model="form[field.name]" :type="field.type" class="form-control" :required="field.required" />
                             <div v-if="form.errors[field.name]" class="mt-1 text-sm text-red-600">{{ form.errors[field.name] }}</div>
@@ -1685,7 +1794,7 @@ function tasksForDay(date) {
                                         <span v-else class="text-xs text-gray-400">-</span>
                                     </td>
                                     <td v-if="showUpdateNewsletter" class="px-3 py-3">
-                                        {{ cadenceLabels[row.cadence] || row.cadence || '-' }}
+                                        {{ displayValue(row.cadence) }}
                                     </td>
                                     <td v-if="showUpdateNewsletter" class="px-3 py-3">
                                         {{ row.contact || '-' }}
@@ -1783,7 +1892,7 @@ function tasksForDay(date) {
                             <thead class="bg-gray-50">
                                 <tr>
                                     <th v-for="column in columns" :key="column" class="px-4 py-3 text-left font-semibold text-gray-600">
-                                        {{ column.replaceAll('_', ' ') }}
+                                        {{ displayColumn(column) }}
                                     </th>
                                     <th v-if="canWrite" class="px-4 py-3 text-right font-semibold text-gray-600">Azioni</th>
                                 </tr>
@@ -1791,15 +1900,14 @@ function tasksForDay(date) {
                             <tbody class="divide-y divide-gray-100 bg-white">
                                 <tr v-for="row in rows" :key="row.id">
                                     <td v-for="column in columns" :key="column" class="max-w-xs truncate px-4 py-3 text-gray-800">
-                                        <span v-if="column === 'active'">{{ row[column] ? 'Si' : 'No' }}</span>
                                         <Link
-                                            v-else-if="column === columns[0] && showRoute(row)"
+                                            v-if="column === columns[0] && showRoute(row)"
                                             :href="showRoute(row)"
                                             class="font-medium text-indigo-600 hover:text-indigo-500"
                                         >
-                                            {{ row[column] ?? '-' }}
+                                            {{ displayValue(row[column]) }}
                                         </Link>
-                                        <span v-else>{{ row[column] ?? '-' }}</span>
+                                        <span v-else>{{ displayValue(row[column]) }}</span>
                                     </td>
                                     <td v-if="canWrite" class="whitespace-nowrap px-4 py-3 text-right">
                                         <button type="button" class="text-sm font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(row)">Modifica</button>

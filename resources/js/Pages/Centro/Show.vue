@@ -22,11 +22,62 @@ const labels = {
     website: 'Sito web',
     status: 'Stato',
     priority: 'Priorita',
+    task_type: 'Tipo',
+    start_date: 'Inizio',
     due_date: 'Scadenza',
     due_time: 'Ora',
+    recurring_enabled: 'Ricorrente',
+    recurring_mode: 'Modalita ricorrenza',
+    recurring_interval_value: 'Ogni',
+    recurring_interval_unit: 'Unita ricorrenza',
+    recurring_weekday: 'Giorno settimana',
+    recurring_month_day: 'Giorno mese',
+    parent_task_id: 'Task padre',
+    project_id: 'Progetto',
+    client_id: 'Cliente',
+    service_id: 'Servizio',
     description: 'Descrizione',
     notes: 'Note',
 };
+
+const valueLabels = {
+    active: 'Attivo',
+    completed: 'Completato',
+    on_hold: 'In pausa',
+    archived: 'Archiviato',
+    todo: 'Da fare',
+    in_progress: 'In corso',
+    in_review: 'Review',
+    done: 'Fatte',
+    low: 'Bassa',
+    medium: 'Media',
+    high: 'Alta',
+    urgent: 'Urgente',
+    project: 'Task',
+    task: 'Task',
+    ongoing: 'Continuativa',
+    meeting: 'Meeting',
+    draft: 'Bozza',
+    sent: 'Inviato',
+    accepted: 'Accettato',
+    rejected: 'Rifiutato',
+    paid: 'Pagato',
+    partially_paid: 'Parziale',
+    overdue: 'Scaduto',
+    cancelled: 'Annullato',
+    week: 'Settimana',
+    month: 'Mese',
+    fixed: 'Fissa',
+    relative: 'Relativa',
+    0: 'No',
+    1: 'Si',
+};
+
+function displayValue(value) {
+    if (value === true) return 'Si';
+    if (value === false) return 'No';
+    return valueLabels[value] || value || '-';
+}
 
 const visibleEntries = Object.entries(props.record).filter(([key, value]) =>
     !['id', 'created_by', 'updated_at', 'created_at', 'password', 'remember_token'].includes(key)
@@ -794,7 +845,7 @@ function remainingAmount() {
                     <dl class="grid gap-4 md:grid-cols-2">
                         <div v-for="[key, value] in visibleEntries" :key="key" class="rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
                             <dt class="text-xs font-medium uppercase tracking-wide text-gray-400">{{ labels[key] || key.replaceAll('_', ' ') }}</dt>
-                            <dd class="mt-1 whitespace-pre-wrap text-sm text-gray-900">{{ value }}</dd>
+                            <dd class="mt-1 whitespace-pre-wrap text-sm text-gray-900">{{ displayValue(value) }}</dd>
                         </div>
                     </dl>
                 </section>
@@ -827,7 +878,7 @@ function remainingAmount() {
                                 :class="['rounded-md border px-3 py-2 text-xs font-medium', record.status === status ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50']"
                                 @click="setTaskStatus(status)"
                             >
-                                {{ status }}
+                                {{ displayValue(status) }}
                             </button>
                         </div>
                     </section>
@@ -902,7 +953,7 @@ function remainingAmount() {
                                     class="font-medium text-indigo-600"
                                 >{{ item.number || item.doc_type }}</Link>
                                 <span v-else class="font-medium text-gray-900">{{ item.number || item.action || item.content }}</span>
-                                <div class="mt-1 text-xs text-gray-500">{{ item.status || item.created_at }}</div>
+                                <div class="mt-1 text-xs text-gray-500">{{ item.status ? displayValue(item.status) : item.created_at }}</div>
                             </div>
                         </div>
                     </section>
@@ -973,7 +1024,7 @@ function remainingAmount() {
                                     </Link>
                                 </label>
                                 <div class="flex shrink-0 items-center gap-2">
-                                    <span :class="['rounded-full px-2 py-1 text-xs font-medium', priorityClass(subtask.priority)]">{{ subtask.priority }}</span>
+                                    <span :class="['rounded-full px-2 py-1 text-xs font-medium', priorityClass(subtask.priority)]">{{ displayValue(subtask.priority) }}</span>
                                     <span class="text-xs text-gray-500">{{ subtask.due_date || '-' }}</span>
                                 </div>
                             </div>
