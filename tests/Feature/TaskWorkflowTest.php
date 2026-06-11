@@ -91,4 +91,37 @@ class TaskWorkflowTest extends TestCase
             'status' => 'todo',
         ]);
     }
+
+    public function test_task_can_be_created_with_assignees_and_followers(): void
+    {
+        $user = User::factory()->create();
+        $assignee = User::factory()->create();
+        $follower = User::factory()->create();
+
+        $response = $this
+            ->actingAs($user)
+            ->post('/tasks', [
+                'title' => 'Preparare piano editoriale',
+                'task_type' => 'project',
+                'status' => 'todo',
+                'priority' => 'high',
+                'due_date' => '2026-06-30',
+                'assignee_ids' => [$assignee->id],
+                'follower_ids' => [$follower->id],
+            ]);
+
+        $response->assertRedirect();
+
+        $task = DB::table('tasks')->where('title', 'Preparare piano editoriale')->first();
+
+        $this->assertNotNull($task);
+        $this->assertDatabaseHas('task_assignees', [
+            'task_id' => $task->id,
+            'user_id' => $assignee->id,
+        ]);
+        $this->assertDatabaseHas('task_followers', [
+            'task_id' => $task->id,
+            'user_id' => $follower->id,
+        ]);
+    }
 }

@@ -71,6 +71,25 @@ class CentroPageController extends Controller
             });
         }
 
+        if ($section === 'tasks') {
+            $taskIds = $rows->pluck('id');
+            $assigneesByTask = DB::table('task_assignees')
+                ->whereIn('task_id', $taskIds)
+                ->get(['task_id', 'user_id'])
+                ->groupBy('task_id');
+            $followersByTask = DB::table('task_followers')
+                ->whereIn('task_id', $taskIds)
+                ->get(['task_id', 'user_id'])
+                ->groupBy('task_id');
+
+            $rows = $rows->map(function ($row) use ($assigneesByTask, $followersByTask) {
+                $row->assignee_ids = ($assigneesByTask[$row->id] ?? collect())->pluck('user_id')->values();
+                $row->follower_ids = ($followersByTask[$row->id] ?? collect())->pluck('user_id')->values();
+
+                return $row;
+            });
+        }
+
         if ($section === 'clients') {
             $servicesByClient = DB::table('client_services')
                 ->join('services', 'services.id', '=', 'client_services.service_id')
@@ -99,7 +118,7 @@ class CentroPageController extends Controller
             'clients' => DB::table('clients')->orderBy('name')->get(['id', 'name']),
             'projects' => DB::table('projects')->orderBy('name')->get(['id', 'name']),
             'services' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name']),
-            'users' => DB::table('users')->orderBy('name')->get(['id', 'name']),
+            'users' => DB::table('users')->orderBy('name')->get(['id', 'name', 'email']),
         ]);
     }
 
@@ -190,6 +209,7 @@ class CentroPageController extends Controller
         }
 
         $payload = $this->validatedPayload($request, $section);
+        $taskPeople = $section === 'tasks' ? $this->extractTaskPeoplePayload($payload) : ['assignees' => [], 'followers' => []];
         $payload['id'] = (string) str()->uuid();
         $payload['created_at'] = now();
         $payload['updated_at'] = now();
@@ -199,6 +219,10 @@ class CentroPageController extends Controller
         }
 
         DB::table($this->config($section)['table'])->insert($payload);
+
+        if ($section === 'tasks') {
+            $this->syncTaskPeopleLists($payload['id'], $taskPeople['assignees'], $taskPeople['followers']);
+        }
 
         return back()->with('status', 'Creato.');
     }
@@ -218,9 +242,14 @@ class CentroPageController extends Controller
         }
 
         $payload = $this->validatedPayload($request, $section);
+        $taskPeople = $section === 'tasks' ? $this->extractTaskPeoplePayload($payload) : ['assignees' => [], 'followers' => []];
         $payload['updated_at'] = now();
 
         DB::table($this->config($section)['table'])->where('id', $id)->update($payload);
+
+        if ($section === 'tasks') {
+            $this->syncTaskPeopleLists($id, $taskPeople['assignees'], $taskPeople['followers']);
+        }
 
         return back()->with('status', 'Aggiornato.');
     }
@@ -648,6 +677,10 @@ class CentroPageController extends Controller
                 'recurring_mode' => ['nullable', Rule::in(['fixed', 'relative'])],
                 'recurring_weekday' => ['nullable', 'integer', 'min:1', 'max:7'],
                 'recurring_month_day' => ['nullable', 'integer', 'min:1', 'max:31'],
+                'assignee_ids' => ['nullable', 'array'],
+                'assignee_ids.*' => ['uuid', 'exists:users,id'],
+                'follower_ids' => ['nullable', 'array'],
+                'follower_ids.*' => ['uuid', 'exists:users,id'],
                 'description' => ['nullable', 'string'],
             ],
             'settings' => [
@@ -700,6 +733,34 @@ class CentroPageController extends Controller
         }
 
         return $payload;
+    }
+
+    private function extractTaskPeoplePayload(array &$payload): array
+    {
+        $people = [
+            'assignees' => array_values(array_unique($payload['assignee_ids'] ?? [])),
+            'followers' => array_values(array_unique($payload['follower_ids'] ?? [])),
+        ];
+
+        unset($payload['assignee_ids'], $payload['follower_ids']);
+
+        return $people;
+    }
+
+    private function syncTaskPeopleLists(string $taskId, array $assigneeIds, array $followerIds): void
+    {
+        foreach ([['task_assignees', $assigneeIds], ['task_followers', $followerIds]] as [$table, $userIds]) {
+            DB::table($table)->where('task_id', $taskId)->delete();
+            foreach ($userIds as $userId) {
+                DB::table($table)->insert([
+                    'id' => (string) str()->uuid(),
+                    'task_id' => $taskId,
+                    'user_id' => $userId,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        }
     }
 
     private function storeUser(Request $request): RedirectResponse

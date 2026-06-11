@@ -97,20 +97,29 @@ const routeBase = computed(() => {
     return props.section;
 });
 
-const defaults = computed(() => Object.fromEntries(props.fields.map((field) => {
-    if (field.type === 'checkbox') return [field.name, field.name === 'recurring_enabled' ? false : true];
-    if (field.name === 'status' && props.section === 'projects') return [field.name, 'active'];
-    if (field.name === 'status' && props.section === 'tasks') return [field.name, 'todo'];
-    if (field.name === 'priority') return [field.name, 'medium'];
-    if (field.name === 'task_type') return [field.name, 'project'];
-    if (field.name === 'recurring_interval_value') return [field.name, 1];
-    if (field.name === 'recurring_interval_unit') return [field.name, 'week'];
-    if (field.name === 'recurring_mode') return [field.name, 'fixed'];
-    if (field.name === 'recurring_weekday') return [field.name, 1];
-    if (field.name === 'recurring_month_day') return [field.name, 1];
-    if (field.name === 'color') return [field.name, '#2563eb'];
-    return [field.name, ''];
-})));
+const defaults = computed(() => {
+    const base = Object.fromEntries(props.fields.map((field) => {
+        if (field.type === 'checkbox') return [field.name, field.name === 'recurring_enabled' ? false : true];
+        if (field.name === 'status' && props.section === 'projects') return [field.name, 'active'];
+        if (field.name === 'status' && props.section === 'tasks') return [field.name, 'todo'];
+        if (field.name === 'priority') return [field.name, 'medium'];
+        if (field.name === 'task_type') return [field.name, 'project'];
+        if (field.name === 'recurring_interval_value') return [field.name, 1];
+        if (field.name === 'recurring_interval_unit') return [field.name, 'week'];
+        if (field.name === 'recurring_mode') return [field.name, 'fixed'];
+        if (field.name === 'recurring_weekday') return [field.name, 1];
+        if (field.name === 'recurring_month_day') return [field.name, 1];
+        if (field.name === 'color') return [field.name, '#2563eb'];
+        return [field.name, ''];
+    }));
+
+    if (props.section === 'tasks') {
+        base.assignee_ids = [];
+        base.follower_ids = [];
+    }
+
+    return base;
+});
 
 const form = useForm({ ...defaults.value });
 const taskCreateTypeLabels = {
@@ -140,6 +149,17 @@ function shouldShowField(field) {
     if (field.name === 'project_id') return ['project', 'task'].includes(form.task_type);
     if (field.name === 'recurring_enabled') return form.task_type !== 'meeting';
     return true;
+}
+
+function toggleFormPerson(field, userId) {
+    const current = [...(form[field] || [])];
+    const index = current.indexOf(userId);
+    if (index >= 0) {
+        current.splice(index, 1);
+    } else {
+        current.push(userId);
+    }
+    form[field] = current;
 }
 
 function resetForm() {
@@ -182,6 +202,10 @@ function editRow(row) {
     props.fields.forEach((field) => {
         form[field.name] = row[field.name] ?? (field.type === 'checkbox' ? false : '');
     });
+    if (props.section === 'tasks') {
+        form.assignee_ids = [...(row.assignee_ids || [])];
+        form.follower_ids = [...(row.follower_ids || [])];
+    }
 }
 
 function submit() {
@@ -738,6 +762,50 @@ function tasksForDay(date) {
                                 </label>
                                 <input v-else v-model="form[field.name]" :type="field.type" class="form-control" :required="field.required" />
                                 <div v-if="form.errors[field.name]" class="mt-1 text-sm text-red-600">{{ form.errors[field.name] }}</div>
+                            </div>
+                            <div class="rounded-md border border-gray-100 bg-gray-50 p-3">
+                                <div class="mb-3 flex items-center justify-between">
+                                    <h4 class="text-sm font-semibold text-gray-900">{{ form.task_type === 'meeting' ? 'Partecipanti' : 'Persone' }}</h4>
+                                    <span class="text-xs text-gray-500">{{ (form.assignee_ids || []).length }} assegnati</span>
+                                </div>
+                                <div class="grid gap-4 sm:grid-cols-2">
+                                    <div>
+                                        <div class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">{{ form.task_type === 'meeting' ? 'Partecipanti' : 'Assegnatari' }}</div>
+                                        <div class="max-h-40 space-y-1 overflow-y-auto pr-1">
+                                            <label v-for="user in users" :key="`assignee-${user.id}`" class="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-700 hover:bg-white">
+                                                <input
+                                                    type="checkbox"
+                                                    class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                                                    :checked="(form.assignee_ids || []).includes(user.id)"
+                                                    @change="toggleFormPerson('assignee_ids', user.id)"
+                                                />
+                                                <span class="min-w-0">
+                                                    <span class="block truncate font-medium">{{ user.name }}</span>
+                                                    <span v-if="user.email" class="block truncate text-xs text-gray-400">{{ user.email }}</span>
+                                                </span>
+                                            </label>
+                                            <p v-if="!users?.length" class="text-xs text-gray-500">Nessun utente disponibile.</p>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Follower</div>
+                                        <div class="max-h-40 space-y-1 overflow-y-auto pr-1">
+                                            <label v-for="user in users" :key="`follower-${user.id}`" class="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-700 hover:bg-white">
+                                                <input
+                                                    type="checkbox"
+                                                    class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                                                    :checked="(form.follower_ids || []).includes(user.id)"
+                                                    @change="toggleFormPerson('follower_ids', user.id)"
+                                                />
+                                                <span class="min-w-0">
+                                                    <span class="block truncate font-medium">{{ user.name }}</span>
+                                                    <span v-if="user.email" class="block truncate text-xs text-gray-400">{{ user.email }}</span>
+                                                </span>
+                                            </label>
+                                            <p v-if="!users?.length" class="text-xs text-gray-500">Nessun utente disponibile.</p>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <button type="submit" class="inline-flex w-full justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50" :disabled="form.processing">
                                 {{ editing ? 'Salva modifiche' : 'Crea task' }}
