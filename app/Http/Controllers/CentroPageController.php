@@ -63,28 +63,26 @@ class CentroPageController extends Controller
     {
         $config = $this->config($section);
         $limit = $section === 'billing' ? 500 : 100;
-        $rows = DB::table($config['table'])
-            ->when($config['table'] === 'projects', fn ($query) => $query->leftJoin('clients', 'clients.id', '=', 'projects.client_id')->select('projects.*', 'clients.name as client_name'))
-            ->when($config['table'] === 'tasks' && $section !== 'calendar', fn ($query) => $query->leftJoin('projects', 'projects.id', '=', 'tasks.project_id')->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')->select('tasks.*', 'projects.name as project_name', 'clients.name as client_name'))
-            ->when($section === 'calendar', fn ($query) => $query
-                ->leftJoin('projects', 'projects.id', '=', 'tasks.project_id')
-                ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
-                ->leftJoin('services', 'services.id', '=', 'tasks.service_id')
-                ->whereNull('tasks.parent_task_id')
-                ->whereNotNull('tasks.due_date')
-                ->select('tasks.*', 'projects.name as project_name', 'projects.color as project_color', 'clients.name as client_name', 'services.name as service_name', 'services.color as service_color')
-            )
-            ->when($config['table'] === 'documents', fn ($query) => $query->leftJoin('clients', 'clients.id', '=', 'documents.client_id')->select('documents.*', 'clients.name as client_name'))
-            ->when($config['table'] === 'users', fn ($query) => $query->leftJoin('user_roles', 'user_roles.user_id', '=', 'users.id')->select('users.*', 'user_roles.role'))
-            ->when($config['table'] === 'client_service_updates', fn ($query) => $query
-                ->leftJoin('clients', 'clients.id', '=', 'client_service_updates.client_id')
-                ->leftJoin('services', 'services.id', '=', 'client_service_updates.service_id')
-                ->leftJoin('users', 'users.id', '=', 'client_service_updates.responsible_user_id')
-                ->select('client_service_updates.*', 'clients.name as client_name', 'services.name as service_name', 'users.name as responsible_name')
-            )
-            ->latest($config['table'].'.created_at')
-            ->limit($limit)
-            ->get();
+        if (str_starts_with($section, 'updates-')) {
+            $rows = $this->serviceUpdateRows($config['serviceName']);
+        } else {
+            $rows = DB::table($config['table'])
+                ->when($config['table'] === 'projects', fn ($query) => $query->leftJoin('clients', 'clients.id', '=', 'projects.client_id')->select('projects.*', 'clients.name as client_name'))
+                ->when($config['table'] === 'tasks' && $section !== 'calendar', fn ($query) => $query->leftJoin('projects', 'projects.id', '=', 'tasks.project_id')->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')->select('tasks.*', 'projects.name as project_name', 'clients.name as client_name'))
+                ->when($section === 'calendar', fn ($query) => $query
+                    ->leftJoin('projects', 'projects.id', '=', 'tasks.project_id')
+                    ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
+                    ->leftJoin('services', 'services.id', '=', 'tasks.service_id')
+                    ->whereNull('tasks.parent_task_id')
+                    ->whereNotNull('tasks.due_date')
+                    ->select('tasks.*', 'projects.name as project_name', 'projects.color as project_color', 'clients.name as client_name', 'services.name as service_name', 'services.color as service_color')
+                )
+                ->when($config['table'] === 'documents', fn ($query) => $query->leftJoin('clients', 'clients.id', '=', 'documents.client_id')->select('documents.*', 'clients.name as client_name'))
+                ->when($config['table'] === 'users', fn ($query) => $query->leftJoin('user_roles', 'user_roles.user_id', '=', 'users.id')->select('users.*', 'user_roles.role'))
+                ->latest($config['table'].'.created_at')
+                ->limit($limit)
+                ->get();
+        }
 
         if ($section === 'calendar') {
             $subtaskCounts = DB::table('tasks')
@@ -568,13 +566,66 @@ class CentroPageController extends Controller
             'fields' => [
                 ['name' => 'client_id', 'label' => 'Cliente', 'type' => 'client', 'required' => true],
                 ['name' => 'responsible_user_id', 'label' => 'Responsabile', 'type' => 'user'],
-                ['name' => 'cadence', 'label' => 'Cadenza', 'type' => 'text'],
+                ['name' => 'cadence', 'label' => 'Cadenza', 'type' => 'select', 'options' => ['on_request', 'weekly', 'biweekly', 'monthly']],
                 ['name' => 'contact', 'label' => 'Contatto', 'type' => 'text'],
                 ['name' => 'report_url', 'label' => 'Report URL', 'type' => 'text'],
                 ['name' => 'notes', 'label' => 'Note', 'type' => 'textarea'],
             ],
             'serviceName' => $service,
         ];
+    }
+
+    private function serviceUpdateRows(string $serviceName)
+    {
+        $service = DB::table('services')->where('name', $serviceName)->first(['id', 'name']);
+        if (! $service) {
+            return collect();
+        }
+
+        $rows = DB::table('client_services')
+            ->join('clients', 'clients.id', '=', 'client_services.client_id')
+            ->leftJoin('client_service_updates', function ($join) use ($service) {
+                $join->on('client_service_updates.client_id', '=', 'client_services.client_id')
+                    ->where('client_service_updates.service_id', '=', $service->id);
+            })
+            ->leftJoin('users', 'users.id', '=', 'client_service_updates.responsible_user_id')
+            ->where('client_services.service_id', $service->id)
+            ->orderBy('clients.name')
+            ->get([
+                'client_service_updates.id',
+                'client_service_updates.responsible_user_id',
+                'client_service_updates.cadence',
+                'client_service_updates.contact',
+                'client_service_updates.report_url',
+                'client_service_updates.notes',
+                'client_service_updates.updated_at',
+                'client_services.client_id',
+                'clients.name as client_name',
+                'users.name as responsible_name',
+            ]);
+
+        $clientIds = $rows->pluck('client_id')->filter()->values();
+        $lastTasks = $clientIds->isEmpty()
+            ? collect()
+            : DB::table('tasks')
+                ->where('service_id', $service->id)
+                ->where('status', 'done')
+                ->whereIn('client_id', $clientIds)
+                ->orderByDesc('updated_at')
+                ->get(['id', 'title', 'client_id', 'updated_at'])
+                ->unique('client_id')
+                ->keyBy('client_id');
+
+        return $rows->map(function ($row) use ($lastTasks, $service) {
+            $task = $lastTasks->get($row->client_id);
+            $row->service_id = $service->id;
+            $row->service_name = $service->name;
+            $row->last_task_id = $task?->id;
+            $row->last_task_title = $task?->title;
+            $row->last_task_updated_at = $task?->updated_at;
+
+            return $row;
+        });
     }
 
     private function billingStats(): array

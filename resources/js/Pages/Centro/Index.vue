@@ -20,6 +20,7 @@ const props = defineProps({
     emailSettings: Object,
     numberings: Array,
     backupRuns: Array,
+    serviceName: String,
 });
 
 const editing = ref(null);
@@ -160,6 +161,10 @@ function optionsFor(field) {
 }
 
 function shouldShowField(field) {
+    if (isUpdatesSection.value) {
+        if (field.name === 'report_url') return showUpdateReport.value;
+        if (['cadence', 'contact'].includes(field.name)) return showUpdateNewsletter.value;
+    }
     if (props.section !== 'tasks') return true;
     if (['recurring_interval_value', 'recurring_interval_unit', 'recurring_mode', 'recurring_weekday', 'recurring_month_day'].includes(field.name)) {
         return Boolean(form.recurring_enabled) && form.task_type !== 'meeting';
@@ -409,6 +414,33 @@ const userRows = computed(() => props.rows.filter((row) => userRoleFilter.value 
 const usersByRole = computed(() => roleOrder
     .map((role) => ({ role, rows: userRows.value.filter((row) => (row.role || 'guest') === role) }))
     .filter((group) => group.rows.length));
+
+const isUpdatesSection = computed(() => props.section?.startsWith('updates-'));
+const showUpdateReport = computed(() => props.serviceName === 'ADV');
+const showUpdateNewsletter = computed(() => props.serviceName === 'NEWSLETTER');
+const updateRows = computed(() => props.rows || []);
+const cadenceLabels = {
+    on_request: 'Su richiesta',
+    weekly: 'Settimanale',
+    biweekly: 'Bisettimanale',
+    monthly: 'Mensile',
+};
+
+function openServiceUpdate(row) {
+    if (row.id) {
+        editRow(row);
+        return;
+    }
+
+    openCreate({
+        client_id: row.client_id,
+        responsible_user_id: row.responsible_user_id || '',
+        cadence: row.cadence || '',
+        contact: row.contact || '',
+        report_url: row.report_url || '',
+        notes: row.notes || '',
+    });
+}
 
 const taskRows = computed(() => props.rows.filter((row) => {
     const search = taskSearch.value.trim().toLowerCase();
@@ -1601,6 +1633,80 @@ function tasksForDay(date) {
                         </div>
                     </form>
                 </section>
+            </div>
+        </div>
+
+        <div v-else-if="isUpdatesSection" class="py-8">
+            <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
+                <div class="rounded-md border border-gray-200 bg-white p-5 shadow-sm">
+                    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h3 class="text-base font-semibold text-gray-900">{{ updateRows.length }} clienti</h3>
+                            <p class="mt-1 text-sm text-gray-500">Clienti con il servizio {{ serviceName }} attivo.</p>
+                        </div>
+                    </div>
+
+                    <div v-if="updateRows.length" class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-3 py-3 text-left font-semibold text-gray-600">Cliente</th>
+                                    <th class="px-3 py-3 text-left font-semibold text-gray-600">Ultimo aggiornamento</th>
+                                    <th class="px-3 py-3 text-left font-semibold text-gray-600">Note</th>
+                                    <th v-if="showUpdateReport" class="px-3 py-3 text-left font-semibold text-gray-600">Report</th>
+                                    <th v-if="showUpdateNewsletter" class="px-3 py-3 text-left font-semibold text-gray-600">Cadenza</th>
+                                    <th v-if="showUpdateNewsletter" class="px-3 py-3 text-left font-semibold text-gray-600">Contatto</th>
+                                    <th class="px-3 py-3 text-left font-semibold text-gray-600">Responsabile</th>
+                                    <th class="px-3 py-3 text-right font-semibold text-gray-600">Azioni</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <tr v-for="row in updateRows" :key="`${row.client_id}-${row.id || 'new'}`" class="hover:bg-gray-50">
+                                    <td class="px-3 py-3">
+                                        <Link :href="route('clients.show', row.client_id)" class="font-medium text-gray-900 hover:text-indigo-600">
+                                            {{ row.client_name }}
+                                        </Link>
+                                    </td>
+                                    <td class="px-3 py-3">
+                                        <Link v-if="row.last_task_id" :href="route('tasks.show', row.last_task_id)" class="hover:text-indigo-600">
+                                            <span class="block max-w-[280px] truncate text-sm font-medium text-gray-800">{{ row.last_task_title }}</span>
+                                            <span class="text-xs text-gray-500">{{ dateIt(row.last_task_updated_at) }}</span>
+                                        </Link>
+                                        <span v-else class="text-xs italic text-gray-500">Nessun aggiornamento</span>
+                                    </td>
+                                    <td class="px-3 py-3">
+                                        <span v-if="row.notes" class="line-clamp-2 max-w-[320px] text-gray-600">{{ row.notes }}</span>
+                                        <span v-else class="text-xs italic text-gray-400">Aggiungi note...</span>
+                                    </td>
+                                    <td v-if="showUpdateReport" class="px-3 py-3">
+                                        <a v-if="row.report_url" :href="row.report_url" target="_blank" rel="noreferrer" class="max-w-[220px] truncate text-indigo-600 hover:text-indigo-500">
+                                            Apri report
+                                        </a>
+                                        <span v-else class="text-xs text-gray-400">-</span>
+                                    </td>
+                                    <td v-if="showUpdateNewsletter" class="px-3 py-3">
+                                        {{ cadenceLabels[row.cadence] || row.cadence || '-' }}
+                                    </td>
+                                    <td v-if="showUpdateNewsletter" class="px-3 py-3">
+                                        {{ row.contact || '-' }}
+                                    </td>
+                                    <td class="px-3 py-3">
+                                        {{ row.responsible_name || 'Nessuno' }}
+                                    </td>
+                                    <td class="px-3 py-3 text-right">
+                                        <button type="button" class="text-sm font-medium text-indigo-600 hover:text-indigo-500" @click="openServiceUpdate(row)">
+                                            {{ row.id ? 'Modifica' : 'Aggiorna' }}
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div v-else class="rounded-md border border-dashed border-gray-300 bg-white px-5 py-12 text-center text-sm text-gray-500">
+                        Nessun cliente con questo servizio attivo.
+                    </div>
+                </div>
             </div>
         </div>
 
