@@ -142,7 +142,7 @@ const createButtonLabel = computed(() => ({
 
 const formTitle = computed(() => {
     if (props.section === 'tasks' && !editing.value) {
-        return `Nuova ${taskCreateTypeLabels[form.task_type] || 'Task'}`;
+        return `Nuovo ${taskCreateTypeLabels[form.task_type] || 'Task'}`;
     }
 
     return editing.value ? `Modifica ${createButtonLabel.value.replace(/^Nuovo |^Nuova /, '').toLowerCase()}` : createButtonLabel.value;
