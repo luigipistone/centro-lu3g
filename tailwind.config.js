@@ -13,7 +13,7 @@ export default {
     theme: {
         extend: {
             fontFamily: {
-                sans: ['Figtree', ...defaultTheme.fontFamily.sans],
+                sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'SF Pro Text', ...defaultTheme.fontFamily.sans],
             },
         },
     },
