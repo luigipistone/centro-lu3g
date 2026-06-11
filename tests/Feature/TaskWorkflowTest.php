@@ -124,4 +124,62 @@ class TaskWorkflowTest extends TestCase
             'user_id' => $follower->id,
         ]);
     }
+
+    public function test_task_detail_route_uses_id_and_section_correctly(): void
+    {
+        $user = User::factory()->create();
+        $taskId = (string) Str::uuid();
+
+        DB::table('tasks')->insert([
+            'id' => $taskId,
+            'title' => 'Task dettaglio',
+            'priority' => 'medium',
+            'status' => 'todo',
+            'task_type' => 'ongoing',
+            'created_by' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->get("/tasks/{$taskId}")
+            ->assertOk();
+    }
+
+    public function test_task_update_route_uses_id_and_section_correctly(): void
+    {
+        $user = User::factory()->create();
+        $taskId = (string) Str::uuid();
+
+        DB::table('tasks')->insert([
+            'id' => $taskId,
+            'title' => 'Task da modificare',
+            'priority' => 'medium',
+            'status' => 'todo',
+            'task_type' => 'ongoing',
+            'created_by' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->put("/tasks/{$taskId}", [
+                'title' => 'Task modificata',
+                'task_type' => 'ongoing',
+                'status' => 'in_progress',
+                'priority' => 'high',
+                'start_date' => '2026-06-12',
+                'recurring_enabled' => false,
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('tasks', [
+            'id' => $taskId,
+            'title' => 'Task modificata',
+            'status' => 'in_progress',
+            'priority' => 'high',
+        ]);
+    }
 }

@@ -169,8 +169,9 @@ class CentroPageController extends Controller
         ]);
     }
 
-    public function show(string $section, string $id): Response
+    public function show(Request $request, string $id): Response
     {
+        $section = $request->route('section');
         $config = $this->config($section);
         $record = DB::table($config['table'])->where('id', $id)->first();
         abort_if(! $record, 404);
@@ -254,8 +255,10 @@ class CentroPageController extends Controller
         return back()->with('status', 'Creato.');
     }
 
-    public function update(Request $request, string $section, string $id): RedirectResponse
+    public function update(Request $request, string $id): RedirectResponse
     {
+        $section = $request->route('section');
+
         if ($section === 'users') {
             return $this->updateUser($request, $id);
         }
@@ -281,8 +284,10 @@ class CentroPageController extends Controller
         return back()->with('status', 'Aggiornato.');
     }
 
-    public function destroy(string $section, string $id): RedirectResponse
+    public function destroy(Request $request, string $id): RedirectResponse
     {
+        $section = $request->route('section');
+
         if ($section === 'users') {
             User::query()->whereKey($id)->delete();
 
