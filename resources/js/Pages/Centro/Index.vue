@@ -40,6 +40,7 @@ const taskType = ref('all');
 const clientSearch = ref('');
 const clientService = ref('all');
 const settingsTab = ref('personalizzazione');
+const userRoleFilter = ref('all');
 
 const docSettingDefaults = {
     company_name: 'Centro LU3G',
@@ -375,6 +376,39 @@ function plainText(value) {
 }
 
 const projectRows = computed(() => props.rows);
+
+const roleLabels = {
+    superadmin: 'Superadmin',
+    admin: 'Admin',
+    editor: 'Editor',
+    guest: 'Guest',
+};
+
+const roleOrder = ['superadmin', 'admin', 'editor', 'guest'];
+
+function roleClass(role) {
+    return {
+        superadmin: 'bg-red-100 text-red-700',
+        admin: 'bg-blue-100 text-blue-700',
+        editor: 'bg-green-100 text-green-700',
+        guest: 'bg-gray-100 text-gray-600',
+    }[role] || 'bg-gray-100 text-gray-600';
+}
+
+function userInitials(user) {
+    const source = user.name || user.email || '?';
+    return source
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part.charAt(0).toUpperCase())
+        .join('');
+}
+
+const userRows = computed(() => props.rows.filter((row) => userRoleFilter.value === 'all' || (row.role || 'guest') === userRoleFilter.value));
+const usersByRole = computed(() => roleOrder
+    .map((role) => ({ role, rows: userRows.value.filter((row) => (row.role || 'guest') === role) }))
+    .filter((group) => group.rows.length));
 
 const taskRows = computed(() => props.rows.filter((row) => {
     const search = taskSearch.value.trim().toLowerCase();
@@ -806,6 +840,67 @@ function tasksForDay(date) {
                         Nessun progetto
                     </div>
                 </section>
+            </div>
+        </div>
+
+        <div v-else-if="section === 'users'" class="py-8">
+            <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            :class="['rounded-md px-3 py-2 text-sm font-medium transition', userRoleFilter === 'all' ? 'bg-gray-900 text-white' : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50']"
+                            @click="userRoleFilter = 'all'"
+                        >
+                            Tutti ({{ rows.length }})
+                        </button>
+                        <button
+                            v-for="role in roleOrder"
+                            :key="role"
+                            type="button"
+                            :class="['rounded-md px-3 py-2 text-sm font-medium transition', userRoleFilter === role ? 'bg-gray-900 text-white' : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50']"
+                            @click="userRoleFilter = role"
+                        >
+                            {{ roleLabels[role] }} ({{ rows.filter((user) => (user.role || 'guest') === role).length }})
+                        </button>
+                    </div>
+                    <button type="button" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500" @click="openCreate()">
+                        Crea Utente
+                    </button>
+                </div>
+
+                <div v-if="usersByRole.length" class="space-y-6">
+                    <section v-for="group in usersByRole" :key="group.role" class="space-y-3">
+                        <div class="flex items-center gap-3">
+                            <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">{{ roleLabels[group.role] }}</h3>
+                            <span :class="['rounded px-2 py-0.5 text-xs font-medium', roleClass(group.role)]">{{ group.rows.length }}</span>
+                        </div>
+
+                        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                            <article
+                                v-for="user in group.rows"
+                                :key="user.id"
+                                class="rounded-md border border-gray-200 bg-white p-4 text-center shadow-sm transition hover:border-indigo-200 hover:shadow"
+                            >
+                                <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-base font-semibold text-gray-700">
+                                    {{ userInitials(user) }}
+                                </div>
+                                <div class="mt-3 min-w-0">
+                                    <h4 class="truncate text-sm font-semibold text-gray-900">{{ user.name || 'Senza nome' }}</h4>
+                                    <p class="mt-1 truncate text-xs text-gray-500">{{ user.email }}</p>
+                                </div>
+                                <div class="mt-3 flex items-center justify-center gap-3">
+                                    <span :class="['rounded px-2 py-0.5 text-[11px] font-medium', roleClass(user.role || 'guest')]">{{ user.role || 'guest' }}</span>
+                                    <button type="button" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(user)">Modifica</button>
+                                </div>
+                            </article>
+                        </div>
+                    </section>
+                </div>
+
+                <div v-else class="rounded-md border border-dashed border-gray-300 bg-white px-5 py-12 text-center text-sm text-gray-500">
+                    Nessun utente trovato.
+                </div>
             </div>
         </div>
 

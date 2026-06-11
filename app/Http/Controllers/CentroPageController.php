@@ -16,7 +16,7 @@ use Inertia\Response;
 
 class CentroPageController extends Controller
 {
-    public function dashboard(): Response
+    public function dashboard(Request $request): Response
     {
         return Inertia::render('Dashboard', [
             'stats' => [
@@ -26,7 +26,36 @@ class CentroPageController extends Controller
                 'urgentTasks' => DB::table('tasks')->where('priority', 'urgent')->where('status', '!=', 'done')->count(),
             ],
             'recentClients' => DB::table('clients')->latest()->limit(6)->get(['id', 'name', 'email', 'phone', 'created_at']),
-            'upcomingTasks' => DB::table('tasks')->whereNotNull('due_date')->orderBy('due_date')->limit(8)->get(['id', 'title', 'status', 'priority', 'due_date']),
+            'upcomingTasks' => DB::table('tasks')
+                ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
+                ->whereNull('tasks.parent_task_id')
+                ->where('tasks.status', '!=', 'done')
+                ->whereNotNull('tasks.due_date')
+                ->orderBy('tasks.due_date')
+                ->limit(6)
+                ->get(['tasks.id', 'tasks.title', 'tasks.status', 'tasks.priority', 'tasks.due_date', 'clients.name as client_name']),
+            'urgentTasks' => DB::table('tasks')
+                ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
+                ->whereNull('tasks.parent_task_id')
+                ->where('tasks.priority', 'urgent')
+                ->where('tasks.status', '!=', 'done')
+                ->orderBy('tasks.due_date')
+                ->limit(6)
+                ->get(['tasks.id', 'tasks.title', 'tasks.status', 'tasks.priority', 'tasks.due_date', 'clients.name as client_name']),
+            'myTasks' => DB::table('tasks')
+                ->join('task_assignees', 'task_assignees.task_id', '=', 'tasks.id')
+                ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
+                ->where('task_assignees.user_id', $request->user()->id)
+                ->where('tasks.status', '!=', 'done')
+                ->orderBy('tasks.due_date')
+                ->limit(6)
+                ->get(['tasks.id', 'tasks.title', 'tasks.status', 'tasks.priority', 'tasks.due_date', 'clients.name as client_name']),
+            'activeProjects' => DB::table('projects')
+                ->leftJoin('clients', 'clients.id', '=', 'projects.client_id')
+                ->where('projects.status', 'active')
+                ->latest('projects.updated_at')
+                ->limit(6)
+                ->get(['projects.id', 'projects.name', 'projects.color', 'clients.name as client_name']),
         ]);
     }
 
