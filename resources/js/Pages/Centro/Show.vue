@@ -749,7 +749,7 @@ function remainingAmount() {
             </div>
         </div>
 
-        <div class="py-8">
+        <div class="detail-page py-8">
             <div v-if="section === 'billing'" class="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
                 <div class="flex flex-wrap items-start justify-between gap-4 rounded-md bg-white p-5 shadow-sm">
                     <div>
