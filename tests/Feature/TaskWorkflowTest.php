@@ -244,4 +244,37 @@ class TaskWorkflowTest extends TestCase
             'status' => 'todo',
         ]);
     }
+
+    public function test_task_schedule_can_be_updated_from_calendar(): void
+    {
+        $user = User::factory()->create();
+        $taskId = (string) Str::uuid();
+
+        DB::table('tasks')->insert([
+            'id' => $taskId,
+            'title' => 'Task calendario',
+            'priority' => 'medium',
+            'status' => 'todo',
+            'task_type' => 'project',
+            'start_date' => '2026-06-10',
+            'due_date' => '2026-06-12',
+            'created_by' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->patch("/tasks/{$taskId}/schedule", [
+                'start_date' => '2026-06-20',
+                'due_date' => '2026-06-22',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('tasks', [
+            'id' => $taskId,
+            'start_date' => '2026-06-20',
+            'due_date' => '2026-06-22',
+        ]);
+    }
 }

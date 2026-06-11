@@ -1621,6 +1621,32 @@ class CentroPageController extends Controller
         return redirect()->route('tasks.show', $newTaskId)->with('status', 'Task duplicata.');
     }
 
+    public function updateTaskSchedule(Request $request, string $id): RedirectResponse
+    {
+        $task = DB::table('tasks')->where('id', $id)->first();
+        abort_if(! $task, 404);
+
+        $payload = $request->validate([
+            'due_date' => ['required', 'date'],
+            'start_date' => ['nullable', 'date'],
+        ]);
+
+        DB::table('tasks')->where('id', $id)->update([
+            'due_date' => $payload['due_date'],
+            'start_date' => $payload['start_date'] ?? null,
+            'updated_at' => now(),
+        ]);
+
+        $this->notifyTaskPeople(
+            $id,
+            $request->user()->id,
+            'task_schedule',
+            $request->user()->name.' ha spostato "'.$task->title.'" al '.$payload['due_date'].'.',
+        );
+
+        return back()->with('status', 'Scadenza task aggiornata.');
+    }
+
     private function createNextRecurringTask(object $task, string $userId): string
     {
         $nextDueDate = $this->nextRecurringTaskDate($task);

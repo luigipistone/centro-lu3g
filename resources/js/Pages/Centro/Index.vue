@@ -38,6 +38,9 @@ const currentCalendarDate = ref(new Date());
 const calendarType = ref('all');
 const compactWeekend = ref(false);
 const calendarCreateDate = ref(null);
+const calendarDraggedTask = ref(null);
+const calendarDropDate = ref(null);
+const calendarExpanded = ref(false);
 const taskSearch = ref('');
 const taskStatus = ref('all');
 const taskPriority = ref('all');
@@ -715,6 +718,49 @@ function toggleTaskDone(task) {
     }, { preserveScroll: true });
 }
 
+function daysBetween(start, end) {
+    const startDate = new Date(`${start}T00:00:00`);
+    const endDate = new Date(`${end}T00:00:00`);
+    return Math.round((endDate.getTime() - startDate.getTime()) / 86400000);
+}
+
+function addDays(date, days) {
+    const next = new Date(`${date}T00:00:00`);
+    next.setDate(next.getDate() + days);
+    return formatCalendarDate(next.getFullYear(), next.getMonth(), next.getDate());
+}
+
+function startCalendarDrag(task) {
+    calendarDraggedTask.value = task;
+}
+
+function endCalendarDrag() {
+    calendarDraggedTask.value = null;
+    calendarDropDate.value = null;
+}
+
+function moveCalendarTask(date) {
+    const task = calendarDraggedTask.value;
+    if (!task || !task.due_date) return;
+
+    const start = task.start_date && task.start_date <= task.due_date ? task.start_date : task.due_date;
+    const duration = start !== task.due_date ? daysBetween(start, task.due_date) : 0;
+    const payload = {
+        due_date: duration > 0 ? addDays(date, duration) : date,
+        start_date: duration > 0 ? date : null,
+    };
+
+    if (payload.due_date === task.due_date && (payload.start_date || null) === (task.start_date || null)) {
+        endCalendarDrag();
+        return;
+    }
+
+    router.patch(route('tasks.schedule.update', task.id), payload, {
+        preserveScroll: true,
+        onFinish: endCalendarDrag,
+    });
+}
+
 function taskSpansDate(row, date) {
     if (!row.due_date) return false;
 
@@ -752,6 +798,11 @@ function tasksForDay(date) {
         .filter((row) => calendarType.value === 'all' || (row.task_type || 'task') === calendarType.value)
         .map((row) => ({ ...row, spanRole: taskSpanRole(row, date) }))
         .sort((a, b) => `${a.due_time || '99:99'}${a.title}`.localeCompare(`${b.due_time || '99:99'}${b.title}`));
+}
+
+function visibleCalendarTasks(cell) {
+    if (calendarExpanded.value) return cell.tasks;
+    return cell.tasks.slice(0, 4);
 }
 </script>
 
@@ -945,6 +996,14 @@ function tasksForDay(date) {
                             <input v-model="compactWeekend" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
                             Weekend compatto
                         </label>
+                        <button
+                            v-if="calendarExpanded"
+                            type="button"
+                            class="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                            @click="calendarExpanded = false"
+                        >
+                            Compatta
+                        </button>
                     </div>
                 </div>
 
@@ -967,8 +1026,13 @@ function tasksForDay(date) {
                                 'group min-h-[170px] bg-white p-2',
                                 cell.empty ? 'bg-gray-50/70' : '',
                                 cell.today ? 'ring-2 ring-inset ring-indigo-500' : '',
+                                calendarDropDate === cell.date ? 'bg-indigo-50' : '',
+                                calendarDraggedTask && !cell.empty ? 'outline outline-1 outline-transparent transition hover:outline-indigo-200' : '',
                                 compactWeekend && cell.weekend ? 'min-h-[170px] px-1' : '',
                             ]"
+                            @dragover.prevent="!cell.empty && (calendarDropDate = cell.date)"
+                            @dragleave="calendarDropDate === cell.date && (calendarDropDate = null)"
+                            @drop.prevent="!cell.empty && moveCalendarTask(cell.date)"
                         >
                             <template v-if="!cell.empty">
                                 <div class="mb-2 flex items-center justify-between">
@@ -1024,13 +1088,17 @@ function tasksForDay(date) {
 
                                 <div v-else class="space-y-1.5">
                                     <div
-                                        v-for="task in cell.tasks.slice(0, 4)"
+                                        v-for="task in visibleCalendarTasks(cell)"
                                         :key="task.id"
                                         :class="[
-                                            'border px-2 py-1.5 text-xs transition hover:border-indigo-300 hover:shadow-sm',
+                                            'cursor-grab border px-2 py-1.5 text-xs transition hover:border-indigo-300 hover:shadow-sm active:cursor-grabbing',
                                             taskTypeClass(task.task_type),
                                             taskSpanClass(task),
+                                            calendarDraggedTask?.id === task.id ? 'opacity-50' : '',
                                         ]"
+                                        draggable="true"
+                                        @dragstart="startCalendarDrag(task)"
+                                        @dragend="endCalendarDrag"
                                     >
                                         <div class="flex items-start gap-1.5">
                                             <button
@@ -1054,9 +1122,14 @@ function tasksForDay(date) {
                                             </div>
                                         </div>
                                     </div>
-                                    <div v-if="cell.tasks.length > 4" class="rounded px-2 py-1 text-[11px] font-medium text-gray-500">
+                                    <button
+                                        v-if="!calendarExpanded && cell.tasks.length > 4"
+                                        type="button"
+                                        class="w-full rounded px-2 py-1 text-left text-[11px] font-medium text-gray-500 hover:bg-gray-50 hover:text-indigo-600"
+                                        @click="calendarExpanded = true"
+                                    >
                                         altre {{ cell.tasks.length - 4 }}
-                                    </div>
+                                    </button>
                                 </div>
                             </template>
                         </div>
