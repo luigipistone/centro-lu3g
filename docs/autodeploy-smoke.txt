@@ -1,0 +1,3 @@
+Plesk autodeploy smoke marker.
+
+Created for webhook verification on 2026-06-11 17:48 Europe/Rome.
