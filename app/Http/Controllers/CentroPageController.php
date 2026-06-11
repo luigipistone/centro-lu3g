@@ -160,7 +160,7 @@ class CentroPageController extends Controller
                 $row = $saved[$widget['widget_type']] ?? null;
                 $legacyProjectStat = $saved['stat_projects'] ?? null;
 
-                if ($widget['widget_type'] === 'active_projects' && $legacyProjectStat?->visible && !($row?->visible)) {
+                if ($widget['widget_type'] === 'active_projects' && $legacyProjectStat && !($row?->visible)) {
                     $row = (object) [
                         'position' => $legacyProjectStat->position,
                         'col_span' => max((int) ($legacyProjectStat->col_span ?? 1), (int) ($row->col_span ?? $widget['col_span'])),

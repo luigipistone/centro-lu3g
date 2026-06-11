@@ -159,7 +159,7 @@ class DashboardWidgetsTest extends TestCase
                 'position' => 1,
                 'size' => 'small',
                 'col_span' => 1,
-                'visible' => true,
+                'visible' => false,
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
