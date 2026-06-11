@@ -478,7 +478,7 @@ watch(
 
                     <div
                         v-if="widgetMenuOpen"
-                        class="absolute right-0 top-12 z-[2147483647] w-80 overflow-hidden rounded-2xl border border-white bg-white p-2 shadow-[0_24px_70px_rgba(28,42,73,0.14)]"
+                        class="app-popover absolute right-0 top-12 z-[2147483647] w-80 overflow-hidden rounded-2xl border border-white bg-white p-2 shadow-[0_24px_70px_rgba(28,42,73,0.14)]"
                     >
                         <div class="px-2 pb-2 pt-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Widget disponibili</div>
                         <button
@@ -518,7 +518,7 @@ watch(
                         :key="widget.widget_type"
                         :data-widget-type="widget.widget_type"
                         :class="[
-                            'app-card group relative flex min-h-[154px] flex-col overflow-hidden transition',
+                            'app-card widget-card group relative flex min-h-[154px] flex-col overflow-hidden transition',
                             colSpanClass(widget),
                             draggingType === widget.widget_type ? 'opacity-45 ring-2 ring-indigo-300' : '',
                             draggingType && dragOverIndex === visibleWidgets.findIndex((item) => item.widget_type === widget.widget_type) ? 'ring-2 ring-indigo-300' : '',
