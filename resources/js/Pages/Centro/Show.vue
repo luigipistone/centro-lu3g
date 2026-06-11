@@ -1,6 +1,21 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import {
+    Check,
+    Copy,
+    Download,
+    FileText,
+    Mail,
+    Pencil,
+    Plus,
+    Printer,
+    Save,
+    Send,
+    Trash2,
+    Undo2,
+    X,
+} from '@lucide/vue';
 import { ref } from 'vue';
 
 const props = defineProps({
@@ -578,48 +593,59 @@ function remainingAmount() {
                     <button
                         type="button"
                         :class="[
-                            'rounded-md px-3 py-2 text-sm font-semibold shadow-sm',
+                            'btn',
                             record.status === 'done'
                                 ? 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
                                 : 'bg-indigo-600 text-white hover:bg-indigo-500',
                         ]"
                         @click="toggleTaskComplete"
                     >
+                        <Undo2 v-if="record.status === 'done'" class="h-4 w-4" :stroke-width="1.7" />
+                        <Check v-else class="h-4 w-4" :stroke-width="1.7" />
                         {{ record.status === 'done' ? 'Riapri' : 'Completa task' }}
                     </button>
-                    <button type="button" class="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="duplicateTask">
+                    <button type="button" class="btn btn-outline" @click="duplicateTask">
+                        <Copy class="h-4 w-4" :stroke-width="1.7" />
                         Duplica
                     </button>
-                    <button type="button" class="rounded-md border border-red-100 bg-white px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50" @click="deleteTaskFromDetail">
+                    <button type="button" class="btn btn-danger" @click="deleteTaskFromDetail">
+                        <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                         Elimina
                     </button>
                 </div>
                 <div v-else-if="section === 'clients'" class="flex flex-wrap justify-end gap-2">
                     <template v-if="editingClient">
-                        <button type="button" class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50" :disabled="clientForm.processing" @click="saveClientDetails">
+                        <button type="button" class="btn btn-primary" :disabled="clientForm.processing" @click="saveClientDetails">
+                            <Save class="h-4 w-4" :stroke-width="1.7" />
                             Salva
                         </button>
-                        <button type="button" class="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="editingClient = false">
+                        <button type="button" class="btn btn-outline" @click="editingClient = false">
+                            <X class="h-4 w-4" :stroke-width="1.7" />
                             Annulla
                         </button>
                     </template>
-                    <button v-else type="button" class="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="editingClient = true">
+                    <button v-else type="button" class="btn btn-outline" @click="editingClient = true">
+                        <Pencil class="h-4 w-4" :stroke-width="1.7" />
                         Modifica
                     </button>
                 </div>
                 <div v-else-if="section === 'projects'" class="flex flex-wrap justify-end gap-2">
                     <template v-if="editingProject">
-                        <button type="button" class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50" :disabled="projectForm.processing" @click="saveProjectDetails">
+                        <button type="button" class="btn btn-primary" :disabled="projectForm.processing" @click="saveProjectDetails">
+                            <Save class="h-4 w-4" :stroke-width="1.7" />
                             Salva
                         </button>
-                        <button type="button" class="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="editingProject = false">
+                        <button type="button" class="btn btn-outline" @click="editingProject = false">
+                            <X class="h-4 w-4" :stroke-width="1.7" />
                             Annulla
                         </button>
                     </template>
-                    <button v-else type="button" class="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="editingProject = true">
+                    <button v-else type="button" class="btn btn-outline" @click="editingProject = true">
+                        <Pencil class="h-4 w-4" :stroke-width="1.7" />
                         Modifica
                     </button>
-                    <button type="button" class="rounded-md border border-red-100 bg-white px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50" @click="deleteProjectFromDetail">
+                    <button type="button" class="btn btn-danger" @click="deleteProjectFromDetail">
+                        <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                         Elimina
                     </button>
                 </div>
@@ -636,18 +662,21 @@ function remainingAmount() {
                 </p>
                 <input v-model="confirmText" class="form-control font-mono" :placeholder="confirmAction.keyword" autocomplete="off" />
                 <div class="mt-5 flex justify-end gap-2">
-                    <button type="button" class="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="closeConfirm">
+                    <button type="button" class="btn btn-outline" @click="closeConfirm">
+                        <X class="h-4 w-4" :stroke-width="1.7" />
                         Annulla
                     </button>
                     <button
                         type="button"
                         :class="[
-                            'rounded-md px-4 py-2 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50',
+                            'btn text-white',
                             confirmAction.danger ? 'bg-red-600 hover:bg-red-500' : 'bg-indigo-600 hover:bg-indigo-500',
                         ]"
                         :disabled="confirmText !== confirmAction.keyword"
                         @click="runConfirmAction"
                     >
+                        <Trash2 v-if="confirmAction.danger" class="h-4 w-4" :stroke-width="1.7" />
+                        <Check v-else class="h-4 w-4" :stroke-width="1.7" />
                         {{ confirmAction.button }}
                     </button>
                 </div>
@@ -668,15 +697,15 @@ function remainingAmount() {
                         </p>
                     </div>
                     <div class="flex flex-wrap gap-2">
-                        <button type="button" class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500" @click="saveDocument">Salva</button>
-                        <button v-if="!record.number" type="button" class="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100" @click="issueDocument">Emetti</button>
-                        <a :href="route('billing.pdf', record.id)" class="rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Scarica PDF</a>
-                        <a v-if="['fattura', 'nota_credito'].includes(record.doc_type)" :href="route('billing.xml', record.id)" class="rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Scarica XML</a>
-                        <button type="button" class="rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="printDocument">Stampa</button>
-                        <button type="button" class="rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="duplicateDocument">Duplica</button>
-                        <button v-if="record.doc_type === 'preventivo'" type="button" class="rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="convertDocument('fattura')">Converti fattura</button>
-                        <button v-if="record.doc_type === 'proforma'" type="button" class="rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="convertDocument('fattura')">Converti fattura</button>
-                        <button v-if="record.doc_type === 'fattura'" type="button" class="rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="convertDocument('nota_credito')">Nota credito</button>
+                        <button type="button" class="btn btn-primary" @click="saveDocument"><Save class="h-4 w-4" :stroke-width="1.7" />Salva</button>
+                        <button v-if="!record.number" type="button" class="btn border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100" @click="issueDocument"><Send class="h-4 w-4" :stroke-width="1.7" />Emetti</button>
+                        <a :href="route('billing.pdf', record.id)" class="btn btn-outline"><Download class="h-4 w-4" :stroke-width="1.7" />PDF</a>
+                        <a v-if="['fattura', 'nota_credito'].includes(record.doc_type)" :href="route('billing.xml', record.id)" class="btn btn-outline"><FileText class="h-4 w-4" :stroke-width="1.7" />XML</a>
+                        <button type="button" class="btn btn-outline" @click="printDocument"><Printer class="h-4 w-4" :stroke-width="1.7" />Stampa</button>
+                        <button type="button" class="btn btn-outline" @click="duplicateDocument"><Copy class="h-4 w-4" :stroke-width="1.7" />Duplica</button>
+                        <button v-if="record.doc_type === 'preventivo'" type="button" class="btn btn-outline" @click="convertDocument('fattura')">Converti fattura</button>
+                        <button v-if="record.doc_type === 'proforma'" type="button" class="btn btn-outline" @click="convertDocument('fattura')">Converti fattura</button>
+                        <button v-if="record.doc_type === 'fattura'" type="button" class="btn btn-outline" @click="convertDocument('nota_credito')">Nota credito</button>
                     </div>
                 </div>
 

@@ -1,6 +1,25 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
+import {
+    Briefcase,
+    CalendarClock,
+    Check,
+    ChevronLeft,
+    ChevronRight,
+    FileText,
+    Filter,
+    Pencil,
+    Plus,
+    RefreshCw,
+    RotateCcw,
+    Save,
+    Search,
+    Trash2,
+    UserPlus,
+    Users,
+    X,
+} from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -823,9 +842,9 @@ function visibleCalendarTasks(cell) {
             <div class="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-md bg-white shadow-xl">
                 <div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
                     <h3 class="font-semibold text-gray-900">{{ formTitle }}</h3>
-                    <button type="button" class="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700" @click="resetForm">
+                    <button type="button" class="icon-btn" @click="resetForm">
                         <span class="sr-only">Chiudi</span>
-                        x
+                        <X class="h-4 w-4" :stroke-width="1.7" />
                     </button>
                 </div>
 
@@ -841,7 +860,7 @@ function visibleCalendarTasks(cell) {
                             ]"
                             @click="setTaskFormType('project')"
                         >
-                            <span class="block">Task</span>
+                            <span class="flex items-center gap-2"><Briefcase class="h-4 w-4" :stroke-width="1.7" />Task</span>
                             <span class="mt-0.5 block text-xs font-normal text-gray-500">Attivita di progetto</span>
                         </button>
                         <button
@@ -854,7 +873,7 @@ function visibleCalendarTasks(cell) {
                             ]"
                             @click="setTaskFormType('ongoing')"
                         >
-                            <span class="block">Continuativa</span>
+                            <span class="flex items-center gap-2"><RefreshCw class="h-4 w-4" :stroke-width="1.7" />Continuativa</span>
                             <span class="mt-0.5 block text-xs font-normal text-gray-500">Ricorrente o operativa</span>
                         </button>
                         <button
@@ -867,7 +886,7 @@ function visibleCalendarTasks(cell) {
                             ]"
                             @click="setTaskFormType('meeting')"
                         >
-                            <span class="block">Meeting</span>
+                            <span class="flex items-center gap-2"><CalendarClock class="h-4 w-4" :stroke-width="1.7" />Meeting</span>
                             <span class="mt-0.5 block text-xs font-normal text-gray-500">Data, ora e luogo</span>
                         </button>
                     </div>
@@ -948,8 +967,10 @@ function visibleCalendarTasks(cell) {
                     </div>
 
                     <div class="flex justify-end gap-2 border-t border-gray-100 pt-4 md:col-span-3">
-                        <button type="button" class="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="resetForm">Annulla</button>
-                        <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50" :disabled="form.processing">
+                        <button type="button" class="btn btn-outline" @click="resetForm"><X class="h-4 w-4" :stroke-width="1.7" />Annulla</button>
+                        <button type="submit" class="btn btn-primary" :disabled="form.processing">
+                            <Save v-if="editing" class="h-4 w-4" :stroke-width="1.7" />
+                            <Plus v-else class="h-4 w-4" :stroke-width="1.7" />
                             {{ editing ? 'Salva modifiche' : 'Crea' }}
                         </button>
                     </div>
@@ -966,15 +987,17 @@ function visibleCalendarTasks(cell) {
                 </p>
                 <input v-model="deleteConfirmText" class="form-control font-mono" placeholder="ELIMINA" autocomplete="off" />
                 <div class="mt-5 flex justify-end gap-2">
-                    <button type="button" class="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="cancelDelete">
+                    <button type="button" class="btn btn-outline" @click="cancelDelete">
+                        <X class="h-4 w-4" :stroke-width="1.7" />
                         Annulla
                     </button>
                     <button
                         type="button"
-                        class="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        class="btn bg-red-600 text-white hover:bg-red-500"
                         :disabled="deleteConfirmText !== 'ELIMINA'"
                         @click="confirmDelete"
                     >
+                        <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                         Elimina
                     </button>
                 </div>
@@ -987,14 +1010,14 @@ function visibleCalendarTasks(cell) {
                     <div class="flex items-center gap-2">
                         <button type="button" class="rounded-md p-2 text-gray-500 hover:bg-white hover:text-gray-900" @click="changeMonth(-1)">
                             <span class="sr-only">Mese precedente</span>
-                            &lt;
+                            <ChevronLeft class="h-4 w-4" :stroke-width="1.7" />
                         </button>
                         <div class="min-w-[190px] text-center font-semibold text-gray-900">
                             {{ monthNames[calendarMonth] }} {{ calendarYear }}
                         </div>
                         <button type="button" class="rounded-md p-2 text-gray-500 hover:bg-white hover:text-gray-900" @click="changeMonth(1)">
                             <span class="sr-only">Mese successivo</span>
-                            &gt;
+                            <ChevronRight class="h-4 w-4" :stroke-width="1.7" />
                         </button>
                     </div>
 
@@ -1165,7 +1188,8 @@ function visibleCalendarTasks(cell) {
         <div v-else-if="section === 'projects'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <div class="flex items-center justify-end">
-                    <button type="button" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500" @click="openCreate()">
+                    <button type="button" class="btn btn-primary" @click="openCreate()">
+                        <Plus class="h-4 w-4" :stroke-width="1.7" />
                         Nuovo Progetto
                     </button>
                 </div>
@@ -1196,8 +1220,8 @@ function visibleCalendarTasks(cell) {
                             <span v-if="project.client_name" class="rounded-full border border-gray-200 px-2 py-0.5 text-xs text-gray-600">{{ project.client_name }}</span>
                             <span v-else class="text-xs text-gray-400">Nessun cliente</span>
                             <div class="flex items-center gap-3">
-                                <button type="button" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(project)">Modifica</button>
-                                <button type="button" class="text-xs font-medium text-red-600 hover:text-red-500" @click="remove(project)">Elimina</button>
+                                <button type="button" class="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(project)"><Pencil class="h-3.5 w-3.5" :stroke-width="1.7" />Modifica</button>
+                                <button type="button" class="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-500" @click="remove(project)"><Trash2 class="h-3.5 w-3.5" :stroke-width="1.7" />Elimina</button>
                             </div>
                         </div>
                     </article>
@@ -1230,7 +1254,8 @@ function visibleCalendarTasks(cell) {
                             {{ roleLabels[role] }} ({{ rows.filter((user) => (user.role || 'guest') === role).length }})
                         </button>
                     </div>
-                    <button type="button" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500" @click="openCreate()">
+                    <button type="button" class="btn btn-primary" @click="openCreate()">
+                        <UserPlus class="h-4 w-4" :stroke-width="1.7" />
                         Crea Utente
                     </button>
                 </div>
@@ -1257,8 +1282,8 @@ function visibleCalendarTasks(cell) {
                                 </div>
                                 <div class="mt-3 flex items-center justify-center gap-3">
                                     <span :class="['rounded px-2 py-0.5 text-[11px] font-medium', roleClass(user.role || 'guest')]">{{ user.role || 'guest' }}</span>
-                                    <button type="button" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(user)">Modifica</button>
-                                    <button type="button" class="text-xs font-medium text-red-600 hover:text-red-500" @click="remove(user)">Elimina</button>
+                                    <button type="button" class="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(user)"><Pencil class="h-3.5 w-3.5" :stroke-width="1.7" />Modifica</button>
+                                    <button type="button" class="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-500" @click="remove(user)"><Trash2 class="h-3.5 w-3.5" :stroke-width="1.7" />Elimina</button>
                                 </div>
                             </article>
                         </div>
@@ -1290,13 +1315,16 @@ function visibleCalendarTasks(cell) {
                 </div>
 
                 <div class="grid gap-3 md:grid-cols-[1fr_220px_auto_auto]">
-                    <input v-model="clientSearch" class="form-control mt-0" placeholder="Cerca per nome, ragione sociale, email, P.IVA o citta..." />
+                    <div class="relative">
+                        <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" :stroke-width="1.7" />
+                        <input v-model="clientSearch" class="form-control mt-0 pl-9" placeholder="Cerca per nome, ragione sociale, email, P.IVA o citta..." />
+                    </div>
                     <select v-model="clientService" class="form-control mt-0">
                         <option value="all">Tutti i servizi</option>
                         <option v-for="service in services" :key="service.id" :value="service.id">{{ service.name }}</option>
                     </select>
-                    <button type="button" class="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="clientSearch = ''; clientService = 'all'">Reset</button>
-                    <button type="button" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500" @click="openCreate()">Nuovo Cliente</button>
+                    <button type="button" class="btn btn-outline" @click="clientSearch = ''; clientService = 'all'"><RotateCcw class="h-4 w-4" :stroke-width="1.7" />Reset</button>
+                    <button type="button" class="btn btn-primary" @click="openCreate()"><Plus class="h-4 w-4" :stroke-width="1.7" />Nuovo Cliente</button>
                 </div>
 
                 <div class="grid gap-6">
@@ -1339,8 +1367,8 @@ function visibleCalendarTasks(cell) {
                                     <p v-if="client.legal_name && client.legal_name !== client.name" class="mt-0.5 truncate text-sm text-gray-500">{{ client.legal_name }}</p>
                                 </Link>
                                 <div class="flex shrink-0 items-center gap-3">
-                                    <button type="button" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(client)">Modifica</button>
-                                    <button type="button" class="text-xs font-medium text-red-600 hover:text-red-500" @click="remove(client)">Elimina</button>
+                                    <button type="button" class="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(client)"><Pencil class="h-3.5 w-3.5" :stroke-width="1.7" />Modifica</button>
+                                    <button type="button" class="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-500" @click="remove(client)"><Trash2 class="h-3.5 w-3.5" :stroke-width="1.7" />Elimina</button>
                                 </div>
                             </div>
 
@@ -1391,7 +1419,10 @@ function visibleCalendarTasks(cell) {
         <div v-else-if="section === 'tasks'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <div class="grid gap-3 md:grid-cols-[1fr_150px_150px_150px_auto_auto_auto_auto]">
-                    <input v-model="taskSearch" class="form-control mt-0" placeholder="Cerca task, cliente o progetto..." />
+                    <div class="relative">
+                        <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" :stroke-width="1.7" />
+                        <input v-model="taskSearch" class="form-control mt-0 pl-9" placeholder="Cerca task, cliente, progetto o servizio..." />
+                    </div>
                     <select v-model="taskStatus" class="form-control mt-0">
                         <option value="all">Tutti gli stati</option>
                         <option value="todo">Da fare</option>
@@ -1413,10 +1444,10 @@ function visibleCalendarTasks(cell) {
                         <option value="ongoing">Continuativa</option>
                         <option value="meeting">Meeting</option>
                     </select>
-                    <button type="button" class="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="taskSearch = ''; taskStatus = 'all'; taskPriority = 'all'; taskType = 'all'">Reset</button>
-                    <button type="button" class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500" @click="openCreate({ task_type: 'project' })">Task</button>
-                    <button type="button" class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100" @click="openCreate({ task_type: 'ongoing' })">Continuativa</button>
-                    <button type="button" class="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-700 hover:bg-violet-100" @click="openCreate({ task_type: 'meeting', due_time: '09:00' })">Meeting</button>
+                    <button type="button" class="btn btn-outline" @click="taskSearch = ''; taskStatus = 'all'; taskPriority = 'all'; taskType = 'all'"><RotateCcw class="h-4 w-4" :stroke-width="1.7" />Reset</button>
+                    <button type="button" class="btn btn-primary" @click="openCreate({ task_type: 'project' })"><Briefcase class="h-4 w-4" :stroke-width="1.7" />Task</button>
+                    <button type="button" class="btn border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100" @click="openCreate({ task_type: 'ongoing' })"><RefreshCw class="h-4 w-4" :stroke-width="1.7" />Continuativa</button>
+                    <button type="button" class="btn border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100" @click="openCreate({ task_type: 'meeting', due_time: '09:00' })"><CalendarClock class="h-4 w-4" :stroke-width="1.7" />Meeting</button>
                 </div>
 
                 <div class="grid gap-4">
@@ -1531,8 +1562,8 @@ function visibleCalendarTasks(cell) {
                                         </Link>
                                     </div>
                                     <div class="mt-3 flex justify-end gap-3 border-t border-gray-100 pt-2">
-                                        <button type="button" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(task)">Modifica</button>
-                                        <button type="button" class="text-xs font-medium text-red-600 hover:text-red-500" @click="remove(task)">Elimina</button>
+                                        <button type="button" class="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(task)"><Pencil class="h-3.5 w-3.5" :stroke-width="1.7" />Modifica</button>
+                                        <button type="button" class="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-500" @click="remove(task)"><Trash2 class="h-3.5 w-3.5" :stroke-width="1.7" />Elimina</button>
                                     </div>
                                 </article>
                                 <div v-if="!tasksByStatus(status).length" class="rounded-md border border-dashed border-gray-300 bg-white px-3 py-8 text-center text-xs text-gray-500">
