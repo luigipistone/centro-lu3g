@@ -91,6 +91,10 @@ class CentroPageController extends Controller
             'rows' => $rows,
             'billingStats' => $section === 'billing' ? $this->billingStats() : null,
             'clientStats' => $section === 'clients' ? $this->clientStats() : null,
+            'documentSettings' => $section === 'settings' ? DB::table('document_settings')->first() : null,
+            'emailSettings' => $section === 'settings' ? DB::table('email_settings')->first() : null,
+            'numberings' => $section === 'settings' ? DB::table('document_numbering')->orderBy('doc_type')->orderByDesc('year')->get() : [],
+            'backupRuns' => $section === 'settings' ? DB::table('backup_runs')->latest('started_at')->limit(8)->get() : [],
             'clients' => DB::table('clients')->orderBy('name')->get(['id', 'name']),
             'projects' => DB::table('projects')->orderBy('name')->get(['id', 'name']),
             'services' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name']),
@@ -230,6 +234,132 @@ class CentroPageController extends Controller
         DB::table($this->config($section)['table'])->where('id', $id)->delete();
 
         return back()->with('status', 'Eliminato.');
+    }
+
+    public function updateDocumentSettings(Request $request): RedirectResponse
+    {
+        $payload = $request->validate([
+            'company_name' => ['required', 'string', 'max:255'],
+            'legal_form' => ['nullable', 'string', 'max:255'],
+            'vat_number' => ['nullable', 'string', 'max:32'],
+            'tax_code' => ['nullable', 'string', 'max:32'],
+            'tax_regime' => ['nullable', 'string', 'max:32'],
+            'street' => ['nullable', 'string', 'max:255'],
+            'street_number' => ['nullable', 'string', 'max:32'],
+            'postal_code' => ['nullable', 'string', 'max:16'],
+            'city' => ['nullable', 'string', 'max:255'],
+            'province' => ['nullable', 'string', 'max:16'],
+            'country' => ['nullable', 'string', 'max:64'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'pec' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:64'],
+            'sdi_code' => ['nullable', 'string', 'max:16'],
+            'iban' => ['nullable', 'string', 'max:64'],
+            'bic_swift' => ['nullable', 'string', 'max:32'],
+            'bank_name' => ['nullable', 'string', 'max:255'],
+            'default_payment_method' => ['nullable', 'string', 'max:255'],
+            'default_payment_terms_days' => ['nullable', 'integer', 'min:0', 'max:365'],
+            'default_withholding_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'default_pension_fund_label' => ['nullable', 'string', 'max:255'],
+            'default_pension_fund_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'bollo_threshold' => ['nullable', 'numeric', 'min:0'],
+            'bollo_amount' => ['nullable', 'numeric', 'min:0'],
+            'bollo_charged_to_client' => ['boolean'],
+            'footer_notes' => ['nullable', 'string'],
+        ]);
+
+        $payload = $this->nullifyEmptyStrings($payload);
+        $payload['bollo_charged_to_client'] = $request->boolean('bollo_charged_to_client');
+
+        $existing = DB::table('document_settings')->first();
+        DB::table('document_settings')->updateOrInsert(
+            ['id' => $existing->id ?? (string) str()->uuid()],
+            [...$payload, 'updated_at' => now(), 'created_at' => $existing->created_at ?? now()],
+        );
+
+        return back()->with('status', 'Impostazioni fatturazione aggiornate.');
+    }
+
+    public function updateEmailSettings(Request $request): RedirectResponse
+    {
+        $payload = $request->validate([
+            'smtp_enabled' => ['boolean'],
+            'smtp_host' => ['nullable', 'string', 'max:255'],
+            'smtp_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
+            'smtp_username' => ['nullable', 'string', 'max:255'],
+            'smtp_password' => ['nullable', 'string', 'max:1000'],
+            'smtp_secure' => ['boolean'],
+            'smtp_from_email' => ['nullable', 'email', 'max:255'],
+            'smtp_from_name' => ['nullable', 'string', 'max:255'],
+            'smtp_reply_to' => ['nullable', 'email', 'max:255'],
+            'pec_username' => ['nullable', 'string', 'max:255'],
+            'pec_password' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $payload = $this->nullifyEmptyStrings($payload);
+        $payload['smtp_enabled'] = $request->boolean('smtp_enabled');
+        $payload['smtp_secure'] = $request->boolean('smtp_secure');
+
+        $existing = DB::table('email_settings')->first();
+        if (empty($payload['smtp_password']) && $existing) {
+            unset($payload['smtp_password']);
+        }
+        if (empty($payload['pec_password']) && $existing) {
+            unset($payload['pec_password']);
+        }
+
+        DB::table('email_settings')->updateOrInsert(
+            ['id' => $existing->id ?? (string) str()->uuid()],
+            [...$payload, 'updated_at' => now(), 'created_at' => $existing->created_at ?? now()],
+        );
+
+        return back()->with('status', 'Impostazioni email aggiornate.');
+    }
+
+    public function updateNumbering(Request $request, string $id): RedirectResponse
+    {
+        $payload = $request->validate([
+            'prefix' => ['nullable', 'string', 'max:32'],
+            'format' => ['required', 'string', 'max:255'],
+            'current_seq' => ['required', 'integer', 'min:0'],
+            'yearly_reset' => ['boolean'],
+        ]);
+
+        $payload['prefix'] = $payload['prefix'] ?? '';
+        $payload['yearly_reset'] = $request->boolean('yearly_reset');
+        $payload['updated_at'] = now();
+
+        DB::table('document_numbering')->where('id', $id)->update($payload);
+
+        return back()->with('status', 'Numerazione aggiornata.');
+    }
+
+    public function runBackup(): RedirectResponse
+    {
+        $tables = DB::select('SHOW TABLES');
+
+        DB::table('backup_runs')->insert([
+            'id' => (string) str()->uuid(),
+            'frequency' => 'manual',
+            'status' => 'completed',
+            'started_at' => now(),
+            'finished_at' => now(),
+            'tables_count' => count($tables),
+            'storage_path' => 'Plesk/manual-db-backup',
+        ]);
+
+        return back()->with('status', 'Backup manuale registrato. Per il dump fisico usa anche il backup Plesk del dominio.');
+    }
+
+    private function nullifyEmptyStrings(array $payload): array
+    {
+        foreach ($payload as $key => $value) {
+            if ($value === '') {
+                $payload[$key] = null;
+            }
+        }
+
+        return $payload;
     }
 
     private function config(string $section): array

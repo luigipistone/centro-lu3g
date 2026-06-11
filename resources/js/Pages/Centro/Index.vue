@@ -16,6 +16,10 @@ const props = defineProps({
     users: Array,
     billingStats: Object,
     clientStats: Object,
+    documentSettings: Object,
+    emailSettings: Object,
+    numberings: Array,
+    backupRuns: Array,
 });
 
 const editing = ref(null);
@@ -33,6 +37,60 @@ const taskPriority = ref('all');
 const taskType = ref('all');
 const clientSearch = ref('');
 const clientService = ref('all');
+const settingsTab = ref('personalizzazione');
+
+const docSettingDefaults = {
+    company_name: 'Centro LU3G',
+    legal_form: '',
+    vat_number: '',
+    tax_code: '',
+    tax_regime: '',
+    street: '',
+    street_number: '',
+    postal_code: '',
+    city: '',
+    province: '',
+    country: 'IT',
+    email: '',
+    pec: '',
+    phone: '',
+    sdi_code: '',
+    iban: '',
+    bic_swift: '',
+    bank_name: '',
+    default_payment_method: '',
+    default_payment_terms_days: '',
+    default_withholding_pct: '',
+    default_pension_fund_label: '',
+    default_pension_fund_pct: '',
+    bollo_threshold: '',
+    bollo_amount: '',
+    bollo_charged_to_client: false,
+    footer_notes: '',
+};
+
+const emailSettingDefaults = {
+    smtp_enabled: false,
+    smtp_host: '',
+    smtp_port: '',
+    smtp_username: '',
+    smtp_password: '',
+    smtp_secure: true,
+    smtp_from_email: '',
+    smtp_from_name: '',
+    smtp_reply_to: '',
+    pec_username: '',
+    pec_password: '',
+};
+
+const documentSettingsForm = useForm({ ...docSettingDefaults, ...(props.documentSettings || {}) });
+const emailSettingsForm = useForm({
+    ...emailSettingDefaults,
+    ...(props.emailSettings || {}),
+    smtp_password: '',
+    pec_password: '',
+});
+const numberingRows = ref((props.numberings || []).map((row) => ({ ...row })));
 
 const routeBase = computed(() => {
     if (props.section === 'settings') return 'settings';
@@ -89,6 +147,27 @@ function submit() {
         preserveScroll: true,
         onSuccess: resetForm,
     });
+}
+
+function saveDocumentSettings() {
+    documentSettingsForm.put(route('settings.document.update'), { preserveScroll: true });
+}
+
+function saveEmailSettings() {
+    emailSettingsForm.put(route('settings.email.update'), { preserveScroll: true });
+}
+
+function saveNumbering(row) {
+    router.put(route('settings.numbering.update', row.id), {
+        prefix: row.prefix || '',
+        format: row.format || '{prefix}{year}/{seq}',
+        current_seq: row.current_seq || 0,
+        yearly_reset: Boolean(row.yearly_reset),
+    }, { preserveScroll: true });
+}
+
+function runBackup() {
+    router.post(route('settings.backup.run'), {}, { preserveScroll: true });
 }
 
 function remove(row) {
@@ -606,6 +685,289 @@ function tasksForDay(date) {
                         </div>
                     </section>
                 </div>
+            </div>
+        </div>
+
+        <div v-else-if="section === 'settings'" class="py-8">
+            <div class="mx-auto max-w-6xl space-y-6 px-4 sm:px-6 lg:px-8">
+                <div v-if="page.props.flash?.status" class="rounded-md border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-700">
+                    {{ page.props.flash.status }}
+                </div>
+
+                <div class="grid gap-2 rounded-md bg-white p-1 shadow-sm sm:grid-cols-4">
+                    <button
+                        v-for="tab in [
+                            ['personalizzazione', 'Personalizzazione'],
+                            ['fatturazione', 'Fatturazione'],
+                            ['backup', 'Backup'],
+                            ['gestione', 'Gestione'],
+                        ]"
+                        :key="tab[0]"
+                        type="button"
+                        :class="['rounded px-3 py-2 text-sm font-medium transition', settingsTab === tab[0] ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900']"
+                        @click="settingsTab = tab[0]"
+                    >
+                        {{ tab[1] }}
+                    </button>
+                </div>
+
+                <section v-if="settingsTab === 'personalizzazione'" class="grid gap-6 lg:grid-cols-[1fr_320px]">
+                    <form class="rounded-md bg-white p-5 shadow-sm" @submit.prevent="saveDocumentSettings">
+                        <h3 class="text-base font-semibold text-gray-900">Identita aziendale</h3>
+                        <p class="mt-1 text-sm text-gray-500">Questi dati alimentano intestazioni, PDF, XML e firme documentali.</p>
+                        <div class="mt-5 grid gap-4 md:grid-cols-2">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Ragione sociale *</label>
+                                <input v-model="documentSettingsForm.company_name" class="form-control" required />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Forma giuridica</label>
+                                <input v-model="documentSettingsForm.legal_form" class="form-control" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Partita IVA</label>
+                                <input v-model="documentSettingsForm.vat_number" class="form-control" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Codice fiscale</label>
+                                <input v-model="documentSettingsForm.tax_code" class="form-control" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Email</label>
+                                <input v-model="documentSettingsForm.email" type="email" class="form-control" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">PEC</label>
+                                <input v-model="documentSettingsForm.pec" type="email" class="form-control" />
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700">Note footer documenti</label>
+                                <textarea v-model="documentSettingsForm.footer_notes" rows="4" class="form-control" />
+                            </div>
+                        </div>
+                        <button type="submit" class="mt-5 inline-flex rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50" :disabled="documentSettingsForm.processing">
+                            Salva identita
+                        </button>
+                    </form>
+
+                    <aside class="rounded-md bg-white p-5 shadow-sm">
+                        <h3 class="text-base font-semibold text-gray-900">Indirizzo e banca</h3>
+                        <div class="mt-4 space-y-3">
+                            <input v-model="documentSettingsForm.street" class="form-control mt-0" placeholder="Via" />
+                            <div class="grid grid-cols-3 gap-3">
+                                <input v-model="documentSettingsForm.street_number" class="form-control mt-0" placeholder="N." />
+                                <input v-model="documentSettingsForm.postal_code" class="form-control mt-0" placeholder="CAP" />
+                                <input v-model="documentSettingsForm.province" class="form-control mt-0" placeholder="Prov." />
+                            </div>
+                            <input v-model="documentSettingsForm.city" class="form-control mt-0" placeholder="Citta" />
+                            <input v-model="documentSettingsForm.country" class="form-control mt-0" placeholder="Paese" />
+                            <input v-model="documentSettingsForm.iban" class="form-control mt-0" placeholder="IBAN" />
+                            <input v-model="documentSettingsForm.bic_swift" class="form-control mt-0" placeholder="BIC/SWIFT" />
+                            <input v-model="documentSettingsForm.bank_name" class="form-control mt-0" placeholder="Banca" />
+                        </div>
+                    </aside>
+                </section>
+
+                <section v-else-if="settingsTab === 'fatturazione'" class="space-y-6">
+                    <form class="rounded-md bg-white p-5 shadow-sm" @submit.prevent="saveDocumentSettings">
+                        <h3 class="text-base font-semibold text-gray-900">Default fatturazione</h3>
+                        <div class="mt-5 grid gap-4 md:grid-cols-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Regime fiscale</label>
+                                <input v-model="documentSettingsForm.tax_regime" class="form-control" placeholder="RF01" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Pagamento default</label>
+                                <input v-model="documentSettingsForm.default_payment_method" class="form-control" placeholder="Bonifico" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Termini pagamento</label>
+                                <input v-model="documentSettingsForm.default_payment_terms_days" type="number" class="form-control" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Codice SDI</label>
+                                <input v-model="documentSettingsForm.sdi_code" class="form-control" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Ritenuta %</label>
+                                <input v-model="documentSettingsForm.default_withholding_pct" type="number" step="0.01" class="form-control" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Cassa label</label>
+                                <input v-model="documentSettingsForm.default_pension_fund_label" class="form-control" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Cassa %</label>
+                                <input v-model="documentSettingsForm.default_pension_fund_pct" type="number" step="0.01" class="form-control" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Telefono</label>
+                                <input v-model="documentSettingsForm.phone" class="form-control" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Soglia bollo</label>
+                                <input v-model="documentSettingsForm.bollo_threshold" type="number" step="0.01" class="form-control" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Importo bollo</label>
+                                <input v-model="documentSettingsForm.bollo_amount" type="number" step="0.01" class="form-control" />
+                            </div>
+                            <label class="mt-7 flex items-center gap-2 text-sm text-gray-700">
+                                <input v-model="documentSettingsForm.bollo_charged_to_client" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
+                                Bollo a carico cliente
+                            </label>
+                        </div>
+                        <button type="submit" class="mt-5 inline-flex rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50" :disabled="documentSettingsForm.processing">
+                            Salva fatturazione
+                        </button>
+                    </form>
+
+                    <section class="rounded-md bg-white p-5 shadow-sm">
+                        <h3 class="text-base font-semibold text-gray-900">Numerazioni</h3>
+                        <div class="mt-4 overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-3 py-3 text-left font-semibold text-gray-600">Tipo</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-gray-600">Anno</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-gray-600">Prefisso</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-gray-600">Formato</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-gray-600">Progressivo</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-gray-600">Reset</th>
+                                        <th class="px-3 py-3 text-right font-semibold text-gray-600">Azioni</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100">
+                                    <tr v-for="row in numberingRows" :key="row.id">
+                                        <td class="px-3 py-3">{{ documentTypeLabels[row.doc_type] || row.doc_type }}</td>
+                                        <td class="px-3 py-3">{{ row.year }}</td>
+                                        <td class="px-3 py-3"><input v-model="row.prefix" class="form-control mt-0 w-24" /></td>
+                                        <td class="px-3 py-3"><input v-model="row.format" class="form-control mt-0 min-w-56" /></td>
+                                        <td class="px-3 py-3"><input v-model="row.current_seq" type="number" class="form-control mt-0 w-28" /></td>
+                                        <td class="px-3 py-3"><input v-model="row.yearly_reset" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" /></td>
+                                        <td class="px-3 py-3 text-right"><button type="button" class="text-sm font-medium text-indigo-600 hover:text-indigo-500" @click="saveNumbering(row)">Salva</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <form class="rounded-md bg-white p-5 shadow-sm" @submit.prevent="saveEmailSettings">
+                        <h3 class="text-base font-semibold text-gray-900">Email e SMTP</h3>
+                        <div class="mt-5 grid gap-4 md:grid-cols-3">
+                            <label class="flex items-center gap-2 text-sm text-gray-700">
+                                <input v-model="emailSettingsForm.smtp_enabled" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
+                                SMTP attivo
+                            </label>
+                            <label class="flex items-center gap-2 text-sm text-gray-700">
+                                <input v-model="emailSettingsForm.smtp_secure" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
+                                TLS/SSL
+                            </label>
+                            <input v-model="emailSettingsForm.smtp_host" class="form-control mt-0" placeholder="Host SMTP" />
+                            <input v-model="emailSettingsForm.smtp_port" type="number" class="form-control mt-0" placeholder="Porta" />
+                            <input v-model="emailSettingsForm.smtp_username" class="form-control mt-0" placeholder="Username" />
+                            <input v-model="emailSettingsForm.smtp_password" type="password" class="form-control mt-0" placeholder="Nuova password SMTP" />
+                            <input v-model="emailSettingsForm.smtp_from_email" type="email" class="form-control mt-0" placeholder="Email mittente" />
+                            <input v-model="emailSettingsForm.smtp_from_name" class="form-control mt-0" placeholder="Nome mittente" />
+                            <input v-model="emailSettingsForm.smtp_reply_to" type="email" class="form-control mt-0" placeholder="Reply-to" />
+                            <input v-model="emailSettingsForm.pec_username" class="form-control mt-0" placeholder="PEC username" />
+                            <input v-model="emailSettingsForm.pec_password" type="password" class="form-control mt-0" placeholder="Nuova password PEC" />
+                        </div>
+                        <button type="submit" class="mt-5 inline-flex rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50" :disabled="emailSettingsForm.processing">
+                            Salva email
+                        </button>
+                    </form>
+                </section>
+
+                <section v-else-if="settingsTab === 'backup'" class="grid gap-6 lg:grid-cols-[340px_1fr]">
+                    <div class="rounded-md bg-white p-5 shadow-sm">
+                        <h3 class="text-base font-semibold text-gray-900">Backup manuale</h3>
+                        <p class="mt-2 text-sm text-gray-500">Registra un controllo backup nel portale. Il dump fisico resta gestito dal backup Plesk del dominio.</p>
+                        <button type="button" class="mt-5 inline-flex rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500" @click="runBackup">
+                            Avvia controllo backup
+                        </button>
+                    </div>
+
+                    <div class="rounded-md bg-white p-5 shadow-sm">
+                        <h3 class="text-base font-semibold text-gray-900">Storico backup</h3>
+                        <div class="mt-4 overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-3 py-3 text-left font-semibold text-gray-600">Data</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-gray-600">Tipo</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-gray-600">Stato</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-gray-600">Tabelle</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100">
+                                    <tr v-for="run in backupRuns || []" :key="run.id">
+                                        <td class="px-3 py-3">{{ dateIt(run.started_at) }}</td>
+                                        <td class="px-3 py-3">{{ run.frequency }}</td>
+                                        <td class="px-3 py-3">{{ run.status }}</td>
+                                        <td class="px-3 py-3">{{ run.tables_count || '-' }}</td>
+                                    </tr>
+                                    <tr v-if="!(backupRuns || []).length">
+                                        <td colspan="4" class="px-3 py-8 text-center text-gray-500">Nessun backup registrato.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <section v-else class="grid gap-6 lg:grid-cols-[360px_1fr]">
+                    <section class="rounded-md bg-white p-5 shadow-sm">
+                        <div class="mb-4 flex items-center justify-between">
+                            <h3 class="font-semibold text-gray-900">{{ editing ? 'Modifica servizio' : 'Nuovo servizio' }}</h3>
+                            <button v-if="editing" type="button" class="text-sm text-gray-500 hover:text-gray-800" @click="resetForm">Annulla</button>
+                        </div>
+                        <form class="space-y-4" @submit.prevent="submit">
+                            <div v-for="field in fields" :key="field.name">
+                                <label class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
+                                <textarea v-if="field.type === 'textarea'" v-model="form[field.name]" rows="4" class="form-control" />
+                                <label v-else-if="field.type === 'checkbox'" class="mt-2 flex items-center gap-2 text-sm text-gray-700">
+                                    <input v-model="form[field.name]" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
+                                    Attivo
+                                </label>
+                                <input v-else v-model="form[field.name]" :type="field.type" class="form-control" :required="field.required" />
+                                <div v-if="form.errors[field.name]" class="mt-1 text-sm text-red-600">{{ form.errors[field.name] }}</div>
+                            </div>
+                            <button type="submit" class="inline-flex w-full justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50" :disabled="form.processing">
+                                {{ editing ? 'Salva modifiche' : 'Crea servizio' }}
+                            </button>
+                        </form>
+                    </section>
+
+                    <section class="overflow-hidden rounded-md bg-white shadow-sm">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left font-semibold text-gray-600">Servizio</th>
+                                    <th class="px-4 py-3 text-left font-semibold text-gray-600">Stato</th>
+                                    <th class="px-4 py-3 text-left font-semibold text-gray-600">Colore</th>
+                                    <th class="px-4 py-3 text-right font-semibold text-gray-600">Azioni</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <tr v-for="row in rows" :key="row.id">
+                                    <td class="px-4 py-3 font-medium text-gray-900">{{ row.name }}</td>
+                                    <td class="px-4 py-3">{{ row.active ? 'Attivo' : 'Disattivo' }}</td>
+                                    <td class="px-4 py-3">
+                                        <span class="inline-flex items-center gap-2">
+                                            <span class="h-3 w-3 rounded-full ring-1 ring-gray-200" :style="{ backgroundColor: row.color || '#64748b' }"></span>
+                                            {{ row.color || '-' }}
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 text-right">
+                                        <button type="button" class="text-sm font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(row)">Modifica</button>
+                                        <button type="button" class="ml-4 text-sm font-medium text-red-600 hover:text-red-500" @click="remove(row)">Elimina</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </section>
+                </section>
             </div>
         </div>
 

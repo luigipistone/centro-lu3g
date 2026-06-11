@@ -82,6 +82,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/settings/services', [CentroPageController::class, 'store'])->defaults('section', 'settings')->name('settings.store');
     Route::put('/settings/services/{id}', [CentroPageController::class, 'update'])->defaults('section', 'settings')->name('settings.update');
     Route::delete('/settings/services/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'settings')->name('settings.destroy');
+    Route::put('/settings/document', [CentroPageController::class, 'updateDocumentSettings'])->name('settings.document.update');
+    Route::put('/settings/email', [CentroPageController::class, 'updateEmailSettings'])->name('settings.email.update');
+    Route::put('/settings/numbering/{id}', [CentroPageController::class, 'updateNumbering'])->name('settings.numbering.update');
+    Route::post('/settings/backup', [CentroPageController::class, 'runBackup'])->name('settings.backup.run');
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
