@@ -33,7 +33,14 @@ class CentroPageController extends Controller
         $limit = $section === 'billing' ? 500 : 100;
         $rows = DB::table($config['table'])
             ->when($config['table'] === 'projects', fn ($query) => $query->leftJoin('clients', 'clients.id', '=', 'projects.client_id')->select('projects.*', 'clients.name as client_name'))
-            ->when($config['table'] === 'tasks', fn ($query) => $query->leftJoin('projects', 'projects.id', '=', 'tasks.project_id')->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')->select('tasks.*', 'projects.name as project_name', 'clients.name as client_name'))
+            ->when($config['table'] === 'tasks' && $section !== 'calendar', fn ($query) => $query->leftJoin('projects', 'projects.id', '=', 'tasks.project_id')->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')->select('tasks.*', 'projects.name as project_name', 'clients.name as client_name'))
+            ->when($section === 'calendar', fn ($query) => $query
+                ->leftJoin('projects', 'projects.id', '=', 'tasks.project_id')
+                ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
+                ->whereNull('tasks.parent_task_id')
+                ->whereNotNull('tasks.due_date')
+                ->select('tasks.*', 'projects.name as project_name', 'projects.color as project_color', 'clients.name as client_name')
+            )
             ->when($config['table'] === 'documents', fn ($query) => $query->leftJoin('clients', 'clients.id', '=', 'documents.client_id')->select('documents.*', 'clients.name as client_name'))
             ->when($config['table'] === 'users', fn ($query) => $query->leftJoin('user_roles', 'user_roles.user_id', '=', 'users.id')->select('users.*', 'user_roles.role'))
             ->when($config['table'] === 'client_service_updates', fn ($query) => $query
@@ -45,6 +52,20 @@ class CentroPageController extends Controller
             ->latest($config['table'].'.created_at')
             ->limit($limit)
             ->get();
+
+        if ($section === 'calendar') {
+            $subtaskCounts = DB::table('tasks')
+                ->whereNotNull('parent_task_id')
+                ->select('parent_task_id', DB::raw('count(*) as aggregate'))
+                ->groupBy('parent_task_id')
+                ->pluck('aggregate', 'parent_task_id');
+
+            $rows = $rows->map(function ($row) use ($subtaskCounts) {
+                $row->subtask_count = (int) ($subtaskCounts[$row->id] ?? 0);
+
+                return $row;
+            });
+        }
 
         return Inertia::render('Centro/Index', [
             ...$config,

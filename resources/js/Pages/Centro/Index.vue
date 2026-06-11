@@ -23,6 +23,9 @@ const canWrite = computed(() => props.fields.length > 0);
 const billingSearch = ref('');
 const billingType = ref('all');
 const billingStatus = ref('all');
+const currentCalendarDate = ref(new Date());
+const calendarType = ref('all');
+const compactWeekend = ref(false);
 
 const routeBase = computed(() => {
     if (props.section === 'settings') return 'settings';
@@ -153,6 +156,71 @@ const billingRows = computed(() => props.rows.filter((row) => {
 
 const maxMonthly = computed(() => Math.max(1, ...((props.billingStats?.monthly || []).map((row) => Math.max(row.invoiced, row.paid)))));
 const maxTopClient = computed(() => Math.max(1, ...((props.billingStats?.topClients || []).map((row) => row.total))));
+
+const monthNames = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+const dayNames = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+const calendarYear = computed(() => currentCalendarDate.value.getFullYear());
+const calendarMonth = computed(() => currentCalendarDate.value.getMonth());
+const calendarDays = computed(() => new Date(calendarYear.value, calendarMonth.value + 1, 0).getDate());
+const calendarOffset = computed(() => (new Date(calendarYear.value, calendarMonth.value, 1).getDay() + 6) % 7);
+const calendarGrid = computed(() => {
+    const cells = [];
+    for (let index = 0; index < calendarOffset.value; index += 1) {
+        cells.push({ key: `empty-${index}`, empty: true });
+    }
+    for (let day = 1; day <= calendarDays.value; day += 1) {
+        const date = formatCalendarDate(calendarYear.value, calendarMonth.value, day);
+        const weekday = (new Date(calendarYear.value, calendarMonth.value, day).getDay() + 6) % 7;
+        cells.push({
+            key: date,
+            day,
+            date,
+            weekday,
+            weekend: weekday >= 5,
+            today: isCalendarToday(day),
+            tasks: tasksForDay(date),
+        });
+    }
+    return cells;
+});
+
+function formatCalendarDate(year, month, day) {
+    return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function isCalendarToday(day) {
+    const today = new Date();
+    return today.getFullYear() === calendarYear.value && today.getMonth() === calendarMonth.value && today.getDate() === day;
+}
+
+function changeMonth(delta) {
+    currentCalendarDate.value = new Date(calendarYear.value, calendarMonth.value + delta, 1);
+}
+
+function taskTypeLabel(type) {
+    return {
+        task: 'Task',
+        project: 'Task',
+        ongoing: 'Continuativa',
+        meeting: 'Meeting',
+    }[type || 'task'] || type;
+}
+
+function taskTypeClass(type) {
+    return {
+        meeting: 'border-violet-200 bg-violet-50 text-violet-800',
+        ongoing: 'border-amber-200 bg-amber-50 text-amber-800',
+        project: 'border-blue-200 bg-blue-50 text-blue-800',
+        task: 'border-blue-200 bg-blue-50 text-blue-800',
+    }[type || 'task'] || 'border-gray-200 bg-gray-50 text-gray-800';
+}
+
+function tasksForDay(date) {
+    return props.rows
+        .filter((row) => row.due_date === date)
+        .filter((row) => calendarType.value === 'all' || (row.task_type || 'task') === calendarType.value)
+        .sort((a, b) => `${a.due_time || '99:99'}${a.title}`.localeCompare(`${b.due_time || '99:99'}${b.title}`));
+}
 </script>
 
 <template>
@@ -167,30 +235,119 @@ const maxTopClient = computed(() => Math.max(1, ...((props.billingStats?.topClie
         </template>
 
         <div v-if="section === 'calendar'" class="py-8">
-            <div class="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
-                <div class="surface overflow-hidden rounded-md">
-                    <div class="divide-y divide-gray-100">
-                        <Link
-                            v-for="row in rows"
-                            :key="row.id"
-                            :href="route('tasks.show', row.id)"
-                            class="grid gap-3 px-5 py-4 hover:bg-gray-50 md:grid-cols-[150px_1fr_auto]"
-                        >
-                            <div>
-                                <div class="text-sm font-semibold text-gray-900">{{ row.due_date || 'Senza data' }}</div>
-                                <div class="text-xs text-gray-500">{{ row.due_time || '' }}</div>
-                            </div>
-                            <div>
-                                <div class="font-medium text-gray-900">{{ row.title }}</div>
-                                <div class="text-sm text-gray-500">{{ row.client_name || row.project_name || '-' }}</div>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <span :class="['rounded-full px-2 py-1 text-xs font-medium', priorityClass(row.priority)]">{{ row.priority }}</span>
-                                <span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">{{ row.status }}</span>
-                            </div>
-                        </Link>
-                        <div v-if="!rows.length" class="px-5 py-8 text-center text-sm text-gray-500">Nessuna attivita in calendario.</div>
+            <div class="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
+                <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center gap-2">
+                        <button type="button" class="rounded-md p-2 text-gray-500 hover:bg-white hover:text-gray-900" @click="changeMonth(-1)">
+                            <span class="sr-only">Mese precedente</span>
+                            &lt;
+                        </button>
+                        <div class="min-w-[190px] text-center font-semibold text-gray-900">
+                            {{ monthNames[calendarMonth] }} {{ calendarYear }}
+                        </div>
+                        <button type="button" class="rounded-md p-2 text-gray-500 hover:bg-white hover:text-gray-900" @click="changeMonth(1)">
+                            <span class="sr-only">Mese successivo</span>
+                            &gt;
+                        </button>
                     </div>
+
+                    <div class="flex flex-wrap items-center gap-3">
+                        <select v-model="calendarType" class="form-control mt-0 w-44">
+                            <option value="all">Tutti i tipi</option>
+                            <option value="task">Task</option>
+                            <option value="project">Task progetto</option>
+                            <option value="ongoing">Continuativa</option>
+                            <option value="meeting">Meeting</option>
+                        </select>
+                        <label class="inline-flex items-center gap-2 text-sm text-gray-600">
+                            <input v-model="compactWeekend" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
+                            Weekend compatto
+                        </label>
+                    </div>
+                </div>
+
+                <div class="overflow-hidden rounded-lg border border-gray-200 bg-gray-200 shadow-sm">
+                    <div :class="['grid gap-px bg-gray-200', compactWeekend ? 'grid-cols-[repeat(5,minmax(0,1fr))_minmax(58px,0.34fr)_minmax(58px,0.34fr)]' : 'grid-cols-7']">
+                        <div
+                            v-for="(day, index) in dayNames"
+                            :key="day"
+                            :class="['bg-gray-50 px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-gray-500', compactWeekend && index >= 5 ? 'text-[10px]' : '']"
+                        >
+                            {{ compactWeekend && index >= 5 ? day.slice(0, 1) : day }}
+                        </div>
+                    </div>
+
+                    <div :class="['grid gap-px bg-gray-200', compactWeekend ? 'grid-cols-[repeat(5,minmax(0,1fr))_minmax(58px,0.34fr)_minmax(58px,0.34fr)]' : 'grid-cols-7']">
+                        <div
+                            v-for="cell in calendarGrid"
+                            :key="cell.key"
+                            :class="[
+                                'group min-h-[170px] bg-white p-2',
+                                cell.empty ? 'bg-gray-50/70' : '',
+                                cell.today ? 'ring-2 ring-inset ring-indigo-500' : '',
+                                compactWeekend && cell.weekend ? 'min-h-[170px] px-1' : '',
+                            ]"
+                        >
+                            <template v-if="!cell.empty">
+                                <div class="mb-2 flex items-center justify-between">
+                                    <span :class="['text-sm font-semibold', cell.today ? 'text-indigo-600' : 'text-gray-500']">{{ cell.day }}</span>
+                                    <Link
+                                        :href="route('tasks.index')"
+                                        class="opacity-0 text-[11px] font-medium text-gray-400 hover:text-indigo-600 group-hover:opacity-100"
+                                    >
+                                        + crea
+                                    </Link>
+                                </div>
+
+                                <div v-if="compactWeekend && cell.weekend" class="flex flex-wrap justify-center gap-1">
+                                    <Link
+                                        v-for="task in cell.tasks"
+                                        :key="task.id"
+                                        :href="route('tasks.show', task.id)"
+                                        class="h-2.5 w-2.5 rounded-full"
+                                        :style="{ backgroundColor: task.project_color || (task.priority === 'urgent' ? '#dc2626' : task.priority === 'high' ? '#f97316' : task.priority === 'low' ? '#10b981' : '#f59e0b') }"
+                                        :title="task.title"
+                                    />
+                                </div>
+
+                                <div v-else class="space-y-1.5">
+                                    <Link
+                                        v-for="task in cell.tasks.slice(0, 4)"
+                                        :key="task.id"
+                                        :href="route('tasks.show', task.id)"
+                                        :class="['block rounded-md border px-2 py-1.5 text-xs transition hover:border-indigo-300 hover:shadow-sm', taskTypeClass(task.task_type)]"
+                                    >
+                                        <div class="flex items-start gap-1.5">
+                                            <span class="mt-1 h-2 w-2 shrink-0 rounded-full" :style="{ backgroundColor: task.project_color || '#2563eb' }"></span>
+                                            <div class="min-w-0 flex-1">
+                                                <div class="flex items-center gap-1">
+                                                    <span v-if="task.due_time" class="shrink-0 text-[10px] text-gray-500">{{ String(task.due_time).slice(0, 5) }}</span>
+                                                    <span :class="['truncate font-medium', task.status === 'done' ? 'line-through opacity-60' : '']">{{ task.title }}</span>
+                                                </div>
+                                                <div class="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-gray-500">
+                                                    <span class="truncate">{{ task.client_name || task.project_name || taskTypeLabel(task.task_type) }}</span>
+                                                    <span v-if="task.subtask_count">{{ task.subtask_count }} sub</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </Link>
+                                    <div v-if="cell.tasks.length > 4" class="rounded px-2 py-1 text-[11px] font-medium text-gray-500">
+                                        altre {{ cell.tasks.length - 4 }}
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="!rows.length" class="mt-4 rounded-md border border-dashed border-gray-300 bg-white px-5 py-8 text-center text-sm text-gray-500">
+                    Nessuna attivita con scadenza. Usa la pagina Task per creare la prima attivita e vederla comparire nel calendario.
+                </div>
+                <div v-else class="mt-3 flex flex-wrap gap-4 text-xs text-gray-500">
+                    <span class="inline-flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-red-600"></span>Urgente</span>
+                    <span class="inline-flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-orange-500"></span>Alta</span>
+                    <span class="inline-flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-amber-500"></span>Media</span>
+                    <span class="inline-flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-emerald-500"></span>Bassa</span>
                 </div>
             </div>
         </div>
