@@ -485,12 +485,9 @@ watch(
                             v-for="widget in hiddenWidgets"
                             :key="widget.widget_type"
                             type="button"
-                            class="flex w-full items-start gap-3 rounded-2xl px-3 py-2 text-left transition hover:bg-indigo-50/80"
+                            class="block w-full rounded-2xl px-3 py-2.5 text-left transition hover:-translate-y-0.5 hover:bg-indigo-50/90 hover:shadow-[0_10px_24px_rgba(79,70,229,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
                             @click="addWidget(widget)"
                         >
-                            <span class="section-icon h-8 w-8">
-                                <component :is="metaFor(widget).icon" class="h-4 w-4" :stroke-width="1.7" />
-                            </span>
                             <span>
                                 <span class="block text-sm font-semibold text-gray-900">{{ metaFor(widget).label }}</span>
                                 <span class="block text-xs text-gray-500">{{ metaFor(widget).description }}</span>
@@ -558,7 +555,8 @@ watch(
                         <component
                             :is="metaFor(widget).kind === 'stat' ? Link : 'div'"
                             v-bind="metaFor(widget).kind === 'stat' ? { href: route(metaFor(widget).route) } : {}"
-                            class="mt-10 flex items-start justify-between gap-4 rounded-2xl px-1 pb-3 pr-4 transition hover:bg-white/55"
+                            class="mt-10 flex items-start justify-between gap-4 rounded-2xl px-1 pb-3 pr-4 transition"
+                            :class="metaFor(widget).kind === 'stat' ? 'cursor-pointer hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_14px_34px_rgba(28,42,73,0.10)] hover:ring-1 hover:ring-indigo-100' : ''"
                         >
                             <span class="flex min-w-0 items-start gap-3">
                                 <span :class="['metric-icon', metaFor(widget).iconClass]">
@@ -569,7 +567,7 @@ watch(
                                     <span class="block truncate text-xs text-gray-500">{{ metaFor(widget).description }}</span>
                                 </span>
                             </span>
-                            <span class="shrink-0 text-3xl font-bold leading-none text-gray-950">{{ widgetNumber(widget) }}</span>
+                            <span v-if="metaFor(widget).kind !== 'note'" class="shrink-0 text-3xl font-bold leading-none text-gray-950">{{ widgetNumber(widget) }}</span>
                         </component>
 
                         <div v-if="metaFor(widget).kind === 'list'" class="flex flex-1 flex-col pr-3">
@@ -578,7 +576,7 @@ watch(
                                     v-for="item in metaFor(widget).items()"
                                     :key="item.id"
                                     :href="itemHref(widget, item)"
-                                    class="flex items-center gap-3 rounded-2xl px-2 py-2 transition hover:bg-white/52"
+                                    class="group/item flex items-center gap-3 rounded-2xl px-2 py-2 transition hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_12px_28px_rgba(28,42,73,0.10)] hover:ring-1 hover:ring-indigo-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
                                 >
                                     <span
                                         v-if="widget.widget_type === 'active_projects'"
