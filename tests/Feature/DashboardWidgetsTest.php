@@ -146,4 +146,47 @@ class DashboardWidgetsTest extends TestCase
             ->where('dashboardWidgets', fn ($widgets) => collect($widgets)->where('widget_type', 'stat_projects')->isEmpty())
         );
     }
+
+    public function test_legacy_project_stat_widget_is_replaced_by_active_project_list(): void
+    {
+        $user = User::factory()->create();
+
+        DB::table('dashboard_widgets')->insert([
+            [
+                'id' => (string) str()->uuid(),
+                'user_id' => $user->id,
+                'widget_type' => 'stat_projects',
+                'position' => 1,
+                'size' => 'small',
+                'col_span' => 1,
+                'visible' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'id' => (string) str()->uuid(),
+                'user_id' => $user->id,
+                'widget_type' => 'active_projects',
+                'position' => 6,
+                'size' => 'small',
+                'col_span' => 1,
+                'visible' => false,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $response = $this->actingAs($user)->get('/dashboard');
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->component('Dashboard')
+            ->where('dashboardWidgets', fn ($widgets) => collect($widgets)->where('widget_type', 'stat_projects')->isEmpty())
+            ->where('dashboardWidgets', fn ($widgets) => collect($widgets)
+                ->where('widget_type', 'active_projects')
+                ->where('visible', true)
+                ->where('position', 1)
+                ->isNotEmpty())
+        );
+    }
 }
