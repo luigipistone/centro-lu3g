@@ -27,6 +27,7 @@ import {
 } from '@lucide/vue';
 
 const showingNavigationDropdown = ref(false);
+const notificationMenuOpen = ref(false);
 
 const groups = [
     {
@@ -75,10 +76,13 @@ const groups = [
                     <span class="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-white/80 text-sm font-extrabold text-indigo-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_12px_24px_rgba(79,70,229,0.14)]">L</span>
                     <span>Agency Hub</span>
                 </Link>
-                <div class="group relative">
-                    <Link
-                        :href="route('notifications.index')"
+                <div class="relative">
+                    <button
+                        type="button"
                         class="relative inline-flex h-9 w-9 items-center justify-center rounded-2xl text-gray-500 transition hover:bg-white/70 hover:text-indigo-600 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]"
+                        :aria-expanded="notificationMenuOpen"
+                        aria-label="Apri notifiche"
+                        @click="notificationMenuOpen = !notificationMenuOpen"
                     >
                         <Bell class="h-[18px] w-[18px]" :stroke-width="1.6" />
                         <span
@@ -87,12 +91,24 @@ const groups = [
                         >
                             {{ $page.props.notifications.unread > 9 ? '9+' : $page.props.notifications.unread }}
                         </span>
-                    </Link>
+                    </button>
 
-                    <div class="invisible absolute right-0 top-11 z-40 w-80 overflow-hidden rounded-2xl border border-white bg-white opacity-0 shadow-[0_24px_70px_rgba(28,42,73,0.14)] transition group-hover:visible group-hover:opacity-100">
+                    <button
+                        v-if="notificationMenuOpen"
+                        type="button"
+                        class="fixed inset-0 z-30 cursor-default bg-transparent"
+                        aria-label="Chiudi notifiche"
+                        @click="notificationMenuOpen = false"
+                    ></button>
+
+                    <div
+                        v-if="notificationMenuOpen"
+                        class="app-popover absolute right-0 top-11 z-40 w-80 overflow-hidden rounded-2xl border border-white bg-white shadow-[0_24px_70px_rgba(28,42,73,0.14)]"
+                        @click.stop
+                    >
                         <div class="flex items-center justify-between border-b border-white/60 px-3 py-2">
                             <span class="text-sm font-semibold text-gray-900">Notifiche</span>
-                            <Link :href="route('notifications.index')" class="text-xs font-medium text-indigo-600 hover:text-indigo-500">Vedi tutte</Link>
+                            <Link :href="route('notifications.index')" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="notificationMenuOpen = false">Vedi tutte</Link>
                         </div>
                         <div v-if="$page.props.notifications?.latest?.length" class="max-h-80 overflow-y-auto py-1">
                             <Link
@@ -100,6 +116,7 @@ const groups = [
                                 :key="notification.id"
                                 :href="notification.task_id ? route('tasks.show', notification.task_id) : route('notifications.index')"
                                 :class="['block border-l-2 px-3 py-2 text-sm transition hover:bg-white/58', notification.read ? 'border-transparent text-gray-600' : 'border-indigo-600 bg-indigo-50/70 text-gray-900']"
+                                @click="notificationMenuOpen = false"
                             >
                                 <span class="line-clamp-2">{{ notification.message }}</span>
                             </Link>
