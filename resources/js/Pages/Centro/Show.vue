@@ -145,6 +145,8 @@ const subscriptionDefaults = {
 };
 const subscriptionForm = useForm({ ...subscriptionDefaults });
 const editingSubscription = ref(null);
+const confirmAction = ref(null);
+const confirmText = ref('');
 const subtaskForm = useForm({
     title: '',
     priority: 'medium',
@@ -185,8 +187,14 @@ function addLine() {
 }
 
 function removeLine(line) {
-    if (!confirm('Eliminare questa riga?')) return;
-    router.delete(route('billing.lines.destroy', [props.record.id, line.id]), { preserveScroll: true });
+    openConfirm({
+        title: 'Eliminare questa riga?',
+        description: line.description || 'Riga documento',
+        keyword: 'ELIMINA',
+        button: 'Elimina',
+        danger: true,
+        action: () => router.delete(route('billing.lines.destroy', [props.record.id, line.id]), { preserveScroll: true, onFinish: closeConfirm }),
+    });
 }
 
 function addPayment() {
@@ -197,8 +205,14 @@ function addPayment() {
 }
 
 function removePayment(payment) {
-    if (!confirm('Eliminare questo pagamento?')) return;
-    router.delete(route('billing.payments.destroy', [props.record.id, payment.id]), { preserveScroll: true });
+    openConfirm({
+        title: 'Eliminare questo pagamento?',
+        description: `${money(payment.amount)} del ${dateIt(payment.paid_at)}`,
+        keyword: 'ELIMINA',
+        button: 'Elimina',
+        danger: true,
+        action: () => router.delete(route('billing.payments.destroy', [props.record.id, payment.id]), { preserveScroll: true, onFinish: closeConfirm }),
+    });
 }
 
 function saveDocument() {
@@ -206,8 +220,14 @@ function saveDocument() {
 }
 
 function issueDocument() {
-    if (!confirm('Emettere il documento e assegnare un numero progressivo?')) return;
-    router.post(route('billing.issue', props.record.id), {}, { preserveScroll: true });
+    openConfirm({
+        title: 'Emettere il documento?',
+        description: 'Verrà assegnato il numero progressivo e il documento non resterà più una semplice bozza.',
+        keyword: 'EMETTI',
+        button: 'Emetti',
+        danger: false,
+        action: () => router.post(route('billing.issue', props.record.id), {}, { preserveScroll: true, onFinish: closeConfirm }),
+    });
 }
 
 function duplicateDocument() {
@@ -234,8 +254,14 @@ function addContact() {
 }
 
 function removeContact(contact) {
-    if (!confirm('Eliminare questo referente?')) return;
-    router.delete(route('clients.contacts.destroy', [props.record.id, contact.id]), { preserveScroll: true });
+    openConfirm({
+        title: 'Eliminare questo referente?',
+        description: [contact.first_name, contact.last_name].filter(Boolean).join(' ') || contact.email || 'Referente',
+        keyword: 'ELIMINA',
+        button: 'Elimina',
+        danger: true,
+        action: () => router.delete(route('clients.contacts.destroy', [props.record.id, contact.id]), { preserveScroll: true, onFinish: closeConfirm }),
+    });
 }
 
 function resetSubscriptionForm() {
@@ -278,8 +304,29 @@ function generateSubscription(subscription) {
 }
 
 function removeSubscription(subscription) {
-    if (!confirm(`Eliminare l'abbonamento "${subscription.name}"?`)) return;
-    router.delete(route('clients.subscriptions.destroy', [props.record.id, subscription.id]), { preserveScroll: true });
+    openConfirm({
+        title: 'Eliminare questo abbonamento?',
+        description: subscription.name || 'Abbonamento',
+        keyword: 'ELIMINA',
+        button: 'Elimina',
+        danger: true,
+        action: () => router.delete(route('clients.subscriptions.destroy', [props.record.id, subscription.id]), { preserveScroll: true, onFinish: closeConfirm }),
+    });
+}
+
+function openConfirm(action) {
+    confirmAction.value = action;
+    confirmText.value = '';
+}
+
+function closeConfirm() {
+    confirmAction.value = null;
+    confirmText.value = '';
+}
+
+function runConfirmAction() {
+    if (!confirmAction.value || confirmText.value !== confirmAction.value.keyword) return;
+    confirmAction.value.action();
 }
 
 function clientHasService(service) {
@@ -401,6 +448,34 @@ function remainingAmount() {
                 </div>
             </div>
         </template>
+
+        <div v-if="confirmAction" class="fixed inset-0 z-[70] flex items-center justify-center bg-gray-900/40 px-4 py-6">
+            <div class="w-full max-w-md rounded-md bg-white p-5 shadow-xl">
+                <h3 class="text-base font-semibold text-gray-900">{{ confirmAction.title }}</h3>
+                <p class="mt-2 text-sm text-gray-600">
+                    <span v-if="confirmAction.description">{{ confirmAction.description }}</span>
+                    <span v-if="confirmAction.danger" class="mt-2 block">Questa azione e' irreversibile.</span>
+                    Digita <span class="font-mono font-semibold text-gray-900">{{ confirmAction.keyword }}</span> per confermare.
+                </p>
+                <input v-model="confirmText" class="form-control font-mono" :placeholder="confirmAction.keyword" autocomplete="off" />
+                <div class="mt-5 flex justify-end gap-2">
+                    <button type="button" class="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="closeConfirm">
+                        Annulla
+                    </button>
+                    <button
+                        type="button"
+                        :class="[
+                            'rounded-md px-4 py-2 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50',
+                            confirmAction.danger ? 'bg-red-600 hover:bg-red-500' : 'bg-indigo-600 hover:bg-indigo-500',
+                        ]"
+                        :disabled="confirmText !== confirmAction.keyword"
+                        @click="runConfirmAction"
+                    >
+                        {{ confirmAction.button }}
+                    </button>
+                </div>
+            </div>
+        </div>
 
         <div class="py-8">
             <div v-if="section === 'billing'" class="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">

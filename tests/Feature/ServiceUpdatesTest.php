@@ -122,4 +122,44 @@ class ServiceUpdatesTest extends TestCase
             'responsible_user_id' => $responsible->id,
         ]);
     }
+
+    public function test_attaching_service_to_client_makes_client_visible_in_updates_page(): void
+    {
+        $user = User::factory()->create();
+        $clientId = (string) Str::uuid();
+        $serviceId = (string) Str::uuid();
+
+        DB::table('clients')->insert([
+            'id' => $clientId,
+            'name' => 'Cliente QA SEO',
+            'created_by' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('services')->insert([
+            'id' => $serviceId,
+            'name' => 'SEO',
+            'color' => '#22c55e',
+            'active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->post("/clients/{$clientId}/services/{$serviceId}")
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('client_services', [
+            'client_id' => $clientId,
+            'service_id' => $serviceId,
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->get('/updates/seo')
+            ->assertOk()
+            ->assertSee('Cliente QA SEO');
+    }
 }

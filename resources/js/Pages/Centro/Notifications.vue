@@ -2,12 +2,15 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { Check, Trash2 } from '@lucide/vue';
+import { ref } from 'vue';
 
 defineProps({
     notifications: Array,
 });
 
 const page = usePage();
+const confirmClear = ref(false);
+const confirmText = ref('');
 
 function markRead(notification) {
     router.patch(route('notifications.read', notification.id), {}, { preserveScroll: true });
@@ -22,8 +25,18 @@ function remove(notification) {
 }
 
 function removeAll() {
-    if (!confirm('Svuotare tutte le notifiche?')) return;
-    router.delete(route('notifications.destroy-all'), { preserveScroll: true });
+    confirmClear.value = true;
+    confirmText.value = '';
+}
+
+function closeConfirm() {
+    confirmClear.value = false;
+    confirmText.value = '';
+}
+
+function confirmRemoveAll() {
+    if (confirmText.value !== 'SVUOTA') return;
+    router.delete(route('notifications.destroy-all'), { preserveScroll: true, onFinish: closeConfirm });
 }
 
 function formatDate(value) {
@@ -47,6 +60,29 @@ function formatDate(value) {
                 <p class="text-sm text-gray-500">Aggiornamenti su task, commenti e attivita che ti riguardano.</p>
             </div>
         </template>
+
+        <div v-if="confirmClear" class="fixed inset-0 z-[70] flex items-center justify-center bg-gray-900/40 px-4 py-6">
+            <div class="w-full max-w-md rounded-md bg-white p-5 shadow-xl">
+                <h3 class="text-base font-semibold text-gray-900">Svuotare tutte le notifiche?</h3>
+                <p class="mt-2 text-sm text-gray-600">
+                    Questa azione e' irreversibile. Digita <span class="font-mono font-semibold text-gray-900">SVUOTA</span> per confermare.
+                </p>
+                <input v-model="confirmText" class="form-control font-mono" placeholder="SVUOTA" autocomplete="off" />
+                <div class="mt-5 flex justify-end gap-2">
+                    <button type="button" class="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="closeConfirm">
+                        Annulla
+                    </button>
+                    <button
+                        type="button"
+                        class="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        :disabled="confirmText !== 'SVUOTA'"
+                        @click="confirmRemoveAll"
+                    >
+                        Svuota
+                    </button>
+                </div>
+            </div>
+        </div>
 
         <div class="py-8">
             <div class="mx-auto max-w-4xl space-y-4 px-4 sm:px-6 lg:px-8">
