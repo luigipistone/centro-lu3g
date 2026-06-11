@@ -1433,60 +1433,50 @@ function visibleCalendarTasks(cell) {
                         </form>
                     </section>
 
-                    <section class="grid min-w-0 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                    <section class="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                         <article
                             v-for="client in clientRows"
                             :key="client.id"
-                            class="rounded-md border border-gray-200 bg-white p-5 shadow-sm transition hover:border-indigo-200 hover:shadow"
+                            class="group relative rounded-md border border-gray-200 bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md"
                         >
-                            <div class="flex items-start justify-between gap-4">
-                                <Link :href="route('clients.show', client.id)" class="min-w-0 flex-1">
+                            <Link :href="route('clients.show', client.id)" class="block h-full p-5 pr-14">
+                                <div class="min-w-0">
                                     <h3 class="truncate text-base font-semibold text-gray-900">{{ client.name }}</h3>
                                     <p v-if="client.legal_name && client.legal_name !== client.name" class="mt-0.5 truncate text-sm text-gray-500">{{ client.legal_name }}</p>
-                                </Link>
-                                <div class="flex shrink-0 items-center gap-3">
-                                    <button type="button" class="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(client)"><Pencil class="h-3.5 w-3.5" :stroke-width="1.7" />Modifica</button>
-                                    <button type="button" class="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-500" @click="remove(client)"><Trash2 class="h-3.5 w-3.5" :stroke-width="1.7" />Elimina</button>
                                 </div>
-                            </div>
 
-                            <div class="mt-4 grid grid-cols-3 gap-2 border-y border-gray-100 py-3 text-center">
-                                <div>
-                                    <div class="text-lg font-semibold text-gray-900">{{ client.projects_count || 0 }}</div>
-                                    <div class="text-[10px] uppercase tracking-wide text-gray-400">Progetti</div>
+                                <div class="mt-4 space-y-1 text-sm text-gray-600">
+                                    <p v-if="client.email" class="truncate">{{ client.email }}</p>
+                                    <p v-if="client.phone" class="truncate">{{ client.phone }}</p>
+                                    <p v-if="client.city || client.province" class="truncate">{{ [client.city, client.province].filter(Boolean).join(', ') }}</p>
+                                    <p v-if="client.vat_number" class="truncate text-xs text-gray-500">P.IVA {{ client.vat_number }}</p>
                                 </div>
-                                <div>
-                                    <div class="text-lg font-semibold text-gray-900">{{ client.tasks_count || 0 }}</div>
-                                    <div class="text-[10px] uppercase tracking-wide text-gray-400">Task</div>
-                                </div>
-                                <div>
-                                    <div class="text-lg font-semibold text-gray-900">{{ client.documents_count || 0 }}</div>
-                                    <div class="text-[10px] uppercase tracking-wide text-gray-400">Doc</div>
-                                </div>
-                            </div>
 
-                            <div class="mt-4 space-y-1 text-sm text-gray-600">
-                                <p v-if="client.email" class="truncate">{{ client.email }}</p>
-                                <p v-if="client.phone" class="truncate">{{ client.phone }}</p>
-                                <p v-if="client.city || client.province" class="truncate">{{ [client.city, client.province].filter(Boolean).join(', ') }}</p>
-                                <p v-if="client.vat_number" class="truncate text-xs text-gray-500">P.IVA {{ client.vat_number }}</p>
-                            </div>
+                                <div class="mt-4 flex flex-wrap gap-1.5">
+                                    <span
+                                        v-for="service in client.services || []"
+                                        :key="service.id"
+                                        class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium"
+                                        :style="{ borderColor: `${service.color || '#64748b'}55`, color: service.color || '#64748b', backgroundColor: `${service.color || '#64748b'}18` }"
+                                    >
+                                        <span class="h-1.5 w-1.5 rounded-full" :style="{ backgroundColor: service.color || '#64748b' }"></span>
+                                        {{ service.name }}
+                                    </span>
+                                    <span v-if="!(client.services || []).length" class="text-xs text-gray-400">Nessun servizio collegato</span>
+                                </div>
+                            </Link>
 
-                            <div class="mt-4 flex flex-wrap gap-1.5">
-                                <span
-                                    v-for="service in client.services || []"
-                                    :key="service.id"
-                                    class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium"
-                                    :style="{ borderColor: `${service.color || '#64748b'}55`, color: service.color || '#64748b', backgroundColor: `${service.color || '#64748b'}18` }"
-                                >
-                                    <span class="h-1.5 w-1.5 rounded-full" :style="{ backgroundColor: service.color || '#64748b' }"></span>
-                                    {{ service.name }}
-                                </span>
-                                <span v-if="!(client.services || []).length" class="text-xs text-gray-400">Nessun servizio collegato</span>
-                            </div>
+                            <button
+                                type="button"
+                                class="absolute right-4 top-4 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-red-100 bg-white/90 text-red-600 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-200"
+                                :aria-label="`Elimina ${client.name}`"
+                                @click.stop.prevent="remove(client)"
+                            >
+                                <Trash2 class="h-4 w-4" :stroke-width="1.8" />
+                            </button>
                         </article>
 
-                        <div v-if="!clientRows.length" class="rounded-md border border-dashed border-gray-300 bg-white px-5 py-12 text-center text-sm text-gray-500 md:col-span-2 2xl:col-span-3">
+                        <div v-if="!clientRows.length" class="rounded-md border border-dashed border-gray-300 bg-white px-5 py-12 text-center text-sm text-gray-500 sm:col-span-2 lg:col-span-4">
                             Nessun cliente trovato.
                         </div>
                     </section>
