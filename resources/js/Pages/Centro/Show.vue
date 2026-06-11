@@ -127,6 +127,33 @@ const contactForm = useForm({
     role: '',
     notes: '',
 });
+const editingClient = ref(false);
+const clientForm = useForm({
+    name: props.record.name || '',
+    legal_name: props.record.legal_name || '',
+    vat_number: props.record.vat_number || '',
+    tax_code: props.record.tax_code || '',
+    legal_form: props.record.legal_form || '',
+    business_sector: props.record.business_sector || '',
+    source: props.record.source || '',
+    country: props.record.country || 'IT',
+    street: props.record.street || '',
+    street_number: props.record.street_number || '',
+    postal_code: props.record.postal_code || '',
+    city: props.record.city || '',
+    province: props.record.province || '',
+    email: props.record.email || '',
+    phone: props.record.phone || '',
+    website: props.record.website || '',
+    pec: props.record.pec || '',
+    sdi_code: props.record.sdi_code || '',
+    iban: props.record.iban || '',
+    bic_swift: props.record.bic_swift || '',
+    vat_treatment: props.record.vat_treatment || '',
+    payment_terms_days: props.record.payment_terms_days || '',
+    is_pa: Boolean(props.record.is_pa),
+    notes: props.record.notes || '',
+});
 const subscriptionDefaults = {
     name: '',
     description: '',
@@ -301,6 +328,15 @@ function addContact() {
     contactForm.post(route('clients.contacts.store', props.record.id), {
         preserveScroll: true,
         onSuccess: () => contactForm.reset(),
+    });
+}
+
+function saveClientDetails() {
+    clientForm.put(route('clients.update', props.record.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            editingClient.value = false;
+        },
     });
 }
 
@@ -515,6 +551,19 @@ function remainingAmount() {
                     </button>
                     <button type="button" class="rounded-md border border-red-100 bg-white px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50" @click="deleteTaskFromDetail">
                         Elimina
+                    </button>
+                </div>
+                <div v-else-if="section === 'clients'" class="flex flex-wrap justify-end gap-2">
+                    <template v-if="editingClient">
+                        <button type="button" class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50" :disabled="clientForm.processing" @click="saveClientDetails">
+                            Salva
+                        </button>
+                        <button type="button" class="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="editingClient = false">
+                            Annulla
+                        </button>
+                    </template>
+                    <button v-else type="button" class="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="editingClient = true">
+                        Modifica
                     </button>
                 </div>
             </div>
@@ -774,6 +823,146 @@ function remainingAmount() {
 
             <div v-else class="mx-auto grid max-w-7xl gap-6 px-4 sm:px-6 lg:grid-cols-[1fr_360px] lg:px-8">
                 <section v-if="section === 'clients'" class="space-y-6">
+                    <section v-if="editingClient" class="surface rounded-md p-5">
+                        <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Modifica anagrafica</h3>
+                                <p class="mt-1 text-sm text-gray-500">Dati fiscali, contatti, indirizzo e note del cliente.</p>
+                            </div>
+                            <button
+                                type="button"
+                                class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
+                                :disabled="clientForm.processing"
+                                @click="saveClientDetails"
+                            >
+                                Salva cliente
+                            </button>
+                        </div>
+
+                        <div class="space-y-6">
+                            <div>
+                                <h4 class="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Anagrafica</h4>
+                                <div class="grid gap-4 md:grid-cols-2">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Nome *</label>
+                                        <input v-model="clientForm.name" class="form-control" required />
+                                        <div v-if="clientForm.errors.name" class="mt-1 text-sm text-red-600">{{ clientForm.errors.name }}</div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Ragione sociale</label>
+                                        <input v-model="clientForm.legal_name" class="form-control" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Partita IVA</label>
+                                        <input v-model="clientForm.vat_number" class="form-control" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Codice fiscale</label>
+                                        <input v-model="clientForm.tax_code" class="form-control" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Natura giuridica</label>
+                                        <input v-model="clientForm.legal_form" class="form-control" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Settore</label>
+                                        <input v-model="clientForm.business_sector" class="form-control" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Sorgente</label>
+                                        <input v-model="clientForm.source" class="form-control" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Sito web</label>
+                                        <input v-model="clientForm.website" class="form-control" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <h4 class="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Contatti e indirizzo</h4>
+                                <div class="grid gap-4 md:grid-cols-2">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Email</label>
+                                        <input v-model="clientForm.email" type="email" class="form-control" />
+                                        <div v-if="clientForm.errors.email" class="mt-1 text-sm text-red-600">{{ clientForm.errors.email }}</div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Telefono</label>
+                                        <input v-model="clientForm.phone" class="form-control" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Paese</label>
+                                        <input v-model="clientForm.country" class="form-control" />
+                                    </div>
+                                    <div class="grid gap-3 grid-cols-[1fr_110px]">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700">Via</label>
+                                            <input v-model="clientForm.street" class="form-control" />
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700">N.</label>
+                                            <input v-model="clientForm.street_number" class="form-control" />
+                                        </div>
+                                    </div>
+                                    <div class="grid gap-3 grid-cols-[110px_1fr_90px]">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700">CAP</label>
+                                            <input v-model="clientForm.postal_code" class="form-control" />
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700">Citta</label>
+                                            <input v-model="clientForm.city" class="form-control" />
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700">Prov.</label>
+                                            <input v-model="clientForm.province" class="form-control" maxlength="2" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <h4 class="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Dati fiscali e bancari</h4>
+                                <div class="grid gap-4 md:grid-cols-2">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">PEC</label>
+                                        <input v-model="clientForm.pec" type="email" class="form-control" />
+                                        <div v-if="clientForm.errors.pec" class="mt-1 text-sm text-red-600">{{ clientForm.errors.pec }}</div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Codice SDI</label>
+                                        <input v-model="clientForm.sdi_code" class="form-control" />
+                                    </div>
+                                    <div class="md:col-span-2">
+                                        <label class="block text-sm font-medium text-gray-700">IBAN</label>
+                                        <input v-model="clientForm.iban" class="form-control" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">BIC / SWIFT</label>
+                                        <input v-model="clientForm.bic_swift" class="form-control" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Trattamento IVA</label>
+                                        <input v-model="clientForm.vat_treatment" class="form-control" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Termini pagamento</label>
+                                        <input v-model="clientForm.payment_terms_days" type="number" min="0" class="form-control" />
+                                    </div>
+                                    <label class="mt-7 flex items-center gap-2 text-sm text-gray-700">
+                                        <input v-model="clientForm.is_pa" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
+                                        Pubblica amministrazione
+                                    </label>
+                                    <div class="md:col-span-2">
+                                        <label class="block text-sm font-medium text-gray-700">Note</label>
+                                        <textarea v-model="clientForm.notes" rows="4" class="form-control"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
                     <div class="grid gap-4 md:grid-cols-3">
                         <div class="rounded-md bg-white p-5 shadow-sm">
                             <div class="text-xs font-medium uppercase tracking-wide text-gray-500">Progetti</div>
