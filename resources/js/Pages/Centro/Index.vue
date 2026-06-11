@@ -1103,7 +1103,7 @@ function visibleCalendarTasks(cell) {
                                         </button>
                                         <div
                                             v-if="calendarCreateDate === cell.date"
-                                            class="absolute right-0 top-7 z-20 w-44 overflow-hidden rounded-2xl border border-white/80 bg-white/95 p-1 shadow-[0_20px_55px_rgba(28,42,73,0.16)] backdrop-blur-xl"
+                                            class="absolute right-0 top-7 z-20 w-44 overflow-hidden rounded-2xl border border-white bg-white p-1 shadow-[0_20px_55px_rgba(28,42,73,0.16)]"
                                             @click.stop
                                         >
                                             <Link
