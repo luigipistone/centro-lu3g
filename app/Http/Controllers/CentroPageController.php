@@ -200,6 +200,9 @@ class CentroPageController extends Controller
                 'assignees' => DB::table('task_assignees')->where('task_id', $id)->pluck('user_id'),
                 'followers' => DB::table('task_followers')->where('task_id', $id)->pluck('user_id'),
                 'users' => DB::table('users')->orderBy('name')->get(['id', 'name', 'email']),
+                'taskClients' => DB::table('clients')->orderBy('name')->get(['id', 'name']),
+                'taskProjects' => DB::table('projects')->orderBy('name')->get(['id', 'name']),
+                'taskServices' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name', 'color']),
                 'subtasks' => DB::table('tasks')
                     ->where('parent_task_id', $id)
                     ->latest()
@@ -1543,6 +1546,79 @@ class CentroPageController extends Controller
         );
 
         return back()->with('status', 'Stato task aggiornato.');
+    }
+
+    public function duplicateTask(Request $request, string $id): RedirectResponse
+    {
+        $task = DB::table('tasks')->where('id', $id)->first();
+        abort_if(! $task, 404);
+
+        $newTaskId = (string) str()->uuid();
+
+        DB::transaction(function () use ($task, $newTaskId, $request) {
+            DB::table('tasks')->insert([
+                'id' => $newTaskId,
+                'title' => $task->title.' (copia)',
+                'description' => $task->description,
+                'project_id' => $task->project_id,
+                'client_id' => $task->client_id,
+                'service_id' => $task->service_id,
+                'parent_task_id' => $task->parent_task_id,
+                'start_date' => $task->start_date,
+                'due_date' => $task->due_date,
+                'due_time' => $task->due_time,
+                'location' => $task->location,
+                'priority' => $task->priority,
+                'status' => 'todo',
+                'task_type' => $task->task_type,
+                'recurring_enabled' => $task->recurring_enabled,
+                'recurring_mode' => $task->recurring_mode,
+                'recurring_interval_value' => $task->recurring_interval_value,
+                'recurring_interval_unit' => $task->recurring_interval_unit,
+                'recurring_weekday' => $task->recurring_weekday,
+                'recurring_month_day' => $task->recurring_month_day,
+                'created_by' => $request->user()->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            foreach (['task_assignees', 'task_followers'] as $table) {
+                foreach (DB::table($table)->where('task_id', $task->id)->pluck('user_id') as $userId) {
+                    DB::table($table)->insert([
+                        'id' => (string) str()->uuid(),
+                        'task_id' => $newTaskId,
+                        'user_id' => $userId,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+            }
+
+            foreach (DB::table('tasks')->where('parent_task_id', $task->id)->get() as $subtask) {
+                DB::table('tasks')->insert([
+                    'id' => (string) str()->uuid(),
+                    'title' => $subtask->title,
+                    'description' => $subtask->description,
+                    'project_id' => $subtask->project_id,
+                    'client_id' => $subtask->client_id,
+                    'service_id' => $subtask->service_id,
+                    'parent_task_id' => $newTaskId,
+                    'start_date' => $subtask->start_date,
+                    'due_date' => $subtask->due_date,
+                    'due_time' => $subtask->due_time,
+                    'location' => $subtask->location,
+                    'priority' => $subtask->priority,
+                    'status' => 'todo',
+                    'task_type' => $subtask->task_type,
+                    'recurring_enabled' => false,
+                    'created_by' => $request->user()->id,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        });
+
+        return redirect()->route('tasks.show', $newTaskId)->with('status', 'Task duplicata.');
     }
 
     private function createNextRecurringTask(object $task, string $userId): string

@@ -38,6 +38,7 @@ Route::middleware('auth')->group(function () {
     Route::put('/tasks/{id}', [CentroPageController::class, 'update'])->defaults('section', 'tasks')->name('tasks.update');
     Route::post('/tasks/{id}/comments', [CentroPageController::class, 'storeTaskComment'])->name('tasks.comments.store');
     Route::post('/tasks/{id}/subtasks', [CentroPageController::class, 'storeSubtask'])->name('tasks.subtasks.store');
+    Route::post('/tasks/{id}/duplicate', [CentroPageController::class, 'duplicateTask'])->name('tasks.duplicate');
     Route::patch('/tasks/{id}/status', [CentroPageController::class, 'updateTaskStatus'])->name('tasks.status.update');
     Route::put('/tasks/{id}/people/{type}', [CentroPageController::class, 'syncTaskPeople'])->name('tasks.people.sync');
     Route::delete('/tasks/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'tasks')->name('tasks.destroy');

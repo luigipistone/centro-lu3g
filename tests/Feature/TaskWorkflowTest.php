@@ -182,4 +182,66 @@ class TaskWorkflowTest extends TestCase
             'priority' => 'high',
         ]);
     }
+
+    public function test_task_can_be_duplicated_with_people_and_subtasks(): void
+    {
+        $user = User::factory()->create();
+        $assignee = User::factory()->create();
+        $taskId = (string) Str::uuid();
+        $subtaskId = (string) Str::uuid();
+
+        DB::table('tasks')->insert([
+            'id' => $taskId,
+            'title' => 'Task da duplicare',
+            'priority' => 'urgent',
+            'status' => 'done',
+            'task_type' => 'project',
+            'due_date' => '2026-06-30',
+            'created_by' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('tasks')->insert([
+            'id' => $subtaskId,
+            'title' => 'Sottoattivita duplicata',
+            'priority' => 'low',
+            'status' => 'done',
+            'task_type' => 'task',
+            'parent_task_id' => $taskId,
+            'created_by' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('task_assignees')->insert([
+            'id' => (string) Str::uuid(),
+            'task_id' => $taskId,
+            'user_id' => $assignee->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->post("/tasks/{$taskId}/duplicate")
+            ->assertRedirect();
+
+        $copy = DB::table('tasks')->where('title', 'Task da duplicare (copia)')->first();
+
+        $this->assertNotNull($copy);
+        $this->assertSame('todo', $copy->status);
+        $this->assertSame('urgent', $copy->priority);
+
+        $this->assertDatabaseHas('task_assignees', [
+            'task_id' => $copy->id,
+            'user_id' => $assignee->id,
+        ]);
+
+        $this->assertDatabaseHas('tasks', [
+            'parent_task_id' => $copy->id,
+            'title' => 'Sottoattivita duplicata',
+            'status' => 'todo',
+        ]);
+    }
 }

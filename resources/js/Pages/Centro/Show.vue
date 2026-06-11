@@ -147,6 +147,28 @@ const subscriptionForm = useForm({ ...subscriptionDefaults });
 const editingSubscription = ref(null);
 const confirmAction = ref(null);
 const confirmText = ref('');
+const taskForm = useForm({
+    title: props.record.title || '',
+    description: props.record.description || '',
+    project_id: props.record.project_id || '',
+    client_id: props.record.client_id || '',
+    service_id: props.record.service_id || '',
+    task_type: props.record.task_type || 'project',
+    status: props.record.status || 'todo',
+    priority: props.record.priority || 'medium',
+    start_date: props.record.start_date || '',
+    due_date: props.record.due_date || '',
+    due_time: props.record.due_time ? String(props.record.due_time).slice(0, 5) : '',
+    location: props.record.location || '',
+    recurring_enabled: Boolean(props.record.recurring_enabled),
+    recurring_interval_value: props.record.recurring_interval_value || 1,
+    recurring_interval_unit: props.record.recurring_interval_unit || 'week',
+    recurring_mode: props.record.recurring_mode || 'fixed',
+    recurring_weekday: props.record.recurring_weekday || 1,
+    recurring_month_day: props.record.recurring_month_day || 1,
+    assignee_ids: [...(props.related.assignees || [])],
+    follower_ids: [...(props.related.followers || [])],
+});
 const subtaskForm = useForm({
     title: '',
     priority: 'medium',
@@ -164,6 +186,35 @@ function addComment() {
 
 function setTaskStatus(status) {
     router.patch(route('tasks.status.update', props.record.id), { status }, { preserveScroll: true });
+}
+
+function saveTaskDetails() {
+    taskForm.assignee_ids = [...selectedAssignees.value];
+    taskForm.follower_ids = [...selectedFollowers.value];
+    taskForm.put(route('tasks.update', props.record.id), { preserveScroll: true });
+}
+
+function toggleTaskComplete() {
+    setTaskStatus(props.record.status === 'done' ? 'todo' : 'done');
+}
+
+function duplicateTask() {
+    router.post(route('tasks.duplicate', props.record.id));
+}
+
+function deleteTaskFromDetail() {
+    openConfirm({
+        title: 'Eliminare questa task?',
+        description: props.record.title || 'Task',
+        keyword: 'ELIMINA',
+        button: 'Elimina',
+        danger: true,
+        action: () => router.delete(route('tasks.destroy', props.record.id), {
+            preserveScroll: true,
+            onFinish: closeConfirm,
+            onSuccess: () => router.visit(route('tasks.index')),
+        }),
+    });
 }
 
 function priorityClass(priority) {
@@ -445,6 +496,26 @@ function remainingAmount() {
                     <h2 class="mt-1 text-xl font-semibold leading-tight text-gray-800">
                         {{ record.name || record.title || record.number }}
                     </h2>
+                </div>
+                <div v-if="section === 'tasks'" class="flex flex-wrap justify-end gap-2">
+                    <button
+                        type="button"
+                        :class="[
+                            'rounded-md px-3 py-2 text-sm font-semibold shadow-sm',
+                            record.status === 'done'
+                                ? 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                                : 'bg-indigo-600 text-white hover:bg-indigo-500',
+                        ]"
+                        @click="toggleTaskComplete"
+                    >
+                        {{ record.status === 'done' ? 'Riapri' : 'Completa task' }}
+                    </button>
+                    <button type="button" class="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="duplicateTask">
+                        Duplica
+                    </button>
+                    <button type="button" class="rounded-md border border-red-100 bg-white px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50" @click="deleteTaskFromDetail">
+                        Elimina
+                    </button>
                 </div>
             </div>
         </template>
@@ -915,7 +986,180 @@ function remainingAmount() {
                     </section>
                 </section>
 
-                <section v-if="section !== 'clients'" class="surface rounded-md p-5">
+                <section v-if="section === 'tasks'" class="surface rounded-md p-5">
+                    <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Dettagli task</h3>
+                            <p class="mt-1 text-sm text-gray-500">Modifica rapida dei campi operativi principali.</p>
+                        </div>
+                        <button
+                            type="button"
+                            class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
+                            :disabled="taskForm.processing"
+                            @click="saveTaskDetails"
+                        >
+                            Salva modifiche
+                        </button>
+                    </div>
+
+                    <div class="space-y-5">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Titolo</label>
+                            <input v-model="taskForm.title" class="form-control" required />
+                            <div v-if="taskForm.errors.title" class="mt-1 text-sm text-red-600">{{ taskForm.errors.title }}</div>
+                        </div>
+
+                        <div class="grid gap-2 sm:grid-cols-3">
+                            <button
+                                type="button"
+                                :class="[
+                                    'rounded-md border px-3 py-2 text-left text-sm font-semibold transition',
+                                    taskForm.task_type === 'project' || taskForm.task_type === 'task'
+                                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm'
+                                        : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50',
+                                ]"
+                                @click="taskForm.task_type = 'project'; taskForm.location = ''"
+                            >
+                                <span class="block">Task</span>
+                                <span class="mt-0.5 block text-xs font-normal text-gray-500">Attivita di progetto</span>
+                            </button>
+                            <button
+                                type="button"
+                                :class="[
+                                    'rounded-md border px-3 py-2 text-left text-sm font-semibold transition',
+                                    taskForm.task_type === 'ongoing'
+                                        ? 'border-amber-500 bg-amber-50 text-amber-800 shadow-sm'
+                                        : 'border-amber-200 bg-white text-amber-700 hover:bg-amber-50',
+                                ]"
+                                @click="taskForm.task_type = 'ongoing'; taskForm.project_id = ''; taskForm.location = ''"
+                            >
+                                <span class="block">Continuativa</span>
+                                <span class="mt-0.5 block text-xs font-normal text-gray-500">Ricorrente o operativa</span>
+                            </button>
+                            <button
+                                type="button"
+                                :class="[
+                                    'rounded-md border px-3 py-2 text-left text-sm font-semibold transition',
+                                    taskForm.task_type === 'meeting'
+                                        ? 'border-violet-500 bg-violet-50 text-violet-800 shadow-sm'
+                                        : 'border-violet-200 bg-white text-violet-700 hover:bg-violet-50',
+                                ]"
+                                @click="taskForm.task_type = 'meeting'; taskForm.project_id = ''; taskForm.recurring_enabled = false; taskForm.due_time = taskForm.due_time || '09:00'"
+                            >
+                                <span class="block">Meeting</span>
+                                <span class="mt-0.5 block text-xs font-normal text-gray-500">Data, ora e luogo</span>
+                            </button>
+                        </div>
+
+                        <div class="grid gap-4 md:grid-cols-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Stato</label>
+                                <select v-model="taskForm.status" class="form-control">
+                                    <option value="todo">Da fare</option>
+                                    <option value="in_progress">In corso</option>
+                                    <option value="in_review">Review</option>
+                                    <option value="done">Fatte</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Priorita</label>
+                                <select v-model="taskForm.priority" class="form-control">
+                                    <option value="low">Bassa</option>
+                                    <option value="medium">Media</option>
+                                    <option value="high">Alta</option>
+                                    <option value="urgent">Urgente</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Inizio</label>
+                                <input v-model="taskForm.start_date" type="date" class="form-control" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Scadenza</label>
+                                <input v-model="taskForm.due_date" type="date" class="form-control" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Ora</label>
+                                <input v-model="taskForm.due_time" type="time" class="form-control" />
+                            </div>
+                            <div v-if="taskForm.task_type === 'project' || taskForm.task_type === 'task'">
+                                <label class="block text-sm font-medium text-gray-700">Progetto</label>
+                                <select v-model="taskForm.project_id" class="form-control">
+                                    <option value="">Nessun progetto</option>
+                                    <option v-for="project in related.taskProjects" :key="project.id" :value="project.id">{{ project.name }}</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Cliente</label>
+                                <select v-model="taskForm.client_id" class="form-control">
+                                    <option value="">Nessun cliente</option>
+                                    <option v-for="client in related.taskClients" :key="client.id" :value="client.id">{{ client.name }}</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Servizio</label>
+                                <select v-model="taskForm.service_id" class="form-control">
+                                    <option value="">Nessun servizio</option>
+                                    <option v-for="service in related.taskServices" :key="service.id" :value="service.id">{{ service.name }}</option>
+                                </select>
+                            </div>
+                            <div v-if="taskForm.task_type === 'meeting'" class="md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700">Luogo / link</label>
+                                <input v-model="taskForm.location" class="form-control" placeholder="Sala riunioni o link meeting" />
+                            </div>
+                        </div>
+
+                        <div v-if="taskForm.task_type !== 'meeting'" class="rounded-md border border-gray-100 bg-gray-50 p-4">
+                            <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
+                                <input v-model="taskForm.recurring_enabled" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
+                                Ricorrente
+                            </label>
+                            <div v-if="taskForm.recurring_enabled" class="mt-3 grid gap-3 md:grid-cols-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-500">Ogni</label>
+                                    <input v-model="taskForm.recurring_interval_value" type="number" min="1" class="form-control" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-500">Unita</label>
+                                    <select v-model="taskForm.recurring_interval_unit" class="form-control">
+                                        <option value="week">Settimana</option>
+                                        <option value="month">Mese</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-500">Modalita</label>
+                                    <select v-model="taskForm.recurring_mode" class="form-control">
+                                        <option value="fixed">Fissa</option>
+                                        <option value="relative">Relativa</option>
+                                    </select>
+                                </div>
+                                <div v-if="taskForm.recurring_interval_unit === 'month' && taskForm.recurring_mode === 'fixed'">
+                                    <label class="block text-xs font-medium text-gray-500">Giorno mese</label>
+                                    <input v-model="taskForm.recurring_month_day" type="number" min="1" max="31" class="form-control" />
+                                </div>
+                                <div v-if="taskForm.recurring_interval_unit === 'week'">
+                                    <label class="block text-xs font-medium text-gray-500">Giorno settimana</label>
+                                    <select v-model="taskForm.recurring_weekday" class="form-control">
+                                        <option value="1">Lunedi</option>
+                                        <option value="2">Martedi</option>
+                                        <option value="3">Mercoledi</option>
+                                        <option value="4">Giovedi</option>
+                                        <option value="5">Venerdi</option>
+                                        <option value="6">Sabato</option>
+                                        <option value="7">Domenica</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Descrizione</label>
+                            <textarea v-model="taskForm.description" rows="5" class="form-control" placeholder="Aggiungi una descrizione..."></textarea>
+                        </div>
+                    </div>
+                </section>
+
+                <section v-if="section !== 'clients' && section !== 'tasks'" class="surface rounded-md p-5">
                     <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Dettagli</h3>
                     <dl class="grid gap-4 md:grid-cols-2">
                         <div v-for="[key, value] in visibleEntries" :key="key" class="rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
