@@ -31,6 +31,7 @@ const dashboardGrid = ref(null);
 const widgetMenuOpen = ref(false);
 const saving = ref(false);
 const draggingType = ref(null);
+const dragOverIndex = ref(null);
 let saveTimer = null;
 let resizeState = null;
 
@@ -193,13 +194,80 @@ async function saveWidgets() {
 
 function startDrag(widget, event) {
     draggingType.value = widget.widget_type;
+    dragOverIndex.value = widget.position;
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', widget.widget_type);
+}
+
+function trackGridDrop(event) {
+    if (!draggingType.value || !dashboardGrid.value) return;
+
+    event.dataTransfer.dropEffect = 'move';
+    dragOverIndex.value = resolveDropIndex(event);
+}
+
+function resolveDropIndex(event) {
+    const sourceType = draggingType.value;
+    const ordered = visibleWidgets.value.filter((widget) => widget.widget_type !== sourceType);
+    const cards = [...dashboardGrid.value.querySelectorAll('[data-widget-type]')]
+        .filter((element) => element.dataset.widgetType !== sourceType)
+        .map((element) => ({
+            index: ordered.findIndex((widget) => widget.widget_type === element.dataset.widgetType),
+            rect: element.getBoundingClientRect(),
+        }))
+        .filter((card) => card.index >= 0)
+        .sort((a, b) => a.index - b.index);
+
+    if (!cards.length) return 0;
+
+    const y = event.clientY;
+    const x = event.clientX;
+    const rowTolerance = 12;
+    const rowCards = cards.filter((card) => y >= card.rect.top - rowTolerance && y <= card.rect.bottom + rowTolerance);
+
+    if (rowCards.length) {
+        const sortedRow = [...rowCards].sort((a, b) => a.rect.left - b.rect.left);
+        const beforeCard = sortedRow.find((card) => x < card.rect.left + card.rect.width / 2);
+
+        return beforeCard ? beforeCard.index : sortedRow[sortedRow.length - 1].index + 1;
+    }
+
+    const belowPointer = cards.find((card) => y < card.rect.top + card.rect.height / 2);
+
+    return belowPointer ? belowPointer.index : ordered.length;
+}
+
+function dropOnGrid() {
+    const sourceType = draggingType.value;
+    const to = dragOverIndex.value;
+    draggingType.value = null;
+    dragOverIndex.value = null;
+
+    if (!sourceType || to === null) return;
+
+    const current = visibleWidgets.value.filter((widget) => widget.widget_type !== sourceType);
+    const moved = widgets.value.find((widget) => widget.widget_type === sourceType);
+    if (!moved) return;
+
+    current.splice(Math.max(0, Math.min(to, current.length)), 0, moved);
+    commitWidgets([...current, ...hiddenWidgets.value]);
+}
+
+function endDrag() {
+    draggingType.value = null;
+    dragOverIndex.value = null;
+}
+
+function clearGridDrop(event) {
+    if (!dashboardGrid.value?.contains(event.relatedTarget)) {
+        dragOverIndex.value = null;
+    }
 }
 
 function dropWidget(targetWidget) {
     const sourceType = draggingType.value;
     draggingType.value = null;
+    dragOverIndex.value = null;
 
     if (!sourceType || sourceType === targetWidget.widget_type) return;
 
@@ -338,23 +406,29 @@ function itemMeta(widget, item) {
                 <div class="toolbar justify-between">
                     <div class="flex items-center gap-2 text-sm font-medium text-gray-600">
                         <Settings2 class="h-4 w-4 text-indigo-500" :stroke-width="1.8" />
-                        Trascina la maniglia per spostare i widget. Usa il bordo destro per larghezza 1/4, 2/4, 3/4 o 4/4.
+                        Trascina la maniglia per spostare i widget. Usa il bordo destro per allargarli o restringerli su 4 colonne.
                     </div>
                     <span class="rounded-full bg-white/60 px-3 py-1 text-xs font-semibold text-gray-500">{{ visibleWidgets.length }} attivi</span>
                 </div>
 
-                <div ref="dashboardGrid" class="grid grid-cols-1 gap-4 lg:grid-cols-4">
+                <div
+                    ref="dashboardGrid"
+                    class="grid grid-cols-1 gap-4 lg:grid-cols-4"
+                    @dragover.prevent="trackGridDrop"
+                    @drop.prevent="dropOnGrid"
+                    @dragleave="clearGridDrop"
+                >
                     <article
                         v-for="widget in visibleWidgets"
                         :key="widget.widget_type"
+                        :data-widget-type="widget.widget_type"
                         :class="[
                             'app-card group relative flex min-h-[154px] flex-col overflow-hidden transition',
                             colSpanClass(widget),
-                            draggingType === widget.widget_type ? 'opacity-50 ring-2 ring-indigo-300' : '',
+                            draggingType === widget.widget_type ? 'opacity-45 ring-2 ring-indigo-300' : '',
+                            draggingType && dragOverIndex === visibleWidgets.findIndex((item) => item.widget_type === widget.widget_type) ? 'ring-2 ring-indigo-300' : '',
                         ]"
-                        @dragover.prevent
-                        @drop.prevent="dropWidget(widget)"
-                        @dragend="draggingType = null"
+                        @dragend="endDrag"
                     >
                         <button
                             type="button"
@@ -378,7 +452,6 @@ function itemMeta(widget, item) {
                             </button>
 
                             <div class="flex shrink-0 items-center gap-1">
-                                <span class="rounded-full bg-white/60 px-2 py-1 text-[11px] font-bold text-gray-500">{{ widget.col_span }}/4</span>
                                 <button type="button" class="icon-btn h-7 w-7" :title="`Rimuovi ${metaFor(widget).label}`" @click="removeWidget(widget)">
                                     <X class="h-4 w-4" :stroke-width="1.8" />
                                     <span class="sr-only">Rimuovi</span>
@@ -436,6 +509,16 @@ function itemMeta(widget, item) {
                             </Link>
                         </div>
                     </article>
+
+                    <div
+                        v-if="draggingType"
+                        :class="[
+                            'hidden min-h-[72px] items-center justify-center rounded-[var(--radius)] border border-dashed text-sm font-semibold transition lg:flex',
+                            dragOverIndex === visibleWidgets.length ? 'border-indigo-300 bg-indigo-50/60 text-indigo-600' : 'border-transparent text-transparent',
+                        ]"
+                    >
+                        Rilascia qui
+                    </div>
                 </div>
             </div>
         </div>
