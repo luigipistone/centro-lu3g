@@ -494,7 +494,7 @@ function tasksForDay(date) {
             </div>
         </template>
 
-        <div v-if="formOpen && canWrite && section !== 'settings'" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 px-4 py-6">
+        <div v-if="formOpen && canWrite" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 px-4 py-6">
             <div class="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-md bg-white shadow-xl">
                 <div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
                     <h3 class="font-semibold text-gray-900">{{ formTitle }}</h3>
@@ -1204,8 +1204,14 @@ function tasksForDay(date) {
                     </div>
                 </section>
 
-                <section v-else class="grid gap-6 lg:grid-cols-[360px_1fr]">
-                    <section class="rounded-md bg-white p-5 shadow-sm">
+                <section v-else class="space-y-4">
+                    <div class="flex justify-end">
+                        <button type="button" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500" @click="openCreate()">
+                            Aggiungi servizio
+                        </button>
+                    </div>
+
+                    <section v-if="false" class="rounded-md bg-white p-5 shadow-sm">
                         <div class="mb-4 flex items-center justify-between">
                             <h3 class="font-semibold text-gray-900">{{ editing ? 'Modifica servizio' : 'Nuovo servizio' }}</h3>
                             <button v-if="editing" type="button" class="text-sm text-gray-500 hover:text-gray-800" @click="resetForm">Annulla</button>
