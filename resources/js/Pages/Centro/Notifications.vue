@@ -61,7 +61,7 @@ function formatDate(value) {
             </div>
         </template>
 
-        <div v-if="confirmClear" class="fixed inset-0 z-[70] flex items-center justify-center bg-gray-900/40 px-4 py-6">
+        <div v-if="confirmClear" class="fixed inset-0 z-[70] flex items-center justify-center bg-gray-900/40 px-4 py-6" @click.self="closeConfirm">
             <div class="w-full max-w-md rounded-md bg-white p-5 shadow-xl">
                 <h3 class="text-base font-semibold text-gray-900">Svuotare tutte le notifiche?</h3>
                 <p class="mt-2 text-sm text-gray-600">

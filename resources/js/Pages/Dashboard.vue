@@ -476,9 +476,18 @@ watch(
                         Aggiungi widget
                     </button>
 
+                    <button
+                        v-if="widgetMenuOpen"
+                        type="button"
+                        class="fixed inset-0 z-[2147483646] cursor-default bg-transparent"
+                        aria-label="Chiudi menu widget"
+                        @click="widgetMenuOpen = false"
+                    ></button>
+
                     <div
                         v-if="widgetMenuOpen"
                         class="app-popover absolute right-0 top-12 z-[2147483647] w-80 overflow-hidden rounded-2xl border border-white bg-white p-2 shadow-[0_24px_70px_rgba(28,42,73,0.14)]"
+                        @click.stop
                     >
                         <div class="px-2 pb-2 pt-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Widget disponibili</div>
                         <button

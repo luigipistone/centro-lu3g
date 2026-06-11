@@ -217,13 +217,21 @@ const groups = [
                     </div>
                 </div>
 
+                <button
+                    v-if="showingNavigationDropdown"
+                    type="button"
+                    class="fixed inset-0 top-16 z-20 bg-transparent sm:hidden"
+                    aria-label="Chiudi menu"
+                    @click="showingNavigationDropdown = false"
+                ></button>
+
                 <!-- Responsive Navigation Menu -->
                 <div
                     :class="{
                         block: showingNavigationDropdown,
                         hidden: !showingNavigationDropdown,
                     }"
-                    class="border-t border-white/60 bg-white/70 backdrop-blur-2xl sm:hidden"
+                    class="relative z-30 border-t border-white/60 bg-white/70 backdrop-blur-2xl sm:hidden"
                 >
                     <div class="space-y-1 pb-3 pt-2">
                         <template v-for="group in groups" :key="group.label">

@@ -33,7 +33,7 @@ import {
     Wallet,
     X,
 } from '@lucide/vue';
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps({
     section: String,
@@ -752,6 +752,13 @@ function openCalendarCreateMenu(date) {
     calendarCreateDate.value = calendarCreateDate.value === date ? null : date;
 }
 
+function closeCalendarCreateMenuOnOutside() {
+    calendarCreateDate.value = null;
+}
+
+onMounted(() => document.addEventListener('click', closeCalendarCreateMenuOnOutside));
+onUnmounted(() => document.removeEventListener('click', closeCalendarCreateMenuOnOutside));
+
 function toggleTaskDone(task) {
     router.patch(route('tasks.status.update', task.id), {
         status: task.status === 'done' ? 'todo' : 'done',
@@ -857,7 +864,7 @@ function visibleCalendarTasks(cell) {
             </div>
         </template>
 
-        <div v-if="formOpen && canWrite" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 px-4 py-6">
+        <div v-if="formOpen && canWrite" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 px-4 py-6" @click.self="resetForm">
             <div class="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-md bg-white shadow-xl">
                 <div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
                     <h3 class="font-semibold text-gray-900">{{ formTitle }}</h3>
@@ -997,7 +1004,7 @@ function visibleCalendarTasks(cell) {
             </div>
         </div>
 
-        <div v-if="deleteTarget" class="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/40 px-4 py-6">
+        <div v-if="deleteTarget" class="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/40 px-4 py-6" @click.self="cancelDelete">
             <div class="w-full max-w-md rounded-md bg-white p-5 shadow-xl">
                 <h3 class="text-base font-semibold text-gray-900">Conferma eliminazione</h3>
                 <p class="mt-2 text-sm text-gray-600">
