@@ -326,6 +326,20 @@ class CentroPageController extends Controller
             });
         }
 
+        if ($section === 'projects') {
+            $projectIds = $rows->pluck('id');
+            $followersByProject = DB::table('project_followers')
+                ->whereIn('project_id', $projectIds)
+                ->get(['project_id', 'user_id'])
+                ->groupBy('project_id');
+
+            $rows = $rows->map(function ($row) use ($followersByProject) {
+                $row->follower_ids = ($followersByProject[$row->id] ?? collect())->pluck('user_id')->values();
+
+                return $row;
+            });
+        }
+
         return Inertia::render('Centro/Index', [
             ...$config,
             'rows' => $rows,

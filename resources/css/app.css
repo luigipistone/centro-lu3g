@@ -136,7 +136,18 @@
         animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
     }
 
+    .content-card {
+        animation-name: widget-rise-in;
+        animation-duration: 320ms;
+        animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+        animation-fill-mode: both;
+    }
+
     .widget-card:nth-child(2) {
+        animation-delay: 35ms;
+    }
+
+    .content-card:nth-child(2) {
         animation-delay: 35ms;
     }
 
@@ -144,11 +155,23 @@
         animation-delay: 70ms;
     }
 
+    .content-card:nth-child(3) {
+        animation-delay: 70ms;
+    }
+
     .widget-card:nth-child(4) {
         animation-delay: 105ms;
     }
 
+    .content-card:nth-child(4) {
+        animation-delay: 105ms;
+    }
+
     .widget-card:nth-child(n + 5) {
+        animation-delay: 140ms;
+    }
+
+    .content-card:nth-child(n + 5) {
         animation-delay: 140ms;
     }
 
@@ -364,6 +387,7 @@
     @media (prefers-reduced-motion: reduce) {
         .surface,
         .widget-card,
+        .content-card,
         .app-popover {
             animation: none;
             transition-duration: 1ms;

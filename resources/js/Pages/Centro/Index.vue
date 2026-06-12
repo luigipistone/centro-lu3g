@@ -80,6 +80,9 @@ const taskPriority = ref('all');
 const taskType = ref('all');
 const clientSearch = ref('');
 const clientService = ref('all');
+const projectSearch = ref('');
+const projectStatus = ref('all');
+const projectUserIds = ref([]);
 const settingsTab = ref('personalizzazione');
 const userRoleFilter = ref('all');
 
@@ -632,7 +635,18 @@ function plainText(value) {
     return String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-const projectRows = computed(() => props.rows);
+const projectRows = computed(() => props.rows.filter((row) => {
+    const search = projectSearch.value.trim().toLowerCase();
+    const matchesSearch = !search
+        || (row.name || '').toLowerCase().includes(search)
+        || plainText(row.description).toLowerCase().includes(search)
+        || (row.client_name || '').toLowerCase().includes(search);
+    const matchesStatus = projectStatus.value === 'all' || row.status === projectStatus.value;
+    const matchesUsers = !projectUserIds.value.length
+        || projectUserIds.value.every((userId) => (row.follower_ids || []).includes(userId));
+
+    return matchesSearch && matchesStatus && matchesUsers;
+}));
 
 const roleLabels = {
     superadmin: 'Superadmin',
@@ -659,6 +673,28 @@ function personAvatarClass(selected) {
             ? 'bg-indigo-50 ring-2 ring-indigo-500 ring-offset-2 ring-offset-white'
             : 'bg-white/70 ring-1 ring-gray-200 hover:-translate-y-0.5 hover:ring-indigo-200 hover:shadow-[0_10px_24px_rgba(79,70,229,0.10)]',
     ];
+}
+
+function toggleProjectUserFilter(userId) {
+    const current = [...projectUserIds.value];
+    const index = current.indexOf(userId);
+    if (index >= 0) {
+        current.splice(index, 1);
+    } else {
+        current.push(userId);
+    }
+    projectUserIds.value = current;
+}
+
+function resetProjectFilters() {
+    projectSearch.value = '';
+    projectStatus.value = 'all';
+    projectUserIds.value = [];
+}
+
+function projectUsers(project) {
+    const selected = project.follower_ids || [];
+    return (props.users || []).filter((user) => selected.includes(user.id));
 }
 
 const userRows = computed(() => props.rows.filter((row) => userRoleFilter.value === 'all' || (row.role || 'guest') === userRoleFilter.value));
@@ -1345,7 +1381,35 @@ function visibleCalendarTasks(cell) {
 
         <div v-else-if="section === 'projects'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
-                <div class="flex items-center justify-end">
+                <div class="grid gap-3 lg:grid-cols-[1fr_190px_minmax(260px,auto)_auto_auto]">
+                    <div class="relative">
+                        <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" :stroke-width="1.7" />
+                        <input v-model="projectSearch" class="form-control mt-0 pl-9" placeholder="Cerca per progetto, cliente o descrizione..." />
+                    </div>
+                    <select v-model="projectStatus" class="form-control mt-0">
+                        <option value="all">Tutti gli stati</option>
+                        <option value="active">Attivi</option>
+                        <option value="completed">Completati</option>
+                        <option value="on_hold">In pausa</option>
+                        <option value="archived">Archiviati</option>
+                    </select>
+                    <div class="surface flex min-h-10 flex-wrap items-center gap-2 px-3 py-2">
+                        <span class="mr-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Persone</span>
+                        <button
+                            v-for="user in users"
+                            :key="`project-filter-${user.id}`"
+                            type="button"
+                            :class="personAvatarClass(projectUserIds.includes(user.id))"
+                            :aria-pressed="projectUserIds.includes(user.id)"
+                            :aria-label="`${projectUserIds.includes(user.id) ? 'Rimuovi filtro' : 'Filtra per'} ${user.name || user.email}`"
+                            :title="user.name || user.email"
+                            @click="toggleProjectUserFilter(user.id)"
+                        >
+                            <UserAvatar :user="user" size="md" />
+                        </button>
+                        <span v-if="!users?.length" class="text-xs text-gray-500">Nessun utente</span>
+                    </div>
+                    <button type="button" class="btn btn-outline" @click="resetProjectFilters"><RotateCcw class="h-4 w-4" :stroke-width="1.7" />Reset</button>
                     <button type="button" class="btn btn-primary" @click="openCreate()">
                         <Plus class="h-4 w-4" :stroke-width="1.7" />
                         Nuovo Progetto
@@ -1356,7 +1420,7 @@ function visibleCalendarTasks(cell) {
                     <article
                         v-for="project in projectRows"
                         :key="project.id"
-                        class="project-preview-card group relative border shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+                        class="content-card project-preview-card group relative border shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg"
                         :style="projectCardStyle(project)"
                     >
                         <Link :href="route('projects.show', project.id)" class="flex h-full min-h-[190px] flex-col p-5">
@@ -1370,6 +1434,17 @@ function visibleCalendarTasks(cell) {
                             <p v-if="plainText(project.description)" class="mt-3 line-clamp-2 text-sm" :style="projectCardMutedStyle(project)">
                                 {{ plainText(project.description) }}
                             </p>
+
+                            <div v-if="projectUsers(project).length" class="mt-4 flex -space-x-2">
+                                <UserAvatar
+                                    v-for="user in projectUsers(project).slice(0, 4)"
+                                    :key="`project-user-${project.id}-${user.id}`"
+                                    :user="user"
+                                    size="sm"
+                                    class="ring-2 ring-white/60"
+                                    :title="user.name || user.email"
+                                />
+                            </div>
 
                             <div class="mt-auto flex items-end justify-between gap-3 pt-5">
                                 <span v-if="project.client_name" class="project-preview-chip min-w-0 truncate border px-2 py-0.5 text-xs" :style="projectCardChipStyle(project)">{{ project.client_name }}</span>
@@ -1390,8 +1465,8 @@ function visibleCalendarTasks(cell) {
                         </button>
                     </article>
 
-                    <div v-if="!projectRows.length" class="rounded-md border border-dashed border-gray-300 bg-white px-5 py-12 text-center text-sm text-gray-500 sm:col-span-2 lg:col-span-4">
-                        Nessun progetto
+                    <div v-if="!projectRows.length" class="content-card rounded-md border border-dashed border-gray-300 bg-white px-5 py-12 text-center text-sm text-gray-500 sm:col-span-2 lg:col-span-4">
+                        Nessun progetto trovato.
                     </div>
                 </section>
             </div>
@@ -1435,7 +1510,7 @@ function visibleCalendarTasks(cell) {
                             <article
                                 v-for="user in group.rows"
                                 :key="user.id"
-                                class="rounded-md border border-gray-200 bg-white p-4 text-center shadow-sm transition hover:border-indigo-200 hover:shadow"
+                                class="content-card rounded-md border border-gray-200 bg-white p-4 text-center shadow-sm transition hover:border-indigo-200 hover:shadow"
                             >
                                 <Link :href="route('users.show', user.id)" class="block rounded-md p-2 transition hover:bg-gray-50">
                                     <UserAvatar :user="user" size="lg" class="mx-auto" />
@@ -1454,7 +1529,7 @@ function visibleCalendarTasks(cell) {
                     </section>
                 </div>
 
-                <div v-else class="rounded-md border border-dashed border-gray-300 bg-white px-5 py-12 text-center text-sm text-gray-500">
+                <div v-else class="content-card rounded-md border border-dashed border-gray-300 bg-white px-5 py-12 text-center text-sm text-gray-500">
                     Nessun utente trovato.
                 </div>
             </div>
@@ -1462,22 +1537,6 @@ function visibleCalendarTasks(cell) {
 
         <div v-else-if="section === 'clients'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
-                <div class="grid gap-4 md:grid-cols-4">
-                    <div
-                        v-for="card in [
-                            ['Clienti', clientStats?.total || 0],
-                            ['Con servizi', clientStats?.withServices || 0],
-                            ['Con task aperti', clientStats?.withOpenTasks || 0],
-                            ['Con documenti', clientStats?.withDocuments || 0],
-                        ]"
-                        :key="card[0]"
-                        class="rounded-md bg-white p-5 shadow-sm"
-                    >
-                        <div class="text-xs font-medium uppercase tracking-wide text-gray-500">{{ card[0] }}</div>
-                        <div class="mt-2 text-3xl font-semibold text-gray-900">{{ card[1] }}</div>
-                    </div>
-                </div>
-
                 <div class="grid gap-3 md:grid-cols-[1fr_220px_auto_auto]">
                     <div class="relative">
                         <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" :stroke-width="1.7" />
@@ -1547,7 +1606,7 @@ function visibleCalendarTasks(cell) {
                         <article
                             v-for="client in clientRows"
                             :key="client.id"
-                            class="group relative rounded-md border border-gray-200 bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md"
+                            class="content-card group relative rounded-md border border-gray-200 bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md"
                         >
                             <Link :href="route('clients.show', client.id)" class="block h-full p-5 pr-14">
                                 <div class="min-w-0">
@@ -1586,7 +1645,7 @@ function visibleCalendarTasks(cell) {
                             </button>
                         </article>
 
-                        <div v-if="!clientRows.length" class="rounded-md border border-dashed border-gray-300 bg-white px-5 py-12 text-center text-sm text-gray-500 sm:col-span-2 lg:col-span-4">
+                        <div v-if="!clientRows.length" class="content-card rounded-md border border-dashed border-gray-300 bg-white px-5 py-12 text-center text-sm text-gray-500 sm:col-span-2 lg:col-span-4">
                             Nessun cliente trovato.
                         </div>
                     </section>
@@ -1725,7 +1784,7 @@ function visibleCalendarTasks(cell) {
                     </section>
 
                     <section class="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                        <div v-for="[status, label] in taskColumns" :key="status" class="min-h-[520px] rounded-md border border-gray-200 bg-gray-50">
+                        <div v-for="[status, label] in taskColumns" :key="status" class="content-card min-h-[520px] rounded-md border border-gray-200 bg-gray-50">
                             <div class="flex items-center justify-between border-b border-gray-200 px-4 py-3">
                                 <h3 class="text-sm font-semibold text-gray-800">{{ label }}</h3>
                                 <span class="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-gray-500">{{ tasksByStatus(status).length }}</span>
@@ -1734,7 +1793,7 @@ function visibleCalendarTasks(cell) {
                                 <article
                                     v-for="task in tasksByStatus(status)"
                                     :key="task.id"
-                                    class="rounded-md border border-gray-200 bg-white p-3 shadow-sm transition hover:border-indigo-200 hover:shadow"
+                                    class="content-card rounded-md border border-gray-200 bg-white p-3 shadow-sm transition hover:border-indigo-200 hover:shadow"
                                 >
                                     <div class="flex items-start justify-between gap-3">
                                         <Link :href="route('tasks.show', task.id)" class="min-w-0 flex-1">
@@ -1768,7 +1827,7 @@ function visibleCalendarTasks(cell) {
                                         <button type="button" class="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-500" @click="remove(task)"><Trash2 class="h-3.5 w-3.5" :stroke-width="1.7" />Elimina</button>
                                     </div>
                                 </article>
-                                <div v-if="!tasksByStatus(status).length" class="rounded-md border border-dashed border-gray-300 bg-white px-3 py-8 text-center text-xs text-gray-500">
+                                <div v-if="!tasksByStatus(status).length" class="content-card rounded-md border border-dashed border-gray-300 bg-white px-3 py-8 text-center text-xs text-gray-500">
                                     Nessun task.
                                 </div>
                             </div>
