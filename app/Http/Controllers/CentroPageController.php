@@ -435,7 +435,7 @@ class CentroPageController extends Controller
         }
 
         $payload = $this->validatedPayload($request, $section);
-        $taskPeople = $section === 'tasks' ? $this->extractTaskPeoplePayload($payload) : ['assignees' => [], 'followers' => []];
+        $taskPeople = $section === 'tasks' ? $this->extractTaskPeoplePayload($payload) : null;
         $payload['id'] = (string) str()->uuid();
         $payload['created_at'] = now();
         $payload['updated_at'] = now();
@@ -447,7 +447,7 @@ class CentroPageController extends Controller
         DB::table($this->config($section)['table'])->insert($payload);
 
         if ($section === 'tasks') {
-            $this->syncTaskPeopleLists($payload['id'], $taskPeople['assignees'], $taskPeople['followers']);
+            $this->syncTaskPeopleLists($payload['id'], $taskPeople['assignees'] ?? [], $taskPeople['followers'] ?? []);
         }
 
         return back()->with('status', 'Creato.');
@@ -470,13 +470,13 @@ class CentroPageController extends Controller
         }
 
         $payload = $this->validatedPayload($request, $section);
-        $taskPeople = $section === 'tasks' ? $this->extractTaskPeoplePayload($payload) : ['assignees' => [], 'followers' => []];
+        $taskPeople = $section === 'tasks' ? $this->extractTaskPeoplePayload($payload) : null;
         $projectFollowers = $section === 'projects' ? $this->extractProjectFollowersPayload($payload) : null;
         $payload['updated_at'] = now();
 
         DB::table($this->config($section)['table'])->where('id', $id)->update($payload);
 
-        if ($section === 'tasks') {
+        if ($section === 'tasks' && $taskPeople !== null) {
             $this->syncTaskPeopleLists($id, $taskPeople['assignees'], $taskPeople['followers']);
         }
 
@@ -1032,8 +1032,15 @@ class CentroPageController extends Controller
         return $payload;
     }
 
-    private function extractTaskPeoplePayload(array &$payload): array
+    private function extractTaskPeoplePayload(array &$payload): ?array
     {
+        $hasAssignees = array_key_exists('assignee_ids', $payload);
+        $hasFollowers = array_key_exists('follower_ids', $payload);
+
+        if (! $hasAssignees && ! $hasFollowers) {
+            return null;
+        }
+
         $people = [
             'assignees' => array_values(array_unique($payload['assignee_ids'] ?? [])),
             'followers' => array_values(array_unique($payload['follower_ids'] ?? [])),

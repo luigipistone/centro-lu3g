@@ -184,6 +184,61 @@ class TaskWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_task_autosave_update_without_people_payload_keeps_people(): void
+    {
+        $user = User::factory()->create();
+        $assignee = User::factory()->create();
+        $follower = User::factory()->create();
+        $taskId = (string) Str::uuid();
+
+        DB::table('tasks')->insert([
+            'id' => $taskId,
+            'title' => 'Task autosave',
+            'priority' => 'medium',
+            'status' => 'todo',
+            'task_type' => 'ongoing',
+            'created_by' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('task_assignees')->insert([
+            'id' => (string) Str::uuid(),
+            'task_id' => $taskId,
+            'user_id' => $assignee->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('task_followers')->insert([
+            'id' => (string) Str::uuid(),
+            'task_id' => $taskId,
+            'user_id' => $follower->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->put("/tasks/{$taskId}", [
+                'title' => 'Task autosave aggiornata',
+                'task_type' => 'ongoing',
+                'status' => 'in_progress',
+                'priority' => 'medium',
+                'recurring_enabled' => false,
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('task_assignees', [
+            'task_id' => $taskId,
+            'user_id' => $assignee->id,
+        ]);
+        $this->assertDatabaseHas('task_followers', [
+            'task_id' => $taskId,
+            'user_id' => $follower->id,
+        ]);
+    }
+
     public function test_task_index_includes_linked_service_information(): void
     {
         $user = User::factory()->create();

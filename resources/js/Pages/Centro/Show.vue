@@ -18,7 +18,7 @@ import {
     Undo2,
     X,
 } from '@lucide/vue';
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 
 const props = defineProps({
     section: String,
@@ -315,6 +315,10 @@ const subtaskForm = useForm({
 });
 const selectedAssignees = ref([...(props.related.assignees || [])]);
 const selectedFollowers = ref([...(props.related.followers || [])]);
+const taskAutosaveState = ref('idle');
+const taskAutosaveError = ref('');
+let taskAutosaveTimer = null;
+let taskAutosaveSequence = 0;
 const editingProject = ref(false);
 const projectForm = useForm({
     name: props.record.name || '',
@@ -344,7 +348,83 @@ function addComment() {
 }
 
 function setTaskStatus(status) {
-    router.patch(route('tasks.status.update', props.record.id), { status }, { preserveScroll: true });
+    taskForm.status = status;
+    taskAutosaveState.value = 'saving';
+    taskAutosaveError.value = '';
+
+    router.patch(route('tasks.status.update', props.record.id), { status }, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => {
+            taskAutosaveState.value = 'saved';
+            window.setTimeout(() => {
+                if (taskAutosaveState.value === 'saved') {
+                    taskAutosaveState.value = 'idle';
+                }
+            }, 1800);
+        },
+        onError: () => {
+            taskAutosaveState.value = 'error';
+            taskAutosaveError.value = 'Stato non salvato';
+        },
+    });
+}
+
+function taskPayload() {
+    return {
+        title: taskForm.title,
+        description: taskForm.description,
+        project_id: taskForm.project_id,
+        client_id: taskForm.client_id,
+        service_id: taskForm.service_id,
+        task_type: taskForm.task_type,
+        status: taskForm.status,
+        priority: taskForm.priority,
+        start_date: taskForm.start_date,
+        due_date: taskForm.due_date,
+        due_time: taskForm.due_time,
+        location: taskForm.location,
+        recurring_enabled: taskForm.recurring_enabled,
+        recurring_interval_value: taskForm.recurring_interval_value,
+        recurring_interval_unit: taskForm.recurring_interval_unit,
+        recurring_mode: taskForm.recurring_mode,
+        recurring_weekday: taskForm.recurring_weekday,
+        recurring_month_day: taskForm.recurring_month_day,
+    };
+}
+
+function saveTaskInline(delay = 650) {
+    if (props.section !== 'tasks') return;
+
+    window.clearTimeout(taskAutosaveTimer);
+    taskAutosaveState.value = 'queued';
+    taskAutosaveError.value = '';
+
+    taskAutosaveTimer = window.setTimeout(() => {
+        const sequence = ++taskAutosaveSequence;
+        taskAutosaveState.value = 'saving';
+        taskForm.transform(() => taskPayload()).put(route('tasks.update', props.record.id), {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                if (sequence !== taskAutosaveSequence) return;
+                taskAutosaveState.value = 'saved';
+                window.setTimeout(() => {
+                    if (taskAutosaveState.value === 'saved') {
+                        taskAutosaveState.value = 'idle';
+                    }
+                }, 1800);
+            },
+            onError: () => {
+                if (sequence !== taskAutosaveSequence) return;
+                taskAutosaveState.value = 'error';
+                taskAutosaveError.value = 'Non salvato';
+            },
+            onFinish: () => {
+                taskForm.transform((data) => data);
+            },
+        });
+    }, delay);
 }
 
 function saveTaskDetails() {
@@ -353,8 +433,51 @@ function saveTaskDetails() {
     taskForm.put(route('tasks.update', props.record.id), { preserveScroll: true });
 }
 
+function setTaskType(type) {
+    taskForm.task_type = type;
+    if (type === 'project' || type === 'task') {
+        taskForm.location = '';
+    }
+    if (type === 'ongoing') {
+        taskForm.project_id = '';
+        taskForm.location = '';
+    }
+    if (type === 'meeting') {
+        taskForm.project_id = '';
+        taskForm.recurring_enabled = false;
+        taskForm.due_time = taskForm.due_time || '09:00';
+    }
+    saveTaskInline(0);
+}
+
+function toggleTaskPerson(type, userId) {
+    const list = type === 'assignees' ? selectedAssignees : selectedFollowers;
+    togglePerson(list, userId);
+    taskAutosaveState.value = 'saving';
+    taskAutosaveError.value = '';
+
+    router.put(route('tasks.people.sync', [props.record.id, type]), {
+        user_ids: [...list.value],
+    }, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => {
+            taskAutosaveState.value = 'saved';
+            window.setTimeout(() => {
+                if (taskAutosaveState.value === 'saved') {
+                    taskAutosaveState.value = 'idle';
+                }
+            }, 1800);
+        },
+        onError: () => {
+            taskAutosaveState.value = 'error';
+            taskAutosaveError.value = 'Persone non salvate';
+        },
+    });
+}
+
 function toggleTaskComplete() {
-    setTaskStatus(props.record.status === 'done' ? 'todo' : 'done');
+    setTaskStatus(taskForm.status === 'done' ? 'todo' : 'done');
 }
 
 function duplicateTask() {
@@ -697,6 +820,28 @@ function statusClass(status) {
 function remainingAmount() {
     return Number(props.record.total_amount || 0) - Number(props.record.total_paid || 0);
 }
+
+watch(
+    () => [
+        taskForm.title,
+        taskForm.description,
+        taskForm.project_id,
+        taskForm.client_id,
+        taskForm.service_id,
+        taskForm.priority,
+        taskForm.start_date,
+        taskForm.due_date,
+        taskForm.due_time,
+        taskForm.location,
+        taskForm.recurring_enabled,
+        taskForm.recurring_interval_value,
+        taskForm.recurring_interval_unit,
+        taskForm.recurring_mode,
+        taskForm.recurring_weekday,
+        taskForm.recurring_month_day,
+    ],
+    () => saveTaskInline(),
+);
 </script>
 
 <template>
@@ -725,15 +870,15 @@ function remainingAmount() {
                         type="button"
                         :class="[
                             'btn',
-                            record.status === 'done'
+                        taskForm.status === 'done'
                                 ? 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
                                 : 'bg-indigo-600 text-white hover:bg-indigo-500',
                         ]"
                         @click="toggleTaskComplete"
                     >
-                        <Undo2 v-if="record.status === 'done'" class="h-4 w-4" :stroke-width="1.7" />
+                        <Undo2 v-if="taskForm.status === 'done'" class="h-4 w-4" :stroke-width="1.7" />
                         <Check v-else class="h-4 w-4" :stroke-width="1.7" />
-                        {{ record.status === 'done' ? 'Riapri' : 'Completa task' }}
+                        {{ taskForm.status === 'done' ? 'Riapri' : 'Completa task' }}
                     </button>
                     <button type="button" class="btn btn-outline" @click="duplicateTask">
                         <Copy class="h-4 w-4" :stroke-width="1.7" />
@@ -1519,16 +1664,22 @@ function remainingAmount() {
                     <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
                         <div>
                             <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Dettagli task</h3>
-                            <p class="mt-1 text-sm text-gray-500">Modifica rapida dei campi operativi principali.</p>
+                            <p class="mt-1 text-sm text-gray-500">Ogni campo si salva automaticamente mentre lavori.</p>
                         </div>
-                        <button
-                            type="button"
-                            class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
-                            :disabled="taskForm.processing"
-                            @click="saveTaskDetails"
+                        <div
+                            v-if="taskAutosaveState !== 'idle'"
+                            :class="[
+                                'inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold transition',
+                                taskAutosaveState === 'saving' || taskAutosaveState === 'queued' ? 'bg-sky-50 text-sky-700' : '',
+                                taskAutosaveState === 'saved' ? 'bg-emerald-50 text-emerald-700' : '',
+                                taskAutosaveState === 'error' ? 'bg-red-50 text-red-700' : '',
+                            ]"
                         >
-                            Salva modifiche
-                        </button>
+                            <span v-if="taskAutosaveState === 'queued'">In attesa...</span>
+                            <span v-else-if="taskAutosaveState === 'saving'">Salvataggio...</span>
+                            <span v-else-if="taskAutosaveState === 'saved'">Salvato</span>
+                            <span v-else>{{ taskAutosaveError || 'Errore salvataggio' }}</span>
+                        </div>
                     </div>
 
                     <div class="space-y-5">
@@ -1547,7 +1698,7 @@ function remainingAmount() {
                                         ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm'
                                         : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50',
                                 ]"
-                                @click="taskForm.task_type = 'project'; taskForm.location = ''"
+                                @click="setTaskType('project')"
                             >
                                 <span class="block">Task</span>
                                 <span class="mt-0.5 block text-xs font-normal text-gray-500">Attivita di progetto</span>
@@ -1560,7 +1711,7 @@ function remainingAmount() {
                                         ? 'border-amber-500 bg-amber-50 text-amber-800 shadow-sm'
                                         : 'border-amber-200 bg-white text-amber-700 hover:bg-amber-50',
                                 ]"
-                                @click="taskForm.task_type = 'ongoing'; taskForm.project_id = ''; taskForm.location = ''"
+                                @click="setTaskType('ongoing')"
                             >
                                 <span class="block">Continuativa</span>
                                 <span class="mt-0.5 block text-xs font-normal text-gray-500">Ricorrente o operativa</span>
@@ -1573,7 +1724,7 @@ function remainingAmount() {
                                         ? 'border-violet-500 bg-violet-50 text-violet-800 shadow-sm'
                                         : 'border-violet-200 bg-white text-violet-700 hover:bg-violet-50',
                                 ]"
-                                @click="taskForm.task_type = 'meeting'; taskForm.project_id = ''; taskForm.recurring_enabled = false; taskForm.due_time = taskForm.due_time || '09:00'"
+                                @click="setTaskType('meeting')"
                             >
                                 <span class="block">Meeting</span>
                                 <span class="mt-0.5 block text-xs font-normal text-gray-500">Data, ora e luogo</span>
@@ -1583,7 +1734,7 @@ function remainingAmount() {
                         <div class="grid gap-4 md:grid-cols-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Stato</label>
-                                <select v-model="taskForm.status" class="form-control">
+                                <select v-model="taskForm.status" class="form-control" @change="setTaskStatus(taskForm.status)">
                                     <option value="todo">Da fare</option>
                                     <option value="in_progress">In corso</option>
                                     <option value="in_review">Review</option>
@@ -1723,7 +1874,7 @@ function remainingAmount() {
                                 v-for="status in ['todo', 'in_progress', 'in_review', 'done']"
                                 :key="status"
                                 type="button"
-                                :class="['rounded-md border px-3 py-2 text-xs font-medium', record.status === status ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50']"
+                                :class="['rounded-md border px-3 py-2 text-xs font-medium', taskForm.status === status ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50']"
                                 @click="setTaskStatus(status)"
                             >
                                 {{ displayValue(status) }}
@@ -1734,7 +1885,7 @@ function remainingAmount() {
                     <section v-if="section === 'tasks'" class="surface rounded-md p-5">
                         <div class="mb-3">
                             <h3 class="text-sm font-semibold text-gray-900">Assegnatari</h3>
-                            <p class="mt-1 text-xs text-gray-500">Aggiungi o rimuovi persone, poi usa Salva modifiche.</p>
+                            <p class="mt-1 text-xs text-gray-500">Clicca sui volti per aggiungere o rimuovere. Il salvataggio e' automatico.</p>
                         </div>
                         <div class="space-y-3">
                             <div>
@@ -1747,7 +1898,7 @@ function remainingAmount() {
                                         :class="personAvatarClass(true)"
                                         :aria-label="`Rimuovi ${user.name || user.email}`"
                                         :title="`Rimuovi ${user.name || user.email}`"
-                                        @click="togglePerson(selectedAssignees, user.id)"
+                                        @click="toggleTaskPerson('assignees', user.id)"
                                     >
                                         <UserAvatar :user="user" size="md" />
                                     </button>
@@ -1764,7 +1915,7 @@ function remainingAmount() {
                                         :class="personAvatarClass(false)"
                                         :aria-label="`Assegna ${user.name || user.email}`"
                                         :title="`Assegna ${user.name || user.email}`"
-                                        @click="togglePerson(selectedAssignees, user.id)"
+                                        @click="toggleTaskPerson('assignees', user.id)"
                                     >
                                         <UserAvatar :user="user" size="md" />
                                     </button>
@@ -1776,7 +1927,7 @@ function remainingAmount() {
                     <section v-if="section === 'tasks'" class="surface rounded-md p-5">
                         <div class="mb-3">
                             <h3 class="text-sm font-semibold text-gray-900">Follower</h3>
-                            <p class="mt-1 text-xs text-gray-500">Aggiungi o rimuovi follower, poi usa Salva modifiche.</p>
+                            <p class="mt-1 text-xs text-gray-500">Clicca sui volti per aggiungere o rimuovere. Il salvataggio e' automatico.</p>
                         </div>
                         <div class="space-y-3">
                             <div>
@@ -1789,7 +1940,7 @@ function remainingAmount() {
                                         :class="personAvatarClass(true)"
                                         :aria-label="`Rimuovi follower ${user.name || user.email}`"
                                         :title="`Rimuovi follower ${user.name || user.email}`"
-                                        @click="togglePerson(selectedFollowers, user.id)"
+                                        @click="toggleTaskPerson('followers', user.id)"
                                     >
                                         <UserAvatar :user="user" size="md" />
                                     </button>
@@ -1806,7 +1957,7 @@ function remainingAmount() {
                                         :class="personAvatarClass(false)"
                                         :aria-label="`Aggiungi follower ${user.name || user.email}`"
                                         :title="`Aggiungi follower ${user.name || user.email}`"
-                                        @click="togglePerson(selectedFollowers, user.id)"
+                                        @click="toggleTaskPerson('followers', user.id)"
                                     >
                                         <UserAvatar :user="user" size="md" />
                                     </button>
