@@ -209,6 +209,10 @@
         @apply flex flex-wrap gap-3 overflow-y-auto p-1;
     }
 
+    .task-type-option {
+        border-radius: var(--radius);
+    }
+
     .nav-link {
         @apply flex items-center gap-3 px-3 py-2 text-sm font-semibold transition-all;
         border: 1px solid transparent;

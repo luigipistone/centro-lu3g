@@ -365,6 +365,32 @@ const formTitle = computed(() => {
     return editing.value ? `Modifica ${createButtonLabel.value.replace(/^Nuovo |^Nuova /, '').toLowerCase()}` : createButtonLabel.value;
 });
 
+const modalPanelClass = computed(() => [
+    'max-h-[92vh] w-full overflow-y-auto rounded-[var(--radius)] bg-white shadow-xl',
+    props.section === 'tasks' ? 'max-w-5xl' : 'max-w-4xl',
+]);
+
+const modalFormClass = computed(() => {
+    if (props.section === 'tasks') return 'grid gap-3 p-5 md:grid-cols-6';
+    if (props.section === 'clients' || props.section === 'billing') return 'grid gap-4 p-5 md:grid-cols-3';
+
+    return 'space-y-4 p-5';
+});
+
+function modalFieldClass(field) {
+    if (props.section !== 'tasks') {
+        return field.type === 'textarea' || ['description', 'notes', 'footer_notes'].includes(field.name) ? 'md:col-span-3' : '';
+    }
+
+    if (['title', 'description'].includes(field.name)) return 'md:col-span-6';
+    if (['project_id', 'client_id', 'service_id', 'status', 'priority', 'start_date', 'due_date', 'due_time', 'recurring_enabled', 'recurring_interval_value', 'recurring_interval_unit', 'recurring_mode', 'recurring_weekday', 'recurring_month_day'].includes(field.name)) {
+        return 'md:col-span-2';
+    }
+    if (field.name === 'location') return 'md:col-span-3';
+
+    return 'md:col-span-3';
+}
+
 hydrateTaskCreateFromUrl();
 
 function optionsFor(field) {
@@ -1113,7 +1139,7 @@ function visibleCalendarTasks(cell) {
         </template>
 
         <div v-if="formOpen && canWrite" class="fixed inset-0 z-[5000] flex items-center justify-center bg-gray-900/40 px-4 py-6" @click.self="resetForm">
-            <div class="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-md bg-white shadow-xl">
+            <div :class="modalPanelClass">
                 <div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
                     <h3 class="font-semibold text-gray-900">{{ formTitle }}</h3>
                     <button type="button" class="icon-btn" @click="resetForm">
@@ -1122,12 +1148,12 @@ function visibleCalendarTasks(cell) {
                     </button>
                 </div>
 
-                <form :class="section === 'clients' || section === 'billing' ? 'grid gap-4 p-5 md:grid-cols-3' : 'space-y-4 p-5'" @submit.prevent="submit">
-                    <div v-if="section === 'tasks'" class="grid gap-2 sm:grid-cols-3">
+                <form :class="modalFormClass" @submit.prevent="submit">
+                    <div v-if="section === 'tasks'" class="grid gap-2 sm:grid-cols-3 md:col-span-6">
                         <button
                             type="button"
                             :class="[
-                                'rounded-md border px-3 py-2 text-left text-sm font-semibold transition',
+                                'task-type-option border px-3 py-2 text-left text-sm font-semibold transition',
                                 form.task_type === 'project' || form.task_type === 'task'
                                     ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm'
                                     : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50',
@@ -1140,7 +1166,7 @@ function visibleCalendarTasks(cell) {
                         <button
                             type="button"
                             :class="[
-                                'rounded-md border px-3 py-2 text-left text-sm font-semibold transition',
+                                'task-type-option border px-3 py-2 text-left text-sm font-semibold transition',
                                 form.task_type === 'ongoing'
                                     ? 'border-amber-500 bg-amber-50 text-amber-800 shadow-sm'
                                     : 'border-amber-200 bg-white text-amber-700 hover:bg-amber-50',
@@ -1153,7 +1179,7 @@ function visibleCalendarTasks(cell) {
                         <button
                             type="button"
                             :class="[
-                                'rounded-md border px-3 py-2 text-left text-sm font-semibold transition',
+                                'task-type-option border px-3 py-2 text-left text-sm font-semibold transition',
                                 form.task_type === 'meeting'
                                     ? 'border-violet-500 bg-violet-50 text-violet-800 shadow-sm'
                                     : 'border-violet-200 bg-white text-violet-700 hover:bg-violet-50',
@@ -1169,10 +1195,10 @@ function visibleCalendarTasks(cell) {
                         v-for="field in fields"
                         v-show="shouldShowField(field)"
                         :key="field.name"
-                        :class="field.type === 'textarea' || ['description', 'notes', 'footer_notes'].includes(field.name) ? 'md:col-span-3' : ''"
+                        :class="modalFieldClass(field)"
                     >
                         <label class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
-                        <textarea v-if="field.type === 'textarea'" v-model="form[field.name]" rows="4" class="form-control" />
+                        <textarea v-if="field.type === 'textarea'" v-model="form[field.name]" :rows="section === 'tasks' ? 3 : 4" class="form-control" />
                         <select v-else-if="['select', 'client', 'project', 'service'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
                             <option value="">-</option>
                             <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ optionLabel(field, option) }}</option>
@@ -1225,7 +1251,7 @@ function visibleCalendarTasks(cell) {
                         <div v-if="form.errors[field.name]" class="mt-1 text-sm text-red-600">{{ form.errors[field.name] }}</div>
                     </div>
 
-                    <div v-if="section === 'tasks'" class="rounded-md border border-gray-100 bg-gray-50 p-3 md:col-span-3">
+                    <div v-if="section === 'tasks'" class="rounded-md border border-gray-100 bg-gray-50 p-3 md:col-span-6">
                         <div class="mb-3 flex items-center justify-between">
                             <h4 class="text-sm font-semibold text-gray-900">{{ form.task_type === 'meeting' ? 'Partecipanti' : 'Persone' }}</h4>
                             <span class="text-xs text-gray-500">{{ (form.assignee_ids || []).length }} assegnati</span>
@@ -1233,7 +1259,7 @@ function visibleCalendarTasks(cell) {
                         <div class="grid gap-4 sm:grid-cols-2">
                             <div>
                                 <div class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">{{ form.task_type === 'meeting' ? 'Partecipanti' : 'Assegnatari' }}</div>
-                                <div class="flex max-h-40 flex-wrap gap-2 overflow-y-auto pr-1">
+                                <div class="people-avatar-picker max-h-32">
                                     <button
                                         v-for="user in users"
                                         :key="`modal-assignee-${user.id}`"
@@ -1250,7 +1276,7 @@ function visibleCalendarTasks(cell) {
                             </div>
                             <div>
                                 <div class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Follower</div>
-                                <div class="flex max-h-40 flex-wrap gap-2 overflow-y-auto pr-1">
+                                <div class="people-avatar-picker max-h-32">
                                     <button
                                         v-for="user in users"
                                         :key="`modal-follower-${user.id}`"
@@ -1268,7 +1294,7 @@ function visibleCalendarTasks(cell) {
                         </div>
                     </div>
 
-                    <div class="flex justify-end gap-2 border-t border-gray-100 pt-4 md:col-span-3">
+                    <div :class="['flex justify-end gap-2 border-t border-gray-100 pt-4', section === 'tasks' ? 'md:col-span-6' : 'md:col-span-3']">
                         <button type="button" class="btn btn-outline" @click="resetForm"><X class="h-4 w-4" :stroke-width="1.7" />Annulla</button>
                         <button type="submit" class="btn btn-primary" :disabled="form.processing">
                             <Save v-if="editing" class="h-4 w-4" :stroke-width="1.7" />
