@@ -78,6 +78,19 @@
         @apply surface p-5 hover-lift transition-colors;
     }
 
+    .project-preview-card {
+        border-radius: var(--radius);
+        overflow: hidden;
+    }
+
+    .project-preview-card > a {
+        border-radius: inherit;
+    }
+
+    .project-preview-chip {
+        border-radius: 9999px;
+    }
+
     .section-title {
         @apply flex items-center gap-2 text-base font-semibold text-gray-950;
     }

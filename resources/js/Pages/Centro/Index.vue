@@ -1332,12 +1332,12 @@ function visibleCalendarTasks(cell) {
                     <article
                         v-for="project in projectRows"
                         :key="project.id"
-                        class="group relative rounded-md border shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+                        class="project-preview-card group relative border shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg"
                         :style="projectCardStyle(project)"
                     >
-                        <Link :href="route('projects.show', project.id)" class="flex h-full min-h-[190px] flex-col p-5 pr-14">
+                        <Link :href="route('projects.show', project.id)" class="flex h-full min-h-[190px] flex-col p-5">
                             <div class="flex items-start justify-between gap-3">
-                                <div class="flex min-w-0 items-center gap-2">
+                                <div class="flex min-w-0 items-center gap-2 pr-12">
                                     <span class="h-3 w-3 shrink-0 rounded-full bg-current opacity-80 ring-1 ring-white/40"></span>
                                     <h3 class="truncate text-base font-semibold">{{ project.name }}</h3>
                                 </div>
@@ -1348,9 +1348,9 @@ function visibleCalendarTasks(cell) {
                             </p>
 
                             <div class="mt-auto flex items-end justify-between gap-3 pt-5">
-                                <span v-if="project.client_name" class="min-w-0 truncate rounded-full border px-2 py-0.5 text-xs" :style="projectCardChipStyle(project)">{{ project.client_name }}</span>
+                                <span v-if="project.client_name" class="project-preview-chip min-w-0 truncate border px-2 py-0.5 text-xs" :style="projectCardChipStyle(project)">{{ project.client_name }}</span>
                                 <span v-else class="text-xs" :style="projectCardMutedStyle(project)">Nessun cliente</span>
-                                <span class="shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium" :style="projectCardChipStyle(project)">
+                                <span class="project-preview-chip ml-auto shrink-0 border px-2 py-0.5 text-right text-xs font-medium" :style="projectCardChipStyle(project)">
                                     {{ displayValue(project.status) }}
                                 </span>
                             </div>
