@@ -498,12 +498,6 @@ function cancelProjectEditing() {
     editingProject.value = false;
 }
 
-function projectMemberUsers() {
-    if (editingProject.value) return props.related.projectUsers || [];
-
-    return (props.related.projectUsers || []).filter((user) => selectedProjectFollowers.value.includes(user.id));
-}
-
 function deleteProjectFromDetail() {
     openConfirm({
         title: 'Eliminare questo progetto?',
@@ -607,6 +601,14 @@ function togglePerson(list, userId) {
     list.value.push(userId);
 }
 
+function peopleSelected(list, users) {
+    return (users || []).filter((user) => list.value.includes(user.id));
+}
+
+function peopleAvailable(list, users) {
+    return (users || []).filter((user) => !list.value.includes(user.id));
+}
+
 function personAvatarClass(selected) {
     return [
         'group/person relative inline-flex h-12 w-12 items-center justify-center rounded-full transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300',
@@ -614,11 +616,6 @@ function personAvatarClass(selected) {
             ? 'bg-indigo-50 ring-2 ring-indigo-500 ring-offset-2 ring-offset-white'
             : 'bg-white/70 ring-1 ring-gray-200 hover:-translate-y-0.5 hover:ring-indigo-200 hover:shadow-[0_10px_24px_rgba(79,70,229,0.10)]',
     ];
-}
-
-function saveTaskPeople(type) {
-    const list = type === 'assignees' ? selectedAssignees.value : selectedFollowers.value;
-    router.put(route('tasks.people.sync', [props.record.id, type]), { user_ids: list }, { preserveScroll: true });
 }
 
 function addSubtask() {
@@ -1732,42 +1729,84 @@ function remainingAmount() {
                     <section v-if="section === 'tasks'" class="surface rounded-md p-5">
                         <div class="mb-3">
                             <h3 class="text-sm font-semibold text-gray-900">Assegnatari</h3>
-                            <p class="mt-1 text-xs text-gray-500">Clicca sugli avatar e poi usa Salva modifiche.</p>
+                            <p class="mt-1 text-xs text-gray-500">Aggiungi o rimuovi persone, poi usa Salva modifiche.</p>
                         </div>
-                        <div class="flex flex-wrap gap-2">
-                            <button
-                                v-for="user in related.users"
-                                :key="user.id"
-                                type="button"
-                                :class="personAvatarClass(selectedAssignees.includes(user.id))"
-                                :aria-pressed="selectedAssignees.includes(user.id)"
-                                :aria-label="`${selectedAssignees.includes(user.id) ? 'Rimuovi' : 'Assegna'} ${user.name || user.email}`"
-                                :title="user.name || user.email"
-                                @click="togglePerson(selectedAssignees, user.id)"
-                            >
-                                <UserAvatar :user="user" size="md" />
-                            </button>
+                        <div class="space-y-3">
+                            <div>
+                                <div class="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Assegnati</div>
+                                <div class="flex flex-wrap gap-2">
+                                    <button
+                                        v-for="user in peopleSelected(selectedAssignees, related.users)"
+                                        :key="`assignee-selected-${user.id}`"
+                                        type="button"
+                                        :class="personAvatarClass(true)"
+                                        :aria-label="`Rimuovi ${user.name || user.email}`"
+                                        :title="`Rimuovi ${user.name || user.email}`"
+                                        @click="togglePerson(selectedAssignees, user.id)"
+                                    >
+                                        <UserAvatar :user="user" size="md" />
+                                    </button>
+                                    <p v-if="!selectedAssignees.length" class="text-sm text-gray-500">Nessun assegnatario.</p>
+                                </div>
+                            </div>
+                            <div v-if="peopleAvailable(selectedAssignees, related.users).length">
+                                <div class="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Aggiungi</div>
+                                <div class="flex flex-wrap gap-2">
+                                    <button
+                                        v-for="user in peopleAvailable(selectedAssignees, related.users)"
+                                        :key="`assignee-available-${user.id}`"
+                                        type="button"
+                                        :class="personAvatarClass(false)"
+                                        :aria-label="`Assegna ${user.name || user.email}`"
+                                        :title="`Assegna ${user.name || user.email}`"
+                                        @click="togglePerson(selectedAssignees, user.id)"
+                                    >
+                                        <UserAvatar :user="user" size="md" />
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </section>
 
                     <section v-if="section === 'tasks'" class="surface rounded-md p-5">
                         <div class="mb-3">
                             <h3 class="text-sm font-semibold text-gray-900">Follower</h3>
-                            <p class="mt-1 text-xs text-gray-500">Clicca sugli avatar e poi usa Salva modifiche.</p>
+                            <p class="mt-1 text-xs text-gray-500">Aggiungi o rimuovi follower, poi usa Salva modifiche.</p>
                         </div>
-                        <div class="flex flex-wrap gap-2">
-                            <button
-                                v-for="user in related.users"
-                                :key="user.id"
-                                type="button"
-                                :class="personAvatarClass(selectedFollowers.includes(user.id))"
-                                :aria-pressed="selectedFollowers.includes(user.id)"
-                                :aria-label="`${selectedFollowers.includes(user.id) ? 'Rimuovi follower' : 'Aggiungi follower'} ${user.name || user.email}`"
-                                :title="user.name || user.email"
-                                @click="togglePerson(selectedFollowers, user.id)"
-                            >
-                                <UserAvatar :user="user" size="md" />
-                            </button>
+                        <div class="space-y-3">
+                            <div>
+                                <div class="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Follower</div>
+                                <div class="flex flex-wrap gap-2">
+                                    <button
+                                        v-for="user in peopleSelected(selectedFollowers, related.users)"
+                                        :key="`follower-selected-${user.id}`"
+                                        type="button"
+                                        :class="personAvatarClass(true)"
+                                        :aria-label="`Rimuovi follower ${user.name || user.email}`"
+                                        :title="`Rimuovi follower ${user.name || user.email}`"
+                                        @click="togglePerson(selectedFollowers, user.id)"
+                                    >
+                                        <UserAvatar :user="user" size="md" />
+                                    </button>
+                                    <p v-if="!selectedFollowers.length" class="text-sm text-gray-500">Nessun follower.</p>
+                                </div>
+                            </div>
+                            <div v-if="peopleAvailable(selectedFollowers, related.users).length">
+                                <div class="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Aggiungi</div>
+                                <div class="flex flex-wrap gap-2">
+                                    <button
+                                        v-for="user in peopleAvailable(selectedFollowers, related.users)"
+                                        :key="`follower-available-${user.id}`"
+                                        type="button"
+                                        :class="personAvatarClass(false)"
+                                        :aria-label="`Aggiungi follower ${user.name || user.email}`"
+                                        :title="`Aggiungi follower ${user.name || user.email}`"
+                                        @click="togglePerson(selectedFollowers, user.id)"
+                                    >
+                                        <UserAvatar :user="user" size="md" />
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </section>
 
@@ -1775,25 +1814,45 @@ function remainingAmount() {
                         <div class="mb-3">
                             <h3 class="text-sm font-semibold text-gray-900">Membri del progetto</h3>
                             <p class="mt-1 text-xs text-gray-500">
-                                {{ editingProject ? 'Clicca sugli avatar e poi usa Salva.' : 'Entra in modifica per aggiungere o rimuovere membri.' }}
+                                {{ editingProject ? 'Aggiungi o rimuovi membri, poi usa Salva.' : 'Entra in modifica per aggiungere o rimuovere membri.' }}
                             </p>
                         </div>
-                        <div class="flex flex-wrap gap-2">
-                            <button
-                                v-for="user in projectMemberUsers()"
-                                :key="user.id"
-                                type="button"
-                                :class="personAvatarClass(selectedProjectFollowers.includes(user.id))"
-                                :aria-pressed="selectedProjectFollowers.includes(user.id)"
-                                :aria-label="`${selectedProjectFollowers.includes(user.id) ? 'Rimuovi dal progetto' : 'Aggiungi al progetto'} ${user.name || user.email}`"
-                                :title="user.name || user.email"
-                                :disabled="!editingProject"
-                                @click="togglePerson(selectedProjectFollowers, user.id)"
-                            >
-                                <UserAvatar :user="user" size="md" />
-                            </button>
+                        <div class="space-y-3">
+                            <div>
+                                <div class="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Assegnati</div>
+                                <div class="flex flex-wrap gap-2">
+                                    <button
+                                        v-for="user in peopleSelected(selectedProjectFollowers, related.projectUsers)"
+                                        :key="`project-selected-${user.id}`"
+                                        type="button"
+                                        :class="personAvatarClass(true)"
+                                        :aria-label="`${editingProject ? 'Rimuovi dal progetto ' : 'Membro progetto '}${user.name || user.email}`"
+                                        :title="`${editingProject ? 'Rimuovi dal progetto ' : ''}${user.name || user.email}`"
+                                        :disabled="!editingProject"
+                                        @click="togglePerson(selectedProjectFollowers, user.id)"
+                                    >
+                                        <UserAvatar :user="user" size="md" />
+                                    </button>
+                                    <p v-if="!selectedProjectFollowers.length" class="text-sm text-gray-500">Nessun membro assegnato.</p>
+                                </div>
+                            </div>
+                            <div v-if="editingProject && peopleAvailable(selectedProjectFollowers, related.projectUsers).length">
+                                <div class="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Aggiungi</div>
+                                <div class="flex flex-wrap gap-2">
+                                    <button
+                                        v-for="user in peopleAvailable(selectedProjectFollowers, related.projectUsers)"
+                                        :key="`project-available-${user.id}`"
+                                        type="button"
+                                        :class="personAvatarClass(false)"
+                                        :aria-label="`Aggiungi al progetto ${user.name || user.email}`"
+                                        :title="`Aggiungi al progetto ${user.name || user.email}`"
+                                        @click="togglePerson(selectedProjectFollowers, user.id)"
+                                    >
+                                        <UserAvatar :user="user" size="md" />
+                                    </button>
+                                </div>
+                            </div>
                             <p v-if="editingProject && !related.projectUsers?.length" class="text-sm text-gray-500">Nessun utente disponibile.</p>
-                            <p v-else-if="!editingProject && !selectedProjectFollowers.length" class="text-sm text-gray-500">Nessun membro assegnato.</p>
                         </div>
                     </section>
 
