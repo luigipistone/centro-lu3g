@@ -2055,7 +2055,7 @@ function visibleCalendarTasks(cell) {
                                         </span>
                                     </td>
                                     <td class="px-4 py-3 text-right">
-                                        <Link :href="route('billing.show', row.id)" class="action-link"><ExternalLink class="h-4 w-4" :stroke-width="1.7" />Apri</Link>
+                                        <button type="button" class="action-link" @click="editRow(row)"><Pencil class="h-4 w-4" :stroke-width="1.7" />Modifica</button>
                                         <button type="button" class="danger-link ml-4" @click="remove(row)"><Trash2 class="h-4 w-4" :stroke-width="1.7" />Elimina</button>
                                     </td>
                                 </tr>
@@ -2182,7 +2182,7 @@ function visibleCalendarTasks(cell) {
                                         <span :class="['rounded-full px-2 py-1 text-xs font-medium', statusClass(row.status)]">{{ displayValue(row.status) }}</span>
                                     </td>
                                     <td class="whitespace-nowrap px-3 py-3 text-right">
-                                        <button type="button" class="action-link" @click="editRow(row)"><Pencil class="h-4 w-4" :stroke-width="1.7" />Modifica</button>
+                                        <Link :href="route('billing.show', row.id)" class="action-link"><ExternalLink class="h-4 w-4" :stroke-width="1.7" />Apri</Link>
                                         <button type="button" class="danger-link ml-4" @click="remove(row)"><Trash2 class="h-4 w-4" :stroke-width="1.7" />Elimina</button>
                                     </td>
                                 </tr>
