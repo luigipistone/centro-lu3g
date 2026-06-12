@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -29,18 +30,23 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        $user = $request->user();
+
         return [
             ...parent::share($request),
             'auth' => [
-                'user' => $request->user(),
+                'user' => fn () => $user ? [
+                    ...$user->only(['id', 'name', 'email', 'email_verified_at']),
+                    'avatar_url' => DB::table('profiles')->where('user_id', $user->id)->value('avatar_url'),
+                ] : null,
             ],
-            'notifications' => fn () => $request->user() ? [
-                'unread' => \Illuminate\Support\Facades\DB::table('notifications')
-                    ->where('user_id', $request->user()->id)
+            'notifications' => fn () => $user ? [
+                'unread' => DB::table('notifications')
+                    ->where('user_id', $user->id)
                     ->where('read', false)
                     ->count(),
-                'latest' => \Illuminate\Support\Facades\DB::table('notifications')
-                    ->where('user_id', $request->user()->id)
+                'latest' => DB::table('notifications')
+                    ->where('user_id', $user->id)
                     ->latest()
                     ->limit(8)
                     ->get(['id', 'task_id', 'message', 'read', 'created_at']),

@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import {
     AlertTriangle,
@@ -651,14 +652,13 @@ function roleClass(role) {
     }[role] || 'bg-gray-100 text-gray-600';
 }
 
-function userInitials(user) {
-    const source = user.name || user.email || '?';
-    return source
-        .split(/\s+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((part) => part.charAt(0).toUpperCase())
-        .join('');
+function personAvatarClass(selected) {
+    return [
+        'group/person relative inline-flex h-12 w-12 items-center justify-center rounded-full transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300',
+        selected
+            ? 'bg-indigo-50 ring-2 ring-indigo-500 ring-offset-2 ring-offset-white'
+            : 'bg-white/70 ring-1 ring-gray-200 hover:-translate-y-0.5 hover:ring-indigo-200 hover:shadow-[0_10px_24px_rgba(79,70,229,0.10)]',
+    ];
 }
 
 const userRows = computed(() => props.rows.filter((row) => userRoleFilter.value === 'all' || (row.role || 'guest') === userRoleFilter.value));
@@ -1029,10 +1029,34 @@ function visibleCalendarTasks(cell) {
                     >
                         <label class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
                         <textarea v-if="field.type === 'textarea'" v-model="form[field.name]" rows="4" class="form-control" />
-                        <select v-else-if="['select', 'client', 'project', 'service', 'user'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
+                        <select v-else-if="['select', 'client', 'project', 'service'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
                             <option value="">-</option>
                             <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ optionLabel(field, option) }}</option>
                         </select>
+                        <div v-else-if="field.type === 'user'" class="mt-2 flex flex-wrap gap-2">
+                            <button
+                                v-if="!field.required"
+                                type="button"
+                                :class="personAvatarClass(!form[field.name])"
+                                aria-label="Nessuna persona"
+                                title="Nessuna persona"
+                                @click="form[field.name] = ''"
+                            >
+                                <span class="text-xs font-semibold">-</span>
+                            </button>
+                            <button
+                                v-for="user in users"
+                                :key="`${field.name}-${user.id}`"
+                                type="button"
+                                :class="personAvatarClass(form[field.name] === user.id)"
+                                :aria-pressed="form[field.name] === user.id"
+                                :aria-label="`Seleziona ${user.name || user.email}`"
+                                :title="user.name || user.email"
+                                @click="form[field.name] = user.id"
+                            >
+                                <UserAvatar :user="user" size="md" />
+                            </button>
+                        </div>
                         <div v-else-if="field.type === 'color'" class="mt-2 flex flex-wrap items-center gap-2">
                             <button
                                 v-for="color in projectColors"
@@ -1065,36 +1089,36 @@ function visibleCalendarTasks(cell) {
                         <div class="grid gap-4 sm:grid-cols-2">
                             <div>
                                 <div class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">{{ form.task_type === 'meeting' ? 'Partecipanti' : 'Assegnatari' }}</div>
-                                <div class="max-h-40 space-y-1 overflow-y-auto pr-1">
-                                    <label v-for="user in users" :key="`modal-assignee-${user.id}`" class="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-700 hover:bg-white">
-                                        <input
-                                            type="checkbox"
-                                            class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
-                                            :checked="(form.assignee_ids || []).includes(user.id)"
-                                            @change="toggleFormPerson('assignee_ids', user.id)"
-                                        />
-                                        <span class="min-w-0">
-                                            <span class="block truncate font-medium">{{ user.name }}</span>
-                                            <span v-if="user.email" class="block truncate text-xs text-gray-400">{{ user.email }}</span>
-                                        </span>
-                                    </label>
+                                <div class="flex max-h-40 flex-wrap gap-2 overflow-y-auto pr-1">
+                                    <button
+                                        v-for="user in users"
+                                        :key="`modal-assignee-${user.id}`"
+                                        type="button"
+                                        :class="personAvatarClass((form.assignee_ids || []).includes(user.id))"
+                                        :aria-pressed="(form.assignee_ids || []).includes(user.id)"
+                                        :aria-label="`${(form.assignee_ids || []).includes(user.id) ? 'Rimuovi' : 'Assegna'} ${user.name || user.email}`"
+                                        :title="user.name || user.email"
+                                        @click="toggleFormPerson('assignee_ids', user.id)"
+                                    >
+                                        <UserAvatar :user="user" size="md" />
+                                    </button>
                                 </div>
                             </div>
                             <div>
                                 <div class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Follower</div>
-                                <div class="max-h-40 space-y-1 overflow-y-auto pr-1">
-                                    <label v-for="user in users" :key="`modal-follower-${user.id}`" class="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-700 hover:bg-white">
-                                        <input
-                                            type="checkbox"
-                                            class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
-                                            :checked="(form.follower_ids || []).includes(user.id)"
-                                            @change="toggleFormPerson('follower_ids', user.id)"
-                                        />
-                                        <span class="min-w-0">
-                                            <span class="block truncate font-medium">{{ user.name }}</span>
-                                            <span v-if="user.email" class="block truncate text-xs text-gray-400">{{ user.email }}</span>
-                                        </span>
-                                    </label>
+                                <div class="flex max-h-40 flex-wrap gap-2 overflow-y-auto pr-1">
+                                    <button
+                                        v-for="user in users"
+                                        :key="`modal-follower-${user.id}`"
+                                        type="button"
+                                        :class="personAvatarClass((form.follower_ids || []).includes(user.id))"
+                                        :aria-pressed="(form.follower_ids || []).includes(user.id)"
+                                        :aria-label="`${(form.follower_ids || []).includes(user.id) ? 'Rimuovi follower' : 'Aggiungi follower'} ${user.name || user.email}`"
+                                        :title="user.name || user.email"
+                                        @click="toggleFormPerson('follower_ids', user.id)"
+                                    >
+                                        <UserAvatar :user="user" size="md" />
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -1413,9 +1437,7 @@ function visibleCalendarTasks(cell) {
                                 :key="user.id"
                                 class="rounded-md border border-gray-200 bg-white p-4 text-center shadow-sm transition hover:border-indigo-200 hover:shadow"
                             >
-                                <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-base font-semibold text-gray-700">
-                                    {{ userInitials(user) }}
-                                </div>
+                                <UserAvatar :user="user" size="lg" class="mx-auto" />
                                 <div class="mt-3 min-w-0">
                                     <h4 class="truncate text-sm font-semibold text-gray-900">{{ user.name || 'Senza nome' }}</h4>
                                     <p class="mt-1 truncate text-xs text-gray-500">{{ user.email }}</p>
@@ -1478,10 +1500,34 @@ function visibleCalendarTasks(cell) {
                             <div v-for="field in fields" :key="field.name">
                                 <label class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
                                 <textarea v-if="field.type === 'textarea'" v-model="form[field.name]" rows="4" class="form-control" />
-                                <select v-else-if="['select', 'client', 'project', 'service', 'user'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
+                                <select v-else-if="['select', 'client', 'project', 'service'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
                                     <option value="">-</option>
                                     <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ option.name }}</option>
                                 </select>
+                                <div v-else-if="field.type === 'user'" class="mt-2 flex flex-wrap gap-2">
+                                    <button
+                                        v-if="!field.required"
+                                        type="button"
+                                        :class="personAvatarClass(!form[field.name])"
+                                        aria-label="Nessuna persona"
+                                        title="Nessuna persona"
+                                        @click="form[field.name] = ''"
+                                    >
+                                        <span class="text-xs font-semibold">-</span>
+                                    </button>
+                                    <button
+                                        v-for="user in users"
+                                        :key="`${field.name}-${user.id}`"
+                                        type="button"
+                                        :class="personAvatarClass(form[field.name] === user.id)"
+                                        :aria-pressed="form[field.name] === user.id"
+                                        :aria-label="`Seleziona ${user.name || user.email}`"
+                                        :title="user.name || user.email"
+                                        @click="form[field.name] = user.id"
+                                    >
+                                        <UserAvatar :user="user" size="md" />
+                                    </button>
+                                </div>
                                 <label v-else-if="field.type === 'checkbox'" class="mt-2 flex items-center gap-2 text-sm text-gray-700">
                                     <input v-model="form[field.name]" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
                                     Si
@@ -1591,10 +1637,34 @@ function visibleCalendarTasks(cell) {
                             <div v-for="field in fields" v-show="shouldShowField(field)" :key="field.name">
                                 <label class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
                                 <textarea v-if="field.type === 'textarea'" v-model="form[field.name]" rows="4" class="form-control" />
-                                <select v-else-if="['select', 'client', 'project', 'service', 'user'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
+                                <select v-else-if="['select', 'client', 'project', 'service'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
                                     <option value="">-</option>
                                     <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ option.name }}</option>
                                 </select>
+                                <div v-else-if="field.type === 'user'" class="mt-2 flex flex-wrap gap-2">
+                                    <button
+                                        v-if="!field.required"
+                                        type="button"
+                                        :class="personAvatarClass(!form[field.name])"
+                                        aria-label="Nessuna persona"
+                                        title="Nessuna persona"
+                                        @click="form[field.name] = ''"
+                                    >
+                                        <span class="text-xs font-semibold">-</span>
+                                    </button>
+                                    <button
+                                        v-for="user in users"
+                                        :key="`${field.name}-${user.id}`"
+                                        type="button"
+                                        :class="personAvatarClass(form[field.name] === user.id)"
+                                        :aria-pressed="form[field.name] === user.id"
+                                        :aria-label="`Seleziona ${user.name || user.email}`"
+                                        :title="user.name || user.email"
+                                        @click="form[field.name] = user.id"
+                                    >
+                                        <UserAvatar :user="user" size="md" />
+                                    </button>
+                                </div>
                                 <label v-else-if="field.type === 'checkbox'" class="mt-2 flex items-center gap-2 text-sm text-gray-700">
                                     <input v-model="form[field.name]" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
                                     Si
@@ -1610,37 +1680,37 @@ function visibleCalendarTasks(cell) {
                                 <div class="grid gap-4 sm:grid-cols-2">
                                     <div>
                                         <div class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">{{ form.task_type === 'meeting' ? 'Partecipanti' : 'Assegnatari' }}</div>
-                                        <div class="max-h-40 space-y-1 overflow-y-auto pr-1">
-                                            <label v-for="user in users" :key="`assignee-${user.id}`" class="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-700 hover:bg-white">
-                                                <input
-                                                    type="checkbox"
-                                                    class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
-                                                    :checked="(form.assignee_ids || []).includes(user.id)"
-                                                    @change="toggleFormPerson('assignee_ids', user.id)"
-                                                />
-                                                <span class="min-w-0">
-                                                    <span class="block truncate font-medium">{{ user.name }}</span>
-                                                    <span v-if="user.email" class="block truncate text-xs text-gray-400">{{ user.email }}</span>
-                                                </span>
-                                            </label>
+                                        <div class="flex max-h-40 flex-wrap gap-2 overflow-y-auto pr-1">
+                                            <button
+                                                v-for="user in users"
+                                                :key="`assignee-${user.id}`"
+                                                type="button"
+                                                :class="personAvatarClass((form.assignee_ids || []).includes(user.id))"
+                                                :aria-pressed="(form.assignee_ids || []).includes(user.id)"
+                                                :aria-label="`${(form.assignee_ids || []).includes(user.id) ? 'Rimuovi' : 'Assegna'} ${user.name || user.email}`"
+                                                :title="user.name || user.email"
+                                                @click="toggleFormPerson('assignee_ids', user.id)"
+                                            >
+                                                <UserAvatar :user="user" size="md" />
+                                            </button>
                                             <p v-if="!users?.length" class="text-xs text-gray-500">Nessun utente disponibile.</p>
                                         </div>
                                     </div>
                                     <div>
                                         <div class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Follower</div>
-                                        <div class="max-h-40 space-y-1 overflow-y-auto pr-1">
-                                            <label v-for="user in users" :key="`follower-${user.id}`" class="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-700 hover:bg-white">
-                                                <input
-                                                    type="checkbox"
-                                                    class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
-                                                    :checked="(form.follower_ids || []).includes(user.id)"
-                                                    @change="toggleFormPerson('follower_ids', user.id)"
-                                                />
-                                                <span class="min-w-0">
-                                                    <span class="block truncate font-medium">{{ user.name }}</span>
-                                                    <span v-if="user.email" class="block truncate text-xs text-gray-400">{{ user.email }}</span>
-                                                </span>
-                                            </label>
+                                        <div class="flex max-h-40 flex-wrap gap-2 overflow-y-auto pr-1">
+                                            <button
+                                                v-for="user in users"
+                                                :key="`follower-${user.id}`"
+                                                type="button"
+                                                :class="personAvatarClass((form.follower_ids || []).includes(user.id))"
+                                                :aria-pressed="(form.follower_ids || []).includes(user.id)"
+                                                :aria-label="`${(form.follower_ids || []).includes(user.id) ? 'Rimuovi follower' : 'Aggiungi follower'} ${user.name || user.email}`"
+                                                :title="user.name || user.email"
+                                                @click="toggleFormPerson('follower_ids', user.id)"
+                                            >
+                                                <UserAvatar :user="user" size="md" />
+                                            </button>
                                             <p v-if="!users?.length" class="text-xs text-gray-500">Nessun utente disponibile.</p>
                                         </div>
                                     </div>
@@ -2134,10 +2204,34 @@ function visibleCalendarTasks(cell) {
                         <div v-for="field in fields" :key="field.name" :class="field.type === 'textarea' ? 'md:col-span-3' : ''">
                             <label class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
                             <textarea v-if="field.type === 'textarea'" v-model="form[field.name]" rows="3" class="form-control" />
-                            <select v-else-if="['select', 'client', 'project', 'service', 'user'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
+                            <select v-else-if="['select', 'client', 'project', 'service'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
                                 <option value="">-</option>
                                 <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ displayValue(option.name) }}</option>
                             </select>
+                            <div v-else-if="field.type === 'user'" class="mt-2 flex flex-wrap gap-2">
+                                <button
+                                    v-if="!field.required"
+                                    type="button"
+                                    :class="personAvatarClass(!form[field.name])"
+                                    aria-label="Nessuna persona"
+                                    title="Nessuna persona"
+                                    @click="form[field.name] = ''"
+                                >
+                                    <span class="text-xs font-semibold">-</span>
+                                </button>
+                                <button
+                                    v-for="user in users"
+                                    :key="`${field.name}-${user.id}`"
+                                    type="button"
+                                    :class="personAvatarClass(form[field.name] === user.id)"
+                                    :aria-pressed="form[field.name] === user.id"
+                                    :aria-label="`Seleziona ${user.name || user.email}`"
+                                    :title="user.name || user.email"
+                                    @click="form[field.name] = user.id"
+                                >
+                                    <UserAvatar :user="user" size="md" />
+                                </button>
+                            </div>
                             <input v-else v-model="form[field.name]" :type="field.type" class="form-control" :required="field.required" />
                             <div v-if="form.errors[field.name]" class="mt-1 text-sm text-red-600">{{ form.errors[field.name] }}</div>
                         </div>
@@ -2293,7 +2387,7 @@ function visibleCalendarTasks(cell) {
                             />
 
                             <select
-                                v-else-if="['select', 'client', 'project', 'service', 'user'].includes(field.type)"
+                                v-else-if="['select', 'client', 'project', 'service'].includes(field.type)"
                                 v-model="form[field.name]"
                                 class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                                 :required="field.required"
@@ -2303,6 +2397,31 @@ function visibleCalendarTasks(cell) {
                                     {{ option.name }}
                                 </option>
                             </select>
+
+                            <div v-else-if="field.type === 'user'" class="mt-2 flex flex-wrap gap-2">
+                                <button
+                                    v-if="!field.required"
+                                    type="button"
+                                    :class="personAvatarClass(!form[field.name])"
+                                    aria-label="Nessuna persona"
+                                    title="Nessuna persona"
+                                    @click="form[field.name] = ''"
+                                >
+                                    <span class="text-xs font-semibold">-</span>
+                                </button>
+                                <button
+                                    v-for="user in users"
+                                    :key="`${field.name}-${user.id}`"
+                                    type="button"
+                                    :class="personAvatarClass(form[field.name] === user.id)"
+                                    :aria-pressed="form[field.name] === user.id"
+                                    :aria-label="`Seleziona ${user.name || user.email}`"
+                                    :title="user.name || user.email"
+                                    @click="form[field.name] = user.id"
+                                >
+                                    <UserAvatar :user="user" size="md" />
+                                </button>
+                            </div>
 
                             <label v-else-if="field.type === 'checkbox'" class="mt-2 flex items-center gap-2 text-sm text-gray-700">
                                 <input v-model="form[field.name]" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />

@@ -98,6 +98,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/settings/backup', [CentroPageController::class, 'runBackup'])->name('settings.backup.run');
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::post('/profile/avatar', [ProfileController::class, 'updateAvatar'])->name('profile.avatar.update');
+    Route::get('/avatars/{filename}', [ProfileController::class, 'avatar'])->name('profile.avatar');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 

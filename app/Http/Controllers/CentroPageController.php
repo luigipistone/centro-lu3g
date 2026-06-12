@@ -266,7 +266,11 @@ class CentroPageController extends Controller
                     ->select('tasks.*', 'projects.name as project_name', 'projects.color as project_color', 'clients.name as client_name', 'services.name as service_name', 'services.color as service_color')
                 )
                 ->when($config['table'] === 'documents', fn ($query) => $query->leftJoin('clients', 'clients.id', '=', 'documents.client_id')->select('documents.*', 'clients.name as client_name'))
-                ->when($config['table'] === 'users', fn ($query) => $query->leftJoin('user_roles', 'user_roles.user_id', '=', 'users.id')->select('users.*', 'user_roles.role'))
+                ->when($config['table'] === 'users', fn ($query) => $query
+                    ->leftJoin('user_roles', 'user_roles.user_id', '=', 'users.id')
+                    ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
+                    ->select('users.*', 'user_roles.role', 'profiles.avatar_url')
+                )
                 ->latest($config['table'].'.created_at')
                 ->limit($limit)
                 ->get();
@@ -333,7 +337,7 @@ class CentroPageController extends Controller
             'clients' => DB::table('clients')->orderBy('name')->get(['id', 'name']),
             'projects' => DB::table('projects')->orderBy('name')->get(['id', 'name']),
             'services' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name']),
-            'users' => DB::table('users')->orderBy('name')->get(['id', 'name', 'email']),
+            'users' => $this->userOptions(),
         ]);
     }
 
@@ -378,7 +382,7 @@ class CentroPageController extends Controller
                 'tasks' => DB::table('tasks')->where('project_id', $id)->latest()->limit(40)->get(),
                 'client' => $record->client_id ? DB::table('clients')->where('id', $record->client_id)->first() : null,
                 'projectClients' => DB::table('clients')->orderBy('name')->get(['id', 'name']),
-                'projectUsers' => DB::table('users')->orderBy('name')->get(['id', 'name', 'email']),
+                'projectUsers' => $this->userOptions(),
                 'followers' => DB::table('project_followers')->where('project_id', $id)->pluck('user_id'),
             ],
             'tasks' => [
@@ -390,7 +394,7 @@ class CentroPageController extends Controller
                     ->get(['task_comments.*', 'users.name as user_name']),
                 'assignees' => DB::table('task_assignees')->where('task_id', $id)->pluck('user_id'),
                 'followers' => DB::table('task_followers')->where('task_id', $id)->pluck('user_id'),
-                'users' => DB::table('users')->orderBy('name')->get(['id', 'name', 'email']),
+                'users' => $this->userOptions(),
                 'taskClients' => DB::table('clients')->orderBy('name')->get(['id', 'name']),
                 'taskProjects' => DB::table('projects')->orderBy('name')->get(['id', 'name']),
                 'taskServices' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name', 'color']),
@@ -1133,6 +1137,14 @@ class CentroPageController extends Controller
             'user_id' => $user->id,
             'role' => $role,
         ]);
+    }
+
+    private function userOptions()
+    {
+        return DB::table('users')
+            ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
+            ->orderBy('users.name')
+            ->get(['users.id', 'users.name', 'users.email', 'profiles.avatar_url']);
     }
 
     private function storeDocument(Request $request): RedirectResponse

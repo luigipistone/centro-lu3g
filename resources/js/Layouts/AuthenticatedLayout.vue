@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
+import UserAvatar from '@/Components/UserAvatar.vue';
 import { Link } from '@inertiajs/vue3';
 import {
     Bell,
@@ -148,9 +149,7 @@ const groups = [
 
             <div class="border-t border-white/60 p-3">
                 <Link :href="route('profile.edit')" class="mb-2 flex items-center gap-2 rounded-2xl p-2 transition hover:bg-white/58">
-                    <div class="flex h-9 w-9 items-center justify-center rounded-2xl bg-indigo-100/80 text-xs font-semibold text-indigo-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.76)]">
-                        {{ $page.props.auth.user.name?.slice(0, 1) }}
-                    </div>
+                    <UserAvatar :user="$page.props.auth.user" size="sm" />
                     <div class="min-w-0">
                         <div class="truncate text-xs font-semibold text-gray-900">{{ $page.props.auth.user.name }}</div>
                         <div class="truncate text-[10px] text-gray-500">{{ $page.props.auth.user.email }}</div>
@@ -196,7 +195,8 @@ const groups = [
                                                 type="button"
                                                 class="inline-flex items-center rounded-2xl border border-white/70 bg-white/64 px-3 py-2 text-sm font-semibold leading-4 text-gray-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] transition duration-150 ease-in-out hover:text-gray-900 focus:outline-none"
                                             >
-                                                {{ $page.props.auth.user.name }}
+                                                <UserAvatar :user="$page.props.auth.user" size="xs" />
+                                                <span class="ml-2">{{ $page.props.auth.user.name }}</span>
 
                                                 <ChevronDown class="-me-0.5 ms-2 h-4 w-4" :stroke-width="1.8" />
                                             </button>

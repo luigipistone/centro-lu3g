@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import {
     Check,
@@ -595,6 +596,15 @@ function togglePerson(list, userId) {
     }
 
     list.value.push(userId);
+}
+
+function personAvatarClass(selected) {
+    return [
+        'group/person relative inline-flex h-12 w-12 items-center justify-center rounded-full transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300',
+        selected
+            ? 'bg-indigo-50 ring-2 ring-indigo-500 ring-offset-2 ring-offset-white'
+            : 'bg-white/70 ring-1 ring-gray-200 hover:-translate-y-0.5 hover:ring-indigo-200 hover:shadow-[0_10px_24px_rgba(79,70,229,0.10)]',
+    ];
 }
 
 function saveTaskPeople(type) {
@@ -1715,16 +1725,19 @@ function remainingAmount() {
                             <h3 class="text-sm font-semibold text-gray-900">Assegnatari</h3>
                             <button type="button" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="saveTaskPeople('assignees')">Salva</button>
                         </div>
-                        <div class="space-y-2">
-                            <label v-for="user in related.users" :key="user.id" class="flex items-center gap-2 text-sm text-gray-700">
-                                <input
-                                    type="checkbox"
-                                    class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
-                                    :checked="selectedAssignees.includes(user.id)"
-                                    @change="togglePerson(selectedAssignees, user.id)"
-                                />
-                                <span class="truncate">{{ user.name }}</span>
-                            </label>
+                        <div class="flex flex-wrap gap-2">
+                            <button
+                                v-for="user in related.users"
+                                :key="user.id"
+                                type="button"
+                                :class="personAvatarClass(selectedAssignees.includes(user.id))"
+                                :aria-pressed="selectedAssignees.includes(user.id)"
+                                :aria-label="`${selectedAssignees.includes(user.id) ? 'Rimuovi' : 'Assegna'} ${user.name || user.email}`"
+                                :title="user.name || user.email"
+                                @click="togglePerson(selectedAssignees, user.id)"
+                            >
+                                <UserAvatar :user="user" size="md" />
+                            </button>
                         </div>
                     </section>
 
@@ -1733,16 +1746,19 @@ function remainingAmount() {
                             <h3 class="text-sm font-semibold text-gray-900">Follower</h3>
                             <button type="button" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="saveTaskPeople('followers')">Salva</button>
                         </div>
-                        <div class="space-y-2">
-                            <label v-for="user in related.users" :key="user.id" class="flex items-center gap-2 text-sm text-gray-700">
-                                <input
-                                    type="checkbox"
-                                    class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
-                                    :checked="selectedFollowers.includes(user.id)"
-                                    @change="togglePerson(selectedFollowers, user.id)"
-                                />
-                                <span class="truncate">{{ user.name }}</span>
-                            </label>
+                        <div class="flex flex-wrap gap-2">
+                            <button
+                                v-for="user in related.users"
+                                :key="user.id"
+                                type="button"
+                                :class="personAvatarClass(selectedFollowers.includes(user.id))"
+                                :aria-pressed="selectedFollowers.includes(user.id)"
+                                :aria-label="`${selectedFollowers.includes(user.id) ? 'Rimuovi follower' : 'Aggiungi follower'} ${user.name || user.email}`"
+                                :title="user.name || user.email"
+                                @click="togglePerson(selectedFollowers, user.id)"
+                            >
+                                <UserAvatar :user="user" size="md" />
+                            </button>
                         </div>
                     </section>
 
@@ -1751,16 +1767,19 @@ function remainingAmount() {
                             <h3 class="text-sm font-semibold text-gray-900">Membri del progetto</h3>
                             <button type="button" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="saveProjectFollowers">Salva</button>
                         </div>
-                        <div class="space-y-2">
-                            <label v-for="user in related.projectUsers" :key="user.id" class="flex items-center gap-2 text-sm text-gray-700">
-                                <input
-                                    type="checkbox"
-                                    class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
-                                    :checked="selectedProjectFollowers.includes(user.id)"
-                                    @change="togglePerson(selectedProjectFollowers, user.id)"
-                                />
-                                <span class="truncate">{{ user.name }}</span>
-                            </label>
+                        <div class="flex flex-wrap gap-2">
+                            <button
+                                v-for="user in related.projectUsers"
+                                :key="user.id"
+                                type="button"
+                                :class="personAvatarClass(selectedProjectFollowers.includes(user.id))"
+                                :aria-pressed="selectedProjectFollowers.includes(user.id)"
+                                :aria-label="`${selectedProjectFollowers.includes(user.id) ? 'Rimuovi dal progetto' : 'Aggiungi al progetto'} ${user.name || user.email}`"
+                                :title="user.name || user.email"
+                                @click="togglePerson(selectedProjectFollowers, user.id)"
+                            >
+                                <UserAvatar :user="user" size="md" />
+                            </button>
                             <p v-if="!related.projectUsers?.length" class="text-sm text-gray-500">Nessun utente disponibile.</p>
                         </div>
                     </section>
