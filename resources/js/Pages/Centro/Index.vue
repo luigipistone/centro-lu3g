@@ -8,6 +8,7 @@ import {
     Briefcase,
     Building2,
     CalendarClock,
+    ChevronDown,
     Check,
     ChevronLeft,
     ChevronRight,
@@ -83,6 +84,8 @@ const clientService = ref('all');
 const projectSearch = ref('');
 const projectStatus = ref('all');
 const projectUserIds = ref([]);
+const projectPeopleMenu = ref(null);
+const projectPeopleMenuOpen = ref(false);
 const settingsTab = ref('personalizzazione');
 const userRoleFilter = ref('all');
 
@@ -690,11 +693,31 @@ function resetProjectFilters() {
     projectSearch.value = '';
     projectStatus.value = 'all';
     projectUserIds.value = [];
+    projectPeopleMenuOpen.value = false;
 }
 
 function projectUsers(project) {
     const selected = project.follower_ids || [];
     return (props.users || []).filter((user) => selected.includes(user.id));
+}
+
+const selectedProjectFilterUsers = computed(() => (props.users || []).filter((user) => projectUserIds.value.includes(user.id)));
+
+const projectPeopleFilterLabel = computed(() => {
+    if (!projectUserIds.value.length) return 'Tutte le persone';
+    if (projectUserIds.value.length === 1) {
+        const user = selectedProjectFilterUsers.value[0];
+        return user?.name || user?.email || '1 persona';
+    }
+
+    return `${projectUserIds.value.length} persone`;
+});
+
+function closeProjectPeopleMenuOnOutside(event) {
+    if (!projectPeopleMenuOpen.value) return;
+    if (projectPeopleMenu.value?.contains(event.target)) return;
+
+    projectPeopleMenuOpen.value = false;
 }
 
 const userRows = computed(() => props.rows.filter((row) => userRoleFilter.value === 'all' || (row.role || 'guest') === userRoleFilter.value));
@@ -896,8 +919,14 @@ function closeCalendarCreateMenuOnOutside() {
     calendarCreateDate.value = null;
 }
 
-onMounted(() => document.addEventListener('click', closeCalendarCreateMenuOnOutside));
-onUnmounted(() => document.removeEventListener('click', closeCalendarCreateMenuOnOutside));
+onMounted(() => {
+    document.addEventListener('click', closeCalendarCreateMenuOnOutside);
+    document.addEventListener('click', closeProjectPeopleMenuOnOutside);
+});
+onUnmounted(() => {
+    document.removeEventListener('click', closeCalendarCreateMenuOnOutside);
+    document.removeEventListener('click', closeProjectPeopleMenuOnOutside);
+});
 
 function toggleTaskDone(task) {
     router.patch(route('tasks.status.update', task.id), {
@@ -1381,7 +1410,7 @@ function visibleCalendarTasks(cell) {
 
         <div v-else-if="section === 'projects'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
-                <div class="grid gap-3 lg:grid-cols-[1fr_190px_minmax(260px,auto)_auto_auto]">
+                <div class="grid gap-3 lg:grid-cols-[1fr_190px_240px_auto_auto]">
                     <div class="relative">
                         <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" :stroke-width="1.7" />
                         <input v-model="projectSearch" class="form-control mt-0 pl-9" placeholder="Cerca per progetto, cliente o descrizione..." />
@@ -1393,21 +1422,55 @@ function visibleCalendarTasks(cell) {
                         <option value="on_hold">In pausa</option>
                         <option value="archived">Archiviati</option>
                     </select>
-                    <div class="surface flex min-h-10 flex-wrap items-center gap-2 px-3 py-2">
-                        <span class="mr-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Persone</span>
+                    <div ref="projectPeopleMenu" class="relative z-30">
                         <button
-                            v-for="user in users"
-                            :key="`project-filter-${user.id}`"
                             type="button"
-                            :class="personAvatarClass(projectUserIds.includes(user.id))"
-                            :aria-pressed="projectUserIds.includes(user.id)"
-                            :aria-label="`${projectUserIds.includes(user.id) ? 'Rimuovi filtro' : 'Filtra per'} ${user.name || user.email}`"
-                            :title="user.name || user.email"
-                            @click="toggleProjectUserFilter(user.id)"
+                            :class="[
+                                'form-control mt-0 flex min-h-10 items-center justify-between gap-3 px-3 py-2 text-left',
+                                projectPeopleMenuOpen ? 'border-indigo-300 ring-4 ring-indigo-500/10' : '',
+                            ]"
+                            :aria-expanded="projectPeopleMenuOpen"
+                            @click.stop="projectPeopleMenuOpen = !projectPeopleMenuOpen"
                         >
-                            <UserAvatar :user="user" size="md" />
+                            <span class="flex min-w-0 items-center gap-2">
+                                <Users class="h-4 w-4 shrink-0 text-gray-400" :stroke-width="1.7" />
+                                <span class="truncate">{{ projectPeopleFilterLabel }}</span>
+                            </span>
+                            <ChevronDown :class="['h-4 w-4 shrink-0 text-gray-400 transition', projectPeopleMenuOpen ? 'rotate-180' : '']" :stroke-width="1.7" />
                         </button>
-                        <span v-if="!users?.length" class="text-xs text-gray-500">Nessun utente</span>
+
+                        <div
+                            v-if="projectPeopleMenuOpen"
+                            class="app-popover absolute left-0 right-0 top-full z-[5200] mt-2 rounded-md border border-white/80 bg-white/95 p-3 shadow-xl backdrop-blur-xl"
+                            @click.stop
+                        >
+                            <div class="mb-3 flex items-center justify-between gap-2">
+                                <span class="text-xs font-semibold uppercase tracking-wide text-gray-400">Filtra per persone</span>
+                                <button
+                                    v-if="projectUserIds.length"
+                                    type="button"
+                                    class="text-xs font-semibold text-indigo-600 hover:text-indigo-500"
+                                    @click="projectUserIds = []"
+                                >
+                                    Pulisci
+                                </button>
+                            </div>
+                            <div class="flex max-h-52 flex-wrap gap-2 overflow-y-auto pr-1">
+                                <button
+                                    v-for="user in users"
+                                    :key="`project-filter-${user.id}`"
+                                    type="button"
+                                    :class="personAvatarClass(projectUserIds.includes(user.id))"
+                                    :aria-pressed="projectUserIds.includes(user.id)"
+                                    :aria-label="`${projectUserIds.includes(user.id) ? 'Rimuovi filtro' : 'Filtra per'} ${user.name || user.email}`"
+                                    :title="user.name || user.email"
+                                    @click="toggleProjectUserFilter(user.id)"
+                                >
+                                    <UserAvatar :user="user" size="md" />
+                                </button>
+                                <span v-if="!users?.length" class="text-xs text-gray-500">Nessun utente</span>
+                            </div>
+                        </div>
                     </div>
                     <button type="button" class="btn btn-outline" @click="resetProjectFilters"><RotateCcw class="h-4 w-4" :stroke-width="1.7" />Reset</button>
                     <button type="button" class="btn btn-primary" @click="openCreate()">
@@ -1425,8 +1488,7 @@ function visibleCalendarTasks(cell) {
                     >
                         <Link :href="route('projects.show', project.id)" class="flex h-full min-h-[190px] flex-col p-5">
                             <div class="flex items-start justify-between gap-3">
-                                <div class="flex min-w-0 items-center gap-2 pr-12">
-                                    <span class="h-3 w-3 shrink-0 rounded-full bg-current opacity-80 ring-1 ring-white/40"></span>
+                                <div class="min-w-0 pr-12">
                                     <h3 class="truncate text-base font-semibold">{{ project.name }}</h3>
                                 </div>
                             </div>
