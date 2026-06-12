@@ -471,12 +471,17 @@ class CentroPageController extends Controller
 
         $payload = $this->validatedPayload($request, $section);
         $taskPeople = $section === 'tasks' ? $this->extractTaskPeoplePayload($payload) : ['assignees' => [], 'followers' => []];
+        $projectFollowers = $section === 'projects' ? $this->extractProjectFollowersPayload($payload) : null;
         $payload['updated_at'] = now();
 
         DB::table($this->config($section)['table'])->where('id', $id)->update($payload);
 
         if ($section === 'tasks') {
             $this->syncTaskPeopleLists($id, $taskPeople['assignees'], $taskPeople['followers']);
+        }
+
+        if ($section === 'projects' && $projectFollowers !== null) {
+            $this->syncProjectFollowersList($id, $projectFollowers);
         }
 
         return back()->with('status', 'Aggiornato.');
@@ -948,6 +953,8 @@ class CentroPageController extends Controller
                 'status' => ['required', Rule::in(['active', 'completed', 'on_hold', 'archived'])],
                 'color' => ['required', 'string', 'max:20'],
                 'description' => ['nullable', 'string'],
+                'user_ids' => ['nullable', 'array'],
+                'user_ids.*' => ['uuid', 'exists:users,id'],
             ],
             'tasks' => [
                 'title' => ['required', 'string', 'max:255'],
@@ -1037,6 +1044,19 @@ class CentroPageController extends Controller
         return $people;
     }
 
+    private function extractProjectFollowersPayload(array &$payload): ?array
+    {
+        if (! array_key_exists('user_ids', $payload)) {
+            return null;
+        }
+
+        $followers = array_values(array_unique($payload['user_ids'] ?? []));
+
+        unset($payload['user_ids']);
+
+        return $followers;
+    }
+
     private function syncTaskPeopleLists(string $taskId, array $assigneeIds, array $followerIds): void
     {
         foreach ([['task_assignees', $assigneeIds], ['task_followers', $followerIds]] as [$table, $userIds]) {
@@ -1062,19 +1082,24 @@ class CentroPageController extends Controller
             'user_ids.*' => ['uuid', 'exists:users,id'],
         ]);
 
-        DB::table('project_followers')->where('project_id', $id)->delete();
+        $this->syncProjectFollowersList($id, array_values(array_unique($payload['user_ids'] ?? [])));
 
-        foreach (array_values(array_unique($payload['user_ids'] ?? [])) as $userId) {
+        return back()->with('status', 'Membri progetto aggiornati.');
+    }
+
+    private function syncProjectFollowersList(string $projectId, array $userIds): void
+    {
+        DB::table('project_followers')->where('project_id', $projectId)->delete();
+
+        foreach ($userIds as $userId) {
             DB::table('project_followers')->insert([
                 'id' => (string) str()->uuid(),
-                'project_id' => $id,
+                'project_id' => $projectId,
                 'user_id' => $userId,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
         }
-
-        return back()->with('status', 'Membri progetto aggiornati.');
     }
 
     private function storeUser(Request $request): RedirectResponse

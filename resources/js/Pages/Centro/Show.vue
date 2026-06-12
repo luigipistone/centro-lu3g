@@ -322,6 +322,7 @@ const projectForm = useForm({
     client_id: props.record.client_id || '',
     status: props.record.status || 'active',
     color: props.record.color || '#2563eb',
+    user_ids: [...(props.related.followers || [])],
 });
 const selectedProjectFollowers = ref([...(props.related.followers || [])]);
 const projectColors = ['#2563eb', '#7c3aed', '#db2777', '#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#475569'];
@@ -483,6 +484,7 @@ function removeContact(contact) {
 }
 
 function saveProjectDetails() {
+    projectForm.user_ids = [...selectedProjectFollowers.value];
     projectForm.put(route('projects.update', props.record.id), {
         preserveScroll: true,
         onSuccess: () => {
@@ -491,8 +493,15 @@ function saveProjectDetails() {
     });
 }
 
-function saveProjectFollowers() {
-    router.put(route('projects.followers.sync', props.record.id), { user_ids: selectedProjectFollowers.value }, { preserveScroll: true });
+function cancelProjectEditing() {
+    selectedProjectFollowers.value = [...(props.related.followers || [])];
+    editingProject.value = false;
+}
+
+function projectMemberUsers() {
+    if (editingProject.value) return props.related.projectUsers || [];
+
+    return (props.related.projectUsers || []).filter((user) => selectedProjectFollowers.value.includes(user.id));
 }
 
 function deleteProjectFromDetail() {
@@ -755,7 +764,7 @@ function remainingAmount() {
                             <Save class="h-4 w-4" :stroke-width="1.7" />
                             Salva
                         </button>
-                        <button type="button" class="btn btn-outline" @click="editingProject = false">
+                        <button type="button" class="btn btn-outline" @click="cancelProjectEditing">
                             <X class="h-4 w-4" :stroke-width="1.7" />
                             Annulla
                         </button>
@@ -1721,9 +1730,9 @@ function remainingAmount() {
                     </section>
 
                     <section v-if="section === 'tasks'" class="surface rounded-md p-5">
-                        <div class="mb-3 flex items-center justify-between">
+                        <div class="mb-3">
                             <h3 class="text-sm font-semibold text-gray-900">Assegnatari</h3>
-                            <button type="button" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="saveTaskPeople('assignees')">Salva</button>
+                            <p class="mt-1 text-xs text-gray-500">Clicca sugli avatar e poi usa Salva modifiche.</p>
                         </div>
                         <div class="flex flex-wrap gap-2">
                             <button
@@ -1742,9 +1751,9 @@ function remainingAmount() {
                     </section>
 
                     <section v-if="section === 'tasks'" class="surface rounded-md p-5">
-                        <div class="mb-3 flex items-center justify-between">
+                        <div class="mb-3">
                             <h3 class="text-sm font-semibold text-gray-900">Follower</h3>
-                            <button type="button" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="saveTaskPeople('followers')">Salva</button>
+                            <p class="mt-1 text-xs text-gray-500">Clicca sugli avatar e poi usa Salva modifiche.</p>
                         </div>
                         <div class="flex flex-wrap gap-2">
                             <button
@@ -1763,24 +1772,28 @@ function remainingAmount() {
                     </section>
 
                     <section v-if="section === 'projects'" class="surface rounded-md p-5">
-                        <div class="mb-3 flex items-center justify-between gap-3">
+                        <div class="mb-3">
                             <h3 class="text-sm font-semibold text-gray-900">Membri del progetto</h3>
-                            <button type="button" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="saveProjectFollowers">Salva</button>
+                            <p class="mt-1 text-xs text-gray-500">
+                                {{ editingProject ? 'Clicca sugli avatar e poi usa Salva.' : 'Entra in modifica per aggiungere o rimuovere membri.' }}
+                            </p>
                         </div>
                         <div class="flex flex-wrap gap-2">
                             <button
-                                v-for="user in related.projectUsers"
+                                v-for="user in projectMemberUsers()"
                                 :key="user.id"
                                 type="button"
                                 :class="personAvatarClass(selectedProjectFollowers.includes(user.id))"
                                 :aria-pressed="selectedProjectFollowers.includes(user.id)"
                                 :aria-label="`${selectedProjectFollowers.includes(user.id) ? 'Rimuovi dal progetto' : 'Aggiungi al progetto'} ${user.name || user.email}`"
                                 :title="user.name || user.email"
+                                :disabled="!editingProject"
                                 @click="togglePerson(selectedProjectFollowers, user.id)"
                             >
                                 <UserAvatar :user="user" size="md" />
                             </button>
-                            <p v-if="!related.projectUsers?.length" class="text-sm text-gray-500">Nessun utente disponibile.</p>
+                            <p v-if="editingProject && !related.projectUsers?.length" class="text-sm text-gray-500">Nessun utente disponibile.</p>
+                            <p v-else-if="!editingProject && !selectedProjectFollowers.length" class="text-sm text-gray-500">Nessun membro assegnato.</p>
                         </div>
                     </section>
 
