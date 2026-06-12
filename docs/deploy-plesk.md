@@ -47,6 +47,29 @@ npm run build
 /opt/plesk/php/8.3/bin/php artisan view:cache
 ```
 
+## Deploy automatico da GitHub Actions
+
+Il deploy di produzione e' gestito dal workflow `.github/workflows/deploy-production.yml`.
+Ad ogni push su `main`, GitHub entra via SSH sul server e lancia:
+
+```bash
+bash /var/www/vhosts/lu3g.com/centro.lu3g.com/scripts/deploy-production.sh
+```
+
+Secret richiesti nella repo GitHub:
+
+```text
+PLESK_HOST=<ip-server-plesk>
+PLESK_USER=<utente-ssh-plesk>
+PLESK_SSH_KEY=<chiave privata dedicata al deploy>
+```
+
+Lo script usa il repository Plesk in `/var/www/vhosts/lu3g.com/git/centro-lu3g`,
+esegue il checkout forzato su `/var/www/vhosts/lu3g.com/centro.lu3g.com`,
+aggiorna le dipendenze PHP, lancia le migrazioni e rigenera le cache Laravel.
+Gli asset Vite sono gia' versionati in `public/build`, quindi il server non ha bisogno
+di `node` o `npm` per pubblicare le modifiche.
+
 ## Stato migrazione
 
 Questa repo contiene la base Laravel/Vue/MySQL e lo schema dati principale derivato da Supabase. Le schermate React/Lovable originali devono essere riscritte in Vue in fasi successive: clienti, progetti, task, calendario, documenti, notifiche, backup, invio email, PDF/XML fatture.
