@@ -592,21 +592,26 @@ function toggleService(service) {
 }
 
 function togglePerson(list, userId) {
-    const index = list.value.indexOf(userId);
+    const values = Array.isArray(list) ? list : list.value;
+    const index = values.indexOf(userId);
     if (index >= 0) {
-        list.value.splice(index, 1);
+        values.splice(index, 1);
         return;
     }
 
-    list.value.push(userId);
+    values.push(userId);
 }
 
 function peopleSelected(list, users) {
-    return (users || []).filter((user) => list.value.includes(user.id));
+    const values = Array.isArray(list) ? list : list.value;
+
+    return (users || []).filter((user) => values.includes(user.id));
 }
 
 function peopleAvailable(list, users) {
-    return (users || []).filter((user) => !list.value.includes(user.id));
+    const values = Array.isArray(list) ? list : list.value;
+
+    return (users || []).filter((user) => !values.includes(user.id));
 }
 
 function personAvatarClass(selected) {
