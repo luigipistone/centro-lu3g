@@ -251,6 +251,11 @@ const contactForm = useForm({
     role: '',
     notes: '',
 });
+const contactDrafts = ref({});
+const contactAutosaveStates = ref({});
+const contactAutosaveErrors = ref({});
+const contactAutosaveTimers = {};
+const contactAutosaveSequences = {};
 const clientForm = useForm({
     name: props.record.name || '',
     legal_name: props.record.legal_name || '',
@@ -759,6 +764,56 @@ function addContact() {
     });
 }
 
+function contactDraftPayload(contactId) {
+    const draft = contactDrafts.value[contactId] || {};
+    return {
+        first_name: draft.first_name || '',
+        last_name: draft.last_name || '',
+        email: draft.email || '',
+        phone: draft.phone || '',
+        role: draft.role || '',
+        notes: draft.notes || '',
+    };
+}
+
+function saveContactInline(contact, delay = 650) {
+    if (props.section !== 'clients') return;
+
+    const payload = contactDraftPayload(contact.id);
+    if (!String(payload.first_name).trim() || !String(payload.last_name).trim()) {
+        setInlineState(contactAutosaveStates, contact.id, 'idle');
+        return;
+    }
+
+    window.clearTimeout(contactAutosaveTimers[contact.id]);
+    setInlineState(contactAutosaveStates, contact.id, 'queued');
+    setInlineState(contactAutosaveErrors, contact.id, '');
+
+    contactAutosaveTimers[contact.id] = window.setTimeout(() => {
+        const sequence = (contactAutosaveSequences[contact.id] || 0) + 1;
+        contactAutosaveSequences[contact.id] = sequence;
+        setInlineState(contactAutosaveStates, contact.id, 'saving');
+        router.put(route('clients.contacts.update', [props.record.id, contact.id]), payload, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                if (sequence !== contactAutosaveSequences[contact.id]) return;
+                setInlineState(contactAutosaveStates, contact.id, 'saved');
+                window.setTimeout(() => {
+                    if (contactAutosaveStates.value[contact.id] === 'saved') {
+                        setInlineState(contactAutosaveStates, contact.id, 'idle');
+                    }
+                }, 1600);
+            },
+            onError: () => {
+                if (sequence !== contactAutosaveSequences[contact.id]) return;
+                setInlineState(contactAutosaveStates, contact.id, 'error');
+                setInlineState(contactAutosaveErrors, contact.id, 'Non salvato');
+            },
+        });
+    }, delay);
+}
+
 function clientPayload() {
     return {
         name: clientForm.name,
@@ -1217,6 +1272,26 @@ watch(
             };
         }
         paymentDrafts.value = next;
+    },
+    { immediate: true },
+);
+
+watch(
+    () => props.related?.contacts || [],
+    (contacts) => {
+        const next = {};
+        for (const contact of contacts) {
+            next[contact.id] = {
+                ...(contactDrafts.value[contact.id] || {}),
+                first_name: contact.first_name || '',
+                last_name: contact.last_name || '',
+                email: contact.email || '',
+                phone: contact.phone || '',
+                role: contact.role || '',
+                notes: contact.notes || '',
+            };
+        }
+        contactDrafts.value = next;
     },
     { immediate: true },
 );
@@ -2450,22 +2525,68 @@ watch(
                         <input v-model="contactForm.email" class="form-control mt-0" type="email" placeholder="Email" />
                         <input v-model="contactForm.phone" class="form-control mt-0" placeholder="Telefono" />
                         <input v-model="contactForm.role" class="form-control mt-0" placeholder="Ruolo" />
-                        <button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
+                        <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
                     </form>
 
                     <div v-if="related.contacts?.length" class="grid gap-3 md:grid-cols-2">
-                        <article v-for="contact in related.contacts" :key="contact.id" class="rounded-md border border-gray-100 bg-gray-50 p-4">
+                        <article v-for="contact in related.contacts" :key="contact.id" class="rounded-md border border-gray-100 bg-gray-50 p-4 transition hover:border-indigo-100 hover:bg-white">
                             <div class="flex items-start justify-between gap-3">
-                                <div>
-                                    <h4 class="font-medium text-gray-900">{{ contact.first_name }} {{ contact.last_name }}</h4>
-                                    <p class="text-sm text-gray-500">{{ contact.role || 'Referente' }}</p>
+                                <div class="min-w-0 flex-1 space-y-3">
+                                    <div class="grid gap-2 sm:grid-cols-2">
+                                        <input
+                                            v-if="contactDrafts[contact.id]"
+                                            v-model="contactDrafts[contact.id].first_name"
+                                            class="form-control mt-0"
+                                            placeholder="Nome"
+                                            @input="saveContactInline(contact)"
+                                        />
+                                        <input
+                                            v-if="contactDrafts[contact.id]"
+                                            v-model="contactDrafts[contact.id].last_name"
+                                            class="form-control mt-0"
+                                            placeholder="Cognome"
+                                            @input="saveContactInline(contact)"
+                                        />
+                                    </div>
+                                    <div class="grid gap-2 sm:grid-cols-2">
+                                        <input
+                                            v-if="contactDrafts[contact.id]"
+                                            v-model="contactDrafts[contact.id].role"
+                                            class="form-control mt-0"
+                                            placeholder="Ruolo"
+                                            @input="saveContactInline(contact)"
+                                        />
+                                        <input
+                                            v-if="contactDrafts[contact.id]"
+                                            v-model="contactDrafts[contact.id].phone"
+                                            class="form-control mt-0"
+                                            placeholder="Telefono"
+                                            @input="saveContactInline(contact)"
+                                        />
+                                    </div>
+                                    <input
+                                        v-if="contactDrafts[contact.id]"
+                                        v-model="contactDrafts[contact.id].email"
+                                        class="form-control mt-0"
+                                        type="email"
+                                        placeholder="Email"
+                                        @input="saveContactInline(contact)"
+                                    />
+                                    <textarea
+                                        v-if="contactDrafts[contact.id]"
+                                        v-model="contactDrafts[contact.id].notes"
+                                        rows="2"
+                                        class="form-control mt-0"
+                                        placeholder="Note"
+                                        @input="saveContactInline(contact)"
+                                    ></textarea>
+                                    <div v-if="contactAutosaveStates[contact.id] && contactAutosaveStates[contact.id] !== 'idle'" :class="['text-[11px] font-medium', contactAutosaveStates[contact.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
+                                        {{ autosaveLabel(contactAutosaveStates[contact.id], contactAutosaveErrors[contact.id]) }}
+                                    </div>
                                 </div>
-                                <button class="text-sm font-medium text-red-600 hover:text-red-500" @click="removeContact(contact)">Elimina</button>
-                            </div>
-                            <div class="mt-3 space-y-1 text-sm text-gray-600">
-                                <p v-if="contact.email">{{ contact.email }}</p>
-                                <p v-if="contact.phone">{{ contact.phone }}</p>
-                                <p v-if="contact.notes" class="whitespace-pre-wrap">{{ contact.notes }}</p>
+                                <button type="button" class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-red-600 transition hover:bg-red-50 hover:text-red-700" aria-label="Elimina referente" @click="removeContact(contact)">
+                                    <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                </button>
                             </div>
                         </article>
                     </div>

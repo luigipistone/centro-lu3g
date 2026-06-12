@@ -20,6 +20,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/clients/{id}', [CentroPageController::class, 'show'])->defaults('section', 'clients')->name('clients.show');
     Route::put('/clients/{id}', [CentroPageController::class, 'update'])->defaults('section', 'clients')->name('clients.update');
     Route::post('/clients/{id}/contacts', [CentroPageController::class, 'storeClientContact'])->name('clients.contacts.store');
+    Route::put('/clients/{clientId}/contacts/{contactId}', [CentroPageController::class, 'updateClientContact'])->name('clients.contacts.update');
     Route::delete('/clients/{clientId}/contacts/{contactId}', [CentroPageController::class, 'destroyClientContact'])->name('clients.contacts.destroy');
     Route::post('/clients/{clientId}/services/{serviceId}', [CentroPageController::class, 'attachClientService'])->name('clients.services.attach');
     Route::delete('/clients/{clientId}/services/{serviceId}', [CentroPageController::class, 'detachClientService'])->name('clients.services.detach');

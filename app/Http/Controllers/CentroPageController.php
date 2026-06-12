@@ -1711,20 +1711,7 @@ class CentroPageController extends Controller
     {
         DB::table('clients')->where('id', $id)->exists() || abort(404);
 
-        $payload = $request->validate([
-            'first_name' => ['required', 'string', 'max:255'],
-            'last_name' => ['required', 'string', 'max:255'],
-            'email' => ['nullable', 'email', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:255'],
-            'role' => ['nullable', 'string', 'max:255'],
-            'notes' => ['nullable', 'string'],
-        ]);
-
-        foreach ($payload as $key => $value) {
-            if ($value === '') {
-                $payload[$key] = null;
-            }
-        }
+        $payload = $this->validatedClientContactPayload($request);
 
         DB::table('client_contacts')->insert([
             ...$payload,
@@ -1735,6 +1722,21 @@ class CentroPageController extends Controller
         ]);
 
         return back()->with('status', 'Referente aggiunto.');
+    }
+
+    public function updateClientContact(Request $request, string $clientId, string $contactId): RedirectResponse
+    {
+        DB::table('client_contacts')->where('client_id', $clientId)->where('id', $contactId)->exists() || abort(404);
+
+        DB::table('client_contacts')
+            ->where('client_id', $clientId)
+            ->where('id', $contactId)
+            ->update([
+                ...$this->validatedClientContactPayload($request),
+                'updated_at' => now(),
+            ]);
+
+        return back()->with('status', 'Referente aggiornato.');
     }
 
     public function destroyClientContact(string $clientId, string $contactId): RedirectResponse
@@ -2340,6 +2342,26 @@ class CentroPageController extends Controller
             'method' => $payload['method'] ?? null,
             'notes' => $payload['notes'] ?? null,
         ];
+    }
+
+    private function validatedClientContactPayload(Request $request): array
+    {
+        $payload = $request->validate([
+            'first_name' => ['required', 'string', 'max:255'],
+            'last_name' => ['required', 'string', 'max:255'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:255'],
+            'role' => ['nullable', 'string', 'max:255'],
+            'notes' => ['nullable', 'string'],
+        ]);
+
+        foreach ($payload as $key => $value) {
+            if ($value === '') {
+                $payload[$key] = null;
+            }
+        }
+
+        return $payload;
     }
 
     private function recalculateDocument(string $id): void
