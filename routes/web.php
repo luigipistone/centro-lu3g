@@ -80,8 +80,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/billing/{id}/xml', [CentroPageController::class, 'downloadDocumentXml'])->name('billing.xml');
     Route::post('/billing/{id}/email', [CentroPageController::class, 'sendDocumentEmail'])->name('billing.email');
     Route::post('/billing/{id}/lines', [CentroPageController::class, 'storeDocumentLine'])->name('billing.lines.store');
+    Route::put('/billing/{documentId}/lines/{lineId}', [CentroPageController::class, 'updateDocumentLine'])->name('billing.lines.update');
     Route::delete('/billing/{documentId}/lines/{lineId}', [CentroPageController::class, 'destroyDocumentLine'])->name('billing.lines.destroy');
     Route::post('/billing/{id}/payments', [CentroPageController::class, 'storeDocumentPayment'])->name('billing.payments.store');
+    Route::put('/billing/{documentId}/payments/{paymentId}', [CentroPageController::class, 'updateDocumentPayment'])->name('billing.payments.update');
     Route::delete('/billing/{documentId}/payments/{paymentId}', [CentroPageController::class, 'destroyDocumentPayment'])->name('billing.payments.destroy');
     Route::delete('/billing/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'billing')->name('billing.destroy');
     Route::get('/users', [CentroPageController::class, 'index'])->defaults('section', 'users')->name('users.index');

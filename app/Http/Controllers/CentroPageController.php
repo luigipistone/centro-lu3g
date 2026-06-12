@@ -2050,28 +2050,13 @@ class CentroPageController extends Controller
     {
         DB::table('documents')->where('id', $id)->exists() || abort(404);
 
-        $payload = $request->validate([
-            'description' => ['required', 'string'],
-            'quantity' => ['required', 'numeric', 'min:0'],
-            'unit_price' => ['required', 'numeric', 'min:0'],
-            'vat_rate' => ['required', 'numeric', 'min:0'],
-            'discount_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
-        ]);
-
-        $quantity = (float) $payload['quantity'];
-        $unitPrice = (float) $payload['unit_price'];
-        $discount = (float) ($payload['discount_pct'] ?? 0);
-        $subtotal = round($quantity * $unitPrice * (1 - ($discount / 100)), 2);
+        [$payload, $subtotal] = $this->validatedDocumentLinePayload($request);
 
         DB::table('document_lines')->insert([
             'id' => (string) str()->uuid(),
             'document_id' => $id,
             'position' => DB::table('document_lines')->where('document_id', $id)->count(),
-            'description' => $payload['description'],
-            'quantity' => $quantity,
-            'unit_price' => $unitPrice,
-            'discount_pct' => $discount,
-            'vat_rate' => (float) $payload['vat_rate'],
+            ...$payload,
             'subtotal' => $subtotal,
             'created_at' => now(),
             'updated_at' => now(),
@@ -2080,6 +2065,26 @@ class CentroPageController extends Controller
         $this->recalculateDocument($id);
 
         return back()->with('status', 'Riga aggiunta.');
+    }
+
+    public function updateDocumentLine(Request $request, string $documentId, string $lineId): RedirectResponse
+    {
+        DB::table('document_lines')->where('document_id', $documentId)->where('id', $lineId)->exists() || abort(404);
+
+        [$payload, $subtotal] = $this->validatedDocumentLinePayload($request);
+
+        DB::table('document_lines')
+            ->where('document_id', $documentId)
+            ->where('id', $lineId)
+            ->update([
+                ...$payload,
+                'subtotal' => $subtotal,
+                'updated_at' => now(),
+            ]);
+
+        $this->recalculateDocument($documentId);
+
+        return back()->with('status', 'Riga aggiornata.');
     }
 
     public function destroyDocumentLine(string $documentId, string $lineId): RedirectResponse
@@ -2094,20 +2099,12 @@ class CentroPageController extends Controller
     {
         DB::table('documents')->where('id', $id)->exists() || abort(404);
 
-        $payload = $request->validate([
-            'amount' => ['required', 'numeric', 'min:0'],
-            'paid_at' => ['required', 'date'],
-            'method' => ['nullable', 'string', 'max:255'],
-            'notes' => ['nullable', 'string'],
-        ]);
+        $payload = $this->validatedDocumentPaymentPayload($request);
 
         DB::table('document_payments')->insert([
             'id' => (string) str()->uuid(),
             'document_id' => $id,
-            'amount' => (float) $payload['amount'],
-            'paid_at' => $payload['paid_at'],
-            'method' => $payload['method'] ?? null,
-            'notes' => $payload['notes'] ?? null,
+            ...$payload,
             'created_by' => $request->user()->id,
             'created_at' => now(),
             'updated_at' => now(),
@@ -2116,6 +2113,25 @@ class CentroPageController extends Controller
         $this->recalculateDocument($id);
 
         return back()->with('status', 'Pagamento registrato.');
+    }
+
+    public function updateDocumentPayment(Request $request, string $documentId, string $paymentId): RedirectResponse
+    {
+        DB::table('document_payments')->where('document_id', $documentId)->where('id', $paymentId)->exists() || abort(404);
+
+        $payload = $this->validatedDocumentPaymentPayload($request);
+
+        DB::table('document_payments')
+            ->where('document_id', $documentId)
+            ->where('id', $paymentId)
+            ->update([
+                ...$payload,
+                'updated_at' => now(),
+            ]);
+
+        $this->recalculateDocument($documentId);
+
+        return back()->with('status', 'Pagamento aggiornato.');
     }
 
     public function destroyDocumentPayment(string $documentId, string $paymentId): RedirectResponse
@@ -2284,6 +2300,46 @@ class CentroPageController extends Controller
         $frequency = max(1, (int) $subscription->frequency_value);
 
         return ($subscription->frequency_unit === 'year' ? $date->addYears($frequency) : $date->addMonths($frequency))->toDateString();
+    }
+
+    private function validatedDocumentLinePayload(Request $request): array
+    {
+        $payload = $request->validate([
+            'description' => ['required', 'string'],
+            'quantity' => ['required', 'numeric', 'min:0'],
+            'unit_price' => ['required', 'numeric', 'min:0'],
+            'vat_rate' => ['required', 'numeric', 'min:0'],
+            'discount_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
+        ]);
+
+        $quantity = (float) $payload['quantity'];
+        $unitPrice = (float) $payload['unit_price'];
+        $discount = (float) ($payload['discount_pct'] ?? 0);
+
+        return [[
+            'description' => $payload['description'],
+            'quantity' => $quantity,
+            'unit_price' => $unitPrice,
+            'discount_pct' => $discount,
+            'vat_rate' => (float) $payload['vat_rate'],
+        ], round($quantity * $unitPrice * (1 - ($discount / 100)), 2)];
+    }
+
+    private function validatedDocumentPaymentPayload(Request $request): array
+    {
+        $payload = $request->validate([
+            'amount' => ['required', 'numeric', 'min:0'],
+            'paid_at' => ['required', 'date'],
+            'method' => ['nullable', 'string', 'max:255'],
+            'notes' => ['nullable', 'string'],
+        ]);
+
+        return [
+            'amount' => (float) $payload['amount'],
+            'paid_at' => $payload['paid_at'],
+            'method' => $payload['method'] ?? null,
+            'notes' => $payload['notes'] ?? null,
+        ];
     }
 
     private function recalculateDocument(string $id): void

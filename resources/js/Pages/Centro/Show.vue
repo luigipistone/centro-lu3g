@@ -209,6 +209,16 @@ const paymentForm = useForm({
     method: '',
     notes: '',
 });
+const lineDrafts = ref({});
+const paymentDrafts = ref({});
+const lineAutosaveStates = ref({});
+const paymentAutosaveStates = ref({});
+const lineAutosaveErrors = ref({});
+const paymentAutosaveErrors = ref({});
+const lineAutosaveTimers = {};
+const paymentAutosaveTimers = {};
+const lineAutosaveSequences = {};
+const paymentAutosaveSequences = {};
 const documentForm = useForm({
     issue_date: props.record.issue_date || new Date().toISOString().slice(0, 10),
     due_date: props.record.due_date || '',
@@ -554,6 +564,115 @@ function removePayment(payment) {
         danger: true,
         action: () => router.delete(route('billing.payments.destroy', [props.record.id, payment.id]), { preserveScroll: true, onFinish: closeConfirm }),
     });
+}
+
+function lineDraftPayload(lineId) {
+    const draft = lineDrafts.value[lineId] || {};
+    return {
+        description: draft.description || '',
+        quantity: draft.quantity ?? 0,
+        unit_price: draft.unit_price ?? 0,
+        vat_rate: draft.vat_rate ?? 0,
+        discount_pct: draft.discount_pct ?? 0,
+    };
+}
+
+function paymentDraftPayload(paymentId) {
+    const draft = paymentDrafts.value[paymentId] || {};
+    return {
+        amount: draft.amount ?? 0,
+        paid_at: draft.paid_at || new Date().toISOString().slice(0, 10),
+        method: draft.method || '',
+        notes: draft.notes || '',
+    };
+}
+
+function setInlineState(bucket, id, value) {
+    bucket.value = { ...bucket.value, [id]: value };
+}
+
+function saveLineInline(line, delay = 650) {
+    if (props.section !== 'billing') return;
+
+    const payload = lineDraftPayload(line.id);
+    if (!String(payload.description).trim()) {
+        setInlineState(lineAutosaveStates, line.id, 'idle');
+        return;
+    }
+
+    window.clearTimeout(lineAutosaveTimers[line.id]);
+    setInlineState(lineAutosaveStates, line.id, 'queued');
+    setInlineState(lineAutosaveErrors, line.id, '');
+
+    lineAutosaveTimers[line.id] = window.setTimeout(() => {
+        const sequence = (lineAutosaveSequences[line.id] || 0) + 1;
+        lineAutosaveSequences[line.id] = sequence;
+        setInlineState(lineAutosaveStates, line.id, 'saving');
+        router.put(route('billing.lines.update', [props.record.id, line.id]), payload, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                if (sequence !== lineAutosaveSequences[line.id]) return;
+                setInlineState(lineAutosaveStates, line.id, 'saved');
+                window.setTimeout(() => {
+                    if (lineAutosaveStates.value[line.id] === 'saved') {
+                        setInlineState(lineAutosaveStates, line.id, 'idle');
+                    }
+                }, 1600);
+            },
+            onError: () => {
+                if (sequence !== lineAutosaveSequences[line.id]) return;
+                setInlineState(lineAutosaveStates, line.id, 'error');
+                setInlineState(lineAutosaveErrors, line.id, 'Non salvato');
+            },
+        });
+    }, delay);
+}
+
+function savePaymentInline(payment, delay = 650) {
+    if (props.section !== 'billing') return;
+
+    const payload = paymentDraftPayload(payment.id);
+    if (!payload.paid_at) {
+        setInlineState(paymentAutosaveStates, payment.id, 'idle');
+        return;
+    }
+
+    window.clearTimeout(paymentAutosaveTimers[payment.id]);
+    setInlineState(paymentAutosaveStates, payment.id, 'queued');
+    setInlineState(paymentAutosaveErrors, payment.id, '');
+
+    paymentAutosaveTimers[payment.id] = window.setTimeout(() => {
+        const sequence = (paymentAutosaveSequences[payment.id] || 0) + 1;
+        paymentAutosaveSequences[payment.id] = sequence;
+        setInlineState(paymentAutosaveStates, payment.id, 'saving');
+        router.put(route('billing.payments.update', [props.record.id, payment.id]), payload, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                if (sequence !== paymentAutosaveSequences[payment.id]) return;
+                setInlineState(paymentAutosaveStates, payment.id, 'saved');
+                window.setTimeout(() => {
+                    if (paymentAutosaveStates.value[payment.id] === 'saved') {
+                        setInlineState(paymentAutosaveStates, payment.id, 'idle');
+                    }
+                }, 1600);
+            },
+            onError: () => {
+                if (sequence !== paymentAutosaveSequences[payment.id]) return;
+                setInlineState(paymentAutosaveStates, payment.id, 'error');
+                setInlineState(paymentAutosaveErrors, payment.id, 'Non salvato');
+            },
+        });
+    }, delay);
+}
+
+function autosaveLabel(state, error = '') {
+    if (state === 'queued') return 'In attesa';
+    if (state === 'saving') return 'Salvo';
+    if (state === 'saved') return 'Salvato';
+    if (state === 'error') return error || 'Errore';
+    return '';
 }
 
 function documentPayload() {
@@ -1063,6 +1182,44 @@ watch(
     ],
     () => saveDocumentInline(),
 );
+
+watch(
+    () => props.related?.lines || [],
+    (lines) => {
+        const next = {};
+        for (const line of lines) {
+            next[line.id] = {
+                ...(lineDrafts.value[line.id] || {}),
+                description: line.description || '',
+                quantity: line.quantity ?? 0,
+                unit_price: line.unit_price ?? 0,
+                vat_rate: line.vat_rate ?? 0,
+                discount_pct: line.discount_pct ?? 0,
+                subtotal: line.subtotal ?? 0,
+            };
+        }
+        lineDrafts.value = next;
+    },
+    { immediate: true },
+);
+
+watch(
+    () => props.related?.payments || [],
+    (payments) => {
+        const next = {};
+        for (const payment of payments) {
+            next[payment.id] = {
+                ...(paymentDrafts.value[payment.id] || {}),
+                amount: payment.amount ?? 0,
+                paid_at: payment.paid_at || '',
+                method: payment.method || '',
+                notes: payment.notes || '',
+            };
+        }
+        paymentDrafts.value = next;
+    },
+    { immediate: true },
+);
 </script>
 
 <template>
@@ -1260,7 +1417,7 @@ watch(
                                 <input v-model="lineForm.unit_price" class="form-control mt-0" type="number" step="0.01" min="0" required />
                                 <input v-model="lineForm.vat_rate" class="form-control mt-0" type="number" step="0.01" min="0" required />
                                 <input v-model="lineForm.discount_pct" class="form-control mt-0" type="number" step="0.01" min="0" max="100" />
-                                <button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
+                                <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
                             </form>
                             <div class="overflow-x-auto">
                                 <table class="min-w-full divide-y divide-gray-200 text-sm">
@@ -1269,22 +1426,79 @@ watch(
                                             <th class="px-3 py-2 text-left">Descrizione</th>
                                             <th class="px-3 py-2 text-right">Qta</th>
                                             <th class="px-3 py-2 text-right">Prezzo</th>
+                                            <th class="px-3 py-2 text-right">Sconto</th>
                                             <th class="px-3 py-2 text-right">IVA</th>
                                             <th class="px-3 py-2 text-right">Subtotale</th>
                                             <th class="px-3 py-2"></th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-gray-100">
-                                        <tr v-for="line in related.lines" :key="line.id">
-                                            <td class="px-3 py-2">{{ line.description }}</td>
-                                            <td class="px-3 py-2 text-right">{{ line.quantity }}</td>
-                                            <td class="px-3 py-2 text-right">{{ money(line.unit_price) }}</td>
-                                            <td class="px-3 py-2 text-right">{{ line.vat_rate }}%</td>
-                                            <td class="px-3 py-2 text-right">{{ money(line.subtotal) }}</td>
-                                            <td class="px-3 py-2 text-right"><button class="text-red-600" @click="removeLine(line)">Elimina</button></td>
+                                        <tr v-for="line in related.lines" :key="line.id" class="align-top">
+                                            <td class="min-w-[260px] px-3 py-2">
+                                                <input
+                                                    v-if="lineDrafts[line.id]"
+                                                    v-model="lineDrafts[line.id].description"
+                                                    class="form-control mt-0"
+                                                    @input="saveLineInline(line)"
+                                                />
+                                                <div v-if="lineAutosaveStates[line.id] && lineAutosaveStates[line.id] !== 'idle'" :class="['mt-1 text-[11px] font-medium', lineAutosaveStates[line.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
+                                                    {{ autosaveLabel(lineAutosaveStates[line.id], lineAutosaveErrors[line.id]) }}
+                                                </div>
+                                            </td>
+                                            <td class="w-24 px-3 py-2">
+                                                <input
+                                                    v-if="lineDrafts[line.id]"
+                                                    v-model="lineDrafts[line.id].quantity"
+                                                    class="form-control mt-0 text-right"
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    @input="saveLineInline(line)"
+                                                />
+                                            </td>
+                                            <td class="w-32 px-3 py-2">
+                                                <input
+                                                    v-if="lineDrafts[line.id]"
+                                                    v-model="lineDrafts[line.id].unit_price"
+                                                    class="form-control mt-0 text-right"
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    @input="saveLineInline(line)"
+                                                />
+                                            </td>
+                                            <td class="w-24 px-3 py-2">
+                                                <input
+                                                    v-if="lineDrafts[line.id]"
+                                                    v-model="lineDrafts[line.id].discount_pct"
+                                                    class="form-control mt-0 text-right"
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    max="100"
+                                                    @input="saveLineInline(line)"
+                                                />
+                                            </td>
+                                            <td class="w-24 px-3 py-2">
+                                                <input
+                                                    v-if="lineDrafts[line.id]"
+                                                    v-model="lineDrafts[line.id].vat_rate"
+                                                    class="form-control mt-0 text-right"
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    @input="saveLineInline(line)"
+                                                />
+                                            </td>
+                                            <td class="px-3 py-2 text-right font-medium text-gray-900">{{ money(line.subtotal) }}</td>
+                                            <td class="px-3 py-2 text-right">
+                                                <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-md text-red-600 transition hover:bg-red-50 hover:text-red-700" aria-label="Elimina riga" @click="removeLine(line)">
+                                                    <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                                </button>
+                                            </td>
                                         </tr>
                                         <tr v-if="!related.lines?.length">
-                                            <td colspan="6" class="px-3 py-8 text-center text-gray-500">Nessuna riga.</td>
+                                            <td colspan="7" class="px-3 py-8 text-center text-gray-500">Nessuna riga.</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -1297,12 +1511,48 @@ watch(
                                 <input v-model="paymentForm.amount" class="form-control mt-0" type="number" step="0.01" min="0" required />
                                 <input v-model="paymentForm.paid_at" class="form-control mt-0" type="date" required />
                                 <input v-model="paymentForm.method" class="form-control mt-0" placeholder="Metodo" />
-                                <button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Registra</button>
+                                <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Registra</button>
                             </form>
                             <div class="space-y-2">
-                                <div v-for="payment in related.payments" :key="payment.id" class="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2 text-sm">
-                                    <span>{{ money(payment.amount) }} · {{ dateIt(payment.paid_at) }} · {{ payment.method || '-' }}</span>
-                                    <button class="text-red-600" @click="removePayment(payment)">Elimina</button>
+                                <div v-for="payment in related.payments" :key="payment.id" class="grid gap-2 rounded-md border border-gray-100 bg-gray-50 p-3 text-sm transition hover:border-indigo-100 hover:bg-white sm:grid-cols-[120px_150px_1fr_auto]">
+                                    <input
+                                        v-if="paymentDrafts[payment.id]"
+                                        v-model="paymentDrafts[payment.id].amount"
+                                        class="form-control mt-0 text-right"
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        @input="savePaymentInline(payment)"
+                                    />
+                                    <input
+                                        v-if="paymentDrafts[payment.id]"
+                                        v-model="paymentDrafts[payment.id].paid_at"
+                                        class="form-control mt-0"
+                                        type="date"
+                                        @input="savePaymentInline(payment)"
+                                    />
+                                    <div class="space-y-1">
+                                        <input
+                                            v-if="paymentDrafts[payment.id]"
+                                            v-model="paymentDrafts[payment.id].method"
+                                            class="form-control mt-0"
+                                            placeholder="Metodo"
+                                            @input="savePaymentInline(payment)"
+                                        />
+                                        <input
+                                            v-if="paymentDrafts[payment.id]"
+                                            v-model="paymentDrafts[payment.id].notes"
+                                            class="form-control mt-0 text-xs"
+                                            placeholder="Note pagamento"
+                                            @input="savePaymentInline(payment)"
+                                        />
+                                        <div v-if="paymentAutosaveStates[payment.id] && paymentAutosaveStates[payment.id] !== 'idle'" :class="['text-[11px] font-medium', paymentAutosaveStates[payment.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
+                                            {{ autosaveLabel(paymentAutosaveStates[payment.id], paymentAutosaveErrors[payment.id]) }}
+                                        </div>
+                                    </div>
+                                    <button type="button" class="inline-flex h-9 w-9 items-center justify-center justify-self-end rounded-md text-red-600 transition hover:bg-red-50 hover:text-red-700" aria-label="Elimina pagamento" @click="removePayment(payment)">
+                                        <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                    </button>
                                 </div>
                                 <p v-if="!related.payments?.length" class="text-sm text-gray-500">Nessun pagamento registrato.</p>
                             </div>
