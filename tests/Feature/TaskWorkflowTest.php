@@ -340,6 +340,56 @@ class TaskWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_subtask_can_be_updated_inline_from_parent_detail(): void
+    {
+        $user = User::factory()->create();
+        $parentId = (string) Str::uuid();
+        $subtaskId = (string) Str::uuid();
+
+        DB::table('tasks')->insert([
+            'id' => $parentId,
+            'title' => 'Task madre',
+            'priority' => 'medium',
+            'status' => 'todo',
+            'task_type' => 'project',
+            'created_by' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('tasks')->insert([
+            'id' => $subtaskId,
+            'title' => 'Sottoattivita iniziale',
+            'priority' => 'low',
+            'status' => 'todo',
+            'task_type' => 'task',
+            'parent_task_id' => $parentId,
+            'created_by' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->put("/tasks/{$subtaskId}", [
+                'title' => 'Sottoattivita aggiornata',
+                'task_type' => 'task',
+                'status' => 'todo',
+                'priority' => 'high',
+                'due_date' => '2026-07-01',
+                'recurring_enabled' => false,
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('tasks', [
+            'id' => $subtaskId,
+            'parent_task_id' => $parentId,
+            'title' => 'Sottoattivita aggiornata',
+            'priority' => 'high',
+            'due_date' => '2026-07-01',
+        ]);
+    }
+
     public function test_task_schedule_can_be_updated_from_calendar(): void
     {
         $user = User::factory()->create();

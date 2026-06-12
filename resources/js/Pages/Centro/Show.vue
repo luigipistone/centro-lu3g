@@ -336,6 +336,11 @@ const subtaskForm = useForm({
     priority: 'medium',
     due_date: '',
 });
+const subtaskDrafts = ref({});
+const subtaskAutosaveStates = ref({});
+const subtaskAutosaveErrors = ref({});
+const subtaskAutosaveTimers = {};
+const subtaskAutosaveSequences = {};
 const selectedAssignees = ref([...(props.related.assignees || [])]);
 const selectedFollowers = ref([...(props.related.followers || [])]);
 const taskAutosaveState = ref('idle');
@@ -535,7 +540,93 @@ function priorityClass(priority) {
 }
 
 function setSubtaskStatus(subtask, done) {
-    router.patch(route('tasks.status.update', subtask.id), { status: done ? 'done' : 'todo' }, { preserveScroll: true });
+    const status = done ? 'done' : 'todo';
+    if (subtaskDrafts.value[subtask.id]) {
+        subtaskDrafts.value[subtask.id].status = status;
+    }
+    setInlineState(subtaskAutosaveStates, subtask.id, 'saving');
+    setInlineState(subtaskAutosaveErrors, subtask.id, '');
+    router.patch(route('tasks.status.update', subtask.id), { status }, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => {
+            setInlineState(subtaskAutosaveStates, subtask.id, 'saved');
+            window.setTimeout(() => {
+                if (subtaskAutosaveStates.value[subtask.id] === 'saved') {
+                    setInlineState(subtaskAutosaveStates, subtask.id, 'idle');
+                }
+            }, 1400);
+        },
+        onError: () => {
+            if (subtaskDrafts.value[subtask.id]) {
+                subtaskDrafts.value[subtask.id].status = subtask.status;
+            }
+            setInlineState(subtaskAutosaveStates, subtask.id, 'error');
+            setInlineState(subtaskAutosaveErrors, subtask.id, 'Non salvato');
+        },
+    });
+}
+
+function subtaskDraftPayload(subtaskId) {
+    const draft = subtaskDrafts.value[subtaskId] || {};
+    return {
+        title: draft.title || '',
+        task_type: draft.task_type || 'task',
+        status: draft.status || 'todo',
+        priority: draft.priority || 'medium',
+        project_id: draft.project_id || '',
+        client_id: draft.client_id || '',
+        service_id: draft.service_id || '',
+        start_date: draft.start_date || '',
+        due_date: draft.due_date || '',
+        due_time: draft.due_time || '',
+        location: draft.location || '',
+        description: draft.description || '',
+        recurring_enabled: false,
+        recurring_interval_value: '',
+        recurring_interval_unit: '',
+        recurring_mode: '',
+        recurring_weekday: '',
+        recurring_month_day: '',
+    };
+}
+
+function saveSubtaskInline(subtask, delay = 650) {
+    if (props.section !== 'tasks') return;
+
+    const payload = subtaskDraftPayload(subtask.id);
+    if (!String(payload.title).trim()) {
+        setInlineState(subtaskAutosaveStates, subtask.id, 'idle');
+        return;
+    }
+
+    window.clearTimeout(subtaskAutosaveTimers[subtask.id]);
+    setInlineState(subtaskAutosaveStates, subtask.id, 'queued');
+    setInlineState(subtaskAutosaveErrors, subtask.id, '');
+
+    subtaskAutosaveTimers[subtask.id] = window.setTimeout(() => {
+        const sequence = (subtaskAutosaveSequences[subtask.id] || 0) + 1;
+        subtaskAutosaveSequences[subtask.id] = sequence;
+        setInlineState(subtaskAutosaveStates, subtask.id, 'saving');
+        router.put(route('tasks.update', subtask.id), payload, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                if (sequence !== subtaskAutosaveSequences[subtask.id]) return;
+                setInlineState(subtaskAutosaveStates, subtask.id, 'saved');
+                window.setTimeout(() => {
+                    if (subtaskAutosaveStates.value[subtask.id] === 'saved') {
+                        setInlineState(subtaskAutosaveStates, subtask.id, 'idle');
+                    }
+                }, 1400);
+            },
+            onError: () => {
+                if (sequence !== subtaskAutosaveSequences[subtask.id]) return;
+                setInlineState(subtaskAutosaveStates, subtask.id, 'error');
+                setInlineState(subtaskAutosaveErrors, subtask.id, 'Non salvato');
+            },
+        });
+    }, delay);
 }
 
 function addLine() {
@@ -1338,6 +1429,32 @@ watch(
     () => props.related?.clientServices || [],
     (services) => {
         clientServiceIds.value = [...services];
+    },
+    { immediate: true },
+);
+
+watch(
+    () => props.related?.subtasks || [],
+    (subtasks) => {
+        const next = {};
+        for (const subtask of subtasks) {
+            next[subtask.id] = {
+                ...(subtaskDrafts.value[subtask.id] || {}),
+                title: subtask.title || '',
+                task_type: subtask.task_type || 'task',
+                status: subtask.status || 'todo',
+                priority: subtask.priority || 'medium',
+                project_id: subtask.project_id || '',
+                client_id: subtask.client_id || '',
+                service_id: subtask.service_id || '',
+                start_date: subtask.start_date || '',
+                due_date: subtask.due_date || '',
+                due_time: subtask.due_time ? String(subtask.due_time).slice(0, 5) : '',
+                location: subtask.location || '',
+                description: subtask.description || '',
+            };
+        }
+        subtaskDrafts.value = next;
     },
     { immediate: true },
 );
@@ -2671,25 +2788,51 @@ watch(
                                 <option value="urgent">Urgente</option>
                             </select>
                             <input v-model="subtaskForm.due_date" class="form-control mt-0" type="date" />
-                            <button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
+                            <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
                         </form>
                         <div class="space-y-2">
-                            <div v-for="subtask in related.subtasks" :key="subtask.id" class="flex items-center justify-between gap-3 rounded-md bg-gray-50 px-3 py-2 text-sm">
+                            <div v-for="subtask in related.subtasks" :key="subtask.id" class="grid gap-3 rounded-md border border-gray-100 bg-gray-50 px-3 py-3 text-sm transition hover:border-indigo-100 hover:bg-white md:grid-cols-[minmax(0,1fr)_140px_150px_auto]">
                                 <label class="flex min-w-0 items-center gap-2">
                                     <input
                                         type="checkbox"
                                         class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
-                                        :checked="subtask.status === 'done'"
+                                        :checked="(subtaskDrafts[subtask.id]?.status || subtask.status) === 'done'"
                                         @change="setSubtaskStatus(subtask, $event.target.checked)"
                                     />
-                                    <Link :href="route('tasks.show', subtask.id)" class="truncate font-medium text-indigo-600 hover:text-indigo-500">
-                                        {{ subtask.title }}
-                                    </Link>
+                                    <div class="min-w-0 flex-1">
+                                        <input
+                                            v-if="subtaskDrafts[subtask.id]"
+                                            v-model="subtaskDrafts[subtask.id].title"
+                                            :class="['form-control mt-0', (subtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'text-gray-400 line-through' : '']"
+                                            placeholder="Titolo sottoattivita"
+                                            @input="saveSubtaskInline(subtask)"
+                                        />
+                                        <div v-if="subtaskAutosaveStates[subtask.id] && subtaskAutosaveStates[subtask.id] !== 'idle'" :class="['mt-1 text-[11px] font-medium', subtaskAutosaveStates[subtask.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
+                                            {{ autosaveLabel(subtaskAutosaveStates[subtask.id], subtaskAutosaveErrors[subtask.id]) }}
+                                        </div>
+                                    </div>
                                 </label>
-                                <div class="flex shrink-0 items-center gap-2">
-                                    <span :class="['rounded-full px-2 py-1 text-xs font-medium', priorityClass(subtask.priority)]">{{ displayValue(subtask.priority) }}</span>
-                                    <span class="text-xs text-gray-500">{{ subtask.due_date || '-' }}</span>
-                                </div>
+                                <select
+                                    v-if="subtaskDrafts[subtask.id]"
+                                    v-model="subtaskDrafts[subtask.id].priority"
+                                    class="form-control mt-0"
+                                    @change="saveSubtaskInline(subtask, 0)"
+                                >
+                                    <option value="low">Bassa</option>
+                                    <option value="medium">Media</option>
+                                    <option value="high">Alta</option>
+                                    <option value="urgent">Urgente</option>
+                                </select>
+                                <input
+                                    v-if="subtaskDrafts[subtask.id]"
+                                    v-model="subtaskDrafts[subtask.id].due_date"
+                                    class="form-control mt-0"
+                                    type="date"
+                                    @input="saveSubtaskInline(subtask)"
+                                />
+                                <Link :href="route('tasks.show', subtask.id)" class="inline-flex h-9 items-center justify-center rounded-md px-3 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-50 hover:text-indigo-700">
+                                    Apri
+                                </Link>
                             </div>
                             <p v-if="!related.subtasks?.length" class="text-sm text-gray-500">Nessuna sottoattivita.</p>
                         </div>
