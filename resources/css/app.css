@@ -91,6 +91,31 @@
         border-radius: 9999px;
     }
 
+    .client-services-carousel {
+        @apply flex gap-1.5 overflow-x-auto overflow-y-hidden pb-1;
+        overscroll-behavior-x: contain;
+        scroll-snap-type: x proximity;
+        scrollbar-width: thin;
+        scrollbar-color: hsl(220 18% 78% / 0.72) transparent;
+    }
+
+    .client-services-carousel::-webkit-scrollbar {
+        height: 4px;
+    }
+
+    .client-services-carousel::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .client-services-carousel::-webkit-scrollbar-thumb {
+        border-radius: 9999px;
+        background: hsl(220 18% 78% / 0.72);
+    }
+
+    .client-services-carousel > * {
+        scroll-snap-align: start;
+    }
+
     .section-title {
         @apply flex items-center gap-2 text-base font-semibold text-gray-950;
     }

@@ -1683,17 +1683,17 @@ function visibleCalendarTasks(cell) {
                                     <p v-if="client.vat_number" class="truncate text-xs text-gray-500">P.IVA {{ client.vat_number }}</p>
                                 </div>
 
-                                <div class="mt-4 flex flex-wrap gap-1.5">
+                                <div class="client-services-carousel mt-4 max-w-full">
                                     <span
                                         v-for="service in client.services || []"
                                         :key="service.id"
-                                        class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium"
+                                        class="inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium"
                                         :style="{ borderColor: `${service.color || '#64748b'}55`, color: service.color || '#64748b', backgroundColor: `${service.color || '#64748b'}18` }"
                                     >
                                         <span class="h-1.5 w-1.5 rounded-full" :style="{ backgroundColor: service.color || '#64748b' }"></span>
                                         {{ service.name }}
                                     </span>
-                                    <span v-if="!(client.services || []).length" class="text-xs text-gray-400">Nessun servizio collegato</span>
+                                    <span v-if="!(client.services || []).length" class="shrink-0 text-xs text-gray-400">Nessun servizio collegato</span>
                                 </div>
                             </Link>
 
