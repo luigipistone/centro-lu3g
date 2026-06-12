@@ -857,6 +857,55 @@ const clientRows = computed(() => props.rows.filter((row) => {
     return matchesSearch && matchesService;
 }));
 
+const clientServicesDrag = {
+    element: null,
+    pointerId: null,
+    startX: 0,
+    scrollLeft: 0,
+};
+
+function canScrollClientServices(element) {
+    return element && element.scrollWidth > element.clientWidth;
+}
+
+function startClientServicesDrag(event) {
+    const element = event.currentTarget;
+    if (!canScrollClientServices(element)) return;
+
+    clientServicesDrag.element = element;
+    clientServicesDrag.pointerId = event.pointerId;
+    clientServicesDrag.startX = event.clientX;
+    clientServicesDrag.scrollLeft = element.scrollLeft;
+    element.classList.add('is-dragging');
+    element.setPointerCapture?.(event.pointerId);
+}
+
+function dragClientServices(event) {
+    const element = clientServicesDrag.element;
+    if (!element || clientServicesDrag.pointerId !== event.pointerId) return;
+
+    event.preventDefault();
+    element.scrollLeft = clientServicesDrag.scrollLeft - (event.clientX - clientServicesDrag.startX);
+}
+
+function stopClientServicesDrag(event) {
+    const element = clientServicesDrag.element;
+    if (!element || (event.pointerId && clientServicesDrag.pointerId !== event.pointerId)) return;
+
+    element.classList.remove('is-dragging');
+    element.releasePointerCapture?.(clientServicesDrag.pointerId);
+    clientServicesDrag.element = null;
+    clientServicesDrag.pointerId = null;
+}
+
+function scrollClientServicesWheel(event) {
+    const element = event.currentTarget;
+    if (!canScrollClientServices(element)) return;
+
+    event.preventDefault();
+    element.scrollLeft += event.deltaX || event.deltaY;
+}
+
 const monthNames = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
 const dayNames = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const calendarYear = computed(() => currentCalendarDate.value.getFullYear());
@@ -1683,7 +1732,16 @@ function visibleCalendarTasks(cell) {
                                     <p v-if="client.vat_number" class="truncate text-xs text-gray-500">P.IVA {{ client.vat_number }}</p>
                                 </div>
 
-                                <div class="client-services-carousel mt-4 max-w-full">
+                                <div
+                                    class="client-services-carousel mt-4 max-w-full"
+                                    @pointerdown.stop="startClientServicesDrag"
+                                    @pointermove.stop="dragClientServices"
+                                    @pointerup.stop="stopClientServicesDrag"
+                                    @pointercancel.stop="stopClientServicesDrag"
+                                    @pointerleave.stop="stopClientServicesDrag"
+                                    @wheel.stop="scrollClientServicesWheel"
+                                    @click.stop
+                                >
                                     <span
                                         v-for="service in client.services || []"
                                         :key="service.id"
