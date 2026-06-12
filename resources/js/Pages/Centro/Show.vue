@@ -11,7 +11,6 @@ import {
     Mail,
     Plus,
     Printer,
-    Save,
     Send,
     Trash2,
     Undo2,
@@ -223,6 +222,10 @@ const documentForm = useForm({
     pension_fund_pct: props.record.pension_fund_pct || 0,
     pension_fund_label: props.record.pension_fund_label || '',
 });
+const documentAutosaveState = ref('idle');
+const documentAutosaveError = ref('');
+let documentAutosaveTimer = null;
+let documentAutosaveSequence = 0;
 const emailForm = useForm({
     recipient: props.related?.client?.pec || props.related?.client?.email || '',
     cc: '',
@@ -553,8 +556,54 @@ function removePayment(payment) {
     });
 }
 
-function saveDocument() {
-    documentForm.put(route('billing.header.update', props.record.id), { preserveScroll: true });
+function documentPayload() {
+    return {
+        issue_date: documentForm.issue_date,
+        due_date: documentForm.due_date,
+        status: documentForm.status,
+        payment_method: documentForm.payment_method,
+        payment_terms_days: documentForm.payment_terms_days,
+        causale: documentForm.causale,
+        notes: documentForm.notes,
+        footer_notes: documentForm.footer_notes,
+        withholding_pct: documentForm.withholding_pct,
+        pension_fund_pct: documentForm.pension_fund_pct,
+        pension_fund_label: documentForm.pension_fund_label,
+    };
+}
+
+function saveDocumentInline(delay = 650) {
+    if (props.section !== 'billing') return;
+
+    window.clearTimeout(documentAutosaveTimer);
+    documentAutosaveState.value = 'queued';
+    documentAutosaveError.value = '';
+
+    documentAutosaveTimer = window.setTimeout(() => {
+        const sequence = ++documentAutosaveSequence;
+        documentAutosaveState.value = 'saving';
+        documentForm.transform(() => documentPayload()).put(route('billing.header.update', props.record.id), {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                if (sequence !== documentAutosaveSequence) return;
+                documentAutosaveState.value = 'saved';
+                window.setTimeout(() => {
+                    if (documentAutosaveState.value === 'saved') {
+                        documentAutosaveState.value = 'idle';
+                    }
+                }, 1800);
+            },
+            onError: () => {
+                if (sequence !== documentAutosaveSequence) return;
+                documentAutosaveState.value = 'error';
+                documentAutosaveError.value = 'Non salvato';
+            },
+            onFinish: () => {
+                documentForm.transform((data) => data);
+            },
+        });
+    }, delay);
 }
 
 function issueDocument() {
@@ -997,6 +1046,23 @@ watch(
     ],
     () => saveClientInline(),
 );
+
+watch(
+    () => [
+        documentForm.issue_date,
+        documentForm.due_date,
+        documentForm.status,
+        documentForm.payment_method,
+        documentForm.payment_terms_days,
+        documentForm.causale,
+        documentForm.notes,
+        documentForm.footer_notes,
+        documentForm.withholding_pct,
+        documentForm.pension_fund_pct,
+        documentForm.pension_fund_label,
+    ],
+    () => saveDocumentInline(),
+);
 </script>
 
 <template>
@@ -1098,7 +1164,20 @@ watch(
                         </p>
                     </div>
                     <div class="flex flex-wrap gap-2">
-                        <button type="button" class="btn btn-primary" @click="saveDocument"><Save class="h-4 w-4" :stroke-width="1.7" />Salva</button>
+                        <div
+                            v-if="documentAutosaveState !== 'idle'"
+                            :class="[
+                                'inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold transition',
+                                documentAutosaveState === 'saving' || documentAutosaveState === 'queued' ? 'bg-sky-50 text-sky-700' : '',
+                                documentAutosaveState === 'saved' ? 'bg-emerald-50 text-emerald-700' : '',
+                                documentAutosaveState === 'error' ? 'bg-red-50 text-red-700' : '',
+                            ]"
+                        >
+                            <span v-if="documentAutosaveState === 'queued'">In attesa...</span>
+                            <span v-else-if="documentAutosaveState === 'saving'">Salvataggio...</span>
+                            <span v-else-if="documentAutosaveState === 'saved'">Salvato</span>
+                            <span v-else>{{ documentAutosaveError || 'Errore salvataggio' }}</span>
+                        </div>
                         <button v-if="!record.number" type="button" class="btn border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100" @click="issueDocument"><Send class="h-4 w-4" :stroke-width="1.7" />Emetti</button>
                         <a :href="route('billing.pdf', record.id)" class="btn btn-outline"><Download class="h-4 w-4" :stroke-width="1.7" />PDF</a>
                         <a v-if="['fattura', 'nota_credito'].includes(record.doc_type)" :href="route('billing.xml', record.id)" class="btn btn-outline"><FileText class="h-4 w-4" :stroke-width="1.7" />XML</a>
@@ -1113,7 +1192,10 @@ watch(
                 <div class="grid gap-6 lg:grid-cols-[1fr_340px]">
                     <div class="space-y-6">
                         <section class="surface rounded-md p-5">
-                            <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Dati documento</h3>
+                            <div class="mb-4">
+                                <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Dati documento</h3>
+                                <p class="mt-1 text-sm text-gray-500">Le modifiche ai dati documento si salvano automaticamente.</p>
+                            </div>
                             <div class="grid gap-4 md:grid-cols-3">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Data emissione</label>

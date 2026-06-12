@@ -1762,7 +1762,7 @@ function visibleCalendarTasks(cell) {
                                         </Link>
                                     </div>
                                     <div class="mt-3 flex justify-end gap-3 border-t border-gray-100 pt-2">
-                                        <button type="button" class="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(task)"><Pencil class="h-3.5 w-3.5" :stroke-width="1.7" />Modifica</button>
+                                        <Link :href="route('tasks.show', task.id)" class="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-500"><ExternalLink class="h-3.5 w-3.5" :stroke-width="1.7" />Apri</Link>
                                         <button type="button" class="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-500" @click="remove(task)"><Trash2 class="h-3.5 w-3.5" :stroke-width="1.7" />Elimina</button>
                                     </div>
                                 </article>
@@ -2055,7 +2055,7 @@ function visibleCalendarTasks(cell) {
                                         </span>
                                     </td>
                                     <td class="px-4 py-3 text-right">
-                                        <button type="button" class="action-link" @click="editRow(row)"><Pencil class="h-4 w-4" :stroke-width="1.7" />Modifica</button>
+                                        <Link :href="route('billing.show', row.id)" class="action-link"><ExternalLink class="h-4 w-4" :stroke-width="1.7" />Apri</Link>
                                         <button type="button" class="danger-link ml-4" @click="remove(row)"><Trash2 class="h-4 w-4" :stroke-width="1.7" />Elimina</button>
                                     </td>
                                 </tr>
@@ -2476,7 +2476,8 @@ function visibleCalendarTasks(cell) {
                                         <span v-else>{{ displayValue(row[column]) }}</span>
                                     </td>
                                     <td v-if="canWrite" class="whitespace-nowrap px-4 py-3 text-right">
-                                        <button type="button" class="text-sm font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(row)">Modifica</button>
+                                        <Link v-if="showRoute(row)" :href="showRoute(row)" class="text-sm font-medium text-indigo-600 hover:text-indigo-500">Apri</Link>
+                                        <button v-else type="button" class="text-sm font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(row)">Modifica</button>
                                         <button type="button" class="ml-4 text-sm font-medium text-red-600 hover:text-red-500" @click="remove(row)">Elimina</button>
                                     </td>
                                 </tr>
