@@ -162,4 +162,44 @@ class ServiceUpdatesTest extends TestCase
             ->assertOk()
             ->assertSee('Cliente QA SEO');
     }
+
+    public function test_client_service_can_be_detached_from_client_detail(): void
+    {
+        $user = User::factory()->create();
+        $clientId = (string) Str::uuid();
+        $serviceId = (string) Str::uuid();
+
+        DB::table('clients')->insert([
+            'id' => $clientId,
+            'name' => 'Cliente QA ADV',
+            'created_by' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('services')->insert([
+            'id' => $serviceId,
+            'name' => 'ADV',
+            'color' => '#f97316',
+            'active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('client_services')->insert([
+            'id' => (string) Str::uuid(),
+            'client_id' => $clientId,
+            'service_id' => $serviceId,
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->delete("/clients/{$clientId}/services/{$serviceId}")
+            ->assertRedirect();
+
+        $this->assertDatabaseMissing('client_services', [
+            'client_id' => $clientId,
+            'service_id' => $serviceId,
+        ]);
+    }
 }

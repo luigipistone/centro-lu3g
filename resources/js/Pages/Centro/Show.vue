@@ -256,6 +256,9 @@ const contactAutosaveStates = ref({});
 const contactAutosaveErrors = ref({});
 const contactAutosaveTimers = {};
 const contactAutosaveSequences = {};
+const clientServiceIds = ref([...(props.related?.clientServices || [])]);
+const serviceToggleStates = ref({});
+const serviceToggleErrors = ref({});
 const clientForm = useForm({
     name: props.record.name || '',
     legal_name: props.record.legal_name || '',
@@ -1039,16 +1042,51 @@ function runConfirmAction() {
 }
 
 function clientHasService(service) {
-    return (props.related.clientServices || []).includes(service.id);
+    return clientServiceIds.value.includes(service.id);
+}
+
+function setClientService(serviceId, enabled) {
+    const ids = new Set(clientServiceIds.value);
+    if (enabled) {
+        ids.add(serviceId);
+    } else {
+        ids.delete(serviceId);
+    }
+    clientServiceIds.value = [...ids];
 }
 
 function toggleService(service) {
-    if (clientHasService(service)) {
-        router.delete(route('clients.services.detach', [props.record.id, service.id]), { preserveScroll: true });
+    const wasEnabled = clientHasService(service);
+    const nextEnabled = !wasEnabled;
+
+    setClientService(service.id, nextEnabled);
+    setInlineState(serviceToggleStates, service.id, 'saving');
+    setInlineState(serviceToggleErrors, service.id, '');
+
+    const options = {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => {
+            setInlineState(serviceToggleStates, service.id, 'saved');
+            window.setTimeout(() => {
+                if (serviceToggleStates.value[service.id] === 'saved') {
+                    setInlineState(serviceToggleStates, service.id, 'idle');
+                }
+            }, 1400);
+        },
+        onError: () => {
+            setClientService(service.id, wasEnabled);
+            setInlineState(serviceToggleStates, service.id, 'error');
+            setInlineState(serviceToggleErrors, service.id, 'Non salvato');
+        },
+    };
+
+    if (nextEnabled) {
+        router.post(route('clients.services.attach', [props.record.id, service.id]), {}, options);
         return;
     }
 
-    router.post(route('clients.services.attach', [props.record.id, service.id]), {}, { preserveScroll: true });
+    router.delete(route('clients.services.detach', [props.record.id, service.id]), options);
 }
 
 function togglePerson(list, userId) {
@@ -1292,6 +1330,14 @@ watch(
             };
         }
         contactDrafts.value = next;
+    },
+    { immediate: true },
+);
+
+watch(
+    () => props.related?.clientServices || [],
+    (services) => {
+        clientServiceIds.value = [...services];
     },
     { immediate: true },
 );
@@ -2313,17 +2359,34 @@ watch(
 
                 <aside class="space-y-6">
                     <section v-if="section === 'clients'" class="surface rounded-md p-5">
-                        <h3 class="text-sm font-semibold text-gray-900">Servizi collegati</h3>
-                        <div class="mt-3 flex flex-wrap gap-2">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <h3 class="text-sm font-semibold text-gray-900">Servizi collegati</h3>
+                                <p class="mt-1 text-xs text-gray-500">Clicca un servizio per attivarlo o disattivarlo.</p>
+                            </div>
+                            <span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500">{{ clientServiceIds.length }} attivi</span>
+                        </div>
+                        <div class="mt-4 flex flex-wrap gap-2">
                             <button
                                 v-for="service in related.services"
                                 :key="service.id"
                                 type="button"
-                                :class="['inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium', clientHasService(service) ? 'border-indigo-200 bg-indigo-50 text-indigo-700' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50']"
+                                :aria-pressed="clientHasService(service)"
+                                :class="[
+                                    'inline-flex min-h-9 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition duration-200 hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200',
+                                    clientHasService(service)
+                                        ? 'border-indigo-200 bg-indigo-50 text-indigo-700 shadow-[0_10px_24px_rgba(79,70,229,0.12)]'
+                                        : 'border-gray-200 bg-white text-gray-600 hover:border-indigo-100 hover:bg-gray-50',
+                                    serviceToggleStates[service.id] === 'saving' ? 'opacity-70' : '',
+                                ]"
                                 @click="toggleService(service)"
                             >
                                 <span class="h-2 w-2 rounded-full" :style="{ backgroundColor: service.color || '#2563eb' }"></span>
+                                <Check v-if="clientHasService(service)" class="h-3.5 w-3.5" :stroke-width="2" />
                                 {{ service.name }}
+                                <span v-if="serviceToggleStates[service.id] && serviceToggleStates[service.id] !== 'idle'" :class="['ml-1 text-[10px]', serviceToggleStates[service.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
+                                    {{ autosaveLabel(serviceToggleStates[service.id], serviceToggleErrors[service.id]) }}
+                                </span>
                             </button>
                         </div>
                         <p v-if="!related.services?.length" class="mt-3 text-sm text-gray-500">Nessun servizio configurato.</p>
