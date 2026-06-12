@@ -2770,9 +2770,6 @@ watch(
                                 <span class="h-2 w-2 shrink-0 rounded-full" :style="{ backgroundColor: service.color || '#2563eb' }"></span>
                                 <Check :class="['h-3.5 w-3.5 shrink-0 transition', clientHasService(service) ? 'opacity-100' : 'opacity-0']" :stroke-width="2" />
                                 {{ service.name }}
-                                <span v-if="serviceToggleStates[service.id] && serviceToggleStates[service.id] !== 'idle'" :class="['ml-1 text-[10px]', serviceToggleStates[service.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
-                                    {{ autosaveLabel(serviceToggleStates[service.id], serviceToggleErrors[service.id]) }}
-                                </span>
                             </button>
                         </div>
                         <p v-if="!related.services?.length" class="mt-3 text-sm text-gray-500">Nessun servizio configurato.</p>
