@@ -319,7 +319,6 @@ const taskAutosaveState = ref('idle');
 const taskAutosaveError = ref('');
 let taskAutosaveTimer = null;
 let taskAutosaveSequence = 0;
-const editingProject = ref(false);
 const projectForm = useForm({
     name: props.record.name || '',
     description: props.record.description || '',
@@ -329,6 +328,10 @@ const projectForm = useForm({
     user_ids: [...(props.related.followers || [])],
 });
 const selectedProjectFollowers = ref([...(props.related.followers || [])]);
+const projectAutosaveState = ref('idle');
+const projectAutosaveError = ref('');
+let projectAutosaveTimer = null;
+let projectAutosaveSequence = 0;
 const projectColors = ['#2563eb', '#7c3aed', '#db2777', '#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#475569'];
 
 function normalizeHexColor(value, fallback = '#2563eb') {
@@ -606,19 +609,74 @@ function removeContact(contact) {
     });
 }
 
-function saveProjectDetails() {
-    projectForm.user_ids = [...selectedProjectFollowers.value];
-    projectForm.put(route('projects.update', props.record.id), {
-        preserveScroll: true,
-        onSuccess: () => {
-            editingProject.value = false;
-        },
-    });
+function projectPayload() {
+    return {
+        name: projectForm.name,
+        description: projectForm.description,
+        client_id: projectForm.client_id,
+        status: projectForm.status,
+        color: normalizeHexColor(projectForm.color),
+    };
 }
 
-function cancelProjectEditing() {
-    selectedProjectFollowers.value = [...(props.related.followers || [])];
-    editingProject.value = false;
+function saveProjectInline(delay = 650) {
+    if (props.section !== 'projects') return;
+
+    window.clearTimeout(projectAutosaveTimer);
+    projectAutosaveState.value = 'queued';
+    projectAutosaveError.value = '';
+
+    projectAutosaveTimer = window.setTimeout(() => {
+        const sequence = ++projectAutosaveSequence;
+        projectAutosaveState.value = 'saving';
+        projectForm.color = normalizeHexColor(projectForm.color);
+        projectForm.transform(() => projectPayload()).put(route('projects.update', props.record.id), {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                if (sequence !== projectAutosaveSequence) return;
+                projectAutosaveState.value = 'saved';
+                window.setTimeout(() => {
+                    if (projectAutosaveState.value === 'saved') {
+                        projectAutosaveState.value = 'idle';
+                    }
+                }, 1800);
+            },
+            onError: () => {
+                if (sequence !== projectAutosaveSequence) return;
+                projectAutosaveState.value = 'error';
+                projectAutosaveError.value = 'Non salvato';
+            },
+            onFinish: () => {
+                projectForm.transform((data) => data);
+            },
+        });
+    }, delay);
+}
+
+function toggleProjectPerson(userId) {
+    togglePerson(selectedProjectFollowers, userId);
+    projectAutosaveState.value = 'saving';
+    projectAutosaveError.value = '';
+
+    router.put(route('projects.followers.sync', props.record.id), {
+        user_ids: [...selectedProjectFollowers.value],
+    }, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => {
+            projectAutosaveState.value = 'saved';
+            window.setTimeout(() => {
+                if (projectAutosaveState.value === 'saved') {
+                    projectAutosaveState.value = 'idle';
+                }
+            }, 1800);
+        },
+        onError: () => {
+            projectAutosaveState.value = 'error';
+            projectAutosaveError.value = 'Membri non salvati';
+        },
+    });
 }
 
 function deleteProjectFromDetail() {
@@ -842,6 +900,17 @@ watch(
     ],
     () => saveTaskInline(),
 );
+
+watch(
+    () => [
+        projectForm.name,
+        projectForm.description,
+        projectForm.client_id,
+        projectForm.status,
+        projectForm.color,
+    ],
+    () => saveProjectInline(),
+);
 </script>
 
 <template>
@@ -859,9 +928,9 @@ watch(
                         Torna a {{ title }}
                     </Link>
                     <div class="mt-1 flex items-center gap-2">
-                        <span v-if="section === 'projects'" class="h-3 w-3 rounded-full" :style="{ backgroundColor: record.color || '#2563eb' }"></span>
+                        <span v-if="section === 'projects'" class="h-3 w-3 rounded-full" :style="{ backgroundColor: normalizeHexColor(projectForm.color) }"></span>
                         <h2 class="text-xl font-semibold leading-tight text-gray-800">
-                            {{ record.name || record.title || record.number }}
+                            {{ section === 'projects' ? projectForm.name : (record.name || record.title || record.number) }}
                         </h2>
                     </div>
                 </div>
@@ -906,20 +975,6 @@ watch(
                     </button>
                 </div>
                 <div v-else-if="section === 'projects'" class="flex flex-wrap justify-end gap-2">
-                    <template v-if="editingProject">
-                        <button type="button" class="btn btn-primary" :disabled="projectForm.processing" @click="saveProjectDetails">
-                            <Save class="h-4 w-4" :stroke-width="1.7" />
-                            Salva
-                        </button>
-                        <button type="button" class="btn btn-outline" @click="cancelProjectEditing">
-                            <X class="h-4 w-4" :stroke-width="1.7" />
-                            Annulla
-                        </button>
-                    </template>
-                    <button v-else type="button" class="btn btn-outline" @click="editingProject = true">
-                        <Pencil class="h-4 w-4" :stroke-width="1.7" />
-                        Modifica
-                    </button>
                     <button type="button" class="btn btn-danger" @click="deleteProjectFromDetail">
                         <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                         Elimina
@@ -1552,14 +1607,30 @@ watch(
                         <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
                             <div>
                                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Panoramica progetto</h3>
-                                <p class="mt-1 text-sm text-gray-500">{{ related.tasks?.length || 0 }} task collegate</p>
+                                <p class="mt-1 text-sm text-gray-500">Ogni campo si salva automaticamente mentre lavori.</p>
                             </div>
-                            <span :class="['rounded-full px-3 py-1 text-xs font-semibold', record.status === 'active' ? 'bg-emerald-100 text-emerald-700' : record.status === 'completed' ? 'bg-indigo-100 text-indigo-700' : record.status === 'on_hold' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600']">
-                                {{ displayValue(record.status) }}
-                            </span>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span :class="['rounded-full px-3 py-1 text-xs font-semibold', projectForm.status === 'active' ? 'bg-emerald-100 text-emerald-700' : projectForm.status === 'completed' ? 'bg-indigo-100 text-indigo-700' : projectForm.status === 'on_hold' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600']">
+                                    {{ displayValue(projectForm.status) }}
+                                </span>
+                                <div
+                                    v-if="projectAutosaveState !== 'idle'"
+                                    :class="[
+                                        'inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold transition',
+                                        projectAutosaveState === 'saving' || projectAutosaveState === 'queued' ? 'bg-sky-50 text-sky-700' : '',
+                                        projectAutosaveState === 'saved' ? 'bg-emerald-50 text-emerald-700' : '',
+                                        projectAutosaveState === 'error' ? 'bg-red-50 text-red-700' : '',
+                                    ]"
+                                >
+                                    <span v-if="projectAutosaveState === 'queued'">In attesa...</span>
+                                    <span v-else-if="projectAutosaveState === 'saving'">Salvataggio...</span>
+                                    <span v-else-if="projectAutosaveState === 'saved'">Salvato</span>
+                                    <span v-else>{{ projectAutosaveError || 'Errore salvataggio' }}</span>
+                                </div>
+                            </div>
                         </div>
 
-                        <div v-if="editingProject" class="space-y-5">
+                        <div class="space-y-5">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Nome</label>
                                 <input v-model="projectForm.name" class="form-control" required />
@@ -1593,7 +1664,7 @@ watch(
                                         :class="['h-8 w-8 rounded-full border-2', projectForm.color === color ? 'border-gray-900 ring-2 ring-gray-300' : 'border-white']"
                                         :style="{ backgroundColor: color }"
                                         :aria-label="`Colore ${color}`"
-                                        @click="projectForm.color = color"
+                                        @click="projectForm.color = color; saveProjectInline(0)"
                                     ></button>
                                     <label class="relative inline-flex h-8 w-8 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm ring-1 ring-gray-200 transition hover:ring-gray-300" :style="{ backgroundColor: normalizeHexColor(projectForm.color) }">
                                         <span class="sr-only">Scegli colore custom</span>
@@ -1607,32 +1678,6 @@ watch(
                                 <textarea v-model="projectForm.description" rows="5" class="form-control"></textarea>
                             </div>
                         </div>
-
-                        <dl v-else class="grid gap-4 md:grid-cols-2">
-                            <div class="rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
-                                <dt class="text-xs font-medium uppercase tracking-wide text-gray-400">Cliente</dt>
-                                <dd class="mt-1 text-sm font-medium text-gray-900">{{ related.client?.name || '-' }}</dd>
-                            </div>
-                            <div class="rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
-                                <dt class="text-xs font-medium uppercase tracking-wide text-gray-400">Colore</dt>
-                                <dd class="mt-1 flex items-center gap-2 text-sm text-gray-900">
-                                    <span class="h-3 w-3 rounded-full" :style="{ backgroundColor: record.color || '#2563eb' }"></span>
-                                    {{ record.color || '-' }}
-                                </dd>
-                            </div>
-                            <div class="rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
-                                <dt class="text-xs font-medium uppercase tracking-wide text-gray-400">Stato</dt>
-                                <dd class="mt-1 text-sm text-gray-900">{{ displayValue(record.status) }}</dd>
-                            </div>
-                            <div class="rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
-                                <dt class="text-xs font-medium uppercase tracking-wide text-gray-400">Task</dt>
-                                <dd class="mt-1 text-sm text-gray-900">{{ related.tasks?.length || 0 }}</dd>
-                            </div>
-                            <div class="rounded-md border border-gray-100 bg-gray-50 px-3 py-2 md:col-span-2">
-                                <dt class="text-xs font-medium uppercase tracking-wide text-gray-400">Descrizione</dt>
-                                <dd class="mt-1 whitespace-pre-wrap text-sm text-gray-900">{{ record.description || '-' }}</dd>
-                            </div>
-                        </dl>
                     </section>
 
                     <section class="surface rounded-md p-5">
@@ -1969,9 +2014,7 @@ watch(
                     <section v-if="section === 'projects'" class="surface rounded-md p-5">
                         <div class="mb-3">
                             <h3 class="text-sm font-semibold text-gray-900">Membri del progetto</h3>
-                            <p class="mt-1 text-xs text-gray-500">
-                                {{ editingProject ? 'Aggiungi o rimuovi membri, poi usa Salva.' : 'Entra in modifica per aggiungere o rimuovere membri.' }}
-                            </p>
+                            <p class="mt-1 text-xs text-gray-500">Clicca sui volti per aggiungere o rimuovere. Il salvataggio e' automatico.</p>
                         </div>
                         <div class="space-y-3">
                             <div>
@@ -1982,17 +2025,16 @@ watch(
                                         :key="`project-selected-${user.id}`"
                                         type="button"
                                         :class="personAvatarClass(true)"
-                                        :aria-label="`${editingProject ? 'Rimuovi dal progetto ' : 'Membro progetto '}${user.name || user.email}`"
-                                        :title="`${editingProject ? 'Rimuovi dal progetto ' : ''}${user.name || user.email}`"
-                                        :disabled="!editingProject"
-                                        @click="togglePerson(selectedProjectFollowers, user.id)"
+                                        :aria-label="`Rimuovi dal progetto ${user.name || user.email}`"
+                                        :title="`Rimuovi dal progetto ${user.name || user.email}`"
+                                        @click="toggleProjectPerson(user.id)"
                                     >
                                         <UserAvatar :user="user" size="md" />
                                     </button>
                                     <p v-if="!selectedProjectFollowers.length" class="text-sm text-gray-500">Nessun membro assegnato.</p>
                                 </div>
                             </div>
-                            <div v-if="editingProject && peopleAvailable(selectedProjectFollowers, related.projectUsers).length">
+                            <div v-if="peopleAvailable(selectedProjectFollowers, related.projectUsers).length">
                                 <div class="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Aggiungi</div>
                                 <div class="flex flex-wrap gap-2">
                                     <button
@@ -2002,13 +2044,13 @@ watch(
                                         :class="personAvatarClass(false)"
                                         :aria-label="`Aggiungi al progetto ${user.name || user.email}`"
                                         :title="`Aggiungi al progetto ${user.name || user.email}`"
-                                        @click="togglePerson(selectedProjectFollowers, user.id)"
+                                        @click="toggleProjectPerson(user.id)"
                                     >
                                         <UserAvatar :user="user" size="md" />
                                     </button>
                                 </div>
                             </div>
-                            <p v-if="editingProject && !related.projectUsers?.length" class="text-sm text-gray-500">Nessun utente disponibile.</p>
+                            <p v-if="!related.projectUsers?.length" class="text-sm text-gray-500">Nessun utente disponibile.</p>
                         </div>
                     </section>
 
