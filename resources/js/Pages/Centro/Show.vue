@@ -118,6 +118,10 @@ const valueLabels = {
     fuori_campo: 'Fuori campo IVA',
     forfettario: 'Regime forfettario',
     altro: 'Altro',
+    superadmin: 'Superadmin',
+    admin: 'Admin',
+    editor: 'Editor',
+    guest: 'Guest',
     IT: 'Italia',
     SM: 'San Marino',
     VA: 'Citta del Vaticano',
@@ -366,6 +370,22 @@ const projectAutosaveError = ref('');
 let projectAutosaveTimer = null;
 let projectAutosaveSequence = 0;
 const projectColors = ['#2563eb', '#7c3aed', '#db2777', '#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#475569'];
+const userForm = useForm({
+    name: props.record.name || '',
+    email: props.record.email || '',
+    role: props.record.role || 'guest',
+    job_title: props.record.job_title || '',
+    phone: props.record.phone || '',
+    bio: props.record.bio || '',
+    password: '',
+});
+const userAutosaveState = ref('idle');
+const userAutosaveError = ref('');
+let userAutosaveTimer = null;
+let userAutosaveSequence = 0;
+const userAvatarInput = ref(null);
+const userAvatarPreview = ref(null);
+const userAvatarForm = useForm({ avatar: null });
 
 function normalizeHexColor(value, fallback = '#2563eb') {
     const color = String(value || '').trim();
@@ -1087,6 +1107,87 @@ function saveProjectInline(delay = 650) {
     }, delay);
 }
 
+function userPayload() {
+    return {
+        name: userForm.name,
+        email: userForm.email,
+        role: userForm.role,
+        job_title: userForm.job_title,
+        phone: userForm.phone,
+        bio: userForm.bio,
+        password: userForm.password,
+    };
+}
+
+function saveUserInline(delay = 650) {
+    if (props.section !== 'users') return;
+    if (!String(userForm.name).trim() || !String(userForm.email).trim()) return;
+
+    window.clearTimeout(userAutosaveTimer);
+    userAutosaveState.value = 'queued';
+    userAutosaveError.value = '';
+
+    userAutosaveTimer = window.setTimeout(() => {
+        const sequence = ++userAutosaveSequence;
+        userAutosaveState.value = 'saving';
+        userForm.transform(() => userPayload()).put(route('users.update', props.record.id), {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                if (sequence !== userAutosaveSequence) return;
+                userForm.password = '';
+                userAutosaveState.value = 'saved';
+                window.setTimeout(() => {
+                    if (userAutosaveState.value === 'saved') {
+                        userAutosaveState.value = 'idle';
+                    }
+                }, 1800);
+            },
+            onError: () => {
+                if (sequence !== userAutosaveSequence) return;
+                userAutosaveState.value = 'error';
+                userAutosaveError.value = 'Non salvato';
+            },
+            onFinish: () => {
+                userForm.transform((data) => data);
+            },
+        });
+    }, delay);
+}
+
+function userPreview() {
+    return {
+        ...props.record,
+        name: userForm.name,
+        email: userForm.email,
+        avatar_url: userAvatarPreview.value || props.record.avatar_url,
+    };
+}
+
+function chooseUserAvatar() {
+    userAvatarInput.value?.click();
+}
+
+function uploadUserAvatar(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    userAvatarForm.avatar = file;
+    userAvatarPreview.value = URL.createObjectURL(file);
+    userAvatarForm.post(route('users.avatar.update', props.record.id), {
+        forceFormData: true,
+        preserveScroll: true,
+        onSuccess: () => {
+            userAutosaveState.value = 'saved';
+            window.setTimeout(() => {
+                if (userAutosaveState.value === 'saved') {
+                    userAutosaveState.value = 'idle';
+                }
+            }, 1800);
+        },
+    });
+}
+
 function toggleProjectPerson(userId) {
     togglePerson(selectedProjectFollowers, userId);
     projectAutosaveState.value = 'saving';
@@ -1533,10 +1634,23 @@ watch(
     },
     { immediate: true },
 );
+
+watch(
+    () => [
+        userForm.name,
+        userForm.email,
+        userForm.role,
+        userForm.job_title,
+        userForm.phone,
+        userForm.bio,
+        userForm.password,
+    ],
+    () => saveUserInline(),
+);
 </script>
 
 <template>
-    <Head :title="record.name || record.title || title" />
+    <Head :title="section === 'users' ? userForm.name : (record.name || record.title || title)" />
 
     <AuthenticatedLayout>
         <template #header>
@@ -1552,7 +1666,7 @@ watch(
                     <div class="mt-1 flex items-center gap-2">
                         <span v-if="section === 'projects'" class="h-3 w-3 rounded-full" :style="{ backgroundColor: normalizeHexColor(projectForm.color) }"></span>
                         <h2 class="text-xl font-semibold leading-tight text-gray-800">
-                            {{ section === 'projects' ? projectForm.name : (section === 'clients' ? clientForm.name : (record.name || record.title || record.number)) }}
+                            {{ section === 'projects' ? projectForm.name : (section === 'clients' ? clientForm.name : (section === 'users' ? userForm.name : (record.name || record.title || record.number))) }}
                         </h2>
                     </div>
                 </div>
@@ -2539,7 +2653,87 @@ watch(
                     </div>
                 </section>
 
-                <section v-if="section !== 'clients' && section !== 'tasks' && section !== 'projects'" class="surface rounded-md p-5">
+                <section v-if="section === 'users'" class="space-y-6">
+                    <section class="surface rounded-md p-5">
+                        <div class="flex flex-wrap items-center gap-4 rounded-md border border-gray-100 bg-gray-50 p-4">
+                            <UserAvatar :user="userPreview()" size="lg" />
+                            <div class="min-w-0 flex-1">
+                                <div class="text-sm font-semibold text-gray-900">Foto personale</div>
+                                <p class="mt-1 text-xs text-gray-500">JPG, PNG o WEBP fino a 2 MB. La foto comparira' ovunque viene usato il volto dell'utente.</p>
+                                <div v-if="userAvatarForm.errors.avatar" class="mt-2 text-sm text-red-600">{{ userAvatarForm.errors.avatar }}</div>
+                            </div>
+                            <input ref="userAvatarInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" @change="uploadUserAvatar" />
+                            <button type="button" class="btn btn-outline" :disabled="userAvatarForm.processing" @click="chooseUserAvatar">
+                                {{ userAvatarForm.processing ? 'Caricamento...' : 'Carica foto' }}
+                            </button>
+                        </div>
+                    </section>
+
+                    <section class="surface rounded-md p-5">
+                        <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Informazioni profilo</h3>
+                                <p class="mt-1 text-sm text-gray-500">Le modifiche si salvano automaticamente mentre lavori.</p>
+                            </div>
+                            <div
+                                v-if="userAutosaveState !== 'idle'"
+                                :class="[
+                                    'inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold transition',
+                                    userAutosaveState === 'saving' || userAutosaveState === 'queued' ? 'bg-sky-50 text-sky-700' : '',
+                                    userAutosaveState === 'saved' ? 'bg-emerald-50 text-emerald-700' : '',
+                                    userAutosaveState === 'error' ? 'bg-red-50 text-red-700' : '',
+                                ]"
+                            >
+                                <span v-if="userAutosaveState === 'queued'">In attesa...</span>
+                                <span v-else-if="userAutosaveState === 'saving'">Salvataggio...</span>
+                                <span v-else-if="userAutosaveState === 'saved'">Salvato</span>
+                                <span v-else>{{ userAutosaveError || 'Errore salvataggio' }}</span>
+                            </div>
+                        </div>
+
+                        <div class="grid gap-4 md:grid-cols-2">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Nome</label>
+                                <input v-model="userForm.name" class="form-control" required />
+                                <div v-if="userForm.errors.name" class="mt-1 text-sm text-red-600">{{ userForm.errors.name }}</div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Email</label>
+                                <input v-model="userForm.email" type="email" class="form-control" required />
+                                <div v-if="userForm.errors.email" class="mt-1 text-sm text-red-600">{{ userForm.errors.email }}</div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Ruolo</label>
+                                <select v-model="userForm.role" class="form-control">
+                                    <option v-for="role in related.roleOptions || []" :key="role" :value="role">{{ displayValue(role) }}</option>
+                                </select>
+                                <div v-if="userForm.errors.role" class="mt-1 text-sm text-red-600">{{ userForm.errors.role }}</div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Qualifica</label>
+                                <input v-model="userForm.job_title" class="form-control" placeholder="Es. Account manager" />
+                                <div v-if="userForm.errors.job_title" class="mt-1 text-sm text-red-600">{{ userForm.errors.job_title }}</div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Telefono</label>
+                                <input v-model="userForm.phone" class="form-control" />
+                                <div v-if="userForm.errors.phone" class="mt-1 text-sm text-red-600">{{ userForm.errors.phone }}</div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Nuova password</label>
+                                <input v-model="userForm.password" type="password" autocomplete="new-password" class="form-control" placeholder="Lascia vuoto per non cambiarla" />
+                                <div v-if="userForm.errors.password" class="mt-1 text-sm text-red-600">{{ userForm.errors.password }}</div>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700">Bio</label>
+                                <textarea v-model="userForm.bio" rows="5" class="form-control" placeholder="Note interne sul profilo..."></textarea>
+                                <div v-if="userForm.errors.bio" class="mt-1 text-sm text-red-600">{{ userForm.errors.bio }}</div>
+                            </div>
+                        </div>
+                    </section>
+                </section>
+
+                <section v-if="section !== 'clients' && section !== 'tasks' && section !== 'projects' && section !== 'users'" class="surface rounded-md p-5">
                     <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Dettagli</h3>
                     <dl class="grid gap-4 md:grid-cols-2">
                         <div v-for="[key, value] in visibleEntries" :key="key" class="rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
@@ -2724,6 +2918,27 @@ watch(
                             </div>
                             <p v-if="!related.projectUsers?.length" class="text-sm text-gray-500">Nessun utente disponibile.</p>
                         </div>
+                    </section>
+
+                    <section v-if="section === 'users'" class="surface rounded-md p-5">
+                        <h3 class="text-sm font-semibold text-gray-900">Profilo</h3>
+                        <dl class="mt-4 space-y-3 text-sm">
+                            <div class="flex items-center justify-between gap-3">
+                                <dt class="text-gray-500">Ruolo attuale</dt>
+                                <dd class="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">{{ displayValue(userForm.role) }}</dd>
+                            </div>
+                            <div class="flex items-center justify-between gap-3">
+                                <dt class="text-gray-500">Creato il</dt>
+                                <dd class="font-medium text-gray-900">{{ dateIt(record.created_at) }}</dd>
+                            </div>
+                            <div v-if="record.updated_at" class="flex items-center justify-between gap-3">
+                                <dt class="text-gray-500">Aggiornato il</dt>
+                                <dd class="font-medium text-gray-900">{{ dateIt(record.updated_at) }}</dd>
+                            </div>
+                        </dl>
+                        <p class="mt-4 rounded-md border border-gray-100 bg-gray-50 px-3 py-2 text-xs leading-relaxed text-gray-500">
+                            La password viene modificata solo quando compili il campo dedicato.
+                        </p>
                     </section>
 
                     <section v-if="related.client" class="surface rounded-md p-5">

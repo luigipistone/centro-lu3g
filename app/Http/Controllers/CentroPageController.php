@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -364,8 +365,19 @@ class CentroPageController extends Controller
     public function show(Request $request, string $id): Response
     {
         $section = $request->route('section');
+        if ($section === 'users') {
+            $this->ensureSuperadmin($request);
+        }
+
         $config = $this->config($section);
-        $record = DB::table($config['table'])->where('id', $id)->first();
+        $record = $section === 'users'
+            ? DB::table('users')
+                ->leftJoin('user_roles', 'user_roles.user_id', '=', 'users.id')
+                ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
+                ->where('users.id', $id)
+                ->select('users.*', 'user_roles.role', 'profiles.avatar_url', 'profiles.job_title', 'profiles.phone', 'profiles.bio', 'profiles.completion_effect')
+                ->first()
+            : DB::table($config['table'])->where('id', $id)->first();
         abort_if(! $record, 404);
 
         $related = match ($section) {
@@ -409,6 +421,9 @@ class CentroPageController extends Controller
                 'client' => DB::table('clients')->where('id', $record->client_id)->first(),
                 'lines' => DB::table('document_lines')->where('document_id', $id)->orderBy('position')->get(),
                 'payments' => DB::table('document_payments')->where('document_id', $id)->latest('paid_at')->get(),
+            ],
+            'users' => [
+                'roleOptions' => ['superadmin', 'admin', 'editor', 'guest'],
             ],
             default => [],
         };
@@ -492,6 +507,7 @@ class CentroPageController extends Controller
         $section = $request->route('section');
 
         if ($section === 'users') {
+            $this->ensureSuperadmin($request);
             User::query()->whereKey($id)->delete();
 
             return back()->with('status', 'Utente eliminato.');
@@ -1111,6 +1127,8 @@ class CentroPageController extends Controller
 
     private function storeUser(Request $request): RedirectResponse
     {
+        $this->ensureSuperadmin($request);
+
         $payload = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
@@ -1131,12 +1149,17 @@ class CentroPageController extends Controller
 
     private function updateUser(Request $request, string $id): RedirectResponse
     {
+        $this->ensureSuperadmin($request);
+
         $user = User::query()->findOrFail($id);
         $payload = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'role' => ['required', Rule::in(['superadmin', 'admin', 'editor', 'guest'])],
             'password' => ['nullable', 'string', 'min:8'],
+            'job_title' => ['nullable', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:255'],
+            'bio' => ['nullable', 'string'],
         ]);
 
         $user->name = $payload['name'];
@@ -1147,8 +1170,60 @@ class CentroPageController extends Controller
         $user->save();
 
         $this->syncProfileAndRole($user, $payload['role']);
+        DB::table('profiles')->updateOrInsert(
+            ['user_id' => $user->id],
+            [
+                'id' => (string) str()->uuid(),
+                'full_name' => $user->name,
+                'job_title' => $payload['job_title'] ?? null,
+                'phone' => $payload['phone'] ?? null,
+                'bio' => $payload['bio'] ?? null,
+                'updated_at' => now(),
+                'created_at' => now(),
+            ],
+        );
 
         return back()->with('status', 'Utente aggiornato.');
+    }
+
+    public function updateUserAvatar(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureSuperadmin($request);
+
+        $request->validate([
+            'avatar' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+        ]);
+
+        $user = User::query()->findOrFail($id);
+        $currentAvatar = DB::table('profiles')->where('user_id', $user->id)->value('avatar_url');
+        $path = $request->file('avatar')->store('avatars', 'public');
+
+        if ($currentAvatar && str_starts_with($currentAvatar, '/avatars/')) {
+            Storage::disk('public')->delete('avatars/'.basename($currentAvatar));
+        }
+
+        DB::table('profiles')->updateOrInsert(
+            ['user_id' => $user->id],
+            [
+                'id' => (string) str()->uuid(),
+                'full_name' => $user->name,
+                'avatar_url' => '/avatars/'.basename($path),
+                'updated_at' => now(),
+                'created_at' => now(),
+            ],
+        );
+
+        return back()->with('status', 'Foto profilo aggiornata.');
+    }
+
+    private function currentUserRole(Request $request): string
+    {
+        return (string) DB::table('user_roles')->where('user_id', $request->user()->id)->value('role');
+    }
+
+    private function ensureSuperadmin(Request $request): void
+    {
+        abort_unless($this->currentUserRole($request) === 'superadmin', 403);
     }
 
     private function syncProfileAndRole(User $user, string $role): void

@@ -91,7 +91,9 @@ Route::middleware('auth')->group(function () {
     Route::delete('/billing/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'billing')->name('billing.destroy');
     Route::get('/users', [CentroPageController::class, 'index'])->defaults('section', 'users')->name('users.index');
     Route::post('/users', [CentroPageController::class, 'store'])->defaults('section', 'users')->name('users.store');
+    Route::get('/users/{id}', [CentroPageController::class, 'show'])->defaults('section', 'users')->name('users.show');
     Route::put('/users/{id}', [CentroPageController::class, 'update'])->defaults('section', 'users')->name('users.update');
+    Route::post('/users/{id}/avatar', [CentroPageController::class, 'updateUserAvatar'])->name('users.avatar.update');
     Route::delete('/users/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'users')->name('users.destroy');
     Route::get('/settings', [CentroPageController::class, 'index'])->defaults('section', 'settings')->name('settings.index');
     Route::post('/settings/services', [CentroPageController::class, 'store'])->defaults('section', 'settings')->name('settings.store');
