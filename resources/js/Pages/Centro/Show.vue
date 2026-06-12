@@ -9,7 +9,6 @@ import {
     Download,
     FileText,
     Mail,
-    Pencil,
     Plus,
     Printer,
     Save,
@@ -239,7 +238,6 @@ const contactForm = useForm({
     role: '',
     notes: '',
 });
-const editingClient = ref(false);
 const clientForm = useForm({
     name: props.record.name || '',
     legal_name: props.record.legal_name || '',
@@ -266,6 +264,10 @@ const clientForm = useForm({
     is_pa: Boolean(props.record.is_pa),
     notes: props.record.notes || '',
 });
+const clientAutosaveState = ref('idle');
+const clientAutosaveError = ref('');
+let clientAutosaveTimer = null;
+let clientAutosaveSequence = 0;
 const subscriptionDefaults = {
     name: '',
     description: '',
@@ -589,13 +591,67 @@ function addContact() {
     });
 }
 
-function saveClientDetails() {
-    clientForm.put(route('clients.update', props.record.id), {
-        preserveScroll: true,
-        onSuccess: () => {
-            editingClient.value = false;
-        },
-    });
+function clientPayload() {
+    return {
+        name: clientForm.name,
+        legal_name: clientForm.legal_name,
+        vat_number: clientForm.vat_number,
+        tax_code: clientForm.tax_code,
+        legal_form: clientForm.legal_form,
+        business_sector: clientForm.business_sector,
+        source: clientForm.source,
+        country: clientForm.country,
+        street: clientForm.street,
+        street_number: clientForm.street_number,
+        postal_code: clientForm.postal_code,
+        city: clientForm.city,
+        province: clientForm.province,
+        email: clientForm.email,
+        phone: clientForm.phone,
+        website: clientForm.website,
+        pec: clientForm.pec,
+        sdi_code: clientForm.sdi_code,
+        iban: clientForm.iban,
+        bic_swift: clientForm.bic_swift,
+        vat_treatment: clientForm.vat_treatment,
+        payment_terms_days: clientForm.payment_terms_days,
+        is_pa: clientForm.is_pa,
+        notes: clientForm.notes,
+    };
+}
+
+function saveClientInline(delay = 650) {
+    if (props.section !== 'clients') return;
+
+    window.clearTimeout(clientAutosaveTimer);
+    clientAutosaveState.value = 'queued';
+    clientAutosaveError.value = '';
+
+    clientAutosaveTimer = window.setTimeout(() => {
+        const sequence = ++clientAutosaveSequence;
+        clientAutosaveState.value = 'saving';
+        clientForm.transform(() => clientPayload()).put(route('clients.update', props.record.id), {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                if (sequence !== clientAutosaveSequence) return;
+                clientAutosaveState.value = 'saved';
+                window.setTimeout(() => {
+                    if (clientAutosaveState.value === 'saved') {
+                        clientAutosaveState.value = 'idle';
+                    }
+                }, 1800);
+            },
+            onError: () => {
+                if (sequence !== clientAutosaveSequence) return;
+                clientAutosaveState.value = 'error';
+                clientAutosaveError.value = 'Non salvato';
+            },
+            onFinish: () => {
+                clientForm.transform((data) => data);
+            },
+        });
+    }, delay);
 }
 
 function removeContact(contact) {
@@ -911,6 +967,36 @@ watch(
     ],
     () => saveProjectInline(),
 );
+
+watch(
+    () => [
+        clientForm.name,
+        clientForm.legal_name,
+        clientForm.vat_number,
+        clientForm.tax_code,
+        clientForm.legal_form,
+        clientForm.business_sector,
+        clientForm.source,
+        clientForm.country,
+        clientForm.street,
+        clientForm.street_number,
+        clientForm.postal_code,
+        clientForm.city,
+        clientForm.province,
+        clientForm.email,
+        clientForm.phone,
+        clientForm.website,
+        clientForm.pec,
+        clientForm.sdi_code,
+        clientForm.iban,
+        clientForm.bic_swift,
+        clientForm.vat_treatment,
+        clientForm.payment_terms_days,
+        clientForm.is_pa,
+        clientForm.notes,
+    ],
+    () => saveClientInline(),
+);
 </script>
 
 <template>
@@ -930,7 +1016,7 @@ watch(
                     <div class="mt-1 flex items-center gap-2">
                         <span v-if="section === 'projects'" class="h-3 w-3 rounded-full" :style="{ backgroundColor: normalizeHexColor(projectForm.color) }"></span>
                         <h2 class="text-xl font-semibold leading-tight text-gray-800">
-                            {{ section === 'projects' ? projectForm.name : (record.name || record.title || record.number) }}
+                            {{ section === 'projects' ? projectForm.name : (section === 'clients' ? clientForm.name : (record.name || record.title || record.number)) }}
                         </h2>
                     </div>
                 </div>
@@ -956,22 +1042,6 @@ watch(
                     <button type="button" class="btn btn-danger" @click="deleteTaskFromDetail">
                         <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                         Elimina
-                    </button>
-                </div>
-                <div v-else-if="section === 'clients'" class="flex flex-wrap justify-end gap-2">
-                    <template v-if="editingClient">
-                        <button type="button" class="btn btn-primary" :disabled="clientForm.processing" @click="saveClientDetails">
-                            <Save class="h-4 w-4" :stroke-width="1.7" />
-                            Salva
-                        </button>
-                        <button type="button" class="btn btn-outline" @click="editingClient = false">
-                            <X class="h-4 w-4" :stroke-width="1.7" />
-                            Annulla
-                        </button>
-                    </template>
-                    <button v-else type="button" class="btn btn-outline" @click="editingClient = true">
-                        <Pencil class="h-4 w-4" :stroke-width="1.7" />
-                        Modifica
                     </button>
                 </div>
                 <div v-else-if="section === 'projects'" class="flex flex-wrap justify-end gap-2">
@@ -1240,11 +1310,25 @@ watch(
 
             <div v-else class="mx-auto grid max-w-7xl gap-6 px-4 sm:px-6 lg:grid-cols-[1fr_360px] lg:px-8">
                 <section v-if="section === 'clients'" class="space-y-6">
-                    <section v-if="editingClient" class="surface rounded-md p-5">
-                        <div class="mb-5">
+                    <section class="surface rounded-md p-5">
+                        <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
                             <div>
-                                <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Modifica anagrafica</h3>
-                                <p class="mt-1 text-sm text-gray-500">Dati fiscali, contatti, indirizzo e note del cliente.</p>
+                                <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Anagrafica cliente</h3>
+                                <p class="mt-1 text-sm text-gray-500">Dati fiscali, contatti, indirizzo e note si salvano automaticamente.</p>
+                            </div>
+                            <div
+                                v-if="clientAutosaveState !== 'idle'"
+                                :class="[
+                                    'inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold transition',
+                                    clientAutosaveState === 'saving' || clientAutosaveState === 'queued' ? 'bg-sky-50 text-sky-700' : '',
+                                    clientAutosaveState === 'saved' ? 'bg-emerald-50 text-emerald-700' : '',
+                                    clientAutosaveState === 'error' ? 'bg-red-50 text-red-700' : '',
+                                ]"
+                            >
+                                <span v-if="clientAutosaveState === 'queued'">In attesa...</span>
+                                <span v-else-if="clientAutosaveState === 'saving'">Salvataggio...</span>
+                                <span v-else-if="clientAutosaveState === 'saved'">Salvato</span>
+                                <span v-else>{{ clientAutosaveError || 'Errore salvataggio' }}</span>
                             </div>
                         </div>
 
@@ -1403,80 +1487,6 @@ watch(
                             <div class="text-xs font-medium uppercase tracking-wide text-gray-500">Documenti</div>
                             <div class="mt-2 text-3xl font-semibold text-gray-900">{{ related.documents?.length || 0 }}</div>
                         </div>
-                    </div>
-
-                    <div class="grid gap-6 md:grid-cols-2">
-                        <section class="surface rounded-md p-5">
-                            <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Anagrafica</h3>
-                            <dl class="grid gap-3 sm:grid-cols-2">
-                                <div>
-                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">Ragione sociale</dt>
-                                    <dd class="mt-1 text-sm font-medium text-gray-900">{{ record.legal_name || '-' }}</dd>
-                                </div>
-                                <div>
-                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">Settore</dt>
-                                    <dd class="mt-1 text-sm text-gray-900">{{ displayValue(record.business_sector) }}</dd>
-                                </div>
-                                <div>
-                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">Email</dt>
-                                    <dd class="mt-1 truncate text-sm text-gray-900">{{ record.email || '-' }}</dd>
-                                </div>
-                                <div>
-                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">Telefono</dt>
-                                    <dd class="mt-1 text-sm text-gray-900">{{ record.phone || '-' }}</dd>
-                                </div>
-                                <div>
-                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">Sito</dt>
-                                    <dd class="mt-1 truncate text-sm text-gray-900">{{ record.website || '-' }}</dd>
-                                </div>
-                                <div>
-                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">Sorgente</dt>
-                                    <dd class="mt-1 text-sm text-gray-900">{{ displayValue(record.source) }}</dd>
-                                </div>
-                                <div class="sm:col-span-2">
-                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">Indirizzo</dt>
-                                    <dd class="mt-1 text-sm text-gray-900">{{ fullClientAddress(record) || '-' }}</dd>
-                                </div>
-                                <div v-if="record.notes" class="sm:col-span-2">
-                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">Note</dt>
-                                    <dd class="mt-1 whitespace-pre-wrap text-sm text-gray-900">{{ record.notes }}</dd>
-                                </div>
-                            </dl>
-                        </section>
-
-                        <section class="surface rounded-md p-5">
-                            <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Dati fiscali e bancari</h3>
-                            <dl class="grid gap-3 sm:grid-cols-2">
-                                <div>
-                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">Partita IVA</dt>
-                                    <dd class="mt-1 text-sm text-gray-900">{{ record.vat_number || '-' }}</dd>
-                                </div>
-                                <div>
-                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">Codice fiscale</dt>
-                                    <dd class="mt-1 text-sm text-gray-900">{{ record.tax_code || '-' }}</dd>
-                                </div>
-                                <div>
-                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">SDI</dt>
-                                    <dd class="mt-1 text-sm text-gray-900">{{ record.sdi_code || '-' }}</dd>
-                                </div>
-                                <div>
-                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">PEC</dt>
-                                    <dd class="mt-1 truncate text-sm text-gray-900">{{ record.pec || '-' }}</dd>
-                                </div>
-                                <div class="sm:col-span-2">
-                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">IBAN</dt>
-                                    <dd class="mt-1 break-all text-sm text-gray-900">{{ record.iban || '-' }}</dd>
-                                </div>
-                                <div>
-                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">IVA</dt>
-                                    <dd class="mt-1 text-sm text-gray-900">{{ displayValue(record.vat_treatment) }}</dd>
-                                </div>
-                                <div>
-                                    <dt class="text-[11px] uppercase tracking-wide text-gray-400">Pagamento</dt>
-                                    <dd class="mt-1 text-sm text-gray-900">{{ paymentTermsLabel(record.payment_terms_days) || '-' }}</dd>
-                                </div>
-                            </dl>
-                        </section>
                     </div>
 
                     <section class="surface rounded-md p-5">
