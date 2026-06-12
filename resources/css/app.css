@@ -98,6 +98,7 @@
         scrollbar-width: none;
         cursor: grab;
         user-select: none;
+        touch-action: pan-y;
         -webkit-overflow-scrolling: touch;
     }
 

@@ -862,6 +862,7 @@ const clientServicesDrag = {
     pointerId: null,
     startX: 0,
     scrollLeft: 0,
+    dragged: false,
 };
 
 function canScrollClientServices(element) {
@@ -872,20 +873,29 @@ function startClientServicesDrag(event) {
     const element = event.currentTarget;
     if (!canScrollClientServices(element)) return;
 
+    event.preventDefault();
     clientServicesDrag.element = element;
     clientServicesDrag.pointerId = event.pointerId;
     clientServicesDrag.startX = event.clientX;
     clientServicesDrag.scrollLeft = element.scrollLeft;
+    clientServicesDrag.dragged = false;
     element.classList.add('is-dragging');
-    element.setPointerCapture?.(event.pointerId);
+    document.addEventListener('pointermove', dragClientServices, { passive: false });
+    document.addEventListener('pointerup', stopClientServicesDrag);
+    document.addEventListener('pointercancel', stopClientServicesDrag);
 }
 
 function dragClientServices(event) {
     const element = clientServicesDrag.element;
     if (!element || clientServicesDrag.pointerId !== event.pointerId) return;
 
+    const delta = event.clientX - clientServicesDrag.startX;
+    if (Math.abs(delta) > 3) {
+        clientServicesDrag.dragged = true;
+    }
+
     event.preventDefault();
-    element.scrollLeft = clientServicesDrag.scrollLeft - (event.clientX - clientServicesDrag.startX);
+    element.scrollLeft = clientServicesDrag.scrollLeft - delta;
 }
 
 function stopClientServicesDrag(event) {
@@ -893,9 +903,22 @@ function stopClientServicesDrag(event) {
     if (!element || (event.pointerId && clientServicesDrag.pointerId !== event.pointerId)) return;
 
     element.classList.remove('is-dragging');
-    element.releasePointerCapture?.(clientServicesDrag.pointerId);
+    document.removeEventListener('pointermove', dragClientServices);
+    document.removeEventListener('pointerup', stopClientServicesDrag);
+    document.removeEventListener('pointercancel', stopClientServicesDrag);
     clientServicesDrag.element = null;
     clientServicesDrag.pointerId = null;
+}
+
+function cancelClientServicesDrag() {
+    const element = clientServicesDrag.element;
+    element?.classList.remove('is-dragging');
+    document.removeEventListener('pointermove', dragClientServices);
+    document.removeEventListener('pointerup', stopClientServicesDrag);
+    document.removeEventListener('pointercancel', stopClientServicesDrag);
+    clientServicesDrag.element = null;
+    clientServicesDrag.pointerId = null;
+    clientServicesDrag.dragged = false;
 }
 
 function scrollClientServicesWheel(event) {
@@ -904,6 +927,12 @@ function scrollClientServicesWheel(event) {
 
     event.preventDefault();
     element.scrollLeft += event.deltaX || event.deltaY;
+}
+
+function blockClientServicesClick(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    clientServicesDrag.dragged = false;
 }
 
 const monthNames = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
@@ -975,6 +1004,7 @@ onMounted(() => {
 onUnmounted(() => {
     document.removeEventListener('click', closeCalendarCreateMenuOnOutside);
     document.removeEventListener('click', closeProjectPeopleMenuOnOutside);
+    cancelClientServicesDrag();
 });
 
 function toggleTaskDone(task) {
@@ -1735,12 +1765,8 @@ function visibleCalendarTasks(cell) {
                                 <div
                                     class="client-services-carousel mt-4 max-w-full"
                                     @pointerdown.stop="startClientServicesDrag"
-                                    @pointermove.stop="dragClientServices"
-                                    @pointerup.stop="stopClientServicesDrag"
-                                    @pointercancel.stop="stopClientServicesDrag"
-                                    @pointerleave.stop="stopClientServicesDrag"
                                     @wheel.stop="scrollClientServicesWheel"
-                                    @click.stop
+                                    @click="blockClientServicesClick"
                                 >
                                     <span
                                         v-for="service in client.services || []"
