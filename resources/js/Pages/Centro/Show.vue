@@ -1366,7 +1366,7 @@ function peopleAvailable(list, users) {
 
 function personAvatarClass(selected) {
     return [
-        'group/person relative inline-flex h-12 w-12 items-center justify-center rounded-full transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300',
+        'group/person relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300',
         selected
             ? 'bg-indigo-50 ring-2 ring-indigo-500 ring-offset-2 ring-offset-white'
             : 'bg-white/70 ring-1 ring-gray-200 hover:-translate-y-0.5 hover:ring-indigo-200 hover:shadow-[0_10px_24px_rgba(79,70,229,0.10)]',
@@ -2845,7 +2845,7 @@ watch(
                             <h3 class="text-sm font-semibold text-gray-900">Membri del progetto</h3>
                             <p class="mt-1 text-xs text-gray-500">Clicca sui volti per aggiungere o rimuovere. Il salvataggio e' automatico.</p>
                         </div>
-                        <div class="flex flex-wrap gap-2">
+                        <div class="people-avatar-picker max-h-56">
                             <button
                                 v-for="user in related.projectUsers"
                                 :key="`project-member-${user.id}`"

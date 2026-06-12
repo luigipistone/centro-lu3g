@@ -201,7 +201,12 @@
 
     .app-popover {
         animation: popover-rise-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        border-radius: var(--radius);
         transform-origin: top right;
+    }
+
+    .people-avatar-picker {
+        @apply flex flex-wrap gap-3 overflow-y-auto p-1;
     }
 
     .nav-link {
