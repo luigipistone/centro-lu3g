@@ -1639,6 +1639,68 @@ class CentroPageController extends Controller
         return back()->with('status', 'Commento aggiunto.');
     }
 
+    public function updateTaskComment(Request $request, string $taskId, string $commentId): RedirectResponse
+    {
+        $comment = DB::table('task_comments')
+            ->where('task_id', $taskId)
+            ->where('id', $commentId)
+            ->first();
+        abort_if(! $comment, 404);
+
+        $payload = $request->validate([
+            'content' => ['required', 'string'],
+        ]);
+
+        DB::table('task_comments')
+            ->where('task_id', $taskId)
+            ->where('id', $commentId)
+            ->update([
+                'content' => $payload['content'],
+                'updated_at' => now(),
+            ]);
+
+        DB::table('task_activity')->insert([
+            'id' => (string) str()->uuid(),
+            'task_id' => $taskId,
+            'user_id' => $request->user()->id,
+            'action' => 'comment_updated',
+            'field' => 'content',
+            'old_value' => $comment->content,
+            'new_value' => $payload['content'],
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return back()->with('status', 'Commento aggiornato.');
+    }
+
+    public function destroyTaskComment(Request $request, string $taskId, string $commentId): RedirectResponse
+    {
+        $comment = DB::table('task_comments')
+            ->where('task_id', $taskId)
+            ->where('id', $commentId)
+            ->first();
+        abort_if(! $comment, 404);
+
+        DB::table('task_comments')
+            ->where('task_id', $taskId)
+            ->where('id', $commentId)
+            ->delete();
+
+        DB::table('task_activity')->insert([
+            'id' => (string) str()->uuid(),
+            'task_id' => $taskId,
+            'user_id' => $request->user()->id,
+            'action' => 'comment_deleted',
+            'field' => 'content',
+            'old_value' => $comment->content,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return back()->with('status', 'Commento eliminato.');
+    }
+
     public function storeSubtask(Request $request, string $id): RedirectResponse
     {
         $task = DB::table('tasks')->where('id', $id)->first();

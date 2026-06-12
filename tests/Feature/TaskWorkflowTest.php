@@ -390,6 +390,64 @@ class TaskWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_task_comment_can_be_updated_and_deleted_inline(): void
+    {
+        $user = User::factory()->create();
+        $taskId = (string) Str::uuid();
+        $commentId = (string) Str::uuid();
+
+        DB::table('tasks')->insert([
+            'id' => $taskId,
+            'title' => 'Task commenti',
+            'priority' => 'medium',
+            'status' => 'todo',
+            'task_type' => 'project',
+            'created_by' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('task_comments')->insert([
+            'id' => $commentId,
+            'task_id' => $taskId,
+            'user_id' => $user->id,
+            'content' => 'Commento iniziale',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->put("/tasks/{$taskId}/comments/{$commentId}", [
+                'content' => 'Commento aggiornato inline',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('task_comments', [
+            'id' => $commentId,
+            'content' => 'Commento aggiornato inline',
+        ]);
+        $this->assertDatabaseHas('task_activity', [
+            'task_id' => $taskId,
+            'action' => 'comment_updated',
+            'field' => 'content',
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->delete("/tasks/{$taskId}/comments/{$commentId}")
+            ->assertRedirect();
+
+        $this->assertDatabaseMissing('task_comments', [
+            'id' => $commentId,
+        ]);
+        $this->assertDatabaseHas('task_activity', [
+            'task_id' => $taskId,
+            'action' => 'comment_deleted',
+            'field' => 'content',
+        ]);
+    }
+
     public function test_task_schedule_can_be_updated_from_calendar(): void
     {
         $user = User::factory()->create();

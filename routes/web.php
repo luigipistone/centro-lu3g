@@ -41,6 +41,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/tasks/{id}', [CentroPageController::class, 'show'])->defaults('section', 'tasks')->name('tasks.show');
     Route::put('/tasks/{id}', [CentroPageController::class, 'update'])->defaults('section', 'tasks')->name('tasks.update');
     Route::post('/tasks/{id}/comments', [CentroPageController::class, 'storeTaskComment'])->name('tasks.comments.store');
+    Route::put('/tasks/{taskId}/comments/{commentId}', [CentroPageController::class, 'updateTaskComment'])->name('tasks.comments.update');
+    Route::delete('/tasks/{taskId}/comments/{commentId}', [CentroPageController::class, 'destroyTaskComment'])->name('tasks.comments.destroy');
     Route::post('/tasks/{id}/subtasks', [CentroPageController::class, 'storeSubtask'])->name('tasks.subtasks.store');
     Route::post('/tasks/{id}/duplicate', [CentroPageController::class, 'duplicateTask'])->name('tasks.duplicate');
     Route::patch('/tasks/{id}/schedule', [CentroPageController::class, 'updateTaskSchedule'])->name('tasks.schedule.update');

@@ -196,6 +196,11 @@ const visibleEntries = Object.entries(props.record).filter(([key, value]) =>
 );
 
 const commentForm = useForm({ content: '' });
+const commentDrafts = ref({});
+const commentAutosaveStates = ref({});
+const commentAutosaveErrors = ref({});
+const commentAutosaveTimers = {};
+const commentAutosaveSequences = {};
 const lineForm = useForm({
     description: '',
     quantity: 1,
@@ -375,6 +380,61 @@ function addComment() {
     commentForm.post(route('tasks.comments.store', props.record.id), {
         preserveScroll: true,
         onSuccess: () => commentForm.reset(),
+    });
+}
+
+function commentDraftPayload(commentId) {
+    return {
+        content: commentDrafts.value[commentId]?.content || '',
+    };
+}
+
+function saveCommentInline(comment, delay = 650) {
+    if (props.section !== 'tasks') return;
+
+    const payload = commentDraftPayload(comment.id);
+    if (!String(payload.content).trim()) {
+        setInlineState(commentAutosaveStates, comment.id, 'idle');
+        return;
+    }
+
+    window.clearTimeout(commentAutosaveTimers[comment.id]);
+    setInlineState(commentAutosaveStates, comment.id, 'queued');
+    setInlineState(commentAutosaveErrors, comment.id, '');
+
+    commentAutosaveTimers[comment.id] = window.setTimeout(() => {
+        const sequence = (commentAutosaveSequences[comment.id] || 0) + 1;
+        commentAutosaveSequences[comment.id] = sequence;
+        setInlineState(commentAutosaveStates, comment.id, 'saving');
+        router.put(route('tasks.comments.update', [props.record.id, comment.id]), payload, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                if (sequence !== commentAutosaveSequences[comment.id]) return;
+                setInlineState(commentAutosaveStates, comment.id, 'saved');
+                window.setTimeout(() => {
+                    if (commentAutosaveStates.value[comment.id] === 'saved') {
+                        setInlineState(commentAutosaveStates, comment.id, 'idle');
+                    }
+                }, 1400);
+            },
+            onError: () => {
+                if (sequence !== commentAutosaveSequences[comment.id]) return;
+                setInlineState(commentAutosaveStates, comment.id, 'error');
+                setInlineState(commentAutosaveErrors, comment.id, 'Non salvato');
+            },
+        });
+    }, delay);
+}
+
+function removeComment(comment) {
+    openConfirm({
+        title: 'Eliminare questo commento?',
+        description: comment.content || 'Commento',
+        keyword: 'ELIMINA',
+        button: 'Elimina',
+        danger: true,
+        action: () => router.delete(route('tasks.comments.destroy', [props.record.id, comment.id]), { preserveScroll: true, onFinish: closeConfirm }),
     });
 }
 
@@ -1455,6 +1515,21 @@ watch(
             };
         }
         subtaskDrafts.value = next;
+    },
+    { immediate: true },
+);
+
+watch(
+    () => props.related?.comments || [],
+    (comments) => {
+        const next = {};
+        for (const comment of comments) {
+            next[comment.id] = {
+                ...(commentDrafts.value[comment.id] || {}),
+                content: comment.content || '',
+            };
+        }
+        commentDrafts.value = next;
     },
     { immediate: true },
 );
@@ -2839,14 +2914,29 @@ watch(
                     </div>
 
                     <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Commenti</h3>
-                    <form class="mb-5 flex gap-3" @submit.prevent="addComment">
-                        <input v-model="commentForm.content" class="form-control mt-0" placeholder="Scrivi un commento..." required />
-                        <button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Invia</button>
+                    <form class="mb-5 grid gap-3 md:grid-cols-[1fr_auto]" @submit.prevent="addComment">
+                        <textarea v-model="commentForm.content" rows="2" class="form-control mt-0" placeholder="Scrivi un commento..." required></textarea>
+                        <button type="submit" class="self-start rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Invia</button>
                     </form>
                     <div class="space-y-3">
-                        <div v-for="comment in related.comments" :key="comment.id" class="rounded-md bg-gray-50 px-3 py-2 text-sm">
-                            <div class="mb-1 text-xs font-medium text-gray-500">{{ comment.user_name || 'Utente' }} · {{ comment.created_at }}</div>
-                            <div class="whitespace-pre-wrap text-gray-900">{{ comment.content }}</div>
+                        <div v-for="comment in related.comments" :key="comment.id" class="rounded-md border border-gray-100 bg-gray-50 px-3 py-3 text-sm transition hover:border-indigo-100 hover:bg-white">
+                            <div class="mb-2 flex items-center justify-between gap-3">
+                                <div class="text-xs font-medium text-gray-500">{{ comment.user_name || 'Utente' }} · {{ comment.created_at }}</div>
+                                <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-md text-red-600 transition hover:bg-red-50 hover:text-red-700" aria-label="Elimina commento" @click="removeComment(comment)">
+                                    <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                </button>
+                            </div>
+                            <textarea
+                                v-if="commentDrafts[comment.id]"
+                                v-model="commentDrafts[comment.id].content"
+                                rows="3"
+                                class="form-control mt-0"
+                                placeholder="Commento..."
+                                @input="saveCommentInline(comment)"
+                            ></textarea>
+                            <div v-if="commentAutosaveStates[comment.id] && commentAutosaveStates[comment.id] !== 'idle'" :class="['mt-1 text-[11px] font-medium', commentAutosaveStates[comment.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
+                                {{ autosaveLabel(commentAutosaveStates[comment.id], commentAutosaveErrors[comment.id]) }}
+                            </div>
                         </div>
                         <p v-if="!related.comments?.length" class="text-sm text-gray-500">Nessun commento.</p>
                     </div>
