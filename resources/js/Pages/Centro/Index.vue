@@ -1223,6 +1223,67 @@ function visibleCalendarTasks(cell) {
                         v-for="field in fields"
                         :key="field.name"
                     >
+                        <div v-if="section === 'tasks' && field.name === 'recurring_enabled'" ref="taskPeopleMenu" class="grid gap-3 md:col-span-4 sm:grid-cols-2">
+                            <div class="relative">
+                                <label class="block text-sm font-medium text-gray-700">{{ form.task_type === 'meeting' ? 'Partecipanti' : 'Assegnatari' }}</label>
+                                <button type="button" class="form-control flex items-center justify-between gap-3 text-left" @click.stop="toggleTaskPeopleMenu('assignee_ids')">
+                                    <span class="flex min-w-0 items-center gap-2">
+                                        <span class="flex -space-x-2">
+                                            <UserAvatar v-for="user in selectedFormUsers('assignee_ids').slice(0, 3)" :key="`assignee-preview-${user.id}`" :user="user" size="sm" class="ring-2 ring-white" />
+                                        </span>
+                                        <span class="truncate">{{ taskPeopleLabel('assignee_ids') }}</span>
+                                    </span>
+                                    <ChevronDown :class="['h-4 w-4 shrink-0 text-gray-400 transition', taskPeopleMenuOpen === 'assignee_ids' ? 'rotate-180' : '']" :stroke-width="1.7" />
+                                </button>
+                                <div v-if="taskPeopleMenuOpen === 'assignee_ids'" class="app-popover absolute left-0 right-0 top-full z-[5300] mt-2 border border-white/80 bg-white/95 p-3 shadow-xl backdrop-blur-xl" @click.stop>
+                                    <div class="people-avatar-picker max-h-44">
+                                        <button
+                                            v-for="user in users"
+                                            :key="`modal-assignee-${user.id}`"
+                                            type="button"
+                                            :class="personAvatarClass((form.assignee_ids || []).includes(user.id))"
+                                            :aria-pressed="(form.assignee_ids || []).includes(user.id)"
+                                            :aria-label="`${(form.assignee_ids || []).includes(user.id) ? 'Rimuovi' : 'Assegna'} ${user.name || user.email}`"
+                                            :title="user.name || user.email"
+                                            @click="toggleFormPerson('assignee_ids', user.id)"
+                                        >
+                                            <UserAvatar :user="user" size="md" />
+                                        </button>
+                                        <p v-if="!users?.length" class="text-xs text-gray-500">Nessun utente disponibile.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="relative">
+                                <label class="block text-sm font-medium text-gray-700">Follower</label>
+                                <button type="button" class="form-control flex items-center justify-between gap-3 text-left" @click.stop="toggleTaskPeopleMenu('follower_ids')">
+                                    <span class="flex min-w-0 items-center gap-2">
+                                        <span class="flex -space-x-2">
+                                            <UserAvatar v-for="user in selectedFormUsers('follower_ids').slice(0, 3)" :key="`follower-preview-${user.id}`" :user="user" size="sm" class="ring-2 ring-white" />
+                                        </span>
+                                        <span class="truncate">{{ taskPeopleLabel('follower_ids') }}</span>
+                                    </span>
+                                    <ChevronDown :class="['h-4 w-4 shrink-0 text-gray-400 transition', taskPeopleMenuOpen === 'follower_ids' ? 'rotate-180' : '']" :stroke-width="1.7" />
+                                </button>
+                                <div v-if="taskPeopleMenuOpen === 'follower_ids'" class="app-popover absolute left-0 right-0 top-full z-[5300] mt-2 border border-white/80 bg-white/95 p-3 shadow-xl backdrop-blur-xl" @click.stop>
+                                    <div class="people-avatar-picker max-h-44">
+                                        <button
+                                            v-for="user in users"
+                                            :key="`modal-follower-${user.id}`"
+                                            type="button"
+                                            :class="personAvatarClass((form.follower_ids || []).includes(user.id))"
+                                            :aria-pressed="(form.follower_ids || []).includes(user.id)"
+                                            :aria-label="`${(form.follower_ids || []).includes(user.id) ? 'Rimuovi follower' : 'Aggiungi follower'} ${user.name || user.email}`"
+                                            :title="user.name || user.email"
+                                            @click="toggleFormPerson('follower_ids', user.id)"
+                                        >
+                                            <UserAvatar :user="user" size="md" />
+                                        </button>
+                                        <p v-if="!users?.length" class="text-xs text-gray-500">Nessun utente disponibile.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div
                             v-show="shouldShowField(field)"
                             :class="modalFieldClass(field)"
@@ -1352,67 +1413,6 @@ function visibleCalendarTasks(cell) {
                             </div>
                         </div>
                     </template>
-
-                    <div v-if="section === 'tasks'" ref="taskPeopleMenu" class="grid gap-3 md:col-span-4 sm:grid-cols-2">
-                        <div class="relative">
-                            <label class="block text-sm font-medium text-gray-700">{{ form.task_type === 'meeting' ? 'Partecipanti' : 'Assegnatari' }}</label>
-                            <button type="button" class="form-control mt-1 flex items-center justify-between gap-3 text-left" @click.stop="toggleTaskPeopleMenu('assignee_ids')">
-                                <span class="flex min-w-0 items-center gap-2">
-                                    <span class="flex -space-x-2">
-                                        <UserAvatar v-for="user in selectedFormUsers('assignee_ids').slice(0, 3)" :key="`assignee-preview-${user.id}`" :user="user" size="sm" class="ring-2 ring-white" />
-                                    </span>
-                                    <span class="truncate">{{ taskPeopleLabel('assignee_ids') }}</span>
-                                </span>
-                                <ChevronDown :class="['h-4 w-4 shrink-0 text-gray-400 transition', taskPeopleMenuOpen === 'assignee_ids' ? 'rotate-180' : '']" :stroke-width="1.7" />
-                            </button>
-                            <div v-if="taskPeopleMenuOpen === 'assignee_ids'" class="app-popover absolute left-0 right-0 top-full z-[5300] mt-2 border border-white/80 bg-white/95 p-3 shadow-xl backdrop-blur-xl" @click.stop>
-                                <div class="people-avatar-picker max-h-44">
-                                    <button
-                                        v-for="user in users"
-                                        :key="`modal-assignee-${user.id}`"
-                                        type="button"
-                                        :class="personAvatarClass((form.assignee_ids || []).includes(user.id))"
-                                        :aria-pressed="(form.assignee_ids || []).includes(user.id)"
-                                        :aria-label="`${(form.assignee_ids || []).includes(user.id) ? 'Rimuovi' : 'Assegna'} ${user.name || user.email}`"
-                                        :title="user.name || user.email"
-                                        @click="toggleFormPerson('assignee_ids', user.id)"
-                                    >
-                                        <UserAvatar :user="user" size="md" />
-                                    </button>
-                                    <p v-if="!users?.length" class="text-xs text-gray-500">Nessun utente disponibile.</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="relative">
-                            <label class="block text-sm font-medium text-gray-700">Follower</label>
-                            <button type="button" class="form-control mt-1 flex items-center justify-between gap-3 text-left" @click.stop="toggleTaskPeopleMenu('follower_ids')">
-                                <span class="flex min-w-0 items-center gap-2">
-                                    <span class="flex -space-x-2">
-                                        <UserAvatar v-for="user in selectedFormUsers('follower_ids').slice(0, 3)" :key="`follower-preview-${user.id}`" :user="user" size="sm" class="ring-2 ring-white" />
-                                    </span>
-                                    <span class="truncate">{{ taskPeopleLabel('follower_ids') }}</span>
-                                </span>
-                                <ChevronDown :class="['h-4 w-4 shrink-0 text-gray-400 transition', taskPeopleMenuOpen === 'follower_ids' ? 'rotate-180' : '']" :stroke-width="1.7" />
-                            </button>
-                            <div v-if="taskPeopleMenuOpen === 'follower_ids'" class="app-popover absolute left-0 right-0 top-full z-[5300] mt-2 border border-white/80 bg-white/95 p-3 shadow-xl backdrop-blur-xl" @click.stop>
-                                <div class="people-avatar-picker max-h-44">
-                                    <button
-                                        v-for="user in users"
-                                        :key="`modal-follower-${user.id}`"
-                                        type="button"
-                                        :class="personAvatarClass((form.follower_ids || []).includes(user.id))"
-                                        :aria-pressed="(form.follower_ids || []).includes(user.id)"
-                                        :aria-label="`${(form.follower_ids || []).includes(user.id) ? 'Rimuovi follower' : 'Aggiungi follower'} ${user.name || user.email}`"
-                                        :title="user.name || user.email"
-                                        @click="toggleFormPerson('follower_ids', user.id)"
-                                    >
-                                        <UserAvatar :user="user" size="md" />
-                                    </button>
-                                    <p v-if="!users?.length" class="text-xs text-gray-500">Nessun utente disponibile.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
 
                     <div :class="['flex justify-end gap-2 border-t border-gray-100 pt-4', section === 'tasks' ? 'md:col-span-4' : 'md:col-span-3']">
                         <button type="button" class="btn btn-outline" @click="resetForm"><X class="h-4 w-4" :stroke-width="1.7" />Annulla</button>
