@@ -96,6 +96,11 @@ const projectPeopleMenu = ref(null);
 const projectPeopleMenuOpen = ref(false);
 const taskPeopleMenu = ref(null);
 const taskPeopleMenuOpen = ref(null);
+const taskSearchSelectOpen = ref(null);
+const taskSearchSelectQueries = ref({
+    project_id: '',
+    client_id: '',
+});
 const taskDescriptionEditor = ref(null);
 const settingsTab = ref('personalizzazione');
 const userRoleFilter = ref('all');
@@ -421,6 +426,42 @@ function optionLabel(field, option) {
     return displayValue(option.name);
 }
 
+function isTaskSearchSelect(field) {
+    return props.section === 'tasks' && ['project_id', 'client_id'].includes(field.name);
+}
+
+function taskSearchSelectLabel(field) {
+    const selected = optionsFor(field).find((option) => option.id === form[field.name]);
+
+    return selected ? optionLabel(field, selected) : '-';
+}
+
+function filteredTaskSearchOptions(field) {
+    const query = (taskSearchSelectQueries.value[field.name] || '').trim().toLowerCase();
+    const options = optionsFor(field);
+    if (!query) return options;
+
+    return options.filter((option) => optionLabel(field, option).toLowerCase().includes(query));
+}
+
+function toggleTaskSearchSelect(field) {
+    taskSearchSelectOpen.value = taskSearchSelectOpen.value === field.name ? null : field.name;
+    taskSearchSelectQueries.value[field.name] = '';
+}
+
+function selectTaskSearchOption(field, value) {
+    form[field.name] = value;
+    taskSearchSelectOpen.value = null;
+    taskSearchSelectQueries.value[field.name] = '';
+}
+
+function closeTaskSearchSelectOnOutside(event) {
+    if (!taskSearchSelectOpen.value) return;
+    if (event.target instanceof Element && event.target.closest(`[data-task-search-field="${taskSearchSelectOpen.value}"]`)) return;
+
+    taskSearchSelectOpen.value = null;
+}
+
 function shouldShowField(field) {
     if (isUpdatesSection.value) {
         if (field.name === 'report_url') return showUpdateReport.value;
@@ -462,6 +503,7 @@ function taskPeopleLabel(field) {
 }
 
 function toggleTaskPeopleMenu(field) {
+    taskSearchSelectOpen.value = null;
     taskPeopleMenuOpen.value = taskPeopleMenuOpen.value === field ? null : field;
 }
 
@@ -476,6 +518,7 @@ function openFieldPicker(event, field) {
     if (field.type !== 'date') return;
 
     taskPeopleMenuOpen.value = null;
+    taskSearchSelectOpen.value = null;
     try {
         event.currentTarget?.showPicker?.();
     } catch (error) {
@@ -535,6 +578,7 @@ function openCreate(patch = {}) {
     Object.assign(form, { ...defaults.value, ...patch });
     formOpen.value = true;
     taskPeopleMenuOpen.value = null;
+    taskSearchSelectOpen.value = null;
     refreshTaskDescriptionEditor();
 }
 
@@ -542,6 +586,7 @@ function resetForm() {
     editing.value = null;
     formOpen.value = false;
     taskPeopleMenuOpen.value = null;
+    taskSearchSelectOpen.value = null;
     form.clearErrors();
     form.defaults({ ...defaults.value });
     form.reset();
@@ -578,6 +623,7 @@ function editRow(row) {
     editing.value = row;
     formOpen.value = true;
     taskPeopleMenuOpen.value = null;
+    taskSearchSelectOpen.value = null;
     form.clearErrors();
     props.fields.forEach((field) => {
         form[field.name] = row[field.name] ?? (field.type === 'checkbox' ? false : '');
@@ -1106,11 +1152,13 @@ onMounted(() => {
     document.addEventListener('click', closeCalendarCreateMenuOnOutside);
     document.addEventListener('click', closeProjectPeopleMenuOnOutside);
     document.addEventListener('pointerdown', closeTaskPeopleMenuOnOutside, true);
+    document.addEventListener('pointerdown', closeTaskSearchSelectOnOutside, true);
 });
 onUnmounted(() => {
     document.removeEventListener('click', closeCalendarCreateMenuOnOutside);
     document.removeEventListener('click', closeProjectPeopleMenuOnOutside);
     document.removeEventListener('pointerdown', closeTaskPeopleMenuOnOutside, true);
+    document.removeEventListener('pointerdown', closeTaskSearchSelectOnOutside, true);
     cancelClientServicesDrag();
 });
 
@@ -1341,6 +1389,57 @@ function visibleCalendarTasks(cell) {
                                 ></div>
                             </div>
                             <textarea v-else-if="field.type === 'textarea'" v-model="form[field.name]" :rows="section === 'tasks' ? 3 : 4" class="form-control" />
+                            <div v-else-if="isTaskSearchSelect(field)" class="relative" :data-task-search-field="field.name">
+                                <button
+                                    type="button"
+                                    class="form-control flex h-[38px] items-center justify-between gap-3 text-left"
+                                    @click.stop="toggleTaskSearchSelect(field)"
+                                >
+                                    <span class="truncate">{{ taskSearchSelectLabel(field) }}</span>
+                                    <ChevronDown :class="['h-4 w-4 shrink-0 text-gray-400 transition', taskSearchSelectOpen === field.name ? 'rotate-180' : '']" :stroke-width="1.7" />
+                                </button>
+                                <div
+                                    v-if="taskSearchSelectOpen === field.name"
+                                    class="app-popover absolute left-0 right-0 top-full z-[5300] mt-2 border border-white/80 bg-white/95 p-3 shadow-xl backdrop-blur-xl"
+                                    @click.stop
+                                >
+                                    <input
+                                        v-model="taskSearchSelectQueries[field.name]"
+                                        type="search"
+                                        class="form-control mt-0"
+                                        :placeholder="`Cerca ${field.label.toLowerCase()}...`"
+                                        autocomplete="off"
+                                    />
+                                    <div class="mt-2 max-h-48 overflow-y-auto pr-1">
+                                        <button
+                                            v-if="!field.required"
+                                            type="button"
+                                            :class="[
+                                                'flex w-full items-center justify-between rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm transition hover:bg-indigo-50',
+                                                !form[field.name] ? 'bg-indigo-50 font-semibold text-indigo-700' : 'text-gray-700',
+                                            ]"
+                                            @click="selectTaskSearchOption(field, '')"
+                                        >
+                                            <span>-</span>
+                                            <Check v-if="!form[field.name]" class="h-4 w-4" :stroke-width="1.8" />
+                                        </button>
+                                        <button
+                                            v-for="option in filteredTaskSearchOptions(field)"
+                                            :key="option.id"
+                                            type="button"
+                                            :class="[
+                                                'flex w-full items-center justify-between gap-3 rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm transition hover:bg-indigo-50',
+                                                form[field.name] === option.id ? 'bg-indigo-50 font-semibold text-indigo-700' : 'text-gray-700',
+                                            ]"
+                                            @click="selectTaskSearchOption(field, option.id)"
+                                        >
+                                            <span class="truncate">{{ optionLabel(field, option) }}</span>
+                                            <Check v-if="form[field.name] === option.id" class="h-4 w-4 shrink-0" :stroke-width="1.8" />
+                                        </button>
+                                        <p v-if="!filteredTaskSearchOptions(field).length" class="px-3 py-2 text-sm text-gray-500">Nessun risultato</p>
+                                    </div>
+                                </div>
+                            </div>
                             <select v-else-if="['select', 'client', 'project', 'service'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
                                 <option value="">-</option>
                                 <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ optionLabel(field, option) }}</option>
