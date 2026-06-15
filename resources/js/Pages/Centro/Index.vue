@@ -335,7 +335,7 @@ const columnLabels = {
     phone: 'Telefono',
     website: 'Sito web',
     status: 'Stato',
-    priority: 'Priorita',
+    priority: 'Priorità',
     task_type: 'Tipo',
     start_date: 'Inizio',
     due_date: 'Scadenza',
@@ -382,7 +382,7 @@ const modalPanelClass = computed(() => [
 ]);
 
 const modalFormClass = computed(() => {
-    if (props.section === 'tasks') return 'grid gap-3 p-5 md:grid-cols-4';
+    if (props.section === 'tasks') return 'grid gap-3 p-5 md:grid-cols-6';
     if (props.section === 'clients' || props.section === 'billing') return 'grid gap-4 p-5 md:grid-cols-3';
 
     return 'space-y-4 p-5';
@@ -393,7 +393,7 @@ function modalFieldClass(field) {
         return field.type === 'textarea' || ['description', 'notes', 'footer_notes'].includes(field.name) ? 'md:col-span-3' : '';
     }
 
-    if (['title', 'description'].includes(field.name)) return 'md:col-span-4';
+    if (['title', 'description'].includes(field.name)) return 'md:col-span-6';
     if (['project_id', 'client_id', 'service_id', 'priority', 'start_date', 'due_date', 'due_time', 'recurring_enabled', 'recurring_interval_value', 'recurring_interval_unit', 'recurring_mode', 'recurring_weekday', 'recurring_month_day'].includes(field.name)) {
         return 'md:col-span-2';
     }
@@ -1234,7 +1234,7 @@ function visibleCalendarTasks(cell) {
                         v-for="field in fields"
                         :key="field.name"
                     >
-                        <div v-if="section === 'tasks' && field.name === 'recurring_enabled'" ref="taskPeopleMenu" class="grid gap-3 md:col-span-4 sm:grid-cols-2">
+                        <div v-if="section === 'tasks' && field.name === 'recurring_enabled'" ref="taskPeopleMenu" class="grid gap-3 md:col-span-6 sm:grid-cols-2">
                             <div class="relative" data-task-people-field="assignee_ids">
                                 <label class="block text-sm font-medium text-gray-700">{{ form.task_type === 'meeting' ? 'Partecipanti' : 'Assegnatari' }}</label>
                                 <button type="button" class="form-control task-people-control flex items-center justify-between gap-3 text-left" @click.stop="toggleTaskPeopleMenu('assignee_ids')">
@@ -1393,7 +1393,7 @@ function visibleCalendarTasks(cell) {
                             <div v-if="form.errors[field.name]" class="mt-1 text-sm text-red-600">{{ form.errors[field.name] }}</div>
                         </div>
 
-                        <div v-if="section === 'tasks' && field.name === 'recurring_enabled' && form.recurring_enabled" class="rounded-md border border-gray-100 bg-gray-50/90 p-3 md:col-span-4">
+                        <div v-if="section === 'tasks' && field.name === 'recurring_enabled' && form.recurring_enabled" class="rounded-md border border-gray-100 bg-gray-50/90 p-3 md:col-span-6">
                             <div class="grid gap-3 sm:grid-cols-2">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Ogni</label>
@@ -1425,7 +1425,7 @@ function visibleCalendarTasks(cell) {
                         </div>
                     </template>
 
-                    <div :class="['flex justify-end gap-2 border-t border-gray-100 pt-4', section === 'tasks' ? 'md:col-span-4' : 'md:col-span-3']">
+                    <div :class="['flex justify-end gap-2 border-t border-gray-100 pt-4', section === 'tasks' ? 'md:col-span-6' : 'md:col-span-3']">
                         <button type="button" class="btn btn-outline" @click="resetForm"><X class="h-4 w-4" :stroke-width="1.7" />Annulla</button>
                         <button type="submit" class="btn btn-primary" :disabled="form.processing">
                             <Save v-if="editing" class="h-4 w-4" :stroke-width="1.7" />

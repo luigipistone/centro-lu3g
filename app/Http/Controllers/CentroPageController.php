@@ -721,7 +721,7 @@ class CentroPageController extends Controller
                     ['name' => 'client_id', 'label' => 'Cliente', 'type' => 'client'],
                     ['name' => 'service_id', 'label' => 'Servizio', 'type' => 'service'],
                     ['name' => 'status', 'label' => 'Stato', 'type' => 'select', 'options' => ['todo', 'in_progress', 'in_review', 'done']],
-                    ['name' => 'priority', 'label' => 'Priorita', 'type' => 'select', 'options' => ['low', 'medium', 'high', 'urgent']],
+                    ['name' => 'priority', 'label' => 'Priorità', 'type' => 'select', 'options' => ['low', 'medium', 'high', 'urgent']],
                     ['name' => 'start_date', 'label' => 'Inizio', 'type' => 'date'],
                     ['name' => 'due_date', 'label' => 'Scadenza', 'type' => 'date'],
                     ['name' => 'due_time', 'label' => 'Ora', 'type' => 'time'],
