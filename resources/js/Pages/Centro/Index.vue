@@ -1801,7 +1801,7 @@ function visibleCalendarTasks(cell) {
                                             <div class="min-w-0 flex-1 transition-transform duration-200 group-hover/task:translate-x-5 group-focus/task:translate-x-5">
                                                 <div class="flex items-center gap-1">
                                                     <span class="h-2 w-2 shrink-0 rounded-full" :style="{ backgroundColor: priorityColor(task.priority) }"></span>
-                                                    <span v-if="task.due_time" class="shrink-0 text-[10px] text-gray-500">{{ String(task.due_time).slice(0, 5) }}</span>
+                                                    <span v-if="(task.task_type || 'task') === 'meeting' && task.due_time" class="shrink-0 text-[10px] text-gray-500">{{ String(task.due_time).slice(0, 5) }}</span>
                                                     <span :class="['truncate font-medium', task.status === 'done' ? 'line-through opacity-60' : '']">{{ task.title }}</span>
                                                 </div>
                                                 <div class="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-gray-500">
