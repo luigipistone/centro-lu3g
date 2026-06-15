@@ -32,7 +32,6 @@ import {
     RefreshCw,
     RotateCcw,
     Save,
-    Search,
     Settings,
     ShieldCheck,
     TrendingUp,
@@ -1236,14 +1235,14 @@ function closeCalendarCreateMenuOnOutside() {
 }
 
 onMounted(() => {
-    document.addEventListener('click', closeCalendarCreateMenuOnOutside);
-    document.addEventListener('click', closeProjectPeopleMenuOnOutside);
+    document.addEventListener('pointerdown', closeCalendarCreateMenuOnOutside, true);
+    document.addEventListener('pointerdown', closeProjectPeopleMenuOnOutside, true);
     document.addEventListener('pointerdown', closeTaskPeopleMenuOnOutside, true);
     document.addEventListener('pointerdown', closeTaskSearchSelectOnOutside, true);
 });
 onUnmounted(() => {
-    document.removeEventListener('click', closeCalendarCreateMenuOnOutside);
-    document.removeEventListener('click', closeProjectPeopleMenuOnOutside);
+    document.removeEventListener('pointerdown', closeCalendarCreateMenuOnOutside, true);
+    document.removeEventListener('pointerdown', closeProjectPeopleMenuOnOutside, true);
     document.removeEventListener('pointerdown', closeTaskPeopleMenuOnOutside, true);
     document.removeEventListener('pointerdown', closeTaskSearchSelectOnOutside, true);
     cancelClientServicesDrag();
@@ -1824,10 +1823,7 @@ function visibleCalendarTasks(cell) {
         <div v-else-if="section === 'projects'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <div class="grid gap-3 lg:grid-cols-[1fr_190px_240px_auto_auto]">
-                    <div class="relative">
-                        <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" :stroke-width="1.7" />
-                        <input v-model="projectSearch" class="form-control mt-0 pl-9" placeholder="Cerca per progetto, cliente o descrizione..." />
-                    </div>
+                    <input v-model="projectSearch" class="form-control mt-0" placeholder="Cerca per progetto, cliente o descrizione..." />
                     <AppSelect v-model="projectStatus" :options="projectStatusOptions" />
                     <div ref="projectPeopleMenu" class="relative z-30">
                         <button
@@ -2007,10 +2003,7 @@ function visibleCalendarTasks(cell) {
         <div v-else-if="section === 'clients'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <div class="grid gap-3 md:grid-cols-[1fr_220px_auto_auto]">
-                    <div class="relative">
-                        <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" :stroke-width="1.7" />
-                        <input v-model="clientSearch" class="form-control mt-0 pl-9" placeholder="Cerca per nome, ragione sociale, email, P.IVA o citta..." />
-                    </div>
+                    <input v-model="clientSearch" class="form-control mt-0" placeholder="Cerca per nome, ragione sociale, email, P.IVA o citta..." />
                     <AppSelect
                         v-model="clientService"
                         :options="namedOptions(services, { value: 'all', label: 'Tutti i servizi' })"
@@ -2134,10 +2127,7 @@ function visibleCalendarTasks(cell) {
         <div v-else-if="section === 'tasks'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <div class="grid gap-3 md:grid-cols-[1fr_150px_150px_150px_auto_auto_auto_auto]">
-                    <div class="relative">
-                        <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" :stroke-width="1.7" />
-                        <input v-model="taskSearch" class="form-control mt-0 pl-9" placeholder="Cerca task, cliente, progetto o servizio..." />
-                    </div>
+                    <input v-model="taskSearch" class="form-control mt-0" placeholder="Cerca task, cliente, progetto o servizio..." />
                     <AppSelect v-model="taskStatus" :options="taskStatusOptions" />
                     <AppSelect v-model="taskPriority" :options="taskPriorityOptions" />
                     <AppSelect v-model="taskType" :options="taskTypeOptions" />
@@ -2654,14 +2644,11 @@ function visibleCalendarTasks(cell) {
 
                 <section class="app-card">
                     <div class="mb-4 grid gap-3 md:grid-cols-[1fr_170px_170px_auto_auto]">
-                        <div class="relative">
-                            <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" :stroke-width="1.7" />
-                            <input
-                                v-model="billingSearch"
-                                class="form-control mt-0 pl-9"
-                                placeholder="Cerca per numero, cliente o note..."
-                            />
-                        </div>
+                        <input
+                            v-model="billingSearch"
+                            class="form-control mt-0"
+                            placeholder="Cerca per numero, cliente o note..."
+                        />
                         <AppSelect v-model="billingType" :options="objectOptions(documentTypeLabels, { value: 'all', label: 'Tutti i tipi' })" />
                         <AppSelect v-model="billingStatus" :options="objectOptions(documentStatusLabels, { value: 'all', label: 'Tutti gli stati' })" />
                         <button type="button" class="btn btn-outline" @click="billingSearch = ''; billingType = 'all'; billingStatus = 'all'"><RotateCcw class="h-4 w-4" :stroke-width="1.7" />Reset</button>

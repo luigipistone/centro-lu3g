@@ -1,5 +1,5 @@
 <script setup>
-import { Check, ChevronDown, Search } from '@lucide/vue';
+import { Check, ChevronDown } from '@lucide/vue';
 import { computed, onMounted, onUnmounted, ref, useAttrs } from 'vue';
 
 defineOptions({ inheritAttrs: false });
@@ -82,8 +82,8 @@ function closeOnOutside(event) {
     open.value = false;
 }
 
-onMounted(() => document.addEventListener('click', closeOnOutside));
-onUnmounted(() => document.removeEventListener('click', closeOnOutside));
+onMounted(() => document.addEventListener('pointerdown', closeOnOutside, true));
+onUnmounted(() => document.removeEventListener('pointerdown', closeOnOutside, true));
 </script>
 
 <template>
@@ -105,12 +105,11 @@ onUnmounted(() => document.removeEventListener('click', closeOnOutside));
             class="app-popover field-dropdown-menu absolute left-0 right-0 top-full z-[5300] mt-2 p-3"
             @click.stop
         >
-            <div v-if="canSearch" class="relative">
-                <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" :stroke-width="1.7" />
+            <div v-if="canSearch">
                 <input
                     v-model="query"
                     type="search"
-                    class="form-control mt-0 pl-9"
+                    class="form-control mt-0"
                     :placeholder="`Cerca...`"
                     autocomplete="off"
                 />
