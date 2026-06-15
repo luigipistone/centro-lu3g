@@ -467,9 +467,20 @@ function toggleTaskPeopleMenu(field) {
 
 function closeTaskPeopleMenuOnOutside(event) {
     if (!taskPeopleMenuOpen.value) return;
-    if (taskPeopleMenu.value?.contains(event.target)) return;
+    if (event.target.closest(`[data-task-people-field="${taskPeopleMenuOpen.value}"]`)) return;
 
     taskPeopleMenuOpen.value = null;
+}
+
+function openFieldPicker(event, field) {
+    if (field.type !== 'date') return;
+
+    taskPeopleMenuOpen.value = null;
+    try {
+        event.currentTarget?.showPicker?.();
+    } catch (error) {
+        event.currentTarget?.focus?.();
+    }
 }
 
 function refreshTaskDescriptionEditor() {
@@ -1224,7 +1235,7 @@ function visibleCalendarTasks(cell) {
                         :key="field.name"
                     >
                         <div v-if="section === 'tasks' && field.name === 'recurring_enabled'" ref="taskPeopleMenu" class="grid gap-3 md:col-span-4 sm:grid-cols-2">
-                            <div class="relative">
+                            <div class="relative" data-task-people-field="assignee_ids">
                                 <label class="block text-sm font-medium text-gray-700">{{ form.task_type === 'meeting' ? 'Partecipanti' : 'Assegnatari' }}</label>
                                 <button type="button" class="form-control task-people-control flex items-center justify-between gap-3 text-left" @click.stop="toggleTaskPeopleMenu('assignee_ids')">
                                     <span class="flex min-w-0 items-center gap-2">
@@ -1253,7 +1264,7 @@ function visibleCalendarTasks(cell) {
                                     </div>
                                 </div>
                             </div>
-                            <div class="relative">
+                            <div class="relative" data-task-people-field="follower_ids">
                                 <label class="block text-sm font-medium text-gray-700">Follower</label>
                                 <button type="button" class="form-control task-people-control flex items-center justify-between gap-3 text-left" @click.stop="toggleTaskPeopleMenu('follower_ids')">
                                     <span class="flex min-w-0 items-center gap-2">
@@ -1378,7 +1389,7 @@ function visibleCalendarTasks(cell) {
                                 <input v-model="form[field.name]" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
                                 Si
                             </label>
-                            <input v-else v-model="form[field.name]" :type="field.type" class="form-control" :required="field.required" />
+                            <input v-else v-model="form[field.name]" :type="field.type" class="form-control" :required="field.required" @click="openFieldPicker($event, field)" />
                             <div v-if="form.errors[field.name]" class="mt-1 text-sm text-red-600">{{ form.errors[field.name] }}</div>
                         </div>
 
