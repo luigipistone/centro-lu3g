@@ -1693,23 +1693,23 @@ function visibleCalendarTasks(cell) {
                 </div>
 
                 <div class="surface overflow-hidden">
-                    <div :class="['grid gap-px bg-slate-200/70', compactWeekend ? 'grid-cols-[repeat(5,minmax(0,1fr))_minmax(58px,0.34fr)_minmax(58px,0.34fr)]' : 'grid-cols-7']">
+                    <div :class="['grid gap-px bg-gray-200/55', compactWeekend ? 'grid-cols-[repeat(5,minmax(0,1fr))_minmax(58px,0.34fr)_minmax(58px,0.34fr)]' : 'grid-cols-7']">
                         <div
                             v-for="(day, index) in dayNames"
                             :key="day"
-                            :class="['bg-white/58 px-2 py-3 text-center text-xs font-bold uppercase tracking-wide text-gray-500 backdrop-blur-xl', compactWeekend && index >= 5 ? 'text-[10px]' : '']"
+                            :class="['bg-white px-2 py-3 text-center text-xs font-bold uppercase tracking-wide text-gray-500', compactWeekend && index >= 5 ? 'text-[10px]' : '']"
                         >
                             {{ compactWeekend && index >= 5 ? day.slice(0, 1) : day }}
                         </div>
                     </div>
 
-                    <div :class="['grid gap-px bg-slate-200/70', compactWeekend ? 'grid-cols-[repeat(5,minmax(0,1fr))_minmax(58px,0.34fr)_minmax(58px,0.34fr)]' : 'grid-cols-7']">
+                    <div :class="['grid gap-px bg-gray-200/55', compactWeekend ? 'grid-cols-[repeat(5,minmax(0,1fr))_minmax(58px,0.34fr)_minmax(58px,0.34fr)]' : 'grid-cols-7']">
                         <div
                             v-for="cell in calendarGrid"
                             :key="cell.key"
                             :class="[
-                                'group min-h-[170px] bg-white/58 p-2 backdrop-blur-xl transition',
-                                cell.empty ? 'bg-white/26' : '',
+                                'group min-h-[170px] bg-white p-2 transition',
+                                cell.empty ? 'bg-white/70' : '',
                                 cell.today ? 'ring-2 ring-inset ring-indigo-500/70' : '',
                                 calendarDropDate === cell.date ? 'bg-indigo-50/80' : '',
                                 calendarDraggedTask && !cell.empty ? 'outline outline-1 outline-transparent transition hover:outline-indigo-200' : '',
