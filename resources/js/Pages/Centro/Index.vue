@@ -100,6 +100,8 @@ const taskSearchSelectOpen = ref(null);
 const taskSearchSelectQueries = ref({
     project_id: '',
     client_id: '',
+    service_id: '',
+    priority: '',
 });
 const taskDescriptionEditor = ref(null);
 const settingsTab = ref('personalizzazione');
@@ -427,13 +429,25 @@ function optionLabel(field, option) {
 }
 
 function isTaskSearchSelect(field) {
-    return props.section === 'tasks' && ['project_id', 'client_id'].includes(field.name);
+    return props.section === 'tasks' && ['project_id', 'client_id', 'service_id', 'priority'].includes(field.name);
 }
 
 function taskSearchSelectLabel(field) {
     const selected = optionsFor(field).find((option) => option.id === form[field.name]);
 
-    return selected ? optionLabel(field, selected) : '-';
+    return selected ? optionLabel(field, selected) : `Seleziona ${field.label.toLowerCase()}`;
+}
+
+function taskSearchEmptyLabel(field) {
+    return {
+        project_id: 'Nessun progetto',
+        client_id: 'Nessun cliente',
+        service_id: 'Nessun servizio',
+    }[field.name] || 'Nessuna selezione';
+}
+
+function canClearTaskSearchSelect(field) {
+    return field.name !== 'priority' && !field.required;
 }
 
 function filteredTaskSearchOptions(field) {
@@ -1412,7 +1426,7 @@ function visibleCalendarTasks(cell) {
                                     />
                                     <div class="mt-2 max-h-48 overflow-y-auto pr-1">
                                         <button
-                                            v-if="!field.required"
+                                            v-if="canClearTaskSearchSelect(field)"
                                             type="button"
                                             :class="[
                                                 'flex w-full items-center justify-between rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm transition hover:bg-indigo-50',
@@ -1420,7 +1434,7 @@ function visibleCalendarTasks(cell) {
                                             ]"
                                             @click="selectTaskSearchOption(field, '')"
                                         >
-                                            <span>-</span>
+                                            <span>{{ taskSearchEmptyLabel(field) }}</span>
                                             <Check v-if="!form[field.name]" class="h-4 w-4" :stroke-width="1.8" />
                                         </button>
                                         <button
@@ -1441,7 +1455,7 @@ function visibleCalendarTasks(cell) {
                                 </div>
                             </div>
                             <select v-else-if="['select', 'client', 'project', 'service'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
-                                <option value="">-</option>
+                                <option value="">Seleziona</option>
                                 <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ optionLabel(field, option) }}</option>
                             </select>
                             <div v-else-if="field.type === 'user'" class="mt-2 flex flex-wrap gap-2">
@@ -1959,7 +1973,7 @@ function visibleCalendarTasks(cell) {
                                 <label class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
                                 <textarea v-if="field.type === 'textarea'" v-model="form[field.name]" rows="4" class="form-control" />
                                 <select v-else-if="['select', 'client', 'project', 'service'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
-                                    <option value="">-</option>
+                                    <option value="">Seleziona</option>
                                     <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ option.name }}</option>
                                 </select>
                                 <div v-else-if="field.type === 'user'" class="mt-2 flex flex-wrap gap-2">
@@ -2101,7 +2115,7 @@ function visibleCalendarTasks(cell) {
                                 <label class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
                                 <textarea v-if="field.type === 'textarea'" v-model="form[field.name]" rows="4" class="form-control" />
                                 <select v-else-if="['select', 'client', 'project', 'service'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
-                                    <option value="">-</option>
+                                    <option value="">Seleziona</option>
                                     <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ option.name }}</option>
                                 </select>
                                 <div v-else-if="field.type === 'user'" class="mt-2 flex flex-wrap gap-2">
@@ -2668,7 +2682,7 @@ function visibleCalendarTasks(cell) {
                             <label class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
                             <textarea v-if="field.type === 'textarea'" v-model="form[field.name]" rows="3" class="form-control" />
                             <select v-else-if="['select', 'client', 'project', 'service'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
-                                <option value="">-</option>
+                                <option value="">Seleziona</option>
                                 <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ displayValue(option.name) }}</option>
                             </select>
                             <div v-else-if="field.type === 'user'" class="mt-2 flex flex-wrap gap-2">
@@ -2779,7 +2793,7 @@ function visibleCalendarTasks(cell) {
                                             class="form-control mt-0 min-w-[150px]"
                                             @change="setDraftValue(row, 'cadence', $event.target.value); saveServiceUpdateInline(row, { cadence: $event.target.value || null })"
                                         >
-                                            <option value="">-</option>
+                                            <option value="">Seleziona</option>
                                             <option value="on_request">Su richiesta</option>
                                             <option value="weekly">Settimanale</option>
                                             <option value="biweekly">Bisettimanale</option>
@@ -2855,7 +2869,7 @@ function visibleCalendarTasks(cell) {
                                 class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                                 :required="field.required"
                             >
-                                <option value="">-</option>
+                                <option value="">Seleziona</option>
                                 <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">
                                     {{ option.name }}
                                 </option>

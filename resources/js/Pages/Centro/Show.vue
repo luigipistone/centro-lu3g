@@ -2115,21 +2115,21 @@ watch(
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Natura giuridica</label>
                                         <select v-model="clientForm.legal_form" class="form-control">
-                                            <option value="">-</option>
+                                            <option value="">Seleziona</option>
                                             <option v-for="option in clientSelectOptions.legal_form" :key="`legal-form-${option}`" :value="option">{{ clientOptionLabel('legal_form', option) }}</option>
                                         </select>
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Settore</label>
                                         <select v-model="clientForm.business_sector" class="form-control">
-                                            <option value="">-</option>
+                                            <option value="">Seleziona</option>
                                             <option v-for="option in clientSelectOptions.business_sector" :key="`business-sector-${option}`" :value="option">{{ clientOptionLabel('business_sector', option) }}</option>
                                         </select>
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Sorgente</label>
                                         <select v-model="clientForm.source" class="form-control">
-                                            <option value="">-</option>
+                                            <option value="">Seleziona</option>
                                             <option v-for="option in clientSelectOptions.source" :key="`source-${option}`" :value="option">{{ clientOptionLabel('source', option) }}</option>
                                         </select>
                                     </div>
@@ -2155,7 +2155,7 @@ watch(
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Paese</label>
                                         <select v-model="clientForm.country" class="form-control">
-                                            <option value="">-</option>
+                                            <option value="">Seleziona</option>
                                             <option v-for="option in clientSelectOptions.country" :key="`country-${option}`" :value="option">{{ clientOptionLabel('country', option) }}</option>
                                         </select>
                                     </div>
@@ -2209,14 +2209,14 @@ watch(
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Trattamento IVA</label>
                                         <select v-model="clientForm.vat_treatment" class="form-control">
-                                            <option value="">-</option>
+                                            <option value="">Seleziona</option>
                                             <option v-for="option in clientSelectOptions.vat_treatment" :key="`vat-treatment-${option}`" :value="option">{{ clientOptionLabel('vat_treatment', option) }}</option>
                                         </select>
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Termini pagamento</label>
                                         <select v-model="clientForm.payment_terms_days" class="form-control">
-                                            <option value="">-</option>
+                                            <option value="">Seleziona</option>
                                             <option v-for="option in clientSelectOptions.payment_terms_days" :key="`payment-terms-${option}`" :value="option">{{ clientOptionLabel('payment_terms_days', option) }}</option>
                                         </select>
                                     </div>
