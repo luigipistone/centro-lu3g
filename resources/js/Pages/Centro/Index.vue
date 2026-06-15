@@ -78,7 +78,7 @@ const billingType = ref('all');
 const billingStatus = ref('all');
 const currentCalendarDate = ref(new Date());
 const calendarType = ref('all');
-const compactWeekend = ref(false);
+const compactWeekend = ref(true);
 const calendarCreateDate = ref(null);
 const calendarDraggedTask = ref(null);
 const calendarDropDate = ref(null);
@@ -1226,6 +1226,10 @@ function createTaskHref(type, date) {
     return `${route('tasks.index')}?create=${type}&date=${date}`;
 }
 
+function openCalendarTask(task) {
+    router.visit(route('tasks.show', task.id));
+}
+
 function openCalendarCreateMenu(date) {
     calendarCreateDate.value = calendarCreateDate.value === date ? null : date;
 }
@@ -1679,24 +1683,24 @@ function visibleCalendarTasks(cell) {
                     </div>
                 </div>
 
-                <div class="surface overflow-hidden">
-                    <div :class="['grid gap-px bg-white/42', compactWeekend ? 'grid-cols-[repeat(5,minmax(0,1fr))_minmax(58px,0.34fr)_minmax(58px,0.34fr)]' : 'grid-cols-7']">
+                <div class="surface">
+                    <div :class="['grid gap-px bg-slate-200/75', compactWeekend ? 'grid-cols-[repeat(5,minmax(0,1fr))_minmax(58px,0.34fr)_minmax(58px,0.34fr)]' : 'grid-cols-7']">
                         <div
                             v-for="(day, index) in dayNames"
                             :key="day"
-                            :class="['bg-white/46 px-2 py-3 text-center text-xs font-bold uppercase tracking-wide text-gray-500 backdrop-blur-xl', compactWeekend && index >= 5 ? 'text-[10px]' : '']"
+                            :class="['bg-white/68 px-2 py-3 text-center text-xs font-bold uppercase tracking-wide text-gray-500 backdrop-blur-xl', compactWeekend && index >= 5 ? 'text-[10px]' : '']"
                         >
                             {{ compactWeekend && index >= 5 ? day.slice(0, 1) : day }}
                         </div>
                     </div>
 
-                    <div :class="['grid gap-px bg-white/42', compactWeekend ? 'grid-cols-[repeat(5,minmax(0,1fr))_minmax(58px,0.34fr)_minmax(58px,0.34fr)]' : 'grid-cols-7']">
+                    <div :class="['grid gap-px bg-slate-200/75', compactWeekend ? 'grid-cols-[repeat(5,minmax(0,1fr))_minmax(58px,0.34fr)_minmax(58px,0.34fr)]' : 'grid-cols-7']">
                         <div
                             v-for="cell in calendarGrid"
                             :key="cell.key"
                             :class="[
-                                'group min-h-[170px] bg-white/58 p-2 backdrop-blur-xl transition',
-                                cell.empty ? 'bg-white/26' : '',
+                                'group min-h-[170px] bg-white/70 p-2 backdrop-blur-xl transition',
+                                cell.empty ? 'bg-white/36' : '',
                                 cell.today ? 'ring-2 ring-inset ring-indigo-500/70' : '',
                                 calendarDropDate === cell.date ? 'bg-indigo-50/80' : '',
                                 calendarDraggedTask && !cell.empty ? 'outline outline-1 outline-transparent transition hover:outline-indigo-200' : '',
@@ -1747,15 +1751,24 @@ function visibleCalendarTasks(cell) {
                                     </div>
                                 </div>
 
-                                <div v-if="compactWeekend && cell.weekend" class="flex flex-wrap justify-center gap-1">
+                                <div v-if="compactWeekend && cell.weekend" class="flex flex-wrap justify-center gap-1 pt-1">
                                     <Link
                                         v-for="task in cell.tasks"
                                         :key="task.id"
                                         :href="route('tasks.show', task.id)"
-                                        class="h-2.5 w-2.5 rounded-full"
+                                        class="group/dot relative h-3 w-3 rounded-full ring-2 ring-white/85 transition hover:scale-125 focus:outline-none focus:ring-indigo-300"
                                         :style="{ backgroundColor: task.project_color || (task.priority === 'urgent' ? '#dc2626' : task.priority === 'high' ? '#f97316' : task.priority === 'low' ? '#10b981' : '#f59e0b') }"
                                         :title="task.title"
-                                    />
+                                    >
+                                        <span class="pointer-events-none absolute left-1/2 top-5 z-[5400] hidden w-56 -translate-x-1/2 rounded-[var(--radius-sm)] border border-white/80 bg-white/96 p-2 text-left text-[11px] leading-4 text-gray-600 shadow-xl backdrop-blur-xl group-hover/dot:block group-focus/dot:block">
+                                            <span class="block truncate font-semibold text-gray-900">{{ task.title }}</span>
+                                            <span class="mt-0.5 block truncate">{{ task.client_name || task.project_name || task.service_name || taskTypeLabel(task.task_type) }}</span>
+                                            <span class="mt-1 flex items-center justify-between gap-2 text-gray-500">
+                                                <span>{{ displayValue(task.priority) }}</span>
+                                                <span v-if="task.due_time">{{ String(task.due_time).slice(0, 5) }}</span>
+                                            </span>
+                                        </span>
+                                    </Link>
                                 </div>
 
                                 <div v-else class="space-y-1.5">
@@ -1768,7 +1781,12 @@ function visibleCalendarTasks(cell) {
                                             taskSpanClass(task),
                                             calendarDraggedTask?.id === task.id ? 'opacity-50' : '',
                                         ]"
+                                        role="link"
+                                        tabindex="0"
                                         draggable="true"
+                                        :title="task.title"
+                                        @click="openCalendarTask(task)"
+                                        @keydown.enter.prevent="openCalendarTask(task)"
                                         @dragstart="startCalendarDrag(task)"
                                         @dragend="endCalendarDrag"
                                     >
@@ -1785,7 +1803,7 @@ function visibleCalendarTasks(cell) {
                                                 <div class="flex items-center gap-1">
                                                     <span class="h-2 w-2 shrink-0 rounded-full" :style="{ backgroundColor: task.project_color || task.service_color || '#2563eb' }"></span>
                                                     <span v-if="task.due_time" class="shrink-0 text-[10px] text-gray-500">{{ String(task.due_time).slice(0, 5) }}</span>
-                                                    <Link :href="route('tasks.show', task.id)" :class="['truncate font-medium hover:text-indigo-600', task.status === 'done' ? 'line-through opacity-60' : '']">{{ task.title }}</Link>
+                                                    <span :class="['truncate font-medium', task.status === 'done' ? 'line-through opacity-60' : '']">{{ task.title }}</span>
                                                 </div>
                                                 <div class="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-gray-500">
                                                     <span class="truncate">{{ task.client_name || task.project_name || task.service_name || taskTypeLabel(task.task_type) }}</span>
