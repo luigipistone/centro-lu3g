@@ -130,7 +130,6 @@ const userRoleFilter = ref('all');
 const calendarTypeOptions = [
     { value: 'all', label: 'Tutti i tipi' },
     { value: 'task', label: 'Task' },
-    { value: 'project', label: 'Task progetto' },
     { value: 'ongoing', label: 'Continuativa' },
     { value: 'meeting', label: 'Meeting' },
 ];
@@ -1966,7 +1965,12 @@ function taskTypeClass(type) {
 function tasksForDay(date) {
     return props.rows
         .filter((row) => taskSpansDate(row, date))
-        .filter((row) => calendarType.value === 'all' || (row.task_type || 'task') === calendarType.value)
+        .filter((row) => {
+            if (calendarType.value === 'all') return true;
+            if (calendarType.value === 'task') return ['task', 'project'].includes(row.task_type || 'task');
+
+            return (row.task_type || 'task') === calendarType.value;
+        })
         .map((row) => ({ ...row, spanRole: taskSpanRole(row, date) }))
         .sort((a, b) => `${a.due_time || '99:99'}${a.title}`.localeCompare(`${b.due_time || '99:99'}${b.title}`));
 }
