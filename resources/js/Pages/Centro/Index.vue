@@ -467,7 +467,7 @@ function toggleTaskPeopleMenu(field) {
 
 function closeTaskPeopleMenuOnOutside(event) {
     if (!taskPeopleMenuOpen.value) return;
-    if (event.target.closest(`[data-task-people-field="${taskPeopleMenuOpen.value}"]`)) return;
+    if (event.target instanceof Element && event.target.closest(`[data-task-people-field="${taskPeopleMenuOpen.value}"]`)) return;
 
     taskPeopleMenuOpen.value = null;
 }
@@ -1105,12 +1105,12 @@ function closeCalendarCreateMenuOnOutside() {
 onMounted(() => {
     document.addEventListener('click', closeCalendarCreateMenuOnOutside);
     document.addEventListener('click', closeProjectPeopleMenuOnOutside);
-    document.addEventListener('click', closeTaskPeopleMenuOnOutside);
+    document.addEventListener('pointerdown', closeTaskPeopleMenuOnOutside, true);
 });
 onUnmounted(() => {
     document.removeEventListener('click', closeCalendarCreateMenuOnOutside);
     document.removeEventListener('click', closeProjectPeopleMenuOnOutside);
-    document.removeEventListener('click', closeTaskPeopleMenuOnOutside);
+    document.removeEventListener('pointerdown', closeTaskPeopleMenuOnOutside, true);
     cancelClientServicesDrag();
 });
 
