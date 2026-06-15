@@ -794,6 +794,15 @@ function priorityClass(priority) {
     }[priority] || 'bg-gray-100 text-gray-700';
 }
 
+function priorityColor(priority) {
+    return {
+        urgent: '#dc2626',
+        high: '#f97316',
+        medium: '#f59e0b',
+        low: '#10b981',
+    }[priority] || '#64748b';
+}
+
 const documentTypeLabels = {
     preventivo: 'Preventivo',
     proforma: 'Proforma',
@@ -1683,24 +1692,24 @@ function visibleCalendarTasks(cell) {
                     </div>
                 </div>
 
-                <div class="surface">
-                    <div :class="['grid gap-px bg-slate-200/75', compactWeekend ? 'grid-cols-[repeat(5,minmax(0,1fr))_minmax(58px,0.34fr)_minmax(58px,0.34fr)]' : 'grid-cols-7']">
+                <div class="surface overflow-hidden">
+                    <div :class="['grid gap-px bg-slate-200/70', compactWeekend ? 'grid-cols-[repeat(5,minmax(0,1fr))_minmax(58px,0.34fr)_minmax(58px,0.34fr)]' : 'grid-cols-7']">
                         <div
                             v-for="(day, index) in dayNames"
                             :key="day"
-                            :class="['bg-white/68 px-2 py-3 text-center text-xs font-bold uppercase tracking-wide text-gray-500 backdrop-blur-xl', compactWeekend && index >= 5 ? 'text-[10px]' : '']"
+                            :class="['bg-white/58 px-2 py-3 text-center text-xs font-bold uppercase tracking-wide text-gray-500 backdrop-blur-xl', compactWeekend && index >= 5 ? 'text-[10px]' : '']"
                         >
                             {{ compactWeekend && index >= 5 ? day.slice(0, 1) : day }}
                         </div>
                     </div>
 
-                    <div :class="['grid gap-px bg-slate-200/75', compactWeekend ? 'grid-cols-[repeat(5,minmax(0,1fr))_minmax(58px,0.34fr)_minmax(58px,0.34fr)]' : 'grid-cols-7']">
+                    <div :class="['grid gap-px bg-slate-200/70', compactWeekend ? 'grid-cols-[repeat(5,minmax(0,1fr))_minmax(58px,0.34fr)_minmax(58px,0.34fr)]' : 'grid-cols-7']">
                         <div
                             v-for="cell in calendarGrid"
                             :key="cell.key"
                             :class="[
-                                'group min-h-[170px] bg-white/70 p-2 backdrop-blur-xl transition',
-                                cell.empty ? 'bg-white/36' : '',
+                                'group min-h-[170px] bg-white/58 p-2 backdrop-blur-xl transition',
+                                cell.empty ? 'bg-white/26' : '',
                                 cell.today ? 'ring-2 ring-inset ring-indigo-500/70' : '',
                                 calendarDropDate === cell.date ? 'bg-indigo-50/80' : '',
                                 calendarDraggedTask && !cell.empty ? 'outline outline-1 outline-transparent transition hover:outline-indigo-200' : '',
@@ -1756,19 +1765,9 @@ function visibleCalendarTasks(cell) {
                                         v-for="task in cell.tasks"
                                         :key="task.id"
                                         :href="route('tasks.show', task.id)"
-                                        class="group/dot relative h-3 w-3 rounded-full ring-2 ring-white/85 transition hover:scale-125 focus:outline-none focus:ring-indigo-300"
-                                        :style="{ backgroundColor: task.project_color || (task.priority === 'urgent' ? '#dc2626' : task.priority === 'high' ? '#f97316' : task.priority === 'low' ? '#10b981' : '#f59e0b') }"
-                                        :title="task.title"
-                                    >
-                                        <span class="pointer-events-none absolute left-1/2 top-5 z-[5400] hidden w-56 -translate-x-1/2 rounded-[var(--radius-sm)] border border-white/80 bg-white/96 p-2 text-left text-[11px] leading-4 text-gray-600 shadow-xl backdrop-blur-xl group-hover/dot:block group-focus/dot:block">
-                                            <span class="block truncate font-semibold text-gray-900">{{ task.title }}</span>
-                                            <span class="mt-0.5 block truncate">{{ task.client_name || task.project_name || task.service_name || taskTypeLabel(task.task_type) }}</span>
-                                            <span class="mt-1 flex items-center justify-between gap-2 text-gray-500">
-                                                <span>{{ displayValue(task.priority) }}</span>
-                                                <span v-if="task.due_time">{{ String(task.due_time).slice(0, 5) }}</span>
-                                            </span>
-                                        </span>
-                                    </Link>
+                                        class="h-3 w-3 rounded-full ring-2 ring-white/85 transition hover:scale-125 focus:outline-none focus:ring-indigo-300"
+                                        :style="{ backgroundColor: priorityColor(task.priority) }"
+                                    />
                                 </div>
 
                                 <div v-else class="space-y-1.5">
@@ -1776,7 +1775,7 @@ function visibleCalendarTasks(cell) {
                                         v-for="task in visibleCalendarTasks(cell)"
                                         :key="task.id"
                                         :class="[
-                                            'cursor-grab border px-2 py-1.5 text-xs shadow-[inset_0_1px_0_rgba(255,255,255,0.68)] backdrop-blur-xl transition hover:border-indigo-300 hover:shadow-md active:cursor-grabbing',
+                                            'group/task relative cursor-grab overflow-hidden border px-2 py-1.5 text-xs shadow-[inset_0_1px_0_rgba(255,255,255,0.68)] backdrop-blur-xl transition hover:border-indigo-300 hover:shadow-md active:cursor-grabbing',
                                             taskTypeClass(task.task_type),
                                             taskSpanClass(task),
                                             calendarDraggedTask?.id === task.id ? 'opacity-50' : '',
@@ -1790,18 +1789,18 @@ function visibleCalendarTasks(cell) {
                                         @dragstart="startCalendarDrag(task)"
                                         @dragend="endCalendarDrag"
                                     >
-                                        <div class="flex items-start gap-1.5">
+                                        <div class="flex items-start">
                                             <button
                                                 type="button"
-                                                :class="['mt-0.5 h-3.5 w-3.5 shrink-0 rounded-md border shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]', task.status === 'done' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300 bg-white/78 hover:border-indigo-400']"
+                                                :class="['absolute left-2 top-2 h-3.5 w-3.5 shrink-0 -translate-x-5 rounded-md border opacity-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] transition duration-200 group-hover/task:translate-x-0 group-hover/task:opacity-100 group-focus/task:translate-x-0 group-focus/task:opacity-100', task.status === 'done' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300 bg-white/78 hover:border-indigo-400']"
                                                 :title="task.status === 'done' ? 'Riapri task' : 'Completa task'"
                                                 @click.stop="toggleTaskDone(task)"
                                             >
                                                 <span class="sr-only">{{ task.status === 'done' ? 'Riapri task' : 'Completa task' }}</span>
                                             </button>
-                                            <div class="min-w-0 flex-1">
+                                            <div class="min-w-0 flex-1 transition-transform duration-200 group-hover/task:translate-x-5 group-focus/task:translate-x-5">
                                                 <div class="flex items-center gap-1">
-                                                    <span class="h-2 w-2 shrink-0 rounded-full" :style="{ backgroundColor: task.project_color || task.service_color || '#2563eb' }"></span>
+                                                    <span class="h-2 w-2 shrink-0 rounded-full" :style="{ backgroundColor: priorityColor(task.priority) }"></span>
                                                     <span v-if="task.due_time" class="shrink-0 text-[10px] text-gray-500">{{ String(task.due_time).slice(0, 5) }}</span>
                                                     <span :class="['truncate font-medium', task.status === 'done' ? 'line-through opacity-60' : '']">{{ task.title }}</span>
                                                 </div>
