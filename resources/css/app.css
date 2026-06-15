@@ -239,9 +239,11 @@
     }
 
     .task-people-control {
-        min-height: 42px;
-        padding-top: 0.45rem;
-        padding-bottom: 0.45rem;
+        height: 38px;
+        min-height: 38px;
+        padding-top: 0.25rem;
+        padding-bottom: 0.25rem;
+        overflow: hidden;
     }
 
     .btn {
