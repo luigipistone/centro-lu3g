@@ -2390,7 +2390,7 @@ function visibleCalendarTasks(cell) {
                     </div>
 
                     <div class="flex shrink-0 items-center gap-2">
-                        <AppSelect v-model="calendarType" class="w-56" :options="calendarTypeOptions" />
+                        <AppSelect v-model="calendarType" class="w-64" :options="calendarTypeOptions" />
                         <label class="inline-flex h-[38px] shrink-0 items-center gap-2 rounded-[var(--radius-sm)] border border-white/70 bg-white/58 px-3 text-sm font-medium text-gray-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.62)] backdrop-blur-xl">
                             <input v-model="compactWeekend" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
                             Weekend
