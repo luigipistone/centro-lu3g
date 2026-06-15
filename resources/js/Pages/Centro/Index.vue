@@ -367,7 +367,7 @@ const formTitle = computed(() => {
 
 const modalPanelClass = computed(() => [
     'max-h-[92vh] w-full overflow-y-auto rounded-[var(--radius)] bg-white shadow-xl',
-    props.section === 'tasks' ? 'max-w-5xl' : 'max-w-4xl',
+    'max-w-4xl',
 ]);
 
 const modalFormClass = computed(() => {
@@ -383,9 +383,10 @@ function modalFieldClass(field) {
     }
 
     if (['title', 'description'].includes(field.name)) return 'md:col-span-6';
-    if (['project_id', 'client_id', 'service_id', 'status', 'priority', 'start_date', 'due_date', 'due_time', 'recurring_enabled', 'recurring_interval_value', 'recurring_interval_unit', 'recurring_mode', 'recurring_weekday', 'recurring_month_day'].includes(field.name)) {
+    if (['project_id', 'client_id', 'service_id', 'priority', 'start_date', 'due_date', 'due_time', 'recurring_enabled', 'recurring_interval_value', 'recurring_interval_unit', 'recurring_mode', 'recurring_weekday', 'recurring_month_day'].includes(field.name)) {
         return 'md:col-span-2';
     }
+    if (field.name === 'status') return 'md:col-span-2';
     if (field.name === 'location') return 'md:col-span-3';
 
     return 'md:col-span-3';
@@ -416,6 +417,7 @@ function shouldShowField(field) {
     }
     if (props.section !== 'tasks') return true;
     if (field.name === 'task_type') return false;
+    if (field.name === 'status' && !editing.value) return false;
     if (['recurring_interval_value', 'recurring_interval_unit', 'recurring_mode', 'recurring_weekday', 'recurring_month_day'].includes(field.name)) {
         return Boolean(form.recurring_enabled) && form.task_type !== 'meeting';
     }
@@ -1149,48 +1151,6 @@ function visibleCalendarTasks(cell) {
                 </div>
 
                 <form :class="modalFormClass" @submit.prevent="submit">
-                    <div v-if="section === 'tasks'" class="grid gap-2 sm:grid-cols-3 md:col-span-6">
-                        <button
-                            type="button"
-                            :class="[
-                                'task-type-option border px-3 py-2 text-left text-sm font-semibold transition',
-                                form.task_type === 'project' || form.task_type === 'task'
-                                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm'
-                                    : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50',
-                            ]"
-                            @click="setTaskFormType('project')"
-                        >
-                            <span class="flex items-center gap-2"><Briefcase class="h-4 w-4" :stroke-width="1.7" />Task</span>
-                            <span class="mt-0.5 block text-xs font-normal text-gray-500">Attivita di progetto</span>
-                        </button>
-                        <button
-                            type="button"
-                            :class="[
-                                'task-type-option border px-3 py-2 text-left text-sm font-semibold transition',
-                                form.task_type === 'ongoing'
-                                    ? 'border-amber-500 bg-amber-50 text-amber-800 shadow-sm'
-                                    : 'border-amber-200 bg-white text-amber-700 hover:bg-amber-50',
-                            ]"
-                            @click="setTaskFormType('ongoing')"
-                        >
-                            <span class="flex items-center gap-2"><RefreshCw class="h-4 w-4" :stroke-width="1.7" />Continuativa</span>
-                            <span class="mt-0.5 block text-xs font-normal text-gray-500">Ricorrente o operativa</span>
-                        </button>
-                        <button
-                            type="button"
-                            :class="[
-                                'task-type-option border px-3 py-2 text-left text-sm font-semibold transition',
-                                form.task_type === 'meeting'
-                                    ? 'border-violet-500 bg-violet-50 text-violet-800 shadow-sm'
-                                    : 'border-violet-200 bg-white text-violet-700 hover:bg-violet-50',
-                            ]"
-                            @click="setTaskFormType('meeting')"
-                        >
-                            <span class="flex items-center gap-2"><CalendarClock class="h-4 w-4" :stroke-width="1.7" />Meeting</span>
-                            <span class="mt-0.5 block text-xs font-normal text-gray-500">Data, ora e luogo</span>
-                        </button>
-                    </div>
-
                     <div
                         v-for="field in fields"
                         v-show="shouldShowField(field)"
