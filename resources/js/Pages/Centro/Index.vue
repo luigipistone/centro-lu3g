@@ -5,6 +5,7 @@ import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import {
     AlertTriangle,
     Banknote,
+    Bold,
     Briefcase,
     Building2,
     CalendarClock,
@@ -17,9 +18,15 @@ import {
     ExternalLink,
     FileText,
     Filter,
+    Heading3,
+    Italic,
+    Link2,
+    List,
+    ListOrdered,
     Mail,
     Pencil,
     Plus,
+    Quote,
     Receipt,
     RefreshCw,
     RotateCcw,
@@ -29,13 +36,14 @@ import {
     ShieldCheck,
     TrendingUp,
     Trash2,
+    Underline,
     UserCog,
     UserPlus,
     Users,
     Wallet,
     X,
 } from '@lucide/vue';
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps({
     section: String,
@@ -86,6 +94,9 @@ const projectStatus = ref('all');
 const projectUserIds = ref([]);
 const projectPeopleMenu = ref(null);
 const projectPeopleMenuOpen = ref(false);
+const taskPeopleMenu = ref(null);
+const taskPeopleMenuOpen = ref(null);
+const taskDescriptionEditor = ref(null);
 const settingsTab = ref('personalizzazione');
 const userRoleFilter = ref('all');
 
@@ -367,11 +378,11 @@ const formTitle = computed(() => {
 
 const modalPanelClass = computed(() => [
     'max-h-[92vh] w-full overflow-y-auto rounded-[var(--radius)] bg-white shadow-xl',
-    'max-w-4xl',
+    props.section === 'tasks' ? 'max-w-3xl' : 'max-w-4xl',
 ]);
 
 const modalFormClass = computed(() => {
-    if (props.section === 'tasks') return 'grid gap-3 p-5 md:grid-cols-6';
+    if (props.section === 'tasks') return 'grid gap-3 p-5 md:grid-cols-4';
     if (props.section === 'clients' || props.section === 'billing') return 'grid gap-4 p-5 md:grid-cols-3';
 
     return 'space-y-4 p-5';
@@ -382,14 +393,14 @@ function modalFieldClass(field) {
         return field.type === 'textarea' || ['description', 'notes', 'footer_notes'].includes(field.name) ? 'md:col-span-3' : '';
     }
 
-    if (['title', 'description'].includes(field.name)) return 'md:col-span-6';
+    if (['title', 'description'].includes(field.name)) return 'md:col-span-4';
     if (['project_id', 'client_id', 'service_id', 'priority', 'start_date', 'due_date', 'due_time', 'recurring_enabled', 'recurring_interval_value', 'recurring_interval_unit', 'recurring_mode', 'recurring_weekday', 'recurring_month_day'].includes(field.name)) {
         return 'md:col-span-2';
     }
     if (field.name === 'status') return 'md:col-span-2';
-    if (field.name === 'location') return 'md:col-span-3';
+    if (field.name === 'location') return 'md:col-span-2';
 
-    return 'md:col-span-3';
+    return 'md:col-span-2';
 }
 
 hydrateTaskCreateFromUrl();
@@ -418,9 +429,7 @@ function shouldShowField(field) {
     if (props.section !== 'tasks') return true;
     if (field.name === 'task_type') return false;
     if (field.name === 'status' && !editing.value) return false;
-    if (['recurring_interval_value', 'recurring_interval_unit', 'recurring_mode', 'recurring_weekday', 'recurring_month_day'].includes(field.name)) {
-        return Boolean(form.recurring_enabled) && form.task_type !== 'meeting';
-    }
+    if (['recurring_interval_value', 'recurring_interval_unit', 'recurring_mode', 'recurring_weekday', 'recurring_month_day'].includes(field.name)) return false;
     if (field.name === 'location') return form.task_type === 'meeting';
     if (field.name === 'due_time') return form.task_type === 'meeting' || Boolean(form.due_date);
     if (field.name === 'project_id') return ['project', 'task'].includes(form.task_type);
@@ -437,6 +446,57 @@ function toggleFormPerson(field, userId) {
         current.push(userId);
     }
     form[field] = current;
+}
+
+function selectedFormUsers(field) {
+    const selected = form[field] || [];
+    return (props.users || []).filter((user) => selected.includes(user.id));
+}
+
+function taskPeopleLabel(field) {
+    const selected = selectedFormUsers(field);
+    if (!selected.length) return field === 'assignee_ids' ? 'Nessuna persona' : 'Nessun follower';
+    if (selected.length === 1) return selected[0].name || selected[0].email || '1 persona';
+
+    return `${selected.length} persone`;
+}
+
+function toggleTaskPeopleMenu(field) {
+    taskPeopleMenuOpen.value = taskPeopleMenuOpen.value === field ? null : field;
+}
+
+function closeTaskPeopleMenuOnOutside(event) {
+    if (!taskPeopleMenuOpen.value) return;
+    if (taskPeopleMenu.value?.contains(event.target)) return;
+
+    taskPeopleMenuOpen.value = null;
+}
+
+function refreshTaskDescriptionEditor() {
+    if (props.section !== 'tasks') return;
+    nextTick(() => {
+        if (!taskDescriptionEditor.value) return;
+        if (taskDescriptionEditor.value.innerHTML !== (form.description || '')) {
+            taskDescriptionEditor.value.innerHTML = form.description || '';
+        }
+    });
+}
+
+function updateTaskDescriptionFromEditor() {
+    form.description = taskDescriptionEditor.value?.innerHTML || '';
+}
+
+function runTaskEditorCommand(command, value = null) {
+    taskDescriptionEditor.value?.focus();
+    document.execCommand(command, false, value);
+    updateTaskDescriptionFromEditor();
+}
+
+function addTaskEditorLink() {
+    const url = window.prompt('URL del link');
+    if (!url) return;
+
+    runTaskEditorCommand('createLink', url);
 }
 
 function setTaskFormType(type) {
@@ -463,15 +523,19 @@ function openCreate(patch = {}) {
     form.reset();
     Object.assign(form, { ...defaults.value, ...patch });
     formOpen.value = true;
+    taskPeopleMenuOpen.value = null;
+    refreshTaskDescriptionEditor();
 }
 
 function resetForm() {
     editing.value = null;
     formOpen.value = false;
+    taskPeopleMenuOpen.value = null;
     form.clearErrors();
     form.defaults({ ...defaults.value });
     form.reset();
     Object.assign(form, { ...defaults.value });
+    refreshTaskDescriptionEditor();
 }
 
 function hydrateTaskCreateFromUrl() {
@@ -502,6 +566,7 @@ function hydrateTaskCreateFromUrl() {
 function editRow(row) {
     editing.value = row;
     formOpen.value = true;
+    taskPeopleMenuOpen.value = null;
     form.clearErrors();
     props.fields.forEach((field) => {
         form[field.name] = row[field.name] ?? (field.type === 'checkbox' ? false : '');
@@ -509,6 +574,7 @@ function editRow(row) {
     if (props.section === 'tasks') {
         form.assignee_ids = [...(row.assignee_ids || [])];
         form.follower_ids = [...(row.follower_ids || [])];
+        refreshTaskDescriptionEditor();
     }
 }
 
@@ -1028,10 +1094,12 @@ function closeCalendarCreateMenuOnOutside() {
 onMounted(() => {
     document.addEventListener('click', closeCalendarCreateMenuOnOutside);
     document.addEventListener('click', closeProjectPeopleMenuOnOutside);
+    document.addEventListener('click', closeTaskPeopleMenuOnOutside);
 });
 onUnmounted(() => {
     document.removeEventListener('click', closeCalendarCreateMenuOnOutside);
     document.removeEventListener('click', closeProjectPeopleMenuOnOutside);
+    document.removeEventListener('click', closeTaskPeopleMenuOnOutside);
     cancelClientServicesDrag();
 });
 
@@ -1151,75 +1219,154 @@ function visibleCalendarTasks(cell) {
                 </div>
 
                 <form :class="modalFormClass" @submit.prevent="submit">
-                    <div
+                    <template
                         v-for="field in fields"
-                        v-show="shouldShowField(field)"
                         :key="field.name"
-                        :class="modalFieldClass(field)"
                     >
-                        <label class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
-                        <textarea v-if="field.type === 'textarea'" v-model="form[field.name]" :rows="section === 'tasks' ? 3 : 4" class="form-control" />
-                        <select v-else-if="['select', 'client', 'project', 'service'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
-                            <option value="">-</option>
-                            <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ optionLabel(field, option) }}</option>
-                        </select>
-                        <div v-else-if="field.type === 'user'" class="mt-2 flex flex-wrap gap-2">
-                            <button
-                                v-if="!field.required"
-                                type="button"
-                                :class="personAvatarClass(!form[field.name])"
-                                aria-label="Nessuna persona"
-                                title="Nessuna persona"
-                                @click="form[field.name] = ''"
-                            >
-                                <span class="text-xs font-semibold">-</span>
-                            </button>
-                            <button
-                                v-for="user in users"
-                                :key="`${field.name}-${user.id}`"
-                                type="button"
-                                :class="personAvatarClass(form[field.name] === user.id)"
-                                :aria-pressed="form[field.name] === user.id"
-                                :aria-label="`Seleziona ${user.name || user.email}`"
-                                :title="user.name || user.email"
-                                @click="form[field.name] = user.id"
-                            >
-                                <UserAvatar :user="user" size="md" />
-                            </button>
-                        </div>
-                        <div v-else-if="field.type === 'color'" class="mt-2 flex flex-wrap items-center gap-2">
-                            <button
-                                v-for="color in projectColors"
-                                :key="`${field.name}-${color}`"
-                                type="button"
-                                :class="['h-8 w-8 rounded-full border-2', form[field.name] === color ? 'border-gray-900 ring-2 ring-gray-300' : 'border-white']"
-                                :style="{ backgroundColor: color }"
-                                :aria-label="`Colore ${color}`"
-                                @click="form[field.name] = color"
-                            ></button>
-                            <label class="relative inline-flex h-8 w-8 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm ring-1 ring-gray-200 transition hover:ring-gray-300" :style="{ backgroundColor: normalizeHexColor(form[field.name]) }">
-                                <span class="sr-only">Scegli colore custom</span>
-                                <input v-model="form[field.name]" type="color" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+                        <div
+                            v-show="shouldShowField(field)"
+                            :class="modalFieldClass(field)"
+                        >
+                            <label class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
+                            <div v-if="section === 'tasks' && field.name === 'description'" class="mt-1 overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white/90 shadow-inner">
+                                <div class="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50/80 px-2 py-1.5">
+                                    <button type="button" class="icon-btn h-8 w-8" title="Grassetto" @click="runTaskEditorCommand('bold')">
+                                        <Bold class="h-4 w-4" :stroke-width="1.8" />
+                                    </button>
+                                    <button type="button" class="icon-btn h-8 w-8" title="Corsivo" @click="runTaskEditorCommand('italic')">
+                                        <Italic class="h-4 w-4" :stroke-width="1.8" />
+                                    </button>
+                                    <button type="button" class="icon-btn h-8 w-8" title="Sottolineato" @click="runTaskEditorCommand('underline')">
+                                        <Underline class="h-4 w-4" :stroke-width="1.8" />
+                                    </button>
+                                    <span class="mx-1 h-5 w-px bg-gray-200"></span>
+                                    <button type="button" class="icon-btn h-8 w-8" title="Titolo" @click="runTaskEditorCommand('formatBlock', 'h3')">
+                                        <Heading3 class="h-4 w-4" :stroke-width="1.8" />
+                                    </button>
+                                    <button type="button" class="icon-btn h-8 w-8" title="Testo normale" @click="runTaskEditorCommand('formatBlock', 'p')">
+                                        <span class="text-xs font-semibold">P</span>
+                                    </button>
+                                    <span class="mx-1 h-5 w-px bg-gray-200"></span>
+                                    <button type="button" class="icon-btn h-8 w-8" title="Elenco puntato" @click="runTaskEditorCommand('insertUnorderedList')">
+                                        <List class="h-4 w-4" :stroke-width="1.8" />
+                                    </button>
+                                    <button type="button" class="icon-btn h-8 w-8" title="Elenco numerato" @click="runTaskEditorCommand('insertOrderedList')">
+                                        <ListOrdered class="h-4 w-4" :stroke-width="1.8" />
+                                    </button>
+                                    <button type="button" class="icon-btn h-8 w-8" title="Citazione" @click="runTaskEditorCommand('formatBlock', 'blockquote')">
+                                        <Quote class="h-4 w-4" :stroke-width="1.8" />
+                                    </button>
+                                    <button type="button" class="icon-btn h-8 w-8" title="Link" @click="addTaskEditorLink">
+                                        <Link2 class="h-4 w-4" :stroke-width="1.8" />
+                                    </button>
+                                </div>
+                                <div
+                                    ref="taskDescriptionEditor"
+                                    class="min-h-28 px-3 py-2 text-sm leading-6 text-gray-800 outline-none"
+                                    contenteditable="true"
+                                    data-placeholder="Aggiungi una descrizione..."
+                                    @input="updateTaskDescriptionFromEditor"
+                                ></div>
+                            </div>
+                            <textarea v-else-if="field.type === 'textarea'" v-model="form[field.name]" :rows="section === 'tasks' ? 3 : 4" class="form-control" />
+                            <select v-else-if="['select', 'client', 'project', 'service'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
+                                <option value="">-</option>
+                                <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ optionLabel(field, option) }}</option>
+                            </select>
+                            <div v-else-if="field.type === 'user'" class="mt-2 flex flex-wrap gap-2">
+                                <button
+                                    v-if="!field.required"
+                                    type="button"
+                                    :class="personAvatarClass(!form[field.name])"
+                                    aria-label="Nessuna persona"
+                                    title="Nessuna persona"
+                                    @click="form[field.name] = ''"
+                                >
+                                    <span class="text-xs font-semibold">-</span>
+                                </button>
+                                <button
+                                    v-for="user in users"
+                                    :key="`${field.name}-${user.id}`"
+                                    type="button"
+                                    :class="personAvatarClass(form[field.name] === user.id)"
+                                    :aria-pressed="form[field.name] === user.id"
+                                    :aria-label="`Seleziona ${user.name || user.email}`"
+                                    :title="user.name || user.email"
+                                    @click="form[field.name] = user.id"
+                                >
+                                    <UserAvatar :user="user" size="md" />
+                                </button>
+                            </div>
+                            <div v-else-if="field.type === 'color'" class="mt-2 flex flex-wrap items-center gap-2">
+                                <button
+                                    v-for="color in projectColors"
+                                    :key="`${field.name}-${color}`"
+                                    type="button"
+                                    :class="['h-8 w-8 rounded-full border-2', form[field.name] === color ? 'border-gray-900 ring-2 ring-gray-300' : 'border-white']"
+                                    :style="{ backgroundColor: color }"
+                                    :aria-label="`Colore ${color}`"
+                                    @click="form[field.name] = color"
+                                ></button>
+                                <label class="relative inline-flex h-8 w-8 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm ring-1 ring-gray-200 transition hover:ring-gray-300" :style="{ backgroundColor: normalizeHexColor(form[field.name]) }">
+                                    <span class="sr-only">Scegli colore custom</span>
+                                    <input v-model="form[field.name]" type="color" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+                                </label>
+                                <input v-model="form[field.name]" type="text" class="form-control mt-0 w-28 font-mono text-xs" :required="field.required" />
+                            </div>
+                            <label v-else-if="field.type === 'checkbox'" class="mt-2 flex items-center gap-2 text-sm text-gray-700">
+                                <input v-model="form[field.name]" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
+                                Si
                             </label>
-                            <input v-model="form[field.name]" type="text" class="form-control mt-0 w-28 font-mono text-xs" :required="field.required" />
+                            <input v-else v-model="form[field.name]" :type="field.type" class="form-control" :required="field.required" />
+                            <div v-if="form.errors[field.name]" class="mt-1 text-sm text-red-600">{{ form.errors[field.name] }}</div>
                         </div>
-                        <label v-else-if="field.type === 'checkbox'" class="mt-2 flex items-center gap-2 text-sm text-gray-700">
-                            <input v-model="form[field.name]" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
-                            Si
-                        </label>
-                        <input v-else v-model="form[field.name]" :type="field.type" class="form-control" :required="field.required" />
-                        <div v-if="form.errors[field.name]" class="mt-1 text-sm text-red-600">{{ form.errors[field.name] }}</div>
-                    </div>
 
-                    <div v-if="section === 'tasks'" class="rounded-md border border-gray-100 bg-gray-50 p-3 md:col-span-6">
-                        <div class="mb-3 flex items-center justify-between">
-                            <h4 class="text-sm font-semibold text-gray-900">{{ form.task_type === 'meeting' ? 'Partecipanti' : 'Persone' }}</h4>
-                            <span class="text-xs text-gray-500">{{ (form.assignee_ids || []).length }} assegnati</span>
+                        <div v-if="section === 'tasks' && field.name === 'recurring_enabled' && form.recurring_enabled" class="rounded-md border border-gray-100 bg-gray-50/90 p-3 md:col-span-4">
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Ogni</label>
+                                    <input v-model="form.recurring_interval_value" type="number" min="1" class="form-control" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Unita ricorrenza</label>
+                                    <select v-model="form.recurring_interval_unit" class="form-control">
+                                        <option value="week">Settimana</option>
+                                        <option value="month">Mese</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Modalita ricorrenza</label>
+                                    <select v-model="form.recurring_mode" class="form-control">
+                                        <option value="fixed">Fissa</option>
+                                        <option value="relative">Relativa</option>
+                                    </select>
+                                </div>
+                                <div v-if="form.recurring_interval_unit === 'week'">
+                                    <label class="block text-sm font-medium text-gray-700">Giorno settimana</label>
+                                    <input v-model="form.recurring_weekday" type="number" min="1" max="7" class="form-control" />
+                                </div>
+                                <div v-if="form.recurring_interval_unit === 'month' && form.recurring_mode === 'fixed'">
+                                    <label class="block text-sm font-medium text-gray-700">Giorno mese</label>
+                                    <input v-model="form.recurring_month_day" type="number" min="1" max="31" class="form-control" />
+                                </div>
+                            </div>
                         </div>
-                        <div class="grid gap-4 sm:grid-cols-2">
-                            <div>
-                                <div class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">{{ form.task_type === 'meeting' ? 'Partecipanti' : 'Assegnatari' }}</div>
-                                <div class="people-avatar-picker max-h-32">
+                    </template>
+
+                    <div v-if="section === 'tasks'" ref="taskPeopleMenu" class="grid gap-3 md:col-span-4 sm:grid-cols-2">
+                        <div class="relative">
+                            <label class="block text-sm font-medium text-gray-700">{{ form.task_type === 'meeting' ? 'Partecipanti' : 'Assegnatari' }}</label>
+                            <button type="button" class="form-control mt-1 flex items-center justify-between gap-3 text-left" @click.stop="toggleTaskPeopleMenu('assignee_ids')">
+                                <span class="flex min-w-0 items-center gap-2">
+                                    <span class="flex -space-x-2">
+                                        <UserAvatar v-for="user in selectedFormUsers('assignee_ids').slice(0, 3)" :key="`assignee-preview-${user.id}`" :user="user" size="sm" class="ring-2 ring-white" />
+                                    </span>
+                                    <span class="truncate">{{ taskPeopleLabel('assignee_ids') }}</span>
+                                </span>
+                                <ChevronDown :class="['h-4 w-4 shrink-0 text-gray-400 transition', taskPeopleMenuOpen === 'assignee_ids' ? 'rotate-180' : '']" :stroke-width="1.7" />
+                            </button>
+                            <div v-if="taskPeopleMenuOpen === 'assignee_ids'" class="app-popover absolute left-0 right-0 top-full z-[5300] mt-2 border border-white/80 bg-white/95 p-3 shadow-xl backdrop-blur-xl" @click.stop>
+                                <div class="people-avatar-picker max-h-44">
                                     <button
                                         v-for="user in users"
                                         :key="`modal-assignee-${user.id}`"
@@ -1232,11 +1379,23 @@ function visibleCalendarTasks(cell) {
                                     >
                                         <UserAvatar :user="user" size="md" />
                                     </button>
+                                    <p v-if="!users?.length" class="text-xs text-gray-500">Nessun utente disponibile.</p>
                                 </div>
                             </div>
-                            <div>
-                                <div class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Follower</div>
-                                <div class="people-avatar-picker max-h-32">
+                        </div>
+                        <div class="relative">
+                            <label class="block text-sm font-medium text-gray-700">Follower</label>
+                            <button type="button" class="form-control mt-1 flex items-center justify-between gap-3 text-left" @click.stop="toggleTaskPeopleMenu('follower_ids')">
+                                <span class="flex min-w-0 items-center gap-2">
+                                    <span class="flex -space-x-2">
+                                        <UserAvatar v-for="user in selectedFormUsers('follower_ids').slice(0, 3)" :key="`follower-preview-${user.id}`" :user="user" size="sm" class="ring-2 ring-white" />
+                                    </span>
+                                    <span class="truncate">{{ taskPeopleLabel('follower_ids') }}</span>
+                                </span>
+                                <ChevronDown :class="['h-4 w-4 shrink-0 text-gray-400 transition', taskPeopleMenuOpen === 'follower_ids' ? 'rotate-180' : '']" :stroke-width="1.7" />
+                            </button>
+                            <div v-if="taskPeopleMenuOpen === 'follower_ids'" class="app-popover absolute left-0 right-0 top-full z-[5300] mt-2 border border-white/80 bg-white/95 p-3 shadow-xl backdrop-blur-xl" @click.stop>
+                                <div class="people-avatar-picker max-h-44">
                                     <button
                                         v-for="user in users"
                                         :key="`modal-follower-${user.id}`"
@@ -1249,12 +1408,13 @@ function visibleCalendarTasks(cell) {
                                     >
                                         <UserAvatar :user="user" size="md" />
                                     </button>
+                                    <p v-if="!users?.length" class="text-xs text-gray-500">Nessun utente disponibile.</p>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div :class="['flex justify-end gap-2 border-t border-gray-100 pt-4', section === 'tasks' ? 'md:col-span-6' : 'md:col-span-3']">
+                    <div :class="['flex justify-end gap-2 border-t border-gray-100 pt-4', section === 'tasks' ? 'md:col-span-4' : 'md:col-span-3']">
                         <button type="button" class="btn btn-outline" @click="resetForm"><X class="h-4 w-4" :stroke-width="1.7" />Annulla</button>
                         <button type="submit" class="btn btn-primary" :disabled="form.processing">
                             <Save v-if="editing" class="h-4 w-4" :stroke-width="1.7" />
