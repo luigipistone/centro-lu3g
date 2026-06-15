@@ -238,6 +238,12 @@
         -webkit-backdrop-filter: blur(14px) saturate(1.22);
     }
 
+    .task-people-control {
+        min-height: 42px;
+        padding-top: 0.45rem;
+        padding-bottom: 0.45rem;
+    }
+
     .btn {
         @apply inline-flex items-center justify-center gap-2 px-3.5 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50;
         border-radius: var(--radius-sm);

@@ -1226,10 +1226,10 @@ function visibleCalendarTasks(cell) {
                         <div v-if="section === 'tasks' && field.name === 'recurring_enabled'" ref="taskPeopleMenu" class="grid gap-3 md:col-span-4 sm:grid-cols-2">
                             <div class="relative">
                                 <label class="block text-sm font-medium text-gray-700">{{ form.task_type === 'meeting' ? 'Partecipanti' : 'Assegnatari' }}</label>
-                                <button type="button" class="form-control flex items-center justify-between gap-3 text-left" @click.stop="toggleTaskPeopleMenu('assignee_ids')">
+                                <button type="button" class="form-control task-people-control flex items-center justify-between gap-3 text-left" @click.stop="toggleTaskPeopleMenu('assignee_ids')">
                                     <span class="flex min-w-0 items-center gap-2">
                                         <span class="flex -space-x-2">
-                                            <UserAvatar v-for="user in selectedFormUsers('assignee_ids').slice(0, 3)" :key="`assignee-preview-${user.id}`" :user="user" size="sm" class="ring-2 ring-white" />
+                                            <UserAvatar v-for="user in selectedFormUsers('assignee_ids').slice(0, 3)" :key="`assignee-preview-${user.id}`" :user="user" size="xs" class="ring-2 ring-white" />
                                         </span>
                                         <span class="truncate">{{ taskPeopleLabel('assignee_ids') }}</span>
                                     </span>
@@ -1255,10 +1255,10 @@ function visibleCalendarTasks(cell) {
                             </div>
                             <div class="relative">
                                 <label class="block text-sm font-medium text-gray-700">Follower</label>
-                                <button type="button" class="form-control flex items-center justify-between gap-3 text-left" @click.stop="toggleTaskPeopleMenu('follower_ids')">
+                                <button type="button" class="form-control task-people-control flex items-center justify-between gap-3 text-left" @click.stop="toggleTaskPeopleMenu('follower_ids')">
                                     <span class="flex min-w-0 items-center gap-2">
                                         <span class="flex -space-x-2">
-                                            <UserAvatar v-for="user in selectedFormUsers('follower_ids').slice(0, 3)" :key="`follower-preview-${user.id}`" :user="user" size="sm" class="ring-2 ring-white" />
+                                            <UserAvatar v-for="user in selectedFormUsers('follower_ids').slice(0, 3)" :key="`follower-preview-${user.id}`" :user="user" size="xs" class="ring-2 ring-white" />
                                         </span>
                                         <span class="truncate">{{ taskPeopleLabel('follower_ids') }}</span>
                                     </span>
