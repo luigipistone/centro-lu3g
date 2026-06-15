@@ -1229,7 +1229,7 @@ function visibleCalendarTasks(cell) {
                     </button>
                 </div>
 
-                <form :class="modalFormClass" @submit.prevent="submit">
+                <form :class="modalFormClass" @pointerdown.capture="closeTaskPeopleMenuOnOutside" @submit.prevent="submit">
                     <template
                         v-for="field in fields"
                         :key="field.name"
