@@ -85,6 +85,7 @@ const calendarDropDate = ref(null);
 const calendarExpanded = ref(false);
 const calendarTaskPanelOpen = ref(false);
 const calendarTaskPanel = ref(null);
+const calendarTaskParentStack = ref([]);
 const calendarTaskAutosaveState = ref('idle');
 const calendarTaskAutosaveError = ref('');
 let calendarTaskAutosaveTimer = null;
@@ -1356,7 +1357,27 @@ function createTaskHref(type, date) {
     return `${route('tasks.index')}?create=${type}&date=${date}`;
 }
 
-function openCalendarTask(task) {
+function calendarTaskTypeButtonClass(type) {
+    const active = calendarTaskForm.task_type === type || (type === 'project' && calendarTaskForm.task_type === 'task');
+    const styles = {
+        project: active
+            ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm'
+            : 'border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50',
+        ongoing: active
+            ? 'border-amber-500 bg-amber-50 text-amber-800 shadow-sm'
+            : 'border-amber-200 bg-white text-amber-700 hover:bg-amber-50',
+        meeting: active
+            ? 'border-violet-500 bg-violet-50 text-violet-800 shadow-sm'
+            : 'border-violet-200 bg-white text-violet-700 hover:bg-violet-50',
+    };
+
+    return styles[type] || styles.project;
+}
+
+function openCalendarTask(task, options = {}) {
+    if (!options.preserveStack) {
+        calendarTaskParentStack.value = [];
+    }
     calendarTaskPanel.value = task;
     calendarTaskPanelOpen.value = true;
     calendarTaskAutosaveState.value = 'idle';
@@ -1394,10 +1415,37 @@ function openCalendarTask(task) {
 function closeCalendarTaskPanel() {
     calendarTaskPanelOpen.value = false;
     calendarTaskPanel.value = null;
+    calendarTaskParentStack.value = [];
     calendarEditingCommentId.value = null;
     calendarTaskAutosaveState.value = 'idle';
     calendarTaskAutosaveError.value = '';
     window.clearTimeout(calendarTaskAutosaveTimer);
+}
+
+function openCalendarSubtask(subtask) {
+    const parent = calendarTaskPanel.value;
+    if (!parent) return;
+
+    calendarTaskParentStack.value = [...calendarTaskParentStack.value, parent];
+    openCalendarTask({
+        ...subtask,
+        task_type: subtask.task_type || 'task',
+        subtasks: subtask.subtasks || [],
+        comments: subtask.comments || [],
+        assignee_ids: subtask.assignee_ids || [],
+        follower_ids: subtask.follower_ids || [],
+        parent_task_id: parent.id,
+        parent_title: parent.title,
+    }, { preserveStack: true });
+}
+
+function returnToCalendarParentTask() {
+    const stack = [...calendarTaskParentStack.value];
+    const parent = stack.pop();
+    if (!parent) return;
+
+    calendarTaskParentStack.value = stack;
+    openCalendarTask(parent, { preserveStack: true });
 }
 
 function hydrateCalendarTaskRelated(task) {
@@ -2348,6 +2396,15 @@ function visibleCalendarTasks(cell) {
                 <aside class="calendar-task-drawer-panel absolute right-0 top-0 flex h-full w-full max-w-3xl flex-col border-l border-white/80 bg-white shadow-2xl sm:w-[62vw]">
                     <div class="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
                         <div class="min-w-0">
+                            <button
+                                v-if="calendarTaskParentStack.length"
+                                type="button"
+                                class="mb-2 inline-flex items-center gap-1 text-xs font-semibold text-gray-500 transition hover:text-indigo-600"
+                                @click="returnToCalendarParentTask"
+                            >
+                                <ChevronLeft class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                Torna alla task genitore
+                            </button>
                             <div class="flex items-center gap-2">
                                 <span class="h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: priorityColor(calendarTaskForm.priority) }"></span>
                                 <h3 class="truncate text-lg font-bold text-gray-950">Modifica task</h3>
@@ -2382,7 +2439,7 @@ function visibleCalendarTasks(cell) {
                                     type="button"
                                     :class="[
                                         'rounded-[var(--radius-sm)] border px-3 py-2 text-left text-sm font-semibold transition',
-                                        calendarTaskForm.task_type === option.value ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50',
+                                        calendarTaskTypeButtonClass(option.value),
                                     ]"
                                     @click="setCalendarTaskType(option.value)"
                                 >
@@ -2587,9 +2644,9 @@ function visibleCalendarTasks(cell) {
                                             @input="saveCalendarSubtaskInline(subtask)"
                                         />
                                         <div class="flex items-center justify-end gap-1">
-                                            <Link :href="route('tasks.show', subtask.id)" class="icon-btn h-9 w-9" title="Apri sottoattività">
+                                            <button type="button" class="icon-btn h-9 w-9" title="Apri sottoattività" @click="openCalendarSubtask(subtask)">
                                                 <ExternalLink class="h-4 w-4" :stroke-width="1.7" />
-                                            </Link>
+                                            </button>
                                             <button type="button" class="icon-btn h-9 w-9 text-red-600 hover:bg-red-50" title="Elimina sottoattività" @click="removeCalendarSubtask(subtask)">
                                                 <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                             </button>

@@ -1,6 +1,6 @@
 <script setup>
 import { Check, ChevronDown } from '@lucide/vue';
-import { computed, onMounted, onUnmounted, ref, useAttrs } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, useAttrs } from 'vue';
 
 defineOptions({ inheritAttrs: false });
 
@@ -34,8 +34,10 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'change']);
 const attrs = useAttrs();
 const root = ref(null);
+const menu = ref(null);
 const open = ref(false);
 const query = ref('');
+const menuStyle = ref({});
 
 const normalizedOptions = computed(() => props.options.map((option) => {
     if (typeof option === 'object' && option !== null) {
@@ -63,7 +65,10 @@ function toggle() {
     if (props.disabled) return;
 
     open.value = !open.value;
-    if (open.value) query.value = '';
+    if (open.value) {
+        query.value = '';
+        updateMenuPosition();
+    }
 }
 
 function selectOption(option) {
@@ -78,12 +83,40 @@ function selectOption(option) {
 function closeOnOutside(event) {
     if (!open.value) return;
     if (root.value?.contains(event.target)) return;
+    if (menu.value?.contains(event.target)) return;
 
     open.value = false;
 }
 
-onMounted(() => document.addEventListener('pointerdown', closeOnOutside, true));
-onUnmounted(() => document.removeEventListener('pointerdown', closeOnOutside, true));
+function updateMenuPosition() {
+    nextTick(() => {
+        const rect = root.value?.getBoundingClientRect();
+        if (!rect) return;
+
+        menuStyle.value = {
+            left: `${rect.left}px`,
+            top: `${rect.bottom + 8}px`,
+            width: `${rect.width}px`,
+        };
+    });
+}
+
+function closeOnViewportChange() {
+    if (!open.value) return;
+
+    updateMenuPosition();
+}
+
+onMounted(() => {
+    document.addEventListener('pointerdown', closeOnOutside, true);
+    window.addEventListener('resize', closeOnViewportChange);
+    window.addEventListener('scroll', closeOnViewportChange, true);
+});
+onUnmounted(() => {
+    document.removeEventListener('pointerdown', closeOnOutside, true);
+    window.removeEventListener('resize', closeOnViewportChange);
+    window.removeEventListener('scroll', closeOnViewportChange, true);
+});
 </script>
 
 <template>
@@ -100,38 +133,42 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeOnOutside, tr
             <ChevronDown :class="['h-4 w-4 shrink-0 text-gray-400 transition', open ? 'rotate-180 text-indigo-500' : '']" :stroke-width="1.7" />
         </button>
 
-        <div
-            v-if="open"
-            class="app-popover field-dropdown-menu absolute left-0 right-0 top-full z-[5300] mt-2 p-3"
-            @click.stop
-        >
-            <div v-if="canSearch">
-                <input
-                    v-model="query"
-                    type="search"
-                    class="form-control mt-0"
-                    :placeholder="`Cerca...`"
-                    autocomplete="off"
-                />
-            </div>
+        <Teleport to="body">
+            <div
+                v-if="open"
+                ref="menu"
+                class="app-popover field-dropdown-menu fixed z-[7000] p-3"
+                :style="menuStyle"
+                @click.stop
+            >
+                <div v-if="canSearch">
+                    <input
+                        v-model="query"
+                        type="search"
+                        class="form-control mt-0"
+                        :placeholder="`Cerca...`"
+                        autocomplete="off"
+                    />
+                </div>
 
-            <div class="mt-2 max-h-56 overflow-y-auto pr-1">
-                <button
-                    v-for="option in filteredOptions"
-                    :key="`${option.value}-${option.label}`"
-                    type="button"
-                    :disabled="option.disabled"
-                    :class="[
-                        'field-dropdown-option flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50',
-                        String(modelValue) === String(option.value) ? 'bg-indigo-50 font-semibold text-indigo-700' : 'text-gray-700',
-                    ]"
-                    @click="selectOption(option)"
-                >
-                    <span class="truncate">{{ option.label }}</span>
-                    <Check v-if="String(modelValue) === String(option.value)" class="h-4 w-4 shrink-0" :stroke-width="1.8" />
-                </button>
-                <p v-if="!filteredOptions.length" class="px-3 py-2 text-sm text-gray-500">Nessun risultato</p>
+                <div class="mt-2 max-h-56 overflow-y-auto pr-1">
+                    <button
+                        v-for="option in filteredOptions"
+                        :key="`${option.value}-${option.label}`"
+                        type="button"
+                        :disabled="option.disabled"
+                        :class="[
+                            'field-dropdown-option flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50',
+                            String(modelValue) === String(option.value) ? 'bg-indigo-50 font-semibold text-indigo-700' : 'text-gray-700',
+                        ]"
+                        @click="selectOption(option)"
+                    >
+                        <span class="truncate">{{ option.label }}</span>
+                        <Check v-if="String(modelValue) === String(option.value)" class="h-4 w-4 shrink-0" :stroke-width="1.8" />
+                    </button>
+                    <p v-if="!filteredOptions.length" class="px-3 py-2 text-sm text-gray-500">Nessun risultato</p>
+                </div>
             </div>
-        </div>
+        </Teleport>
     </div>
 </template>
