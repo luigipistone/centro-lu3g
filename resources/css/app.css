@@ -207,12 +207,12 @@
 
     .calendar-task-drawer-enter-active,
     .calendar-task-drawer-leave-active {
-        transition: opacity 220ms ease;
+        transition: opacity 260ms ease;
     }
 
     .calendar-task-drawer-enter-active .calendar-task-drawer-panel,
     .calendar-task-drawer-leave-active .calendar-task-drawer-panel {
-        transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease;
+        transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 260ms ease;
     }
 
     .calendar-task-drawer-enter-from,
@@ -222,8 +222,8 @@
 
     .calendar-task-drawer-enter-from .calendar-task-drawer-panel,
     .calendar-task-drawer-leave-to .calendar-task-drawer-panel {
-        opacity: 0.85;
-        transform: translateX(28px);
+        opacity: 0.92;
+        transform: translateX(100%);
     }
 
     .people-avatar-picker {

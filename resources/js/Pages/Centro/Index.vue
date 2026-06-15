@@ -96,10 +96,12 @@ const calendarSubtaskAutosaveErrors = ref({});
 const calendarCommentDrafts = ref({});
 const calendarCommentAutosaveStates = ref({});
 const calendarCommentAutosaveErrors = ref({});
+const calendarEditingCommentId = ref(null);
 const calendarSubtaskAutosaveTimers = {};
 const calendarSubtaskAutosaveSequences = {};
 const calendarCommentAutosaveTimers = {};
 const calendarCommentAutosaveSequences = {};
+let calendarBodyOverflow = '';
 const taskSearch = ref('');
 const taskStatus = ref('all');
 const taskPriority = ref('all');
@@ -1392,6 +1394,7 @@ function openCalendarTask(task) {
 function closeCalendarTaskPanel() {
     calendarTaskPanelOpen.value = false;
     calendarTaskPanel.value = null;
+    calendarEditingCommentId.value = null;
     calendarTaskAutosaveState.value = 'idle';
     calendarTaskAutosaveError.value = '';
     window.clearTimeout(calendarTaskAutosaveTimer);
@@ -1619,6 +1622,22 @@ function removeCalendarComment(comment) {
     });
 }
 
+function editCalendarComment(comment) {
+    calendarEditingCommentId.value = comment.id;
+    if (!calendarCommentDrafts.value[comment.id]) {
+        calendarCommentDrafts.value = {
+            ...calendarCommentDrafts.value,
+            [comment.id]: { content: comment.content || '' },
+        };
+    }
+}
+
+function stopEditingCalendarComment(comment) {
+    if (calendarEditingCommentId.value !== comment.id) return;
+
+    calendarEditingCommentId.value = null;
+}
+
 function calendarTaskPayload() {
     return {
         title: calendarTaskForm.title,
@@ -1714,6 +1733,21 @@ watch(
     },
 );
 
+watch(
+    calendarTaskPanelOpen,
+    (open) => {
+        if (typeof document === 'undefined') return;
+
+        if (open) {
+            calendarBodyOverflow = document.body.style.overflow;
+            document.body.style.overflow = 'hidden';
+            return;
+        }
+
+        document.body.style.overflow = calendarBodyOverflow;
+    },
+);
+
 onMounted(() => {
     document.addEventListener('pointerdown', closeCalendarCreateMenuOnOutside, true);
     document.addEventListener('pointerdown', closeProjectPeopleMenuOnOutside, true);
@@ -1721,6 +1755,9 @@ onMounted(() => {
     document.addEventListener('pointerdown', closeTaskSearchSelectOnOutside, true);
 });
 onUnmounted(() => {
+    if (typeof document !== 'undefined') {
+        document.body.style.overflow = calendarBodyOverflow;
+    }
     document.removeEventListener('pointerdown', closeCalendarCreateMenuOnOutside, true);
     document.removeEventListener('pointerdown', closeProjectPeopleMenuOnOutside, true);
     document.removeEventListener('pointerdown', closeTaskPeopleMenuOnOutside, true);
@@ -2572,17 +2609,30 @@ function visibleCalendarTasks(cell) {
                                     <div v-for="comment in calendarPanelComments()" :key="comment.id" class="rounded-[var(--radius-sm)] border border-gray-100 bg-white px-3 py-3 text-sm transition hover:border-indigo-100 hover:shadow-sm">
                                         <div class="mb-2 flex items-center justify-between gap-3">
                                             <div class="text-xs font-medium text-gray-500">{{ comment.user_name || 'Utente' }} · {{ comment.created_at }}</div>
-                                            <button type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" aria-label="Elimina commento" @click="removeCalendarComment(comment)">
-                                                <Trash2 class="h-4 w-4" :stroke-width="1.7" />
-                                            </button>
+                                            <div class="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    class="text-xs font-semibold text-indigo-600 transition hover:text-indigo-500"
+                                                    @click="editCalendarComment(comment)"
+                                                >
+                                                    Modifica
+                                                </button>
+                                                <button type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" aria-label="Elimina commento" @click="removeCalendarComment(comment)">
+                                                    <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div v-if="calendarEditingCommentId !== comment.id" class="min-h-10 whitespace-pre-wrap rounded-[var(--radius-sm)] bg-gray-50/70 px-3 py-2 text-sm leading-6 text-gray-700">
+                                            {{ comment.content }}
                                         </div>
                                         <textarea
-                                            v-if="calendarCommentDrafts[comment.id]"
+                                            v-else-if="calendarCommentDrafts[comment.id]"
                                             v-model="calendarCommentDrafts[comment.id].content"
                                             rows="3"
                                             class="form-control mt-0"
                                             placeholder="Commento..."
                                             @input="saveCalendarCommentInline(comment)"
+                                            @blur="stopEditingCalendarComment(comment)"
                                         ></textarea>
                                         <div v-if="calendarCommentAutosaveStates[comment.id] && calendarCommentAutosaveStates[comment.id] !== 'idle'" :class="['mt-1 text-[11px] font-medium', calendarCommentAutosaveStates[comment.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
                                             {{ autosaveLabel(calendarCommentAutosaveStates[comment.id], calendarCommentAutosaveErrors[comment.id]) }}
