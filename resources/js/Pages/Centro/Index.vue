@@ -2374,8 +2374,8 @@ function visibleCalendarTasks(cell) {
 
         <div v-if="section === 'calendar'" class="py-8">
             <div class="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
-                <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-                    <div class="flex items-center gap-2">
+                <div class="mb-4 flex items-center justify-between gap-3 overflow-x-auto pb-1">
+                    <div class="flex shrink-0 items-center gap-2">
                         <button type="button" class="icon-btn" @click="changeMonth(-1)">
                             <span class="sr-only">Mese precedente</span>
                             <ChevronLeft class="h-4 w-4" :stroke-width="1.7" />
@@ -2389,9 +2389,9 @@ function visibleCalendarTasks(cell) {
                         </button>
                     </div>
 
-                    <div class="flex flex-wrap items-center gap-3">
+                    <div class="flex shrink-0 items-center gap-2">
                         <AppSelect v-model="calendarType" class="w-44" :options="calendarTypeOptions" />
-                        <label class="inline-flex items-center gap-2 rounded-2xl border border-white/70 bg-white/58 px-3 py-2 text-sm font-medium text-gray-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.62)] backdrop-blur-xl">
+                        <label class="inline-flex h-[38px] shrink-0 items-center gap-2 rounded-[var(--radius-sm)] border border-white/70 bg-white/58 px-3 text-sm font-medium text-gray-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.62)] backdrop-blur-xl">
                             <input v-model="compactWeekend" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
                             Weekend compatto
                         </label>
