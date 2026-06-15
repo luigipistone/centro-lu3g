@@ -504,7 +504,9 @@ class CentroPageController extends Controller
             $this->syncTaskPeopleLists($payload['id'], $taskPeople['assignees'] ?? [], $taskPeople['followers'] ?? []);
         }
 
-        return back()->with('status', 'Creato.');
+        return back()
+            ->with('status', 'Creato.')
+            ->with('created_id', $payload['id']);
     }
 
     public function update(Request $request, string $id): RedirectResponse

@@ -53,6 +53,7 @@ class HandleInertiaRequests extends Middleware
             ] : ['unread' => 0, 'latest' => []],
             'flash' => [
                 'status' => fn () => $request->session()->get('status'),
+                'created_id' => fn () => $request->session()->get('created_id'),
             ],
         ];
     }

@@ -86,6 +86,7 @@ const calendarExpanded = ref(false);
 const calendarTaskPanelOpen = ref(false);
 const calendarTaskPanel = ref(null);
 const calendarTaskParentStack = ref([]);
+const calendarTaskPanelMode = ref('edit');
 const calendarTaskAutosaveState = ref('idle');
 const calendarTaskAutosaveError = ref('');
 let calendarTaskAutosaveTimer = null;
@@ -1413,10 +1414,6 @@ function taskTypeLabel(type) {
     }[type || 'task'] || type;
 }
 
-function createTaskHref(type, date) {
-    return `${route('tasks.index')}?create=${type}&date=${date}`;
-}
-
 function calendarTaskTypeButtonClass(type) {
     const active = calendarTaskForm.task_type === type || (type === 'project' && calendarTaskForm.task_type === 'task');
     const styles = {
@@ -1439,6 +1436,7 @@ function openCalendarTask(task, options = {}) {
         calendarTaskParentStack.value = [];
     }
     calendarTaskPanel.value = task;
+    calendarTaskPanelMode.value = 'edit';
     calendarTaskPanelOpen.value = true;
     calendarTaskAutosaveState.value = 'idle';
     calendarTaskAutosaveError.value = '';
@@ -1472,10 +1470,55 @@ function openCalendarTask(task, options = {}) {
     refreshCalendarTaskDescriptionEditor();
 }
 
+function openCalendarTaskCreate(type, date) {
+    const taskType = type === 'task' ? 'project' : type;
+    calendarCreateDate.value = null;
+    calendarTaskParentStack.value = [];
+    calendarTaskPanelMode.value = 'create';
+    calendarTaskPanel.value = {
+        id: '',
+        title: '',
+        description: '',
+        project_id: '',
+        client_id: '',
+        service_id: '',
+        task_type: taskType,
+        status: 'todo',
+        priority: 'medium',
+        start_date: '',
+        due_date: date || '',
+        due_time: taskType === 'meeting' ? '09:00' : '',
+        location: '',
+        recurring_enabled: false,
+        recurring_interval_value: 1,
+        recurring_interval_unit: 'week',
+        recurring_mode: 'fixed',
+        recurring_weekday: 1,
+        recurring_month_day: 1,
+        assignee_ids: [],
+        follower_ids: [],
+        subtasks: [],
+        comments: [],
+    };
+    calendarTaskPanelOpen.value = true;
+    calendarTaskAutosaveState.value = 'idle';
+    calendarTaskAutosaveError.value = '';
+    window.clearTimeout(calendarTaskAutosaveTimer);
+    calendarTaskForm.defaults({ ...calendarTaskPanel.value });
+    calendarTaskForm.reset();
+    calendarTaskForm.clearErrors();
+    hydrateCalendarTaskRelated(calendarTaskPanel.value);
+    calendarCommentForm.reset();
+    calendarSubtaskForm.reset();
+    refreshCalendarTaskDescriptionEditor();
+    refreshCalendarCommentEditor('new');
+}
+
 function closeCalendarTaskPanel() {
     calendarTaskPanelOpen.value = false;
     calendarTaskPanel.value = null;
     calendarTaskParentStack.value = [];
+    calendarTaskPanelMode.value = 'edit';
     calendarEditingCommentId.value = null;
     calendarTaskAutosaveState.value = 'idle';
     calendarTaskAutosaveError.value = '';
@@ -1781,7 +1824,7 @@ function calendarTaskPayload() {
 }
 
 function saveCalendarTaskInline(delay = 650) {
-    if (!calendarTaskForm.id || !String(calendarTaskForm.title || '').trim()) return;
+    if (!String(calendarTaskForm.title || '').trim()) return;
 
     window.clearTimeout(calendarTaskAutosaveTimer);
     calendarTaskAutosaveState.value = 'queued';
@@ -1791,13 +1834,40 @@ function saveCalendarTaskInline(delay = 650) {
         const sequence = calendarTaskAutosaveSequence + 1;
         calendarTaskAutosaveSequence = sequence;
         calendarTaskAutosaveState.value = 'saving';
-
-        calendarTaskForm.transform(() => calendarTaskPayload()).put(route('tasks.update', calendarTaskForm.id), {
+        const requestOptions = {
             preserveScroll: true,
             preserveState: true,
             only: ['rows', 'errors', 'flash'],
             onSuccess: () => {
                 if (sequence !== calendarTaskAutosaveSequence) return;
+                const createdId = page.props.flash?.created_id;
+                if (!calendarTaskForm.id && createdId) {
+                    calendarTaskForm.id = createdId;
+                    calendarTaskPanelMode.value = 'edit';
+                    calendarTaskForm.defaults({
+                        id: createdId,
+                        title: calendarTaskForm.title,
+                        description: calendarTaskForm.description,
+                        project_id: calendarTaskForm.project_id,
+                        client_id: calendarTaskForm.client_id,
+                        service_id: calendarTaskForm.service_id,
+                        task_type: calendarTaskForm.task_type,
+                        status: calendarTaskForm.status,
+                        priority: calendarTaskForm.priority,
+                        start_date: calendarTaskForm.start_date,
+                        due_date: calendarTaskForm.due_date,
+                        due_time: calendarTaskForm.due_time,
+                        location: calendarTaskForm.location,
+                        recurring_enabled: calendarTaskForm.recurring_enabled,
+                        recurring_interval_value: calendarTaskForm.recurring_interval_value,
+                        recurring_interval_unit: calendarTaskForm.recurring_interval_unit,
+                        recurring_mode: calendarTaskForm.recurring_mode,
+                        recurring_weekday: calendarTaskForm.recurring_weekday,
+                        recurring_month_day: calendarTaskForm.recurring_month_day,
+                        assignee_ids: [...(calendarTaskForm.assignee_ids || [])],
+                        follower_ids: [...(calendarTaskForm.follower_ids || [])],
+                    });
+                }
                 calendarTaskAutosaveState.value = 'saved';
                 window.setTimeout(() => {
                     if (calendarTaskAutosaveState.value === 'saved') {
@@ -1808,12 +1878,19 @@ function saveCalendarTaskInline(delay = 650) {
             onError: () => {
                 if (sequence !== calendarTaskAutosaveSequence) return;
                 calendarTaskAutosaveState.value = 'error';
-                calendarTaskAutosaveError.value = 'Non salvato';
+                calendarTaskAutosaveError.value = calendarTaskForm.id ? 'Non salvato' : 'Non creata';
             },
             onFinish: () => {
                 calendarTaskForm.transform((data) => data);
             },
-        });
+        };
+
+        calendarTaskForm.transform(() => calendarTaskPayload());
+        if (calendarTaskForm.id) {
+            calendarTaskForm.put(route('tasks.update', calendarTaskForm.id), requestOptions);
+        } else {
+            calendarTaskForm.post(route('tasks.store'), requestOptions);
+        }
     }, delay);
 }
 
@@ -2361,27 +2438,30 @@ function visibleCalendarTasks(cell) {
                                             class="absolute right-0 top-7 z-20 w-44 overflow-hidden rounded-2xl border border-white bg-white p-1 shadow-[0_20px_55px_rgba(28,42,73,0.16)]"
                                             @click.stop
                                         >
-                                            <Link
-                                                :href="createTaskHref('project', cell.date)"
+                                            <button
+                                                type="button"
                                                 class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-indigo-50/80"
+                                                @click="openCalendarTaskCreate('project', cell.date)"
                                             >
                                                 <span class="h-2 w-2 rounded-full bg-blue-500"></span>
                                                 Task
-                                            </Link>
-                                            <Link
-                                                :href="createTaskHref('ongoing', cell.date)"
+                                            </button>
+                                            <button
+                                                type="button"
                                                 class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-amber-50/80"
+                                                @click="openCalendarTaskCreate('ongoing', cell.date)"
                                             >
                                                 <span class="h-2 w-2 rounded-full bg-amber-500"></span>
                                                 Continuativa
-                                            </Link>
-                                            <Link
-                                                :href="createTaskHref('meeting', cell.date)"
+                                            </button>
+                                            <button
+                                                type="button"
                                                 class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-violet-50/80"
+                                                @click="openCalendarTaskCreate('meeting', cell.date)"
                                             >
                                                 <span class="h-2 w-2 rounded-full bg-violet-500"></span>
                                                 Meeting
-                                            </Link>
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -2481,9 +2561,11 @@ function visibleCalendarTasks(cell) {
                             </button>
                             <div class="flex items-center gap-2">
                                 <span class="h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: priorityColor(calendarTaskForm.priority) }"></span>
-                                <h3 class="truncate text-lg font-bold text-gray-950">Modifica task</h3>
+                                <h3 class="truncate text-lg font-bold text-gray-950">{{ calendarTaskPanelMode === 'create' ? 'Nuova task' : 'Modifica task' }}</h3>
                             </div>
-                            <p class="mt-1 text-sm text-gray-500">Le modifiche si salvano automaticamente.</p>
+                            <p class="mt-1 text-sm text-gray-500">
+                                {{ calendarTaskForm.id ? 'Le modifiche si salvano automaticamente.' : 'Inserisci un titolo: la task verrà creata automaticamente.' }}
+                            </p>
                         </div>
                         <div class="flex shrink-0 items-center gap-2">
                             <span v-if="calendarTaskAutosaveState !== 'idle'" :class="['rounded-full px-2.5 py-1 text-xs font-semibold', calendarTaskAutosaveState === 'error' ? 'bg-red-50 text-red-700' : calendarTaskAutosaveState === 'saved' ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700']">
@@ -2669,7 +2751,11 @@ function visibleCalendarTasks(cell) {
                                 </div>
                             </div>
 
-                            <section class="content-card rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
+                            <div v-if="!calendarTaskForm.id" class="content-card rounded-[var(--radius-sm)] border border-dashed border-indigo-200 bg-indigo-50/60 p-4 text-sm text-indigo-700">
+                                Completa almeno il titolo per creare la task. Dopo la creazione potrai aggiungere sottoattività e commenti.
+                            </div>
+
+                            <section v-if="calendarTaskForm.id" class="content-card rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
                                 <div class="mb-4 flex items-center justify-between gap-3">
                                     <h4 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Sottoattività</h4>
                                     <span class="text-xs text-gray-400">{{ calendarPanelSubtasks().length }} elementi</span>
@@ -2732,7 +2818,7 @@ function visibleCalendarTasks(cell) {
                                 </div>
                             </section>
 
-                            <section class="content-card rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
+                            <section v-if="calendarTaskForm.id" class="content-card rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
                                 <h4 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Commenti</h4>
                                 <form class="mb-5 grid gap-3 md:grid-cols-[1fr_auto]" @submit.prevent="addCalendarComment">
                                     <div class="overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white/90 shadow-inner">
