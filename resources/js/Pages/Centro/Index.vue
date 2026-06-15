@@ -87,6 +87,7 @@ const calendarTaskPanelOpen = ref(false);
 const calendarTaskPanel = ref(null);
 const calendarTaskParentStack = ref([]);
 const calendarTaskPanelMode = ref('edit');
+const calendarTaskDrawerBody = ref(null);
 const calendarTaskAutosaveState = ref('idle');
 const calendarTaskAutosaveError = ref('');
 let calendarTaskAutosaveTimer = null;
@@ -1540,6 +1541,7 @@ function openCalendarSubtask(subtask) {
         parent_task_id: parent.id,
         parent_title: parent.title,
     }, { preserveStack: true });
+    scrollCalendarTaskDrawerTop();
 }
 
 function returnToCalendarParentTask() {
@@ -1549,6 +1551,13 @@ function returnToCalendarParentTask() {
 
     calendarTaskParentStack.value = stack;
     openCalendarTask(parent, { preserveStack: true });
+    scrollCalendarTaskDrawerTop();
+}
+
+function scrollCalendarTaskDrawerTop() {
+    nextTick(() => {
+        calendarTaskDrawerBody.value?.scrollTo?.({ top: 0, behavior: 'smooth' });
+    });
 }
 
 function hydrateCalendarTaskRelated(task) {
@@ -2582,7 +2591,7 @@ function visibleCalendarTasks(cell) {
                         </div>
                     </div>
 
-                    <div class="flex-1 overflow-y-auto px-5 py-5">
+                    <div ref="calendarTaskDrawerBody" class="flex-1 overflow-y-auto px-5 py-5">
                         <div class="space-y-5">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Titolo</label>
