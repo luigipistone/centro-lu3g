@@ -2868,8 +2868,12 @@ function visibleCalendarTasks(cell) {
                                                 >
                                                     Modifica
                                                 </button>
-                                                <button type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" aria-label="Elimina commento" @click="removeCalendarComment(comment)">
-                                                    <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                                <button
+                                                    type="button"
+                                                    class="text-xs font-semibold text-red-600 transition hover:text-red-500"
+                                                    @click="removeCalendarComment(comment)"
+                                                >
+                                                    Elimina
                                                 </button>
                                             </div>
                                         </div>
