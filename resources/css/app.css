@@ -229,13 +229,41 @@
     }
 
     .form-control {
-        @apply mt-1 block w-full border text-sm text-gray-900 transition placeholder:text-gray-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10;
+        @apply mt-1 block w-full border text-sm text-gray-900 transition placeholder:text-gray-400 focus:border-indigo-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10;
         border-radius: var(--radius-sm);
         border-color: hsl(220 18% 84% / 0.8);
         background: hsl(0 0% 100% / 0.88);
         box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.82), 0 1px 2px hsl(220 28% 16% / 0.04);
         backdrop-filter: blur(14px) saturate(1.22);
         -webkit-backdrop-filter: blur(14px) saturate(1.22);
+    }
+
+    input.form-control:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+    select.form-control,
+    button.form-control {
+        min-height: 38px;
+    }
+
+    input.form-control:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+    select.form-control {
+        padding: 0.5rem 0.75rem;
+        line-height: 1.25rem;
+    }
+
+    button.form-control {
+        padding: 0.5rem 0.75rem;
+        font-weight: 500;
+        color: rgb(31 41 55);
+    }
+
+    .form-control:hover {
+        border-color: hsl(220 18% 76% / 0.95);
+        background: hsl(0 0% 100% / 0.94);
+    }
+
+    .form-control:disabled {
+        cursor: not-allowed;
+        opacity: 0.64;
     }
 
     .task-people-control {
@@ -248,11 +276,32 @@
 
     select.form-control {
         appearance: none;
+        height: 38px;
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
         background-position: right 0.75rem center;
         background-repeat: no-repeat;
         background-size: 1rem 1rem;
-        padding-right: 2.5rem;
+        padding: 0.5rem 2.5rem 0.5rem 0.75rem;
+        cursor: pointer;
+        font-weight: 500;
+        color: rgb(31 41 55);
+    }
+
+    select.form-control:focus {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%236366f1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    }
+
+    .field-dropdown-menu {
+        border: 1px solid hsl(0 0% 100% / 0.8);
+        border-radius: var(--radius);
+        background: hsl(0 0% 100% / 0.96);
+        box-shadow: var(--shadow-elevated);
+        backdrop-filter: blur(22px) saturate(1.25);
+        -webkit-backdrop-filter: blur(22px) saturate(1.25);
+    }
+
+    .field-dropdown-option {
+        border-radius: var(--radius-sm);
     }
 
     .btn {

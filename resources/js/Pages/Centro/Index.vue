@@ -1308,7 +1308,7 @@ function visibleCalendarTasks(cell) {
                                     </span>
                                     <ChevronDown :class="['h-4 w-4 shrink-0 text-gray-400 transition', taskPeopleMenuOpen === 'assignee_ids' ? 'rotate-180' : '']" :stroke-width="1.7" />
                                 </button>
-                                <div v-if="taskPeopleMenuOpen === 'assignee_ids'" class="app-popover absolute left-0 right-0 top-full z-[5300] mt-2 border border-white/80 bg-white/95 p-3 shadow-xl backdrop-blur-xl" @click.stop>
+                                <div v-if="taskPeopleMenuOpen === 'assignee_ids'" class="app-popover field-dropdown-menu absolute left-0 right-0 top-full z-[5300] mt-2 p-3" @click.stop>
                                     <div class="people-avatar-picker max-h-44">
                                         <button
                                             v-for="user in users"
@@ -1337,7 +1337,7 @@ function visibleCalendarTasks(cell) {
                                     </span>
                                     <ChevronDown :class="['h-4 w-4 shrink-0 text-gray-400 transition', taskPeopleMenuOpen === 'follower_ids' ? 'rotate-180' : '']" :stroke-width="1.7" />
                                 </button>
-                                <div v-if="taskPeopleMenuOpen === 'follower_ids'" class="app-popover absolute left-0 right-0 top-full z-[5300] mt-2 border border-white/80 bg-white/95 p-3 shadow-xl backdrop-blur-xl" @click.stop>
+                                <div v-if="taskPeopleMenuOpen === 'follower_ids'" class="app-popover field-dropdown-menu absolute left-0 right-0 top-full z-[5300] mt-2 p-3" @click.stop>
                                     <div class="people-avatar-picker max-h-44">
                                         <button
                                             v-for="user in users"
@@ -1414,7 +1414,7 @@ function visibleCalendarTasks(cell) {
                                 </button>
                                 <div
                                     v-if="taskSearchSelectOpen === field.name"
-                                    class="app-popover absolute left-0 right-0 top-full z-[5300] mt-2 border border-white/80 bg-white/95 p-3 shadow-xl backdrop-blur-xl"
+                                    class="app-popover field-dropdown-menu absolute left-0 right-0 top-full z-[5300] mt-2 p-3"
                                     @click.stop
                                 >
                                     <input
@@ -1429,7 +1429,7 @@ function visibleCalendarTasks(cell) {
                                             v-if="canClearTaskSearchSelect(field)"
                                             type="button"
                                             :class="[
-                                                'flex w-full items-center justify-between rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm transition hover:bg-indigo-50',
+                                                'field-dropdown-option flex w-full items-center justify-between px-3 py-2 text-left text-sm transition hover:bg-indigo-50',
                                                 !form[field.name] ? 'bg-indigo-50 font-semibold text-indigo-700' : 'text-gray-700',
                                             ]"
                                             @click="selectTaskSearchOption(field, '')"
@@ -1442,7 +1442,7 @@ function visibleCalendarTasks(cell) {
                                             :key="option.id"
                                             type="button"
                                             :class="[
-                                                'flex w-full items-center justify-between gap-3 rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm transition hover:bg-indigo-50',
+                                                'field-dropdown-option flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition hover:bg-indigo-50',
                                                 form[field.name] === option.id ? 'bg-indigo-50 font-semibold text-indigo-700' : 'text-gray-700',
                                             ]"
                                             @click="selectTaskSearchOption(field, option.id)"
@@ -1790,7 +1790,7 @@ function visibleCalendarTasks(cell) {
 
                         <div
                             v-if="projectPeopleMenuOpen"
-                            class="app-popover absolute left-0 right-0 top-full z-[5200] mt-2 border border-white/80 bg-white/95 p-4 shadow-xl backdrop-blur-xl"
+                            class="app-popover field-dropdown-menu absolute left-0 right-0 top-full z-[5200] mt-2 p-4"
                             @click.stop
                         >
                             <div class="mb-3 flex items-center justify-between gap-2">
