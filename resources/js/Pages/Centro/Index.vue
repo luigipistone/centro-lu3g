@@ -694,6 +694,17 @@ function openFieldPicker(event, field) {
     }
 }
 
+function openDatePicker(event) {
+    taskPeopleMenuOpen.value = null;
+    taskSearchSelectOpen.value = null;
+
+    try {
+        event.currentTarget?.showPicker?.();
+    } catch (error) {
+        event.currentTarget?.focus?.();
+    }
+}
+
 function refreshTaskDescriptionEditor() {
     if (props.section !== 'tasks') return;
     nextTick(() => {
@@ -2458,11 +2469,11 @@ function visibleCalendarTasks(cell) {
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Inizio</label>
-                                    <input v-model="calendarTaskForm.start_date" type="date" class="form-control" @input="saveCalendarTaskInline()" />
+                                    <input v-model="calendarTaskForm.start_date" type="date" class="form-control" @click="openDatePicker" @focus="openDatePicker" @input="saveCalendarTaskInline()" />
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Scadenza</label>
-                                    <input v-model="calendarTaskForm.due_date" type="date" class="form-control" @input="saveCalendarTaskInline()" />
+                                    <input v-model="calendarTaskForm.due_date" type="date" class="form-control" @click="openDatePicker" @focus="openDatePicker" @input="saveCalendarTaskInline()" />
                                 </div>
                                 <div v-if="calendarTaskForm.task_type === 'meeting'">
                                     <label class="block text-sm font-medium text-gray-700">Ora</label>
@@ -2603,7 +2614,7 @@ function visibleCalendarTasks(cell) {
                                 <form class="mb-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_140px_145px_auto]" @submit.prevent="addCalendarSubtask">
                                     <input v-model="calendarSubtaskForm.title" class="form-control mt-0" placeholder="Nuova sottoattività..." required />
                                     <AppSelect v-model="calendarSubtaskForm.priority" :options="taskPriorityOptions.filter((option) => option.value !== 'all')" />
-                                    <input v-model="calendarSubtaskForm.due_date" class="form-control mt-0" type="date" />
+                                    <input v-model="calendarSubtaskForm.due_date" class="form-control mt-0" type="date" @click="openDatePicker" @focus="openDatePicker" />
                                     <button type="submit" class="btn btn-primary justify-center px-4" :disabled="calendarSubtaskForm.processing">
                                         <Plus class="h-4 w-4" :stroke-width="1.7" />
                                     </button>
@@ -2641,6 +2652,8 @@ function visibleCalendarTasks(cell) {
                                             v-model="calendarSubtaskDrafts[subtask.id].due_date"
                                             class="form-control mt-0"
                                             type="date"
+                                            @click="openDatePicker"
+                                            @focus="openDatePicker"
                                             @input="saveCalendarSubtaskInline(subtask)"
                                         />
                                         <div class="flex items-center justify-end gap-1">
