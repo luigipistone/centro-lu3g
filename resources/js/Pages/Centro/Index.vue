@@ -987,6 +987,12 @@ function priorityColor(priority) {
     }[priority] || '#64748b';
 }
 
+function priorityTextColor(priority) {
+    return ['medium', 'low'].includes(priority) ? '#111827' : '#ffffff';
+}
+
+const subtaskIconPath = 'M20,15c-1.9,0-3.4,1.3-3.9,3H7c-2.8,0-5-2.2-5-5v-3h14.1c0.4,1.7,2,3,3.9,3c2.2,0,4-1.8,4-4s-1.8-4-4-4 c-1.9,0-3.4,1.3-3.9,3H2V3c0-0.6-0.4-1-1-1S0,2.4,0,3v10c0,3.9,3.1,7,7,7h9.1c0.4,1.7,2,3,3.9,3c2.2,0,4-1.8,4-4S22.2,15,20,15z M20,7c1.1,0,2,0.9,2,2s-0.9,2-2,2s-2-0.9-2-2S18.9,7,20,7z M20,21c-1.1,0-2-0.9-2-2s0.9-2,2-2s2,0.9,2,2S21.1,21,20,21z';
+
 const documentTypeLabels = {
     preventivo: 'Preventivo',
     proforma: 'Proforma',
@@ -1256,6 +1262,8 @@ function saveDraftField(row, field) {
 }
 
 const taskRows = computed(() => props.rows.filter((row) => {
+    if (row.parent_task_id) return false;
+
     const search = taskSearch.value.trim().toLowerCase();
     const matchesSearch = !search
         || (row.title || '').toLowerCase().includes(search)
@@ -2528,7 +2536,12 @@ function visibleCalendarTasks(cell) {
                                                 </div>
                                                 <div class="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-gray-500">
                                                     <span class="truncate">{{ task.client_name || task.project_name || task.service_name || taskTypeLabel(task.task_type) }}</span>
-                                                    <span v-if="task.subtask_count">{{ task.subtask_count }} sub</span>
+                                                    <span v-if="task.subtask_count" class="inline-flex shrink-0 items-center gap-1 font-semibold text-gray-500">
+                                                        <span>{{ task.subtask_count }}</span>
+                                                        <svg class="h-3 w-3 fill-current" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                                            <path :d="subtaskIconPath" />
+                                                        </svg>
+                                                    </span>
                                                 </div>
                                             </div>
                                         </div>
@@ -3365,24 +3378,27 @@ function visibleCalendarTasks(cell) {
                                     <div class="flex items-start justify-between gap-3">
                                         <Link :href="route('tasks.show', task.id)" class="min-w-0 flex-1">
                                             <div class="flex items-center gap-2">
-                                                <span :class="['h-2 w-2 shrink-0 rounded-full', priorityClass(task.priority)]"></span>
                                                 <h4 :class="['truncate text-sm font-semibold text-gray-900', task.status === 'done' ? 'line-through opacity-60' : '']">{{ task.title }}</h4>
                                             </div>
-                                            <div class="mt-2 flex flex-wrap gap-1.5">
+                                            <div class="mt-2 flex flex-wrap items-center gap-1.5">
                                                 <span :class="['rounded-full border px-2 py-0.5 text-[10px] font-medium', taskTypeClass(task.task_type)]">{{ displayValue(task.task_type || 'task') }}</span>
-                                                <span class="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">{{ displayValue(task.priority) }}</span>
+                                                <span
+                                                    class="rounded-full px-2 py-0.5 text-[10px] font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.28)]"
+                                                    :style="{ backgroundColor: priorityColor(task.priority), color: priorityTextColor(task.priority) }"
+                                                >
+                                                    {{ displayValue(task.priority) }}
+                                                </span>
+                                                <span v-if="task.client_name" class="min-w-0 max-w-full truncate rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">{{ task.client_name }}</span>
                                             </div>
-                                            <div class="mt-3 space-y-1 text-xs text-gray-500">
-                                                <div v-if="task.project_name" class="truncate">Progetto: {{ task.project_name }}</div>
-                                                <div v-if="task.client_name" class="truncate">Cliente: {{ task.client_name }}</div>
-                                                <div v-if="task.service_name" class="truncate">
-                                                    Servizio:
-                                                    <span class="inline-flex items-center gap-1">
-                                                        <span class="h-1.5 w-1.5 rounded-full" :style="{ backgroundColor: task.service_color || '#64748b' }"></span>
-                                                        {{ task.service_name }}
+                                            <div class="mt-3 flex items-center justify-between gap-3 text-xs text-gray-500">
+                                                <span class="min-w-0 truncate">{{ task.project_name || 'Senza progetto' }}</span>
+                                                <div class="flex shrink-0 items-center gap-2">
+                                                    <span v-if="task.subtask_count" class="inline-flex items-center gap-1 font-semibold text-gray-500">
+                                                        <span>{{ task.subtask_count }}</span>
+                                                        <svg class="h-3.5 w-3.5 fill-current" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                                            <path :d="subtaskIconPath" />
+                                                        </svg>
                                                     </span>
-                                                </div>
-                                                <div class="flex items-center justify-between gap-2">
                                                     <span>{{ task.due_date ? dateIt(task.due_date) : 'Senza scadenza' }}</span>
                                                     <span v-if="task.due_time">{{ String(task.due_time).slice(0, 5) }}</span>
                                                 </div>

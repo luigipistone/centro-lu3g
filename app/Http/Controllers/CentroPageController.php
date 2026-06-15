@@ -256,6 +256,7 @@ class CentroPageController extends Controller
                     ->leftJoin('projects', 'projects.id', '=', 'tasks.project_id')
                     ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
                     ->leftJoin('services', 'services.id', '=', 'tasks.service_id')
+                    ->whereNull('tasks.parent_task_id')
                     ->select('tasks.*', 'projects.name as project_name', 'clients.name as client_name', 'services.name as service_name', 'services.color as service_color')
                 )
                 ->when($section === 'calendar', fn ($query) => $query
@@ -318,6 +319,11 @@ class CentroPageController extends Controller
 
         if ($section === 'tasks') {
             $taskIds = $rows->pluck('id');
+            $subtaskCounts = DB::table('tasks')
+                ->whereIn('parent_task_id', $taskIds)
+                ->select('parent_task_id', DB::raw('count(*) as aggregate'))
+                ->groupBy('parent_task_id')
+                ->pluck('aggregate', 'parent_task_id');
             $assigneesByTask = DB::table('task_assignees')
                 ->whereIn('task_id', $taskIds)
                 ->get(['task_id', 'user_id'])
@@ -327,7 +333,8 @@ class CentroPageController extends Controller
                 ->get(['task_id', 'user_id'])
                 ->groupBy('task_id');
 
-            $rows = $rows->map(function ($row) use ($assigneesByTask, $followersByTask) {
+            $rows = $rows->map(function ($row) use ($subtaskCounts, $assigneesByTask, $followersByTask) {
+                $row->subtask_count = (int) ($subtaskCounts[$row->id] ?? 0);
                 $row->assignee_ids = ($assigneesByTask[$row->id] ?? collect())->pluck('user_id')->values();
                 $row->follower_ids = ($followersByTask[$row->id] ?? collect())->pluck('user_id')->values();
 
