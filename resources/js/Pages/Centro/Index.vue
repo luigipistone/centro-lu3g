@@ -83,6 +83,12 @@ const calendarCreateDate = ref(null);
 const calendarDraggedTask = ref(null);
 const calendarDropDate = ref(null);
 const calendarExpanded = ref(false);
+const calendarTaskPanelOpen = ref(false);
+const calendarTaskPanel = ref(null);
+const calendarTaskAutosaveState = ref('idle');
+const calendarTaskAutosaveError = ref('');
+let calendarTaskAutosaveTimer = null;
+let calendarTaskAutosaveSequence = 0;
 const taskSearch = ref('');
 const taskStatus = ref('all');
 const taskPriority = ref('all');
@@ -139,6 +145,11 @@ const taskTypeOptions = [
     { value: 'all', label: 'Tutti i tipi' },
     { value: 'task', label: 'Task' },
     { value: 'project', label: 'Progetto' },
+    { value: 'ongoing', label: 'Continuativa' },
+    { value: 'meeting', label: 'Meeting' },
+];
+const taskEditTypeOptions = [
+    { value: 'project', label: 'Task' },
     { value: 'ongoing', label: 'Continuativa' },
     { value: 'meeting', label: 'Meeting' },
 ];
@@ -241,6 +252,29 @@ const defaults = computed(() => {
 });
 
 const form = useForm({ ...defaults.value });
+const calendarTaskForm = useForm({
+    id: '',
+    title: '',
+    description: '',
+    project_id: '',
+    client_id: '',
+    service_id: '',
+    task_type: 'project',
+    status: 'todo',
+    priority: 'medium',
+    start_date: '',
+    due_date: '',
+    due_time: '',
+    location: '',
+    recurring_enabled: false,
+    recurring_interval_value: 1,
+    recurring_interval_unit: 'week',
+    recurring_mode: 'fixed',
+    recurring_weekday: 1,
+    recurring_month_day: 1,
+    assignee_ids: [],
+    follower_ids: [],
+});
 const taskCreateTypeLabels = {
     project: 'Task',
     task: 'Task',
@@ -586,6 +620,32 @@ function taskPeopleLabel(field) {
     if (selected.length === 1) return selected[0].name || selected[0].email || '1 persona';
 
     return `${selected.length} persone`;
+}
+
+function selectedCalendarTaskUsers(field) {
+    const selected = calendarTaskForm[field] || [];
+
+    return (props.users || []).filter((user) => selected.includes(user.id));
+}
+
+function calendarTaskPeopleLabel(field) {
+    const selected = selectedCalendarTaskUsers(field);
+    if (!selected.length) return field === 'assignee_ids' ? 'Nessuna persona' : 'Nessun follower';
+    if (selected.length === 1) return selected[0].name || selected[0].email || '1 persona';
+
+    return `${selected.length} persone`;
+}
+
+function toggleCalendarTaskPerson(field, userId) {
+    const current = [...(calendarTaskForm[field] || [])];
+    const index = current.indexOf(userId);
+    if (index >= 0) {
+        current.splice(index, 1);
+    } else {
+        current.push(userId);
+    }
+    calendarTaskForm[field] = current;
+    saveCalendarTaskInline(0);
 }
 
 function toggleTaskPeopleMenu(field) {
@@ -1236,7 +1296,119 @@ function createTaskHref(type, date) {
 }
 
 function openCalendarTask(task) {
-    router.visit(route('tasks.show', task.id));
+    calendarTaskPanel.value = task;
+    calendarTaskPanelOpen.value = true;
+    calendarTaskAutosaveState.value = 'idle';
+    calendarTaskAutosaveError.value = '';
+    window.clearTimeout(calendarTaskAutosaveTimer);
+    calendarTaskForm.defaults({
+        id: task.id,
+        title: task.title || '',
+        description: task.description || '',
+        project_id: task.project_id || '',
+        client_id: task.client_id || '',
+        service_id: task.service_id || '',
+        task_type: task.task_type || 'project',
+        status: task.status || 'todo',
+        priority: task.priority || 'medium',
+        start_date: task.start_date || '',
+        due_date: task.due_date || '',
+        due_time: task.due_time ? String(task.due_time).slice(0, 5) : '',
+        location: task.location || '',
+        recurring_enabled: Boolean(task.recurring_enabled),
+        recurring_interval_value: task.recurring_interval_value || 1,
+        recurring_interval_unit: task.recurring_interval_unit || 'week',
+        recurring_mode: task.recurring_mode || 'fixed',
+        recurring_weekday: task.recurring_weekday || 1,
+        recurring_month_day: task.recurring_month_day || 1,
+        assignee_ids: [...(task.assignee_ids || [])],
+        follower_ids: [...(task.follower_ids || [])],
+    });
+    calendarTaskForm.reset();
+    calendarTaskForm.clearErrors();
+}
+
+function closeCalendarTaskPanel() {
+    calendarTaskPanelOpen.value = false;
+    calendarTaskPanel.value = null;
+    calendarTaskAutosaveState.value = 'idle';
+    calendarTaskAutosaveError.value = '';
+    window.clearTimeout(calendarTaskAutosaveTimer);
+}
+
+function calendarTaskPayload() {
+    return {
+        title: calendarTaskForm.title,
+        description: calendarTaskForm.description,
+        project_id: calendarTaskForm.project_id || null,
+        client_id: calendarTaskForm.client_id || null,
+        service_id: calendarTaskForm.service_id || null,
+        task_type: calendarTaskForm.task_type,
+        status: calendarTaskForm.status,
+        priority: calendarTaskForm.priority,
+        start_date: calendarTaskForm.start_date || null,
+        due_date: calendarTaskForm.due_date || null,
+        due_time: calendarTaskForm.due_time || null,
+        location: calendarTaskForm.location || null,
+        recurring_enabled: Boolean(calendarTaskForm.recurring_enabled),
+        recurring_interval_value: calendarTaskForm.recurring_enabled ? (calendarTaskForm.recurring_interval_value || 1) : null,
+        recurring_interval_unit: calendarTaskForm.recurring_enabled ? (calendarTaskForm.recurring_interval_unit || 'week') : null,
+        recurring_mode: calendarTaskForm.recurring_enabled ? (calendarTaskForm.recurring_mode || 'fixed') : null,
+        recurring_weekday: calendarTaskForm.recurring_enabled ? calendarTaskForm.recurring_weekday : null,
+        recurring_month_day: calendarTaskForm.recurring_enabled ? calendarTaskForm.recurring_month_day : null,
+        assignee_ids: [...(calendarTaskForm.assignee_ids || [])],
+        follower_ids: [...(calendarTaskForm.follower_ids || [])],
+    };
+}
+
+function saveCalendarTaskInline(delay = 650) {
+    if (!calendarTaskForm.id || !String(calendarTaskForm.title || '').trim()) return;
+
+    window.clearTimeout(calendarTaskAutosaveTimer);
+    calendarTaskAutosaveState.value = 'queued';
+    calendarTaskAutosaveError.value = '';
+
+    calendarTaskAutosaveTimer = window.setTimeout(() => {
+        const sequence = calendarTaskAutosaveSequence + 1;
+        calendarTaskAutosaveSequence = sequence;
+        calendarTaskAutosaveState.value = 'saving';
+
+        calendarTaskForm.transform(() => calendarTaskPayload()).put(route('tasks.update', calendarTaskForm.id), {
+            preserveScroll: true,
+            preserveState: true,
+            only: ['rows', 'errors', 'flash'],
+            onSuccess: () => {
+                if (sequence !== calendarTaskAutosaveSequence) return;
+                calendarTaskAutosaveState.value = 'saved';
+                window.setTimeout(() => {
+                    if (calendarTaskAutosaveState.value === 'saved') {
+                        calendarTaskAutosaveState.value = 'idle';
+                    }
+                }, 1400);
+            },
+            onError: () => {
+                if (sequence !== calendarTaskAutosaveSequence) return;
+                calendarTaskAutosaveState.value = 'error';
+                calendarTaskAutosaveError.value = 'Non salvato';
+            },
+            onFinish: () => {
+                calendarTaskForm.transform((data) => data);
+            },
+        });
+    }, delay);
+}
+
+function setCalendarTaskType(type) {
+    calendarTaskForm.task_type = type;
+    if (type === 'meeting') {
+        calendarTaskForm.project_id = '';
+        calendarTaskForm.recurring_enabled = false;
+        calendarTaskForm.due_time = calendarTaskForm.due_time || '09:00';
+    } else {
+        calendarTaskForm.location = '';
+        if (type === 'ongoing') calendarTaskForm.project_id = '';
+    }
+    saveCalendarTaskInline(0);
 }
 
 function openCalendarCreateMenu(date) {
@@ -1761,12 +1933,13 @@ function visibleCalendarTasks(cell) {
                                 </div>
 
                                 <div v-if="compactWeekend && cell.weekend" class="flex flex-wrap justify-center gap-1 pt-1">
-                                    <Link
+                                    <button
                                         v-for="task in cell.tasks"
                                         :key="task.id"
-                                        :href="route('tasks.show', task.id)"
+                                        type="button"
                                         class="h-3 w-3 rounded-full ring-2 ring-white/85 transition hover:scale-125 focus:outline-none focus:ring-indigo-300"
                                         :style="{ backgroundColor: priorityColor(task.priority) }"
+                                        @click="openCalendarTask(task)"
                                     />
                                 </div>
 
@@ -1836,6 +2009,168 @@ function visibleCalendarTasks(cell) {
                     <span class="inline-flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-amber-500"></span>Media</span>
                     <span class="inline-flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-emerald-500"></span>Bassa</span>
                 </div>
+            </div>
+
+            <div v-if="calendarTaskPanelOpen" class="fixed inset-0 z-[5200] bg-gray-950/20 backdrop-blur-[2px]" @click.self="closeCalendarTaskPanel">
+                <aside class="absolute right-0 top-0 flex h-full w-full max-w-2xl flex-col border-l border-white/80 bg-white shadow-2xl sm:w-[56vw]">
+                    <div class="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2">
+                                <span class="h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: priorityColor(calendarTaskForm.priority) }"></span>
+                                <h3 class="truncate text-lg font-bold text-gray-950">Modifica task</h3>
+                            </div>
+                            <p class="mt-1 text-sm text-gray-500">Le modifiche si salvano automaticamente.</p>
+                        </div>
+                        <div class="flex shrink-0 items-center gap-2">
+                            <span v-if="calendarTaskAutosaveState !== 'idle'" :class="['rounded-full px-2.5 py-1 text-xs font-semibold', calendarTaskAutosaveState === 'error' ? 'bg-red-50 text-red-700' : calendarTaskAutosaveState === 'saved' ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700']">
+                                <template v-if="calendarTaskAutosaveState === 'queued'">In attesa</template>
+                                <template v-else-if="calendarTaskAutosaveState === 'saving'">Salvataggio</template>
+                                <template v-else-if="calendarTaskAutosaveState === 'saved'">Salvato</template>
+                                <template v-else>{{ calendarTaskAutosaveError || 'Errore' }}</template>
+                            </span>
+                            <button type="button" class="icon-btn" @click="closeCalendarTaskPanel">
+                                <X class="h-4 w-4" :stroke-width="1.8" />
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex-1 overflow-y-auto px-5 py-5">
+                        <div class="space-y-5">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Titolo</label>
+                                <input v-model="calendarTaskForm.title" class="form-control" required @input="saveCalendarTaskInline()" />
+                                <div v-if="calendarTaskForm.errors.title" class="mt-1 text-sm text-red-600">{{ calendarTaskForm.errors.title }}</div>
+                            </div>
+
+                            <div class="grid gap-2 sm:grid-cols-3">
+                                <button
+                                    v-for="option in taskEditTypeOptions"
+                                    :key="option.value"
+                                    type="button"
+                                    :class="[
+                                        'rounded-[var(--radius-sm)] border px-3 py-2 text-left text-sm font-semibold transition',
+                                        calendarTaskForm.task_type === option.value ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50',
+                                    ]"
+                                    @click="setCalendarTaskType(option.value)"
+                                >
+                                    {{ option.label }}
+                                </button>
+                            </div>
+
+                            <div class="grid gap-4 md:grid-cols-2">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Stato</label>
+                                    <AppSelect v-model="calendarTaskForm.status" :options="taskStatusOptions.filter((option) => option.value !== 'all')" @change="saveCalendarTaskInline(0)" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Priorità</label>
+                                    <AppSelect v-model="calendarTaskForm.priority" :options="taskPriorityOptions.filter((option) => option.value !== 'all')" @change="saveCalendarTaskInline(0)" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Inizio</label>
+                                    <input v-model="calendarTaskForm.start_date" type="date" class="form-control" @input="saveCalendarTaskInline()" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Scadenza</label>
+                                    <input v-model="calendarTaskForm.due_date" type="date" class="form-control" @input="saveCalendarTaskInline()" />
+                                </div>
+                                <div v-if="calendarTaskForm.task_type === 'meeting'">
+                                    <label class="block text-sm font-medium text-gray-700">Ora</label>
+                                    <input v-model="calendarTaskForm.due_time" type="time" class="form-control" @input="saveCalendarTaskInline()" />
+                                </div>
+                                <div v-if="calendarTaskForm.task_type === 'meeting'">
+                                    <label class="block text-sm font-medium text-gray-700">Luogo / link</label>
+                                    <input v-model="calendarTaskForm.location" class="form-control" placeholder="Sala riunioni o link meeting" @input="saveCalendarTaskInline()" />
+                                </div>
+                                <div v-if="['project', 'task'].includes(calendarTaskForm.task_type)">
+                                    <label class="block text-sm font-medium text-gray-700">Progetto</label>
+                                    <AppSelect v-model="calendarTaskForm.project_id" :options="namedOptions(projects, { value: '', label: 'Nessun progetto' })" searchable @change="saveCalendarTaskInline(0)" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Cliente</label>
+                                    <AppSelect v-model="calendarTaskForm.client_id" :options="namedOptions(clients, { value: '', label: 'Nessun cliente' })" searchable @change="saveCalendarTaskInline(0)" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Servizio</label>
+                                    <AppSelect v-model="calendarTaskForm.service_id" :options="namedOptions(services, { value: '', label: 'Nessun servizio' })" searchable @change="saveCalendarTaskInline(0)" />
+                                </div>
+                            </div>
+
+                            <div v-if="calendarTaskForm.task_type !== 'meeting'" class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/80 p-4">
+                                <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
+                                    <input v-model="calendarTaskForm.recurring_enabled" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" @change="saveCalendarTaskInline(0)" />
+                                    Ricorrente
+                                </label>
+                                <div v-if="calendarTaskForm.recurring_enabled" class="mt-3 grid gap-3 md:grid-cols-2">
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-500">Ogni</label>
+                                        <input v-model="calendarTaskForm.recurring_interval_value" type="number" min="1" class="form-control" @input="saveCalendarTaskInline()" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-500">Unità</label>
+                                        <AppSelect v-model="calendarTaskForm.recurring_interval_unit" :options="recurrenceUnitOptions" @change="saveCalendarTaskInline(0)" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-500">Modalità</label>
+                                        <AppSelect v-model="calendarTaskForm.recurring_mode" :options="recurrenceModeOptions" @change="saveCalendarTaskInline(0)" />
+                                    </div>
+                                    <div v-if="calendarTaskForm.recurring_interval_unit === 'week'">
+                                        <label class="block text-xs font-medium text-gray-500">Giorno settimana</label>
+                                        <input v-model="calendarTaskForm.recurring_weekday" type="number" min="1" max="7" class="form-control" @input="saveCalendarTaskInline()" />
+                                    </div>
+                                    <div v-if="calendarTaskForm.recurring_interval_unit === 'month' && calendarTaskForm.recurring_mode === 'fixed'">
+                                        <label class="block text-xs font-medium text-gray-500">Giorno mese</label>
+                                        <input v-model="calendarTaskForm.recurring_month_day" type="number" min="1" max="31" class="form-control" @input="saveCalendarTaskInline()" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="grid gap-4 md:grid-cols-2">
+                                <div>
+                                    <div class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">{{ calendarTaskForm.task_type === 'meeting' ? 'Partecipanti' : 'Assegnatari' }}</div>
+                                    <div class="people-avatar-picker max-h-36">
+                                        <button
+                                            v-for="user in users"
+                                            :key="`calendar-assignee-${user.id}`"
+                                            type="button"
+                                            :class="personAvatarClass((calendarTaskForm.assignee_ids || []).includes(user.id))"
+                                            :aria-pressed="(calendarTaskForm.assignee_ids || []).includes(user.id)"
+                                            :title="user.name || user.email"
+                                            @click="toggleCalendarTaskPerson('assignee_ids', user.id)"
+                                        >
+                                            <UserAvatar :user="user" size="md" />
+                                        </button>
+                                        <p v-if="!users?.length" class="text-xs text-gray-500">Nessun utente disponibile.</p>
+                                    </div>
+                                    <p class="mt-2 text-xs text-gray-400">{{ calendarTaskPeopleLabel('assignee_ids') }}</p>
+                                </div>
+                                <div>
+                                    <div class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Follower</div>
+                                    <div class="people-avatar-picker max-h-36">
+                                        <button
+                                            v-for="user in users"
+                                            :key="`calendar-follower-${user.id}`"
+                                            type="button"
+                                            :class="personAvatarClass((calendarTaskForm.follower_ids || []).includes(user.id))"
+                                            :aria-pressed="(calendarTaskForm.follower_ids || []).includes(user.id)"
+                                            :title="user.name || user.email"
+                                            @click="toggleCalendarTaskPerson('follower_ids', user.id)"
+                                        >
+                                            <UserAvatar :user="user" size="md" />
+                                        </button>
+                                        <p v-if="!users?.length" class="text-xs text-gray-500">Nessun utente disponibile.</p>
+                                    </div>
+                                    <p class="mt-2 text-xs text-gray-400">{{ calendarTaskPeopleLabel('follower_ids') }}</p>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Descrizione</label>
+                                <textarea v-model="calendarTaskForm.description" rows="6" class="form-control" placeholder="Aggiungi una descrizione..." @input="saveCalendarTaskInline()"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </aside>
             </div>
         </div>
 

@@ -283,9 +283,20 @@ class CentroPageController extends Controller
                 ->select('parent_task_id', DB::raw('count(*) as aggregate'))
                 ->groupBy('parent_task_id')
                 ->pluck('aggregate', 'parent_task_id');
+            $taskIds = $rows->pluck('id');
+            $assigneesByTask = DB::table('task_assignees')
+                ->whereIn('task_id', $taskIds)
+                ->get(['task_id', 'user_id'])
+                ->groupBy('task_id');
+            $followersByTask = DB::table('task_followers')
+                ->whereIn('task_id', $taskIds)
+                ->get(['task_id', 'user_id'])
+                ->groupBy('task_id');
 
-            $rows = $rows->map(function ($row) use ($subtaskCounts) {
+            $rows = $rows->map(function ($row) use ($subtaskCounts, $assigneesByTask, $followersByTask) {
                 $row->subtask_count = (int) ($subtaskCounts[$row->id] ?? 0);
+                $row->assignee_ids = ($assigneesByTask[$row->id] ?? collect())->pluck('user_id')->values();
+                $row->follower_ids = ($followersByTask[$row->id] ?? collect())->pluck('user_id')->values();
 
                 return $row;
             });
