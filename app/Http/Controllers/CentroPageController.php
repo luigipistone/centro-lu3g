@@ -284,6 +284,18 @@ class CentroPageController extends Controller
                 ->groupBy('parent_task_id')
                 ->pluck('aggregate', 'parent_task_id');
             $taskIds = $rows->pluck('id');
+            $subtasksByTask = DB::table('tasks')
+                ->whereIn('parent_task_id', $taskIds)
+                ->latest()
+                ->get(['id', 'parent_task_id', 'title', 'status', 'priority', 'due_date', 'due_time', 'project_id', 'client_id', 'service_id', 'description'])
+                ->groupBy('parent_task_id');
+            $commentsByTask = DB::table('task_comments')
+                ->leftJoin('users', 'users.id', '=', 'task_comments.user_id')
+                ->whereIn('task_comments.task_id', $taskIds)
+                ->latest('task_comments.created_at')
+                ->get(['task_comments.*', 'users.name as user_name'])
+                ->groupBy('task_id')
+                ->map(fn ($comments) => $comments->take(30)->values());
             $assigneesByTask = DB::table('task_assignees')
                 ->whereIn('task_id', $taskIds)
                 ->get(['task_id', 'user_id'])
@@ -293,8 +305,10 @@ class CentroPageController extends Controller
                 ->get(['task_id', 'user_id'])
                 ->groupBy('task_id');
 
-            $rows = $rows->map(function ($row) use ($subtaskCounts, $assigneesByTask, $followersByTask) {
+            $rows = $rows->map(function ($row) use ($subtaskCounts, $subtasksByTask, $commentsByTask, $assigneesByTask, $followersByTask) {
                 $row->subtask_count = (int) ($subtaskCounts[$row->id] ?? 0);
+                $row->subtasks = ($subtasksByTask[$row->id] ?? collect())->values();
+                $row->comments = ($commentsByTask[$row->id] ?? collect())->values();
                 $row->assignee_ids = ($assigneesByTask[$row->id] ?? collect())->pluck('user_id')->values();
                 $row->follower_ids = ($followersByTask[$row->id] ?? collect())->pluck('user_id')->values();
 

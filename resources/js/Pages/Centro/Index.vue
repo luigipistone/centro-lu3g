@@ -89,6 +89,17 @@ const calendarTaskAutosaveState = ref('idle');
 const calendarTaskAutosaveError = ref('');
 let calendarTaskAutosaveTimer = null;
 let calendarTaskAutosaveSequence = 0;
+const calendarTaskDescriptionEditor = ref(null);
+const calendarSubtaskDrafts = ref({});
+const calendarSubtaskAutosaveStates = ref({});
+const calendarSubtaskAutosaveErrors = ref({});
+const calendarCommentDrafts = ref({});
+const calendarCommentAutosaveStates = ref({});
+const calendarCommentAutosaveErrors = ref({});
+const calendarSubtaskAutosaveTimers = {};
+const calendarSubtaskAutosaveSequences = {};
+const calendarCommentAutosaveTimers = {};
+const calendarCommentAutosaveSequences = {};
 const taskSearch = ref('');
 const taskStatus = ref('all');
 const taskPriority = ref('all');
@@ -274,6 +285,14 @@ const calendarTaskForm = useForm({
     recurring_month_day: 1,
     assignee_ids: [],
     follower_ids: [],
+});
+const calendarSubtaskForm = useForm({
+    title: '',
+    priority: 'medium',
+    due_date: '',
+});
+const calendarCommentForm = useForm({
+    content: '',
 });
 const taskCreateTypeLabels = {
     project: 'Task',
@@ -697,6 +716,46 @@ function addTaskEditorLink() {
     if (!url) return;
 
     runTaskEditorCommand('createLink', url);
+}
+
+function setInlineState(target, id, value) {
+    target.value = { ...target.value, [id]: value };
+}
+
+function autosaveLabel(state, fallback = '') {
+    return {
+        queued: 'In attesa',
+        saving: 'Salvataggio',
+        saved: 'Salvato',
+        error: fallback || 'Errore',
+    }[state] || '';
+}
+
+function refreshCalendarTaskDescriptionEditor() {
+    nextTick(() => {
+        if (!calendarTaskDescriptionEditor.value) return;
+        if (calendarTaskDescriptionEditor.value.innerHTML !== (calendarTaskForm.description || '')) {
+            calendarTaskDescriptionEditor.value.innerHTML = calendarTaskForm.description || '';
+        }
+    });
+}
+
+function updateCalendarTaskDescriptionFromEditor() {
+    calendarTaskForm.description = calendarTaskDescriptionEditor.value?.innerHTML || '';
+    saveCalendarTaskInline();
+}
+
+function runCalendarTaskEditorCommand(command, value = null) {
+    calendarTaskDescriptionEditor.value?.focus();
+    document.execCommand(command, false, value);
+    updateCalendarTaskDescriptionFromEditor();
+}
+
+function addCalendarTaskEditorLink() {
+    const url = window.prompt('URL del link');
+    if (!url) return;
+
+    runCalendarTaskEditorCommand('createLink', url);
 }
 
 function setTaskFormType(type) {
@@ -1326,6 +1385,8 @@ function openCalendarTask(task) {
     });
     calendarTaskForm.reset();
     calendarTaskForm.clearErrors();
+    hydrateCalendarTaskRelated(task);
+    refreshCalendarTaskDescriptionEditor();
 }
 
 function closeCalendarTaskPanel() {
@@ -1334,6 +1395,228 @@ function closeCalendarTaskPanel() {
     calendarTaskAutosaveState.value = 'idle';
     calendarTaskAutosaveError.value = '';
     window.clearTimeout(calendarTaskAutosaveTimer);
+}
+
+function hydrateCalendarTaskRelated(task) {
+    const subtasks = task?.subtasks || [];
+    const comments = task?.comments || [];
+    const nextSubtasks = {};
+    const nextComments = {};
+
+    for (const subtask of subtasks) {
+        nextSubtasks[subtask.id] = {
+            ...(calendarSubtaskDrafts.value[subtask.id] || {}),
+            title: subtask.title || '',
+            task_type: subtask.task_type || 'task',
+            status: subtask.status || 'todo',
+            priority: subtask.priority || 'medium',
+            project_id: subtask.project_id || task?.project_id || '',
+            client_id: subtask.client_id || task?.client_id || '',
+            service_id: subtask.service_id || task?.service_id || '',
+            start_date: subtask.start_date || '',
+            due_date: subtask.due_date || '',
+            due_time: subtask.due_time ? String(subtask.due_time).slice(0, 5) : '',
+            location: subtask.location || '',
+            description: subtask.description || '',
+        };
+    }
+
+    for (const comment of comments) {
+        nextComments[comment.id] = {
+            ...(calendarCommentDrafts.value[comment.id] || {}),
+            content: comment.content || '',
+        };
+    }
+
+    calendarSubtaskDrafts.value = nextSubtasks;
+    calendarCommentDrafts.value = nextComments;
+}
+
+function calendarPanelSubtasks() {
+    return calendarTaskPanel.value?.subtasks || [];
+}
+
+function calendarPanelComments() {
+    return calendarTaskPanel.value?.comments || [];
+}
+
+function calendarSubtaskPayload(subtaskId) {
+    const draft = calendarSubtaskDrafts.value[subtaskId] || {};
+
+    return {
+        title: draft.title || '',
+        task_type: draft.task_type || 'task',
+        status: draft.status || 'todo',
+        priority: draft.priority || 'medium',
+        project_id: draft.project_id || calendarTaskForm.project_id || '',
+        client_id: draft.client_id || calendarTaskForm.client_id || '',
+        service_id: draft.service_id || calendarTaskForm.service_id || '',
+        start_date: draft.start_date || '',
+        due_date: draft.due_date || '',
+        due_time: draft.due_time || '',
+        location: draft.location || '',
+        description: draft.description || '',
+        recurring_enabled: false,
+        recurring_interval_value: '',
+        recurring_interval_unit: '',
+        recurring_mode: '',
+        recurring_weekday: '',
+        recurring_month_day: '',
+    };
+}
+
+function saveCalendarSubtaskInline(subtask, delay = 650) {
+    const payload = calendarSubtaskPayload(subtask.id);
+    if (!String(payload.title).trim()) {
+        setInlineState(calendarSubtaskAutosaveStates, subtask.id, 'idle');
+        return;
+    }
+
+    window.clearTimeout(calendarSubtaskAutosaveTimers[subtask.id]);
+    setInlineState(calendarSubtaskAutosaveStates, subtask.id, 'queued');
+    setInlineState(calendarSubtaskAutosaveErrors, subtask.id, '');
+
+    calendarSubtaskAutosaveTimers[subtask.id] = window.setTimeout(() => {
+        const sequence = (calendarSubtaskAutosaveSequences[subtask.id] || 0) + 1;
+        calendarSubtaskAutosaveSequences[subtask.id] = sequence;
+        setInlineState(calendarSubtaskAutosaveStates, subtask.id, 'saving');
+
+        router.put(route('tasks.update', subtask.id), payload, {
+            preserveScroll: true,
+            preserveState: true,
+            only: ['rows', 'errors', 'flash'],
+            onSuccess: () => {
+                if (sequence !== calendarSubtaskAutosaveSequences[subtask.id]) return;
+                setInlineState(calendarSubtaskAutosaveStates, subtask.id, 'saved');
+                window.setTimeout(() => {
+                    if (calendarSubtaskAutosaveStates.value[subtask.id] === 'saved') {
+                        setInlineState(calendarSubtaskAutosaveStates, subtask.id, 'idle');
+                    }
+                }, 1400);
+            },
+            onError: () => {
+                if (sequence !== calendarSubtaskAutosaveSequences[subtask.id]) return;
+                setInlineState(calendarSubtaskAutosaveStates, subtask.id, 'error');
+                setInlineState(calendarSubtaskAutosaveErrors, subtask.id, 'Non salvato');
+            },
+        });
+    }, delay);
+}
+
+function setCalendarSubtaskStatus(subtask, done) {
+    const status = done ? 'done' : 'todo';
+    if (calendarSubtaskDrafts.value[subtask.id]) {
+        calendarSubtaskDrafts.value[subtask.id].status = status;
+    }
+
+    setInlineState(calendarSubtaskAutosaveStates, subtask.id, 'saving');
+    setInlineState(calendarSubtaskAutosaveErrors, subtask.id, '');
+    router.patch(route('tasks.status.update', subtask.id), { status }, {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['rows', 'errors', 'flash'],
+        onSuccess: () => {
+            setInlineState(calendarSubtaskAutosaveStates, subtask.id, 'saved');
+            window.setTimeout(() => {
+                if (calendarSubtaskAutosaveStates.value[subtask.id] === 'saved') {
+                    setInlineState(calendarSubtaskAutosaveStates, subtask.id, 'idle');
+                }
+            }, 1400);
+        },
+        onError: () => {
+            if (calendarSubtaskDrafts.value[subtask.id]) {
+                calendarSubtaskDrafts.value[subtask.id].status = subtask.status;
+            }
+            setInlineState(calendarSubtaskAutosaveStates, subtask.id, 'error');
+            setInlineState(calendarSubtaskAutosaveErrors, subtask.id, 'Non salvato');
+        },
+    });
+}
+
+function addCalendarSubtask() {
+    if (!calendarTaskForm.id) return;
+
+    calendarSubtaskForm.post(route('tasks.subtasks.store', calendarTaskForm.id), {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['rows', 'errors', 'flash'],
+        onSuccess: () => calendarSubtaskForm.reset(),
+    });
+}
+
+function removeCalendarSubtask(subtask) {
+    if (!window.confirm('Eliminare questa sottoattività?')) return;
+
+    router.delete(route('tasks.destroy', subtask.id), {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['rows', 'errors', 'flash'],
+    });
+}
+
+function calendarCommentPayload(commentId) {
+    return {
+        content: calendarCommentDrafts.value[commentId]?.content || '',
+    };
+}
+
+function saveCalendarCommentInline(comment, delay = 650) {
+    const payload = calendarCommentPayload(comment.id);
+    if (!String(payload.content).trim()) {
+        setInlineState(calendarCommentAutosaveStates, comment.id, 'idle');
+        return;
+    }
+
+    window.clearTimeout(calendarCommentAutosaveTimers[comment.id]);
+    setInlineState(calendarCommentAutosaveStates, comment.id, 'queued');
+    setInlineState(calendarCommentAutosaveErrors, comment.id, '');
+
+    calendarCommentAutosaveTimers[comment.id] = window.setTimeout(() => {
+        const sequence = (calendarCommentAutosaveSequences[comment.id] || 0) + 1;
+        calendarCommentAutosaveSequences[comment.id] = sequence;
+        setInlineState(calendarCommentAutosaveStates, comment.id, 'saving');
+
+        router.put(route('tasks.comments.update', [calendarTaskForm.id, comment.id]), payload, {
+            preserveScroll: true,
+            preserveState: true,
+            only: ['rows', 'errors', 'flash'],
+            onSuccess: () => {
+                if (sequence !== calendarCommentAutosaveSequences[comment.id]) return;
+                setInlineState(calendarCommentAutosaveStates, comment.id, 'saved');
+                window.setTimeout(() => {
+                    if (calendarCommentAutosaveStates.value[comment.id] === 'saved') {
+                        setInlineState(calendarCommentAutosaveStates, comment.id, 'idle');
+                    }
+                }, 1400);
+            },
+            onError: () => {
+                if (sequence !== calendarCommentAutosaveSequences[comment.id]) return;
+                setInlineState(calendarCommentAutosaveStates, comment.id, 'error');
+                setInlineState(calendarCommentAutosaveErrors, comment.id, 'Non salvato');
+            },
+        });
+    }, delay);
+}
+
+function addCalendarComment() {
+    if (!calendarTaskForm.id) return;
+
+    calendarCommentForm.post(route('tasks.comments.store', calendarTaskForm.id), {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['rows', 'errors', 'flash'],
+        onSuccess: () => calendarCommentForm.reset(),
+    });
+}
+
+function removeCalendarComment(comment) {
+    if (!window.confirm('Eliminare questo commento?')) return;
+
+    router.delete(route('tasks.comments.destroy', [calendarTaskForm.id, comment.id]), {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['rows', 'errors', 'flash'],
+    });
 }
 
 function calendarTaskPayload() {
@@ -1418,6 +1701,18 @@ function openCalendarCreateMenu(date) {
 function closeCalendarCreateMenuOnOutside() {
     calendarCreateDate.value = null;
 }
+
+watch(
+    () => props.rows,
+    (rows) => {
+        if (!calendarTaskPanelOpen.value || !calendarTaskForm.id) return;
+        const freshTask = (rows || []).find((row) => row.id === calendarTaskForm.id);
+        if (!freshTask) return;
+
+        calendarTaskPanel.value = freshTask;
+        hydrateCalendarTaskRelated(freshTask);
+    },
+);
 
 onMounted(() => {
     document.addEventListener('pointerdown', closeCalendarCreateMenuOnOutside, true);
@@ -2011,8 +2306,9 @@ function visibleCalendarTasks(cell) {
                 </div>
             </div>
 
-            <div v-if="calendarTaskPanelOpen" class="fixed inset-0 z-[5200] bg-gray-950/20 backdrop-blur-[2px]" @click.self="closeCalendarTaskPanel">
-                <aside class="absolute right-0 top-0 flex h-full w-full max-w-2xl flex-col border-l border-white/80 bg-white shadow-2xl sm:w-[56vw]">
+            <Transition name="calendar-task-drawer">
+                <div v-if="calendarTaskPanelOpen" class="fixed inset-0 z-[5200] bg-gray-950/20 backdrop-blur-[2px]" @click.self="closeCalendarTaskPanel">
+                <aside class="calendar-task-drawer-panel absolute right-0 top-0 flex h-full w-full max-w-3xl flex-col border-l border-white/80 bg-white shadow-2xl sm:w-[62vw]">
                     <div class="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
                         <div class="min-w-0">
                             <div class="flex items-center gap-2">
@@ -2166,12 +2462,140 @@ function visibleCalendarTasks(cell) {
 
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Descrizione</label>
-                                <textarea v-model="calendarTaskForm.description" rows="6" class="form-control" placeholder="Aggiungi una descrizione..." @input="saveCalendarTaskInline()"></textarea>
+                                <div class="mt-1 overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white/90 shadow-inner">
+                                    <div class="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50/80 p-2">
+                                        <button type="button" class="icon-btn h-8 w-8" title="Grassetto" @click="runCalendarTaskEditorCommand('bold')">
+                                            <Bold class="h-4 w-4" :stroke-width="1.7" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Corsivo" @click="runCalendarTaskEditorCommand('italic')">
+                                            <Italic class="h-4 w-4" :stroke-width="1.7" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Sottolineato" @click="runCalendarTaskEditorCommand('underline')">
+                                            <Underline class="h-4 w-4" :stroke-width="1.7" />
+                                        </button>
+                                        <span class="mx-1 h-5 w-px bg-gray-200"></span>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Titolo" @click="runCalendarTaskEditorCommand('formatBlock', 'h3')">
+                                            <Heading3 class="h-4 w-4" :stroke-width="1.7" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Elenco puntato" @click="runCalendarTaskEditorCommand('insertUnorderedList')">
+                                            <List class="h-4 w-4" :stroke-width="1.7" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Elenco numerato" @click="runCalendarTaskEditorCommand('insertOrderedList')">
+                                            <ListOrdered class="h-4 w-4" :stroke-width="1.7" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Citazione" @click="runCalendarTaskEditorCommand('formatBlock', 'blockquote')">
+                                            <Quote class="h-4 w-4" :stroke-width="1.7" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Link" @click="addCalendarTaskEditorLink">
+                                            <Link2 class="h-4 w-4" :stroke-width="1.7" />
+                                        </button>
+                                    </div>
+                                    <div
+                                        ref="calendarTaskDescriptionEditor"
+                                        class="min-h-[150px] px-4 py-3 text-sm leading-6 text-gray-800 outline-none empty:before:text-gray-400 empty:before:content-[attr(data-placeholder)]"
+                                        contenteditable="true"
+                                        data-placeholder="Aggiungi una descrizione..."
+                                        @input="updateCalendarTaskDescriptionFromEditor"
+                                        @blur="updateCalendarTaskDescriptionFromEditor"
+                                    ></div>
+                                </div>
                             </div>
+
+                            <section class="content-card rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
+                                <div class="mb-4 flex items-center justify-between gap-3">
+                                    <h4 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Sottoattività</h4>
+                                    <span class="text-xs text-gray-400">{{ calendarPanelSubtasks().length }} elementi</span>
+                                </div>
+                                <form class="mb-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_140px_145px_auto]" @submit.prevent="addCalendarSubtask">
+                                    <input v-model="calendarSubtaskForm.title" class="form-control mt-0" placeholder="Nuova sottoattività..." required />
+                                    <AppSelect v-model="calendarSubtaskForm.priority" :options="taskPriorityOptions.filter((option) => option.value !== 'all')" />
+                                    <input v-model="calendarSubtaskForm.due_date" class="form-control mt-0" type="date" />
+                                    <button type="submit" class="btn btn-primary justify-center px-4" :disabled="calendarSubtaskForm.processing">
+                                        <Plus class="h-4 w-4" :stroke-width="1.7" />
+                                    </button>
+                                </form>
+                                <div class="space-y-2">
+                                    <div v-for="subtask in calendarPanelSubtasks()" :key="subtask.id" class="grid gap-3 rounded-[var(--radius-sm)] border border-gray-100 bg-white px-3 py-3 text-sm transition hover:border-indigo-100 hover:shadow-sm md:grid-cols-[minmax(0,1fr)_140px_145px_auto]">
+                                        <label class="flex min-w-0 items-center gap-2">
+                                            <input
+                                                type="checkbox"
+                                                class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                                                :checked="(calendarSubtaskDrafts[subtask.id]?.status || subtask.status) === 'done'"
+                                                @change="setCalendarSubtaskStatus(subtask, $event.target.checked)"
+                                            />
+                                            <div class="min-w-0 flex-1">
+                                                <input
+                                                    v-if="calendarSubtaskDrafts[subtask.id]"
+                                                    v-model="calendarSubtaskDrafts[subtask.id].title"
+                                                    :class="['form-control mt-0', (calendarSubtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'text-gray-400 line-through' : '']"
+                                                    placeholder="Titolo sottoattività"
+                                                    @input="saveCalendarSubtaskInline(subtask)"
+                                                />
+                                                <div v-if="calendarSubtaskAutosaveStates[subtask.id] && calendarSubtaskAutosaveStates[subtask.id] !== 'idle'" :class="['mt-1 text-[11px] font-medium', calendarSubtaskAutosaveStates[subtask.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
+                                                    {{ autosaveLabel(calendarSubtaskAutosaveStates[subtask.id], calendarSubtaskAutosaveErrors[subtask.id]) }}
+                                                </div>
+                                            </div>
+                                        </label>
+                                        <AppSelect
+                                            v-if="calendarSubtaskDrafts[subtask.id]"
+                                            v-model="calendarSubtaskDrafts[subtask.id].priority"
+                                            :options="taskPriorityOptions.filter((option) => option.value !== 'all')"
+                                            @change="saveCalendarSubtaskInline(subtask, 0)"
+                                        />
+                                        <input
+                                            v-if="calendarSubtaskDrafts[subtask.id]"
+                                            v-model="calendarSubtaskDrafts[subtask.id].due_date"
+                                            class="form-control mt-0"
+                                            type="date"
+                                            @input="saveCalendarSubtaskInline(subtask)"
+                                        />
+                                        <div class="flex items-center justify-end gap-1">
+                                            <Link :href="route('tasks.show', subtask.id)" class="icon-btn h-9 w-9" title="Apri sottoattività">
+                                                <ExternalLink class="h-4 w-4" :stroke-width="1.7" />
+                                            </Link>
+                                            <button type="button" class="icon-btn h-9 w-9 text-red-600 hover:bg-red-50" title="Elimina sottoattività" @click="removeCalendarSubtask(subtask)">
+                                                <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <p v-if="!calendarPanelSubtasks().length" class="text-sm text-gray-500">Nessuna sottoattività.</p>
+                                </div>
+                            </section>
+
+                            <section class="content-card rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
+                                <h4 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Commenti</h4>
+                                <form class="mb-5 grid gap-3 md:grid-cols-[1fr_auto]" @submit.prevent="addCalendarComment">
+                                    <textarea v-model="calendarCommentForm.content" rows="2" class="form-control mt-0" placeholder="Scrivi un commento..." required></textarea>
+                                    <button type="submit" class="btn btn-primary self-start px-4" :disabled="calendarCommentForm.processing">Invia</button>
+                                </form>
+                                <div class="space-y-3">
+                                    <div v-for="comment in calendarPanelComments()" :key="comment.id" class="rounded-[var(--radius-sm)] border border-gray-100 bg-white px-3 py-3 text-sm transition hover:border-indigo-100 hover:shadow-sm">
+                                        <div class="mb-2 flex items-center justify-between gap-3">
+                                            <div class="text-xs font-medium text-gray-500">{{ comment.user_name || 'Utente' }} · {{ comment.created_at }}</div>
+                                            <button type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" aria-label="Elimina commento" @click="removeCalendarComment(comment)">
+                                                <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                            </button>
+                                        </div>
+                                        <textarea
+                                            v-if="calendarCommentDrafts[comment.id]"
+                                            v-model="calendarCommentDrafts[comment.id].content"
+                                            rows="3"
+                                            class="form-control mt-0"
+                                            placeholder="Commento..."
+                                            @input="saveCalendarCommentInline(comment)"
+                                        ></textarea>
+                                        <div v-if="calendarCommentAutosaveStates[comment.id] && calendarCommentAutosaveStates[comment.id] !== 'idle'" :class="['mt-1 text-[11px] font-medium', calendarCommentAutosaveStates[comment.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
+                                            {{ autosaveLabel(calendarCommentAutosaveStates[comment.id], calendarCommentAutosaveErrors[comment.id]) }}
+                                        </div>
+                                    </div>
+                                    <p v-if="!calendarPanelComments().length" class="text-sm text-gray-500">Nessun commento.</p>
+                                </div>
+                            </section>
                         </div>
                     </div>
                 </aside>
-            </div>
+                </div>
+            </Transition>
         </div>
 
         <div v-else-if="section === 'projects'" class="py-8">
