@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import {
@@ -106,6 +107,57 @@ const taskSearchSelectQueries = ref({
 const taskDescriptionEditor = ref(null);
 const settingsTab = ref('personalizzazione');
 const userRoleFilter = ref('all');
+
+const calendarTypeOptions = [
+    { value: 'all', label: 'Tutti i tipi' },
+    { value: 'task', label: 'Task' },
+    { value: 'project', label: 'Task progetto' },
+    { value: 'ongoing', label: 'Continuativa' },
+    { value: 'meeting', label: 'Meeting' },
+];
+const projectStatusOptions = [
+    { value: 'all', label: 'Tutti gli stati' },
+    { value: 'active', label: 'Attivi' },
+    { value: 'completed', label: 'Completati' },
+    { value: 'on_hold', label: 'In pausa' },
+    { value: 'archived', label: 'Archiviati' },
+];
+const taskStatusOptions = [
+    { value: 'all', label: 'Tutti gli stati' },
+    { value: 'todo', label: 'Da fare' },
+    { value: 'in_progress', label: 'In corso' },
+    { value: 'in_review', label: 'Review' },
+    { value: 'done', label: 'Fatte' },
+];
+const taskPriorityOptions = [
+    { value: 'all', label: 'Tutte priorità' },
+    { value: 'urgent', label: 'Urgente' },
+    { value: 'high', label: 'Alta' },
+    { value: 'medium', label: 'Media' },
+    { value: 'low', label: 'Bassa' },
+];
+const taskTypeOptions = [
+    { value: 'all', label: 'Tutti i tipi' },
+    { value: 'task', label: 'Task' },
+    { value: 'project', label: 'Progetto' },
+    { value: 'ongoing', label: 'Continuativa' },
+    { value: 'meeting', label: 'Meeting' },
+];
+const recurrenceUnitOptions = [
+    { value: 'week', label: 'Settimana' },
+    { value: 'month', label: 'Mese' },
+];
+const recurrenceModeOptions = [
+    { value: 'fixed', label: 'Fissa' },
+    { value: 'relative', label: 'Relativa' },
+];
+const updateCadenceOptions = [
+    { value: '', label: 'Seleziona' },
+    { value: 'on_request', label: 'Su richiesta' },
+    { value: 'weekly', label: 'Settimanale' },
+    { value: 'biweekly', label: 'Bisettimanale' },
+    { value: 'monthly', label: 'Mensile' },
+];
 
 const docSettingDefaults = {
     company_name: 'Centro LU3G',
@@ -426,6 +478,27 @@ function optionLabel(field, option) {
     }
 
     return displayValue(option.name);
+}
+
+function fieldSelectOptions(field, emptyLabel = 'Seleziona') {
+    const options = optionsFor(field).map((option) => ({
+        value: option.id,
+        label: optionLabel(field, option),
+    }));
+
+    return field.required ? options : [{ value: '', label: emptyLabel }, ...options];
+}
+
+function objectOptions(source, emptyOption = null) {
+    const options = Object.entries(source).map(([value, label]) => ({ value, label }));
+
+    return emptyOption ? [emptyOption, ...options] : options;
+}
+
+function namedOptions(source, emptyOption = null) {
+    const options = source.map((item) => ({ value: item.id, label: item.name || item.email || item.title || item.id }));
+
+    return emptyOption ? [emptyOption, ...options] : options;
 }
 
 function isTaskSearchSelect(field) {
@@ -1454,10 +1527,13 @@ function visibleCalendarTasks(cell) {
                                     </div>
                                 </div>
                             </div>
-                            <select v-else-if="['select', 'client', 'project', 'service'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
-                                <option value="">Seleziona</option>
-                                <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ optionLabel(field, option) }}</option>
-                            </select>
+                            <AppSelect
+                                v-else-if="['select', 'client', 'project', 'service'].includes(field.type)"
+                                v-model="form[field.name]"
+                                :options="fieldSelectOptions(field)"
+                                placeholder="Seleziona"
+                                searchable
+                            />
                             <div v-else-if="field.type === 'user'" class="mt-2 flex flex-wrap gap-2">
                                 <button
                                     v-if="!field.required"
@@ -1514,17 +1590,11 @@ function visibleCalendarTasks(cell) {
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Unita ricorrenza</label>
-                                    <select v-model="form.recurring_interval_unit" class="form-control">
-                                        <option value="week">Settimana</option>
-                                        <option value="month">Mese</option>
-                                    </select>
+                                    <AppSelect v-model="form.recurring_interval_unit" :options="recurrenceUnitOptions" />
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Modalita ricorrenza</label>
-                                    <select v-model="form.recurring_mode" class="form-control">
-                                        <option value="fixed">Fissa</option>
-                                        <option value="relative">Relativa</option>
-                                    </select>
+                                    <AppSelect v-model="form.recurring_mode" :options="recurrenceModeOptions" />
                                 </div>
                                 <div v-if="form.recurring_interval_unit === 'week'">
                                     <label class="block text-sm font-medium text-gray-700">Giorno settimana</label>
@@ -1594,13 +1664,7 @@ function visibleCalendarTasks(cell) {
                     </div>
 
                     <div class="flex flex-wrap items-center gap-3">
-                        <select v-model="calendarType" class="form-control mt-0 w-44">
-                            <option value="all">Tutti i tipi</option>
-                            <option value="task">Task</option>
-                            <option value="project">Task progetto</option>
-                            <option value="ongoing">Continuativa</option>
-                            <option value="meeting">Meeting</option>
-                        </select>
+                        <AppSelect v-model="calendarType" class="w-44" :options="calendarTypeOptions" />
                         <label class="inline-flex items-center gap-2 rounded-2xl border border-white/70 bg-white/58 px-3 py-2 text-sm font-medium text-gray-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.62)] backdrop-blur-xl">
                             <input v-model="compactWeekend" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
                             Weekend compatto
@@ -1764,13 +1828,7 @@ function visibleCalendarTasks(cell) {
                         <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" :stroke-width="1.7" />
                         <input v-model="projectSearch" class="form-control mt-0 pl-9" placeholder="Cerca per progetto, cliente o descrizione..." />
                     </div>
-                    <select v-model="projectStatus" class="form-control mt-0">
-                        <option value="all">Tutti gli stati</option>
-                        <option value="active">Attivi</option>
-                        <option value="completed">Completati</option>
-                        <option value="on_hold">In pausa</option>
-                        <option value="archived">Archiviati</option>
-                    </select>
+                    <AppSelect v-model="projectStatus" :options="projectStatusOptions" />
                     <div ref="projectPeopleMenu" class="relative z-30">
                         <button
                             type="button"
@@ -1953,10 +2011,11 @@ function visibleCalendarTasks(cell) {
                         <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" :stroke-width="1.7" />
                         <input v-model="clientSearch" class="form-control mt-0 pl-9" placeholder="Cerca per nome, ragione sociale, email, P.IVA o citta..." />
                     </div>
-                    <select v-model="clientService" class="form-control mt-0">
-                        <option value="all">Tutti i servizi</option>
-                        <option v-for="service in services" :key="service.id" :value="service.id">{{ service.name }}</option>
-                    </select>
+                    <AppSelect
+                        v-model="clientService"
+                        :options="namedOptions(services, { value: 'all', label: 'Tutti i servizi' })"
+                        searchable
+                    />
                     <button type="button" class="btn btn-outline" @click="clientSearch = ''; clientService = 'all'"><RotateCcw class="h-4 w-4" :stroke-width="1.7" />Reset</button>
                     <button type="button" class="btn btn-primary" @click="openCreate()"><Plus class="h-4 w-4" :stroke-width="1.7" />Nuovo Cliente</button>
                 </div>
@@ -1972,10 +2031,13 @@ function visibleCalendarTasks(cell) {
                             <div v-for="field in fields" :key="field.name">
                                 <label class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
                                 <textarea v-if="field.type === 'textarea'" v-model="form[field.name]" rows="4" class="form-control" />
-                                <select v-else-if="['select', 'client', 'project', 'service'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
-                                    <option value="">Seleziona</option>
-                                    <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ option.name }}</option>
-                                </select>
+                                <AppSelect
+                                    v-else-if="['select', 'client', 'project', 'service'].includes(field.type)"
+                                    v-model="form[field.name]"
+                                    :options="fieldSelectOptions(field)"
+                                    placeholder="Seleziona"
+                                    searchable
+                                />
                                 <div v-else-if="field.type === 'user'" class="mt-2 flex flex-wrap gap-2">
                                     <button
                                         v-if="!field.required"
@@ -2076,27 +2138,9 @@ function visibleCalendarTasks(cell) {
                         <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" :stroke-width="1.7" />
                         <input v-model="taskSearch" class="form-control mt-0 pl-9" placeholder="Cerca task, cliente, progetto o servizio..." />
                     </div>
-                    <select v-model="taskStatus" class="form-control mt-0">
-                        <option value="all">Tutti gli stati</option>
-                        <option value="todo">Da fare</option>
-                        <option value="in_progress">In corso</option>
-                        <option value="in_review">Review</option>
-                        <option value="done">Fatte</option>
-                    </select>
-                    <select v-model="taskPriority" class="form-control mt-0">
-                        <option value="all">Tutte priorita</option>
-                        <option value="urgent">Urgente</option>
-                        <option value="high">Alta</option>
-                        <option value="medium">Media</option>
-                        <option value="low">Bassa</option>
-                    </select>
-                    <select v-model="taskType" class="form-control mt-0">
-                        <option value="all">Tutti i tipi</option>
-                        <option value="task">Task</option>
-                        <option value="project">Progetto</option>
-                        <option value="ongoing">Continuativa</option>
-                        <option value="meeting">Meeting</option>
-                    </select>
+                    <AppSelect v-model="taskStatus" :options="taskStatusOptions" />
+                    <AppSelect v-model="taskPriority" :options="taskPriorityOptions" />
+                    <AppSelect v-model="taskType" :options="taskTypeOptions" />
                     <button type="button" class="btn btn-outline" @click="taskSearch = ''; taskStatus = 'all'; taskPriority = 'all'; taskType = 'all'"><RotateCcw class="h-4 w-4" :stroke-width="1.7" />Reset</button>
                     <button type="button" class="btn btn-primary" @click="openCreate({ task_type: 'project' })"><Briefcase class="h-4 w-4" :stroke-width="1.7" />Task</button>
                     <button type="button" class="btn border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100" @click="openCreate({ task_type: 'ongoing' })"><RefreshCw class="h-4 w-4" :stroke-width="1.7" />Continuativa</button>
@@ -2114,10 +2158,13 @@ function visibleCalendarTasks(cell) {
                             <div v-for="field in fields" v-show="shouldShowField(field)" :key="field.name">
                                 <label class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
                                 <textarea v-if="field.type === 'textarea'" v-model="form[field.name]" rows="4" class="form-control" />
-                                <select v-else-if="['select', 'client', 'project', 'service'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
-                                    <option value="">Seleziona</option>
-                                    <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ option.name }}</option>
-                                </select>
+                                <AppSelect
+                                    v-else-if="['select', 'client', 'project', 'service'].includes(field.type)"
+                                    v-model="form[field.name]"
+                                    :options="fieldSelectOptions(field)"
+                                    placeholder="Seleziona"
+                                    searchable
+                                />
                                 <div v-else-if="field.type === 'user'" class="mt-2 flex flex-wrap gap-2">
                                     <button
                                         v-if="!field.required"
@@ -2615,14 +2662,8 @@ function visibleCalendarTasks(cell) {
                                 placeholder="Cerca per numero, cliente o note..."
                             />
                         </div>
-                        <select v-model="billingType" class="form-control mt-0">
-                            <option value="all">Tutti i tipi</option>
-                            <option v-for="(label, value) in documentTypeLabels" :key="value" :value="value">{{ label }}</option>
-                        </select>
-                        <select v-model="billingStatus" class="form-control mt-0">
-                            <option value="all">Tutti gli stati</option>
-                            <option v-for="(label, value) in documentStatusLabels" :key="value" :value="value">{{ label }}</option>
-                        </select>
+                        <AppSelect v-model="billingType" :options="objectOptions(documentTypeLabels, { value: 'all', label: 'Tutti i tipi' })" />
+                        <AppSelect v-model="billingStatus" :options="objectOptions(documentStatusLabels, { value: 'all', label: 'Tutti gli stati' })" />
                         <button type="button" class="btn btn-outline" @click="billingSearch = ''; billingType = 'all'; billingStatus = 'all'"><RotateCcw class="h-4 w-4" :stroke-width="1.7" />Reset</button>
                         <button type="button" class="btn btn-primary" @click="openCreate()"><Plus class="h-4 w-4" :stroke-width="1.7" />Nuovo documento</button>
                     </div>
@@ -2681,10 +2722,13 @@ function visibleCalendarTasks(cell) {
                         <div v-for="field in fields" :key="field.name" :class="field.type === 'textarea' ? 'md:col-span-3' : ''">
                             <label class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
                             <textarea v-if="field.type === 'textarea'" v-model="form[field.name]" rows="3" class="form-control" />
-                            <select v-else-if="['select', 'client', 'project', 'service'].includes(field.type)" v-model="form[field.name]" class="form-control" :required="field.required">
-                                <option value="">Seleziona</option>
-                                <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">{{ displayValue(option.name) }}</option>
-                            </select>
+                            <AppSelect
+                                v-else-if="['select', 'client', 'project', 'service'].includes(field.type)"
+                                v-model="form[field.name]"
+                                :options="fieldSelectOptions(field)"
+                                placeholder="Seleziona"
+                                searchable
+                            />
                             <div v-else-if="field.type === 'user'" class="mt-2 flex flex-wrap gap-2">
                                 <button
                                     v-if="!field.required"
@@ -2788,17 +2832,12 @@ function visibleCalendarTasks(cell) {
                                         </div>
                                     </td>
                                     <td v-if="showUpdateNewsletter" class="px-3 py-3">
-                                        <select
-                                            :value="draftValue(row, 'cadence')"
-                                            class="form-control mt-0 min-w-[150px]"
-                                            @change="setDraftValue(row, 'cadence', $event.target.value); saveServiceUpdateInline(row, { cadence: $event.target.value || null })"
-                                        >
-                                            <option value="">Seleziona</option>
-                                            <option value="on_request">Su richiesta</option>
-                                            <option value="weekly">Settimanale</option>
-                                            <option value="biweekly">Bisettimanale</option>
-                                            <option value="monthly">Mensile</option>
-                                        </select>
+                                        <AppSelect
+                                            :model-value="draftValue(row, 'cadence')"
+                                            class="min-w-[150px]"
+                                            :options="updateCadenceOptions"
+                                            @change="(value) => { setDraftValue(row, 'cadence', value); saveServiceUpdateInline(row, { cadence: value || null }); }"
+                                        />
                                     </td>
                                     <td v-if="showUpdateNewsletter" class="px-3 py-3">
                                         <input
@@ -2811,14 +2850,12 @@ function visibleCalendarTasks(cell) {
                                     </td>
                                     <td class="px-3 py-3">
                                         <div class="flex min-w-[200px] items-center gap-2">
-                                            <select
-                                                :value="draftValue(row, 'responsible_user_id')"
-                                                class="form-control mt-0"
-                                                @change="setDraftValue(row, 'responsible_user_id', $event.target.value); saveServiceUpdateInline(row, { responsible_user_id: $event.target.value || null })"
-                                            >
-                                                <option value="">Nessuno</option>
-                                                <option v-for="user in users" :key="user.id" :value="user.id">{{ user.name || user.email }}</option>
-                                            </select>
+                                            <AppSelect
+                                                :model-value="draftValue(row, 'responsible_user_id')"
+                                                :options="namedOptions(users, { value: '', label: 'Nessuno' })"
+                                                searchable
+                                                @change="(value) => { setDraftValue(row, 'responsible_user_id', value); saveServiceUpdateInline(row, { responsible_user_id: value || null }); }"
+                                            />
                                             <span v-if="savingUpdateKeys.includes(updateRowKey(row))" class="inline-flex shrink-0 items-center gap-1 text-xs text-indigo-500">
                                                 <Save class="h-3.5 w-3.5" :stroke-width="1.7" />
                                                 Salvo...
@@ -2863,17 +2900,13 @@ function visibleCalendarTasks(cell) {
                                 class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                             />
 
-                            <select
+                            <AppSelect
                                 v-else-if="['select', 'client', 'project', 'service'].includes(field.type)"
                                 v-model="form[field.name]"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                :required="field.required"
-                            >
-                                <option value="">Seleziona</option>
-                                <option v-for="option in optionsFor(field)" :key="option.id" :value="option.id">
-                                    {{ option.name }}
-                                </option>
-                            </select>
+                                :options="fieldSelectOptions(field)"
+                                placeholder="Seleziona"
+                                searchable
+                            />
 
                             <div v-else-if="field.type === 'user'" class="mt-2 flex flex-wrap gap-2">
                                 <button

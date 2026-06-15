@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import {
@@ -145,6 +146,56 @@ const clientSelectOptions = {
     payment_terms_days: [0, 15, 30, 45, 60, 90, 120],
 };
 
+const documentStatusOptions = [
+    { value: 'draft', label: 'Bozza' },
+    { value: 'sent', label: 'Inviato' },
+    { value: 'accepted', label: 'Accettato' },
+    { value: 'rejected', label: 'Rifiutato' },
+    { value: 'paid', label: 'Pagato' },
+    { value: 'partially_paid', label: 'Parziale' },
+    { value: 'overdue', label: 'Scaduto' },
+    { value: 'cancelled', label: 'Annullato' },
+];
+const projectStatusOptions = [
+    { value: 'active', label: 'Attivo' },
+    { value: 'completed', label: 'Completato' },
+    { value: 'on_hold', label: 'In pausa' },
+    { value: 'archived', label: 'Archiviato' },
+];
+const taskStatusOptions = [
+    { value: 'todo', label: 'Da fare' },
+    { value: 'in_progress', label: 'In corso' },
+    { value: 'in_review', label: 'Review' },
+    { value: 'done', label: 'Fatte' },
+];
+const priorityOptions = [
+    { value: 'low', label: 'Bassa' },
+    { value: 'medium', label: 'Media' },
+    { value: 'high', label: 'Alta' },
+    { value: 'urgent', label: 'Urgente' },
+];
+const recurrenceUnitOptions = [
+    { value: 'week', label: 'Settimana' },
+    { value: 'month', label: 'Mese' },
+];
+const recurrenceModeOptions = [
+    { value: 'fixed', label: 'Fissa' },
+    { value: 'relative', label: 'Relativa' },
+];
+const weekdayOptions = [
+    { value: 1, label: 'Lunedì' },
+    { value: 2, label: 'Martedì' },
+    { value: 3, label: 'Mercoledì' },
+    { value: 4, label: 'Giovedì' },
+    { value: 5, label: 'Venerdì' },
+    { value: 6, label: 'Sabato' },
+    { value: 7, label: 'Domenica' },
+];
+const subscriptionFrequencyOptions = [
+    { value: 'month', label: 'Mese/i' },
+    { value: 'year', label: 'Anno/i' },
+];
+
 function displayValue(value) {
     if (value === true) return 'Si';
     if (value === false) return 'No';
@@ -157,6 +208,23 @@ function clientOptionLabel(field, value) {
     }
 
     return displayValue(value);
+}
+
+function clientSelectFieldOptions(field) {
+    return [
+        { value: '', label: 'Seleziona' },
+        ...clientSelectOptions[field].map((value) => ({ value, label: clientOptionLabel(field, value) })),
+    ];
+}
+
+function namedOptions(source, emptyOption = null) {
+    const options = (source || []).map((item) => ({ value: item.id, label: item.name || item.email || item.title || item.id }));
+
+    return emptyOption ? [emptyOption, ...options] : options;
+}
+
+function primitiveOptions(source) {
+    return (source || []).map((value) => ({ value, label: displayValue(value) }));
 }
 
 function relatedSectionLabel(name) {
@@ -1791,16 +1859,7 @@ watch(
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Stato</label>
-                                    <select v-model="documentForm.status" class="form-control">
-                                        <option value="draft">Bozza</option>
-                                        <option value="sent">Inviato</option>
-                                        <option value="accepted">Accettato</option>
-                                        <option value="rejected">Rifiutato</option>
-                                        <option value="paid">Pagato</option>
-                                        <option value="partially_paid">Parziale</option>
-                                        <option value="overdue">Scaduto</option>
-                                        <option value="cancelled">Annullato</option>
-                                    </select>
+                                    <AppSelect v-model="documentForm.status" :options="documentStatusOptions" />
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Termini pagamento</label>
@@ -2114,24 +2173,15 @@ watch(
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Natura giuridica</label>
-                                        <select v-model="clientForm.legal_form" class="form-control">
-                                            <option value="">Seleziona</option>
-                                            <option v-for="option in clientSelectOptions.legal_form" :key="`legal-form-${option}`" :value="option">{{ clientOptionLabel('legal_form', option) }}</option>
-                                        </select>
+                                        <AppSelect v-model="clientForm.legal_form" :options="clientSelectFieldOptions('legal_form')" searchable />
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Settore</label>
-                                        <select v-model="clientForm.business_sector" class="form-control">
-                                            <option value="">Seleziona</option>
-                                            <option v-for="option in clientSelectOptions.business_sector" :key="`business-sector-${option}`" :value="option">{{ clientOptionLabel('business_sector', option) }}</option>
-                                        </select>
+                                        <AppSelect v-model="clientForm.business_sector" :options="clientSelectFieldOptions('business_sector')" searchable />
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Sorgente</label>
-                                        <select v-model="clientForm.source" class="form-control">
-                                            <option value="">Seleziona</option>
-                                            <option v-for="option in clientSelectOptions.source" :key="`source-${option}`" :value="option">{{ clientOptionLabel('source', option) }}</option>
-                                        </select>
+                                        <AppSelect v-model="clientForm.source" :options="clientSelectFieldOptions('source')" searchable />
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Sito web</label>
@@ -2154,10 +2204,7 @@ watch(
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Paese</label>
-                                        <select v-model="clientForm.country" class="form-control">
-                                            <option value="">Seleziona</option>
-                                            <option v-for="option in clientSelectOptions.country" :key="`country-${option}`" :value="option">{{ clientOptionLabel('country', option) }}</option>
-                                        </select>
+                                        <AppSelect v-model="clientForm.country" :options="clientSelectFieldOptions('country')" searchable />
                                     </div>
                                     <div class="grid gap-3 grid-cols-[1fr_110px]">
                                         <div>
@@ -2208,17 +2255,11 @@ watch(
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Trattamento IVA</label>
-                                        <select v-model="clientForm.vat_treatment" class="form-control">
-                                            <option value="">Seleziona</option>
-                                            <option v-for="option in clientSelectOptions.vat_treatment" :key="`vat-treatment-${option}`" :value="option">{{ clientOptionLabel('vat_treatment', option) }}</option>
-                                        </select>
+                                        <AppSelect v-model="clientForm.vat_treatment" :options="clientSelectFieldOptions('vat_treatment')" searchable />
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Termini pagamento</label>
-                                        <select v-model="clientForm.payment_terms_days" class="form-control">
-                                            <option value="">Seleziona</option>
-                                            <option v-for="option in clientSelectOptions.payment_terms_days" :key="`payment-terms-${option}`" :value="option">{{ clientOptionLabel('payment_terms_days', option) }}</option>
-                                        </select>
+                                        <AppSelect v-model="clientForm.payment_terms_days" :options="clientSelectFieldOptions('payment_terms_days')" />
                                     </div>
                                     <label class="mt-7 flex items-center gap-2 text-sm text-gray-700">
                                         <input v-model="clientForm.is_pa" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
@@ -2282,10 +2323,7 @@ watch(
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Unita'</label>
-                                <select v-model="subscriptionForm.frequency_unit" class="form-control">
-                                    <option value="month">Mese/i</option>
-                                    <option value="year">Anno/i</option>
-                                </select>
+                                <AppSelect v-model="subscriptionForm.frequency_unit" :options="subscriptionFrequencyOptions" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Inizio</label>
@@ -2408,19 +2446,15 @@ watch(
                             <div class="grid gap-4 md:grid-cols-2">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Cliente</label>
-                                    <select v-model="projectForm.client_id" class="form-control">
-                                        <option value="">Nessun cliente</option>
-                                        <option v-for="client in related.projectClients" :key="client.id" :value="client.id">{{ client.name }}</option>
-                                    </select>
+                                    <AppSelect
+                                        v-model="projectForm.client_id"
+                                        :options="namedOptions(related.projectClients, { value: '', label: 'Nessun cliente' })"
+                                        searchable
+                                    />
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Stato</label>
-                                    <select v-model="projectForm.status" class="form-control">
-                                        <option value="active">Attivo</option>
-                                        <option value="completed">Completato</option>
-                                        <option value="on_hold">In pausa</option>
-                                        <option value="archived">Archiviato</option>
-                                    </select>
+                                    <AppSelect v-model="projectForm.status" :options="projectStatusOptions" />
                                 </div>
                             </div>
                             <div>
@@ -2548,21 +2582,11 @@ watch(
                         <div class="grid gap-4 md:grid-cols-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Stato</label>
-                                <select v-model="taskForm.status" class="form-control" @change="setTaskStatus(taskForm.status)">
-                                    <option value="todo">Da fare</option>
-                                    <option value="in_progress">In corso</option>
-                                    <option value="in_review">Review</option>
-                                    <option value="done">Fatte</option>
-                                </select>
+                                <AppSelect v-model="taskForm.status" :options="taskStatusOptions" @change="setTaskStatus" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Priorita</label>
-                                <select v-model="taskForm.priority" class="form-control">
-                                    <option value="low">Bassa</option>
-                                    <option value="medium">Media</option>
-                                    <option value="high">Alta</option>
-                                    <option value="urgent">Urgente</option>
-                                </select>
+                                <AppSelect v-model="taskForm.priority" :options="priorityOptions" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Inizio</label>
@@ -2578,24 +2602,27 @@ watch(
                             </div>
                             <div v-if="taskForm.task_type === 'project' || taskForm.task_type === 'task'">
                                 <label class="block text-sm font-medium text-gray-700">Progetto</label>
-                                <select v-model="taskForm.project_id" class="form-control">
-                                    <option value="">Nessun progetto</option>
-                                    <option v-for="project in related.taskProjects" :key="project.id" :value="project.id">{{ project.name }}</option>
-                                </select>
+                                <AppSelect
+                                    v-model="taskForm.project_id"
+                                    :options="namedOptions(related.taskProjects, { value: '', label: 'Nessun progetto' })"
+                                    searchable
+                                />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Cliente</label>
-                                <select v-model="taskForm.client_id" class="form-control">
-                                    <option value="">Nessun cliente</option>
-                                    <option v-for="client in related.taskClients" :key="client.id" :value="client.id">{{ client.name }}</option>
-                                </select>
+                                <AppSelect
+                                    v-model="taskForm.client_id"
+                                    :options="namedOptions(related.taskClients, { value: '', label: 'Nessun cliente' })"
+                                    searchable
+                                />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Servizio</label>
-                                <select v-model="taskForm.service_id" class="form-control">
-                                    <option value="">Nessun servizio</option>
-                                    <option v-for="service in related.taskServices" :key="service.id" :value="service.id">{{ service.name }}</option>
-                                </select>
+                                <AppSelect
+                                    v-model="taskForm.service_id"
+                                    :options="namedOptions(related.taskServices, { value: '', label: 'Nessun servizio' })"
+                                    searchable
+                                />
                             </div>
                             <div v-if="taskForm.task_type === 'meeting'" class="md:col-span-2">
                                 <label class="block text-sm font-medium text-gray-700">Luogo / link</label>
@@ -2615,17 +2642,11 @@ watch(
                                 </div>
                                 <div>
                                     <label class="block text-xs font-medium text-gray-500">Unita</label>
-                                    <select v-model="taskForm.recurring_interval_unit" class="form-control">
-                                        <option value="week">Settimana</option>
-                                        <option value="month">Mese</option>
-                                    </select>
+                                    <AppSelect v-model="taskForm.recurring_interval_unit" :options="recurrenceUnitOptions" />
                                 </div>
                                 <div>
                                     <label class="block text-xs font-medium text-gray-500">Modalita</label>
-                                    <select v-model="taskForm.recurring_mode" class="form-control">
-                                        <option value="fixed">Fissa</option>
-                                        <option value="relative">Relativa</option>
-                                    </select>
+                                    <AppSelect v-model="taskForm.recurring_mode" :options="recurrenceModeOptions" />
                                 </div>
                                 <div v-if="taskForm.recurring_interval_unit === 'month' && taskForm.recurring_mode === 'fixed'">
                                     <label class="block text-xs font-medium text-gray-500">Giorno mese</label>
@@ -2633,15 +2654,7 @@ watch(
                                 </div>
                                 <div v-if="taskForm.recurring_interval_unit === 'week'">
                                     <label class="block text-xs font-medium text-gray-500">Giorno settimana</label>
-                                    <select v-model="taskForm.recurring_weekday" class="form-control">
-                                        <option value="1">Lunedi</option>
-                                        <option value="2">Martedi</option>
-                                        <option value="3">Mercoledi</option>
-                                        <option value="4">Giovedi</option>
-                                        <option value="5">Venerdi</option>
-                                        <option value="6">Sabato</option>
-                                        <option value="7">Domenica</option>
-                                    </select>
+                                    <AppSelect v-model="taskForm.recurring_weekday" :options="weekdayOptions" />
                                 </div>
                             </div>
                         </div>
@@ -2704,9 +2717,7 @@ watch(
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Ruolo</label>
-                                <select v-model="userForm.role" class="form-control">
-                                    <option v-for="role in related.roleOptions || []" :key="role" :value="role">{{ displayValue(role) }}</option>
-                                </select>
+                                <AppSelect v-model="userForm.role" :options="primitiveOptions(related.roleOptions)" />
                                 <div v-if="userForm.errors.role" class="mt-1 text-sm text-red-600">{{ userForm.errors.role }}</div>
                             </div>
                             <div>
@@ -3013,12 +3024,7 @@ watch(
                         </div>
                         <form class="mb-4 grid gap-3 md:grid-cols-[1fr_150px_150px_auto]" @submit.prevent="addSubtask">
                             <input v-model="subtaskForm.title" class="form-control mt-0" placeholder="Nuova sottoattivita..." required />
-                            <select v-model="subtaskForm.priority" class="form-control mt-0">
-                                <option value="low">Bassa</option>
-                                <option value="medium">Media</option>
-                                <option value="high">Alta</option>
-                                <option value="urgent">Urgente</option>
-                            </select>
+                            <AppSelect v-model="subtaskForm.priority" :options="priorityOptions" />
                             <input v-model="subtaskForm.due_date" class="form-control mt-0" type="date" />
                             <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
                         </form>
@@ -3044,17 +3050,12 @@ watch(
                                         </div>
                                     </div>
                                 </label>
-                                <select
+                                <AppSelect
                                     v-if="subtaskDrafts[subtask.id]"
                                     v-model="subtaskDrafts[subtask.id].priority"
-                                    class="form-control mt-0"
+                                    :options="priorityOptions"
                                     @change="saveSubtaskInline(subtask, 0)"
-                                >
-                                    <option value="low">Bassa</option>
-                                    <option value="medium">Media</option>
-                                    <option value="high">Alta</option>
-                                    <option value="urgent">Urgente</option>
-                                </select>
+                                />
                                 <input
                                     v-if="subtaskDrafts[subtask.id]"
                                     v-model="subtaskDrafts[subtask.id].due_date"
