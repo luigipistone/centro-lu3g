@@ -1778,6 +1778,7 @@ function visibleCalendarTasks(cell) {
                                             'group/task relative cursor-grab overflow-hidden border px-2 py-1.5 text-xs shadow-[inset_0_1px_0_rgba(255,255,255,0.68)] backdrop-blur-xl transition hover:border-indigo-300 hover:shadow-md active:cursor-grabbing',
                                             taskTypeClass(task.task_type),
                                             taskSpanClass(task),
+                                            task.status === 'done' ? 'opacity-55 hover:opacity-80' : '',
                                             calendarDraggedTask?.id === task.id ? 'opacity-50' : '',
                                         ]"
                                         role="link"
@@ -1796,6 +1797,7 @@ function visibleCalendarTasks(cell) {
                                                 :title="task.status === 'done' ? 'Riapri task' : 'Completa task'"
                                                 @click.stop="toggleTaskDone(task)"
                                             >
+                                                <Check v-if="task.status === 'done'" class="h-full w-full p-[2px] text-white" :stroke-width="2.2" />
                                                 <span class="sr-only">{{ task.status === 'done' ? 'Riapri task' : 'Completa task' }}</span>
                                             </button>
                                             <div class="min-w-0 flex-1 transition-transform duration-200 group-hover/task:translate-x-5 group-focus/task:translate-x-5">
