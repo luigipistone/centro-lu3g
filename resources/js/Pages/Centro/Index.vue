@@ -772,6 +772,56 @@ function addCalendarTaskEditorLink() {
     runCalendarTaskEditorCommand('createLink', url);
 }
 
+function calendarCommentEditorSelector(commentId = 'new') {
+    return `[data-calendar-comment-editor="${commentId}"]`;
+}
+
+function calendarCommentEditorElement(commentId = 'new') {
+    return document.querySelector(calendarCommentEditorSelector(commentId));
+}
+
+function updateCalendarCommentFromEditor(commentId = 'new') {
+    const html = calendarCommentEditorElement(commentId)?.innerHTML || '';
+
+    if (commentId === 'new') {
+        calendarCommentForm.content = html;
+        return;
+    }
+
+    if (calendarCommentDrafts.value[commentId]) {
+        calendarCommentDrafts.value[commentId].content = html;
+    }
+}
+
+function refreshCalendarCommentEditor(commentId = 'new') {
+    nextTick(() => {
+        const editor = calendarCommentEditorElement(commentId);
+        if (!editor) return;
+
+        const html = commentId === 'new'
+            ? calendarCommentForm.content || ''
+            : calendarCommentDrafts.value[commentId]?.content || '';
+
+        if (editor.innerHTML !== html) {
+            editor.innerHTML = html;
+        }
+    });
+}
+
+function runCalendarCommentEditorCommand(commentId, command, value = null) {
+    const editor = calendarCommentEditorElement(commentId);
+    editor?.focus();
+    document.execCommand(command, false, value);
+    updateCalendarCommentFromEditor(commentId);
+}
+
+function addCalendarCommentEditorLink(commentId = 'new') {
+    const url = window.prompt('URL del link');
+    if (!url) return;
+
+    runCalendarCommentEditorCommand(commentId, 'createLink', url);
+}
+
 function setTaskFormType(type) {
     form.task_type = type;
     if (type === 'meeting' && !form.due_time) {
@@ -1623,6 +1673,7 @@ function calendarCommentPayload(commentId) {
 }
 
 function saveCalendarCommentInline(comment, delay = 650) {
+    updateCalendarCommentFromEditor(comment.id);
     const payload = calendarCommentPayload(comment.id);
     if (!String(payload.content).trim()) {
         setInlineState(calendarCommentAutosaveStates, comment.id, 'idle');
@@ -1663,11 +1714,17 @@ function saveCalendarCommentInline(comment, delay = 650) {
 function addCalendarComment() {
     if (!calendarTaskForm.id) return;
 
+    updateCalendarCommentFromEditor('new');
+    if (!String(calendarCommentForm.content || '').trim()) return;
+
     calendarCommentForm.post(route('tasks.comments.store', calendarTaskForm.id), {
         preserveScroll: true,
         preserveState: true,
         only: ['rows', 'errors', 'flash'],
-        onSuccess: () => calendarCommentForm.reset(),
+        onSuccess: () => {
+            calendarCommentForm.reset();
+            refreshCalendarCommentEditor('new');
+        },
     });
 }
 
@@ -1689,11 +1746,13 @@ function editCalendarComment(comment) {
             [comment.id]: { content: comment.content || '' },
         };
     }
+    refreshCalendarCommentEditor(comment.id);
 }
 
 function stopEditingCalendarComment(comment) {
     if (calendarEditingCommentId.value !== comment.id) return;
 
+    saveCalendarCommentInline(comment, 0);
     calendarEditingCommentId.value = null;
 }
 
@@ -2672,7 +2731,37 @@ function visibleCalendarTasks(cell) {
                             <section class="content-card rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
                                 <h4 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Commenti</h4>
                                 <form class="mb-5 grid gap-3 md:grid-cols-[1fr_auto]" @submit.prevent="addCalendarComment">
-                                    <textarea v-model="calendarCommentForm.content" rows="2" class="form-control mt-0" placeholder="Scrivi un commento..." required></textarea>
+                                    <div class="overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white/90 shadow-inner">
+                                        <div class="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50/80 p-2">
+                                            <button type="button" class="icon-btn h-8 w-8" title="Grassetto" @mousedown.prevent @click="runCalendarCommentEditorCommand('new', 'bold')">
+                                                <Bold class="h-4 w-4" :stroke-width="1.7" />
+                                            </button>
+                                            <button type="button" class="icon-btn h-8 w-8" title="Corsivo" @mousedown.prevent @click="runCalendarCommentEditorCommand('new', 'italic')">
+                                                <Italic class="h-4 w-4" :stroke-width="1.7" />
+                                            </button>
+                                            <button type="button" class="icon-btn h-8 w-8" title="Sottolineato" @mousedown.prevent @click="runCalendarCommentEditorCommand('new', 'underline')">
+                                                <Underline class="h-4 w-4" :stroke-width="1.7" />
+                                            </button>
+                                            <span class="mx-1 h-5 w-px bg-gray-200"></span>
+                                            <button type="button" class="icon-btn h-8 w-8" title="Elenco puntato" @mousedown.prevent @click="runCalendarCommentEditorCommand('new', 'insertUnorderedList')">
+                                                <List class="h-4 w-4" :stroke-width="1.7" />
+                                            </button>
+                                            <button type="button" class="icon-btn h-8 w-8" title="Elenco numerato" @mousedown.prevent @click="runCalendarCommentEditorCommand('new', 'insertOrderedList')">
+                                                <ListOrdered class="h-4 w-4" :stroke-width="1.7" />
+                                            </button>
+                                            <button type="button" class="icon-btn h-8 w-8" title="Link" @mousedown.prevent @click="addCalendarCommentEditorLink('new')">
+                                                <Link2 class="h-4 w-4" :stroke-width="1.7" />
+                                            </button>
+                                        </div>
+                                        <div
+                                            class="min-h-[92px] px-4 py-3 text-sm leading-6 text-gray-800 outline-none empty:before:text-gray-400 empty:before:content-[attr(data-placeholder)]"
+                                            contenteditable="true"
+                                            data-calendar-comment-editor="new"
+                                            data-placeholder="Scrivi un commento..."
+                                            @input="updateCalendarCommentFromEditor('new')"
+                                            @blur="updateCalendarCommentFromEditor('new')"
+                                        ></div>
+                                    </div>
                                     <button type="submit" class="btn btn-primary self-start px-4" :disabled="calendarCommentForm.processing">Invia</button>
                                 </form>
                                 <div class="space-y-3">
@@ -2692,18 +2781,38 @@ function visibleCalendarTasks(cell) {
                                                 </button>
                                             </div>
                                         </div>
-                                        <div v-if="calendarEditingCommentId !== comment.id" class="min-h-10 whitespace-pre-wrap rounded-[var(--radius-sm)] bg-gray-50/70 px-3 py-2 text-sm leading-6 text-gray-700">
-                                            {{ comment.content }}
+                                        <div v-if="calendarEditingCommentId !== comment.id" class="min-h-10 rounded-[var(--radius-sm)] bg-gray-50/70 px-3 py-2 text-sm leading-6 text-gray-700" v-html="comment.content"></div>
+                                        <div v-else-if="calendarCommentDrafts[comment.id]" class="overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white/90 shadow-inner">
+                                            <div class="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50/80 p-2">
+                                                <button type="button" class="icon-btn h-8 w-8" title="Grassetto" @mousedown.prevent @click="runCalendarCommentEditorCommand(comment.id, 'bold')">
+                                                    <Bold class="h-4 w-4" :stroke-width="1.7" />
+                                                </button>
+                                                <button type="button" class="icon-btn h-8 w-8" title="Corsivo" @mousedown.prevent @click="runCalendarCommentEditorCommand(comment.id, 'italic')">
+                                                    <Italic class="h-4 w-4" :stroke-width="1.7" />
+                                                </button>
+                                                <button type="button" class="icon-btn h-8 w-8" title="Sottolineato" @mousedown.prevent @click="runCalendarCommentEditorCommand(comment.id, 'underline')">
+                                                    <Underline class="h-4 w-4" :stroke-width="1.7" />
+                                                </button>
+                                                <span class="mx-1 h-5 w-px bg-gray-200"></span>
+                                                <button type="button" class="icon-btn h-8 w-8" title="Elenco puntato" @mousedown.prevent @click="runCalendarCommentEditorCommand(comment.id, 'insertUnorderedList')">
+                                                    <List class="h-4 w-4" :stroke-width="1.7" />
+                                                </button>
+                                                <button type="button" class="icon-btn h-8 w-8" title="Elenco numerato" @mousedown.prevent @click="runCalendarCommentEditorCommand(comment.id, 'insertOrderedList')">
+                                                    <ListOrdered class="h-4 w-4" :stroke-width="1.7" />
+                                                </button>
+                                                <button type="button" class="icon-btn h-8 w-8" title="Link" @mousedown.prevent @click="addCalendarCommentEditorLink(comment.id)">
+                                                    <Link2 class="h-4 w-4" :stroke-width="1.7" />
+                                                </button>
+                                            </div>
+                                            <div
+                                                class="min-h-[110px] px-4 py-3 text-sm leading-6 text-gray-800 outline-none empty:before:text-gray-400 empty:before:content-[attr(data-placeholder)]"
+                                                contenteditable="true"
+                                                :data-calendar-comment-editor="comment.id"
+                                                data-placeholder="Commento..."
+                                                @input="saveCalendarCommentInline(comment)"
+                                                @blur="stopEditingCalendarComment(comment)"
+                                            ></div>
                                         </div>
-                                        <textarea
-                                            v-else-if="calendarCommentDrafts[comment.id]"
-                                            v-model="calendarCommentDrafts[comment.id].content"
-                                            rows="3"
-                                            class="form-control mt-0"
-                                            placeholder="Commento..."
-                                            @input="saveCalendarCommentInline(comment)"
-                                            @blur="stopEditingCalendarComment(comment)"
-                                        ></textarea>
                                         <div v-if="calendarCommentAutosaveStates[comment.id] && calendarCommentAutosaveStates[comment.id] !== 'idle'" :class="['mt-1 text-[11px] font-medium', calendarCommentAutosaveStates[comment.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
                                             {{ autosaveLabel(calendarCommentAutosaveStates[comment.id], calendarCommentAutosaveErrors[comment.id]) }}
                                         </div>
