@@ -2436,7 +2436,7 @@ function visibleCalendarTasks(cell) {
                             <template v-if="!cell.empty">
                                 <div class="mb-2 flex items-center justify-between">
                                     <span :class="['text-sm font-semibold', cell.today ? 'text-indigo-600' : 'text-gray-500']">{{ cell.day }}</span>
-                                    <div class="relative" data-calendar-create-menu>
+                                    <div v-if="!(compactWeekend && cell.weekend)" class="relative" data-calendar-create-menu>
                                         <button
                                             type="button"
                                             class="rounded-xl bg-white/58 px-2 py-1 text-[11px] font-semibold text-gray-400 opacity-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] transition hover:bg-indigo-50/90 hover:text-indigo-600 group-hover:opacity-100"
