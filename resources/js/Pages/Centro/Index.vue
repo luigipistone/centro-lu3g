@@ -3383,7 +3383,7 @@ function visibleCalendarTasks(cell) {
                                     :key="task.id"
                                     :class="[
                                         'content-card rounded-md border border-gray-200 bg-white p-3 shadow-sm transition hover:border-indigo-200 hover:shadow',
-                                        task.status === 'done' ? 'opacity-55 hover:opacity-80' : '',
+                                        task.status === 'done' ? 'task-card-done' : '',
                                     ]"
                                 >
                                     <div class="flex items-start justify-between gap-3">
