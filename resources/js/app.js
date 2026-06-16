@@ -11,6 +11,21 @@ const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
 window.route = route;
 
+function openNativeDatePicker(event) {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement)) return;
+    if (!['date', 'time', 'datetime-local', 'month', 'week'].includes(input.type)) return;
+
+    try {
+        input.showPicker?.();
+    } catch (error) {
+        input.focus?.();
+    }
+}
+
+document.addEventListener('click', openNativeDatePicker, true);
+document.addEventListener('focusin', openNativeDatePicker, true);
+
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,
     resolve: (name) =>

@@ -562,7 +562,20 @@ class CentroPageController extends Controller
             return back()->with('status', 'Utente eliminato.');
         }
 
+        $task = null;
+        if ($section === 'tasks') {
+            $task = DB::table('tasks')->where('id', $id)->first(['id', 'parent_task_id']);
+        }
+
         DB::table($this->config($section)['table'])->where('id', $id)->delete();
+
+        if ($section === 'tasks') {
+            $previousPath = (string) parse_url(url()->previous(), PHP_URL_PATH);
+            if ($previousPath === '/tasks/'.$id) {
+                return redirect($task?->parent_task_id ? route('tasks.show', $task->parent_task_id) : route('tasks.index'))
+                    ->with('status', 'Eliminato.');
+            }
+        }
 
         return back()->with('status', 'Eliminato.');
     }

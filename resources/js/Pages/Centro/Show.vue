@@ -3161,62 +3161,62 @@ watch(
                 </section>
 
                 <section v-if="section === 'tasks'" class="surface rounded-md p-5 lg:col-span-2">
-                    <div class="mb-8">
-                        <div class="mb-4 flex items-center justify-between">
-                            <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Sottoattivita</h3>
-                            <span class="text-xs text-gray-500">{{ related.subtasks?.length || 0 }} elementi</span>
-                        </div>
-                        <form class="mb-4 grid gap-3 md:grid-cols-[1fr_150px_150px_auto]" @submit.prevent="addSubtask">
-                            <input v-model="subtaskForm.title" class="form-control mt-0" placeholder="Nuova sottoattivita..." required />
-                            <AppSelect v-model="subtaskForm.priority" :options="priorityOptions" />
-                            <input v-model="subtaskForm.due_date" class="form-control mt-0" type="date" />
-                            <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
-                        </form>
-                        <div class="space-y-2">
-                            <div v-for="subtask in related.subtasks" :key="subtask.id" class="grid gap-3 rounded-md border border-gray-100 bg-gray-50 px-3 py-3 text-sm transition hover:border-indigo-100 hover:bg-white md:grid-cols-[minmax(0,1fr)_140px_150px_auto]">
-                                <label class="flex min-w-0 items-center gap-2">
-                                    <input
-                                        type="checkbox"
-                                        class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
-                                        :checked="(subtaskDrafts[subtask.id]?.status || subtask.status) === 'done'"
-                                        @change="setSubtaskStatus(subtask, $event.target.checked)"
-                                    />
-                                    <div class="min-w-0 flex-1">
-                                        <input
-                                            v-if="subtaskDrafts[subtask.id]"
-                                            v-model="subtaskDrafts[subtask.id].title"
-                                            :class="['form-control mt-0', (subtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'text-gray-400 line-through' : '']"
-                                            placeholder="Titolo sottoattivita"
-                                            @input="saveSubtaskInline(subtask)"
-                                        />
-                                        <div v-if="subtaskAutosaveStates[subtask.id] && subtaskAutosaveStates[subtask.id] !== 'idle'" :class="['mt-1 text-[11px] font-medium', subtaskAutosaveStates[subtask.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
-                                            {{ autosaveLabel(subtaskAutosaveStates[subtask.id], subtaskAutosaveErrors[subtask.id]) }}
-                                        </div>
-                                    </div>
-                                </label>
-                                <AppSelect
-                                    v-if="subtaskDrafts[subtask.id]"
-                                    v-model="subtaskDrafts[subtask.id].priority"
-                                    :options="priorityOptions"
-                                    @change="saveSubtaskInline(subtask, 0)"
-                                />
-                                <input
-                                    v-if="subtaskDrafts[subtask.id]"
-                                    v-model="subtaskDrafts[subtask.id].due_date"
-                                    class="form-control mt-0"
-                                    type="date"
-                                    @input="saveSubtaskInline(subtask)"
-                                />
-                                <Link :href="route('tasks.show', subtask.id)" class="inline-flex h-9 items-center justify-center rounded-md px-3 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-50 hover:text-indigo-700">
-                                    Apri
-                                </Link>
-                            </div>
-                            <p v-if="!related.subtasks?.length" class="text-sm text-gray-500">Nessuna sottoattivita.</p>
-                        </div>
+                    <div class="mb-4 flex items-center justify-between">
+                        <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Sottoattivita</h3>
+                        <span class="text-xs text-gray-500">{{ related.subtasks?.length || 0 }} elementi</span>
                     </div>
+                    <form class="mb-4 grid gap-3 md:grid-cols-[1fr_150px_150px_auto]" @submit.prevent="addSubtask">
+                        <input v-model="subtaskForm.title" class="form-control mt-0" placeholder="Nuova sottoattivita..." required />
+                        <AppSelect v-model="subtaskForm.priority" :options="priorityOptions" />
+                        <input v-model="subtaskForm.due_date" class="form-control mt-0" type="date" />
+                        <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
+                    </form>
+                    <div class="space-y-2">
+                        <div v-for="subtask in related.subtasks" :key="subtask.id" class="grid gap-3 rounded-md border border-gray-100 bg-gray-50 px-3 py-3 text-sm transition hover:border-indigo-100 hover:bg-white md:grid-cols-[minmax(0,1fr)_140px_150px_auto]">
+                            <label class="flex min-w-0 items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                                    :checked="(subtaskDrafts[subtask.id]?.status || subtask.status) === 'done'"
+                                    @change="setSubtaskStatus(subtask, $event.target.checked)"
+                                />
+                                <div class="min-w-0 flex-1">
+                                    <input
+                                        v-if="subtaskDrafts[subtask.id]"
+                                        v-model="subtaskDrafts[subtask.id].title"
+                                        :class="['form-control mt-0', (subtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'text-gray-400 line-through' : '']"
+                                        placeholder="Titolo sottoattivita"
+                                        @input="saveSubtaskInline(subtask)"
+                                    />
+                                    <div v-if="subtaskAutosaveStates[subtask.id] && subtaskAutosaveStates[subtask.id] !== 'idle'" :class="['mt-1 text-[11px] font-medium', subtaskAutosaveStates[subtask.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
+                                        {{ autosaveLabel(subtaskAutosaveStates[subtask.id], subtaskAutosaveErrors[subtask.id]) }}
+                                    </div>
+                                </div>
+                            </label>
+                            <AppSelect
+                                v-if="subtaskDrafts[subtask.id]"
+                                v-model="subtaskDrafts[subtask.id].priority"
+                                :options="priorityOptions"
+                                @change="saveSubtaskInline(subtask, 0)"
+                            />
+                            <input
+                                v-if="subtaskDrafts[subtask.id]"
+                                v-model="subtaskDrafts[subtask.id].due_date"
+                                class="form-control mt-0"
+                                type="date"
+                                @input="saveSubtaskInline(subtask)"
+                            />
+                            <Link :href="route('tasks.show', subtask.id)" class="inline-flex h-9 items-center justify-center rounded-[var(--radius-sm)] px-3 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-50 hover:text-indigo-700">
+                                Apri
+                            </Link>
+                        </div>
+                        <p v-if="!related.subtasks?.length" class="text-sm text-gray-500">Nessuna sottoattivita.</p>
+                    </div>
+                </section>
 
+                <section v-if="section === 'tasks'" class="surface rounded-md p-5 lg:col-span-2">
                     <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Commenti</h3>
-                    <form class="mb-5 grid gap-3 md:grid-cols-[1fr_auto]" @submit.prevent="addComment">
+                    <form class="mb-5" @submit.prevent="addComment">
                         <div class="overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white/90 shadow-inner">
                             <div class="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50/80 p-2">
                                 <button type="button" class="icon-btn h-8 w-8" title="Grassetto" @mousedown.prevent @click="runCommentEditorCommand('new', 'bold')">
@@ -3248,7 +3248,9 @@ watch(
                                 @blur="updateCommentFromEditor('new')"
                             ></div>
                         </div>
-                        <button type="submit" class="self-start rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Invia</button>
+                        <div class="mt-3 flex justify-end">
+                            <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Invia</button>
+                        </div>
                     </form>
                     <div class="space-y-3">
                         <div v-for="comment in related.comments" :key="comment.id" class="rounded-md border border-gray-100 bg-gray-50 px-3 py-3 text-sm transition hover:border-indigo-100 hover:bg-white">

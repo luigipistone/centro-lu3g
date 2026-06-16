@@ -145,6 +145,14 @@
         @apply inline-flex items-center gap-1.5 text-sm font-semibold text-red-600 transition hover:text-red-500;
     }
 
+    input[type="date"],
+    input[type="time"],
+    input[type="datetime-local"],
+    input[type="month"],
+    input[type="week"] {
+        cursor: pointer;
+    }
+
     .hover-lift {
         @apply transition-all duration-200 ease-out;
     }
