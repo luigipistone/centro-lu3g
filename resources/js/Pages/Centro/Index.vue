@@ -2039,6 +2039,12 @@ function setCalendarTaskType(type) {
     saveCalendarTaskInline(0);
 }
 
+function toggleCalendarTaskComplete() {
+    if (!calendarTaskForm.id) return;
+    calendarTaskForm.status = calendarTaskForm.status === 'done' ? 'todo' : 'done';
+    saveCalendarTaskInline(0);
+}
+
 function openCalendarCreateMenu(date) {
     calendarCreateDate.value = calendarCreateDate.value === date ? null : date;
 }
@@ -2472,7 +2478,7 @@ function visibleCalendarTasks(cell) {
             </div>
         </div>
 
-        <div v-if="deleteTarget" class="fixed inset-0 z-[7000] flex items-center justify-center bg-gray-900 px-4 py-6" @click.self="cancelDelete">
+        <div v-if="deleteTarget" class="fixed inset-0 z-[7000] flex items-center justify-center bg-transparent px-4 py-6" @click.self="cancelDelete">
             <div class="w-full max-w-md rounded-md bg-white p-5 shadow-xl">
                 <h3 class="text-base font-semibold text-gray-900">Conferma eliminazione</h3>
                 <p class="mt-2 text-sm text-gray-600">
@@ -2718,6 +2724,15 @@ function visibleCalendarTasks(cell) {
                                 <template v-else-if="calendarTaskAutosaveState === 'saved'">Salvato</template>
                                 <template v-else>{{ calendarTaskAutosaveError || 'Errore' }}</template>
                             </span>
+                            <button
+                                v-if="calendarTaskForm.id"
+                                type="button"
+                                class="btn btn-outline"
+                                @click="toggleCalendarTaskComplete"
+                            >
+                                <Check class="h-4 w-4" :stroke-width="1.7" />
+                                {{ calendarTaskForm.status === 'done' ? 'Riapri' : 'Completa' }}
+                            </button>
                             <button type="button" class="icon-btn" @click="closeCalendarTaskPanel">
                                 <X class="h-4 w-4" :stroke-width="1.8" />
                             </button>
@@ -2947,22 +2962,31 @@ function visibleCalendarTasks(cell) {
                                                 </span>
                                                 <span class="text-xs font-semibold text-gray-400">{{ calendarSubtaskAssignees(subtask.id).length }}</span>
                                             </button>
-                                            <div v-if="calendarSubtaskAssigneeMenuOpen === subtask.id" class="app-popover field-dropdown-menu absolute right-0 top-full z-[6500] mt-2 w-64 p-3" @click.stop>
-                                                <div class="people-avatar-picker max-h-44">
-                                                    <button
-                                                        v-for="user in users"
-                                                        :key="`calendar-subtask-person-${subtask.id}-${user.id}`"
-                                                        type="button"
-                                                        :class="personAvatarClass((calendarSubtaskDrafts[subtask.id].assignee_ids || []).includes(user.id))"
-                                                        :aria-pressed="(calendarSubtaskDrafts[subtask.id].assignee_ids || []).includes(user.id)"
-                                                        :aria-label="`${(calendarSubtaskDrafts[subtask.id].assignee_ids || []).includes(user.id) ? 'Rimuovi' : 'Assegna'} ${user.name || user.email}`"
-                                                        @click="toggleCalendarSubtaskAssignee(subtask, user.id)"
-                                                    >
-                                                        <UserAvatar :user="user" size="md" />
-                                                    </button>
+                                            <Teleport to="body">
+                                                <div
+                                                    v-if="calendarSubtaskAssigneeMenuOpen === subtask.id"
+                                                    class="fixed inset-0 z-[7600] bg-transparent"
+                                                    :data-calendar-subtask-assignees="subtask.id"
+                                                    @click.self="calendarSubtaskAssigneeMenuOpen = null"
+                                                >
+                                                    <div class="app-popover field-dropdown-menu fixed right-6 top-1/2 w-72 -translate-y-1/2 p-3" @click.stop>
+                                                        <div class="people-avatar-picker max-h-56">
+                                                            <button
+                                                                v-for="user in users"
+                                                                :key="`calendar-subtask-person-${subtask.id}-${user.id}`"
+                                                                type="button"
+                                                                :class="personAvatarClass((calendarSubtaskDrafts[subtask.id].assignee_ids || []).includes(user.id))"
+                                                                :aria-pressed="(calendarSubtaskDrafts[subtask.id].assignee_ids || []).includes(user.id)"
+                                                                :aria-label="`${(calendarSubtaskDrafts[subtask.id].assignee_ids || []).includes(user.id) ? 'Rimuovi' : 'Assegna'} ${user.name || user.email}`"
+                                                                @click="toggleCalendarSubtaskAssignee(subtask, user.id)"
+                                                            >
+                                                                <UserAvatar :user="user" size="md" />
+                                                            </button>
+                                                        </div>
+                                                        <p v-if="!users?.length" class="text-sm text-gray-500">Nessun utente disponibile.</p>
+                                                    </div>
                                                 </div>
-                                                <p v-if="!users?.length" class="text-sm text-gray-500">Nessun utente disponibile.</p>
-                                            </div>
+                                            </Teleport>
                                         </div>
                                         <input
                                             v-if="calendarSubtaskDrafts[subtask.id]"
@@ -2974,6 +2998,14 @@ function visibleCalendarTasks(cell) {
                                             @input="saveCalendarSubtaskInline(subtask)"
                                         />
                                         <div class="flex self-center items-center justify-end gap-1">
+                                            <button
+                                                type="button"
+                                                class="icon-btn h-9 w-9"
+                                                :title="(calendarSubtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'Riapri sottoattività' : 'Completa sottoattività'"
+                                                @click="setCalendarSubtaskStatus(subtask, (calendarSubtaskDrafts[subtask.id]?.status || subtask.status) !== 'done')"
+                                            >
+                                                <Check class="h-4 w-4" :stroke-width="1.7" />
+                                            </button>
                                             <button type="button" class="icon-btn h-9 w-9" title="Apri sottoattività" @click="openCalendarSubtask(subtask)">
                                                 <ExternalLink class="h-4 w-4" :stroke-width="1.7" />
                                             </button>

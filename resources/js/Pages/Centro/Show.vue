@@ -1939,7 +1939,7 @@ onUnmounted(() => {
             </div>
         </template>
 
-        <div v-if="confirmAction" class="fixed inset-0 z-[7000] flex items-center justify-center bg-gray-900 px-4 py-6" @click.self="closeConfirm">
+        <div v-if="confirmAction" class="fixed inset-0 z-[7000] flex items-center justify-center bg-transparent px-4 py-6" @click.self="closeConfirm">
             <div class="w-full max-w-md rounded-md bg-white p-5 shadow-xl">
                 <h3 class="text-base font-semibold text-gray-900">{{ confirmAction.title }}</h3>
                 <p class="mt-2 text-sm text-gray-600">
@@ -3271,22 +3271,31 @@ onUnmounted(() => {
                                     </span>
                                     <span class="text-xs font-semibold text-gray-400">{{ subtaskAssignees(subtask.id).length }}</span>
                                 </button>
-                                <div v-if="subtaskAssigneeMenuOpen === subtask.id" class="app-popover field-dropdown-menu absolute right-0 top-full z-[6500] mt-2 w-64 p-3" @click.stop>
-                                    <div class="people-avatar-picker max-h-44">
-                                        <button
-                                            v-for="user in related.users"
-                                            :key="`subtask-person-${subtask.id}-${user.id}`"
-                                            type="button"
-                                            :class="personAvatarClass((subtaskDrafts[subtask.id].assignee_ids || []).includes(user.id))"
-                                            :aria-pressed="(subtaskDrafts[subtask.id].assignee_ids || []).includes(user.id)"
-                                            :aria-label="`${(subtaskDrafts[subtask.id].assignee_ids || []).includes(user.id) ? 'Rimuovi' : 'Assegna'} ${user.name || user.email}`"
-                                            @click="toggleSubtaskAssignee(subtask, user.id)"
-                                        >
-                                            <UserAvatar :user="user" size="md" />
-                                        </button>
+                                <Teleport to="body">
+                                    <div
+                                        v-if="subtaskAssigneeMenuOpen === subtask.id"
+                                        class="fixed inset-0 z-[7600] bg-transparent"
+                                        :data-subtask-assignees="subtask.id"
+                                        @click.self="subtaskAssigneeMenuOpen = null"
+                                    >
+                                        <div class="app-popover field-dropdown-menu fixed right-6 top-1/2 w-72 -translate-y-1/2 p-3" @click.stop>
+                                            <div class="people-avatar-picker max-h-56">
+                                                <button
+                                                    v-for="user in related.users"
+                                                    :key="`subtask-person-${subtask.id}-${user.id}`"
+                                                    type="button"
+                                                    :class="personAvatarClass((subtaskDrafts[subtask.id].assignee_ids || []).includes(user.id))"
+                                                    :aria-pressed="(subtaskDrafts[subtask.id].assignee_ids || []).includes(user.id)"
+                                                    :aria-label="`${(subtaskDrafts[subtask.id].assignee_ids || []).includes(user.id) ? 'Rimuovi' : 'Assegna'} ${user.name || user.email}`"
+                                                    @click="toggleSubtaskAssignee(subtask, user.id)"
+                                                >
+                                                    <UserAvatar :user="user" size="md" />
+                                                </button>
+                                            </div>
+                                            <p v-if="!related.users?.length" class="text-sm text-gray-500">Nessun utente disponibile.</p>
+                                        </div>
                                     </div>
-                                    <p v-if="!related.users?.length" class="text-sm text-gray-500">Nessun utente disponibile.</p>
-                                </div>
+                                </Teleport>
                             </div>
                             <input
                                 v-if="subtaskDrafts[subtask.id]"
