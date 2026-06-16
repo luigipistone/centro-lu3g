@@ -1586,12 +1586,27 @@ function toggleSubtaskAssignee(subtask, userId) {
         values.push(userId);
     }
 
-    subtaskDrafts.value[subtask.id].assignee_ids = values;
+    subtaskDrafts.value = {
+        ...subtaskDrafts.value,
+        [subtask.id]: {
+            ...subtaskDrafts.value[subtask.id],
+            assignee_ids: values,
+        },
+    };
     router.put(route('tasks.people.sync', [subtask.id, 'assignees']), {
         user_ids: values,
     }, {
         preserveScroll: true,
         preserveState: true,
+        onError: () => {
+            subtaskDrafts.value = {
+                ...subtaskDrafts.value,
+                [subtask.id]: {
+                    ...subtaskDrafts.value[subtask.id],
+                    assignee_ids: subtask.assignee_ids || [],
+                },
+            };
+        },
     });
 }
 
@@ -1920,7 +1935,7 @@ onUnmounted(() => {
             </div>
         </template>
 
-        <div v-if="confirmAction" class="fixed inset-0 z-[5100] flex items-center justify-center bg-gray-900/40 px-4 py-6" @click.self="closeConfirm">
+        <div v-if="confirmAction" class="fixed inset-0 z-[7000] flex items-center justify-center bg-gray-900/40 px-4 py-6" @click.self="closeConfirm">
             <div class="w-full max-w-md rounded-md bg-white p-5 shadow-xl">
                 <h3 class="text-base font-semibold text-gray-900">{{ confirmAction.title }}</h3>
                 <p class="mt-2 text-sm text-gray-600">
@@ -3245,7 +3260,7 @@ onUnmounted(() => {
                                     </span>
                                     <span class="text-xs font-semibold text-gray-400">{{ subtaskAssignees(subtask.id).length }}</span>
                                 </button>
-                                <div v-if="subtaskAssigneeMenuOpen === subtask.id" class="app-popover field-dropdown-menu absolute right-0 top-full z-[5300] mt-2 w-64 p-3" @click.stop>
+                                <div v-if="subtaskAssigneeMenuOpen === subtask.id" class="app-popover field-dropdown-menu absolute right-0 top-full z-[6500] mt-2 w-64 p-3" @click.stop>
                                     <div class="people-avatar-picker max-h-44">
                                         <button
                                             v-for="user in related.users"

@@ -702,13 +702,28 @@ function toggleCalendarSubtaskAssignee(subtask, userId) {
         values.push(userId);
     }
 
-    calendarSubtaskDrafts.value[subtask.id].assignee_ids = values;
+    calendarSubtaskDrafts.value = {
+        ...calendarSubtaskDrafts.value,
+        [subtask.id]: {
+            ...calendarSubtaskDrafts.value[subtask.id],
+            assignee_ids: values,
+        },
+    };
     router.put(route('tasks.people.sync', [subtask.id, 'assignees']), {
         user_ids: values,
     }, {
         preserveScroll: true,
         preserveState: true,
         only: ['rows', 'errors', 'flash'],
+        onError: () => {
+            calendarSubtaskDrafts.value = {
+                ...calendarSubtaskDrafts.value,
+                [subtask.id]: {
+                    ...calendarSubtaskDrafts.value[subtask.id],
+                    assignee_ids: subtask.assignee_ids || [],
+                },
+            };
+        },
     });
 }
 
@@ -1700,6 +1715,10 @@ function calendarPanelSubtasks() {
     return calendarTaskPanel.value?.subtasks || [];
 }
 
+function isCalendarSubtaskPanel() {
+    return Boolean(calendarTaskParentStack.value.length || calendarTaskPanel.value?.parent_task_id);
+}
+
 function calendarPanelComments() {
     return calendarTaskPanel.value?.comments || [];
 }
@@ -2452,7 +2471,7 @@ function visibleCalendarTasks(cell) {
             </div>
         </div>
 
-        <div v-if="deleteTarget" class="fixed inset-0 z-[5100] flex items-center justify-center bg-gray-900/40 px-4 py-6" @click.self="cancelDelete">
+        <div v-if="deleteTarget" class="fixed inset-0 z-[7000] flex items-center justify-center bg-gray-900/40 px-4 py-6" @click.self="cancelDelete">
             <div class="w-full max-w-md rounded-md bg-white p-5 shadow-xl">
                 <h3 class="text-base font-semibold text-gray-900">Conferma eliminazione</h3>
                 <p class="mt-2 text-sm text-gray-600">
@@ -2879,7 +2898,7 @@ function visibleCalendarTasks(cell) {
                                 Completa almeno il titolo per creare la task. Dopo la creazione potrai aggiungere sottoattività e commenti.
                             </div>
 
-                            <section v-if="calendarTaskForm.id" class="content-card rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
+                            <section v-if="calendarTaskForm.id && !isCalendarSubtaskPanel()" class="content-card rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
                                 <div class="mb-4 flex items-center justify-between gap-3">
                                     <h4 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Sottoattività</h4>
                                     <span class="text-xs text-gray-400">{{ calendarPanelSubtasks().length }} elementi</span>
@@ -2920,7 +2939,7 @@ function visibleCalendarTasks(cell) {
                                                 </span>
                                                 <span class="text-xs font-semibold text-gray-400">{{ calendarSubtaskAssignees(subtask.id).length }}</span>
                                             </button>
-                                            <div v-if="calendarSubtaskAssigneeMenuOpen === subtask.id" class="app-popover field-dropdown-menu absolute right-0 top-full z-[5400] mt-2 w-64 p-3" @click.stop>
+                                            <div v-if="calendarSubtaskAssigneeMenuOpen === subtask.id" class="app-popover field-dropdown-menu absolute right-0 top-full z-[6500] mt-2 w-64 p-3" @click.stop>
                                                 <div class="people-avatar-picker max-h-44">
                                                     <button
                                                         v-for="user in users"

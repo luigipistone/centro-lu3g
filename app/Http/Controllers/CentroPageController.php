@@ -290,6 +290,11 @@ class CentroPageController extends Controller
                 ->latest()
                 ->get(['id', 'parent_task_id', 'title', 'status', 'priority', 'due_date', 'due_time', 'project_id', 'client_id', 'service_id', 'description'])
                 ->groupBy('parent_task_id');
+            $subtaskIds = $subtasksByTask->flatten(1)->pluck('id');
+            $assigneesBySubtask = DB::table('task_assignees')
+                ->whereIn('task_id', $subtaskIds)
+                ->get(['task_id', 'user_id'])
+                ->groupBy('task_id');
             $commentsByTask = DB::table('task_comments')
                 ->leftJoin('users', 'users.id', '=', 'task_comments.user_id')
                 ->whereIn('task_comments.task_id', $taskIds)
@@ -306,9 +311,15 @@ class CentroPageController extends Controller
                 ->get(['task_id', 'user_id'])
                 ->groupBy('task_id');
 
-            $rows = $rows->map(function ($row) use ($subtaskCounts, $subtasksByTask, $commentsByTask, $assigneesByTask, $followersByTask) {
+            $rows = $rows->map(function ($row) use ($subtaskCounts, $subtasksByTask, $commentsByTask, $assigneesByTask, $followersByTask, $assigneesBySubtask) {
                 $row->subtask_count = (int) ($subtaskCounts[$row->id] ?? 0);
-                $row->subtasks = ($subtasksByTask[$row->id] ?? collect())->values();
+                $row->subtasks = ($subtasksByTask[$row->id] ?? collect())
+                    ->map(function ($subtask) use ($assigneesBySubtask) {
+                        $subtask->assignee_ids = ($assigneesBySubtask[$subtask->id] ?? collect())->pluck('user_id')->values();
+
+                        return $subtask;
+                    })
+                    ->values();
                 $row->comments = ($commentsByTask[$row->id] ?? collect())->values();
                 $row->assignee_ids = ($assigneesByTask[$row->id] ?? collect())->pluck('user_id')->values();
                 $row->follower_ids = ($followersByTask[$row->id] ?? collect())->pluck('user_id')->values();
@@ -456,10 +467,7 @@ class CentroPageController extends Controller
                 'taskClients' => DB::table('clients')->orderBy('name')->get(['id', 'name']),
                 'taskProjects' => DB::table('projects')->orderBy('name')->get(['id', 'name']),
                 'taskServices' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name', 'color']),
-                'subtasks' => DB::table('tasks')
-                    ->where('parent_task_id', $id)
-                    ->latest()
-                    ->get(['id', 'title', 'status', 'priority', 'due_date', 'due_time']),
+                'subtasks' => $this->taskSubtaskRows($id),
                 'parentTask' => $record->parent_task_id ? DB::table('tasks')->where('id', $record->parent_task_id)->first(['id', 'title']) : null,
                 'project' => $record->project_id ? DB::table('projects')->where('id', $record->project_id)->first() : null,
                 'client' => $record->client_id ? DB::table('clients')->where('id', $record->client_id)->first() : null,
@@ -1311,6 +1319,25 @@ class CentroPageController extends Controller
             ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
             ->orderBy('users.name')
             ->get(['users.id', 'users.name', 'users.email', 'profiles.avatar_url']);
+    }
+
+    private function taskSubtaskRows(string $taskId)
+    {
+        $subtasks = DB::table('tasks')
+            ->where('parent_task_id', $taskId)
+            ->latest()
+            ->get(['id', 'title', 'status', 'priority', 'due_date', 'due_time']);
+
+        $assigneesBySubtask = DB::table('task_assignees')
+            ->whereIn('task_id', $subtasks->pluck('id'))
+            ->get(['task_id', 'user_id'])
+            ->groupBy('task_id');
+
+        return $subtasks->map(function ($subtask) use ($assigneesBySubtask) {
+            $subtask->assignee_ids = ($assigneesBySubtask[$subtask->id] ?? collect())->pluck('user_id')->values();
+
+            return $subtask;
+        });
     }
 
     private function storeDocument(Request $request): RedirectResponse
