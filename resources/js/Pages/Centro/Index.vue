@@ -298,6 +298,9 @@ const calendarSubtaskForm = useForm({
     due_date: '',
 });
 const calendarSubtaskAssigneeMenuOpen = ref(null);
+const calendarSubtaskAssigneeMenuStyle = ref({});
+const calendarSubtaskStatusPulse = ref(null);
+const calendarTaskStatusPulse = ref(false);
 const calendarCommentForm = useForm({
     content: '',
 });
@@ -660,6 +663,19 @@ function calendarSubtaskAssignees(subtaskId) {
     return (props.users || []).filter((user) => selected.includes(user.id));
 }
 
+function floatingMenuStyleFromEvent(event, width = 288) {
+    const rect = event?.currentTarget?.getBoundingClientRect?.();
+    if (!rect) return { right: '1.5rem', top: '50%', transform: 'translateY(-50%)' };
+
+    const left = Math.min(Math.max(12, rect.right - width), window.innerWidth - width - 12);
+    const bottom = Math.max(12, window.innerHeight - rect.top + 8);
+
+    return {
+        left: `${left}px`,
+        bottom: `${bottom}px`,
+    };
+}
+
 function calendarTaskPeopleLabel(field) {
     const selected = selectedCalendarTaskUsers(field);
     if (!selected.length) return field === 'assignee_ids' ? 'Nessuna persona' : 'Nessun follower';
@@ -680,7 +696,8 @@ function toggleCalendarTaskPerson(field, userId) {
     saveCalendarTaskInline(0);
 }
 
-function toggleCalendarSubtaskAssigneeMenu(subtaskId) {
+function toggleCalendarSubtaskAssigneeMenu(subtaskId, event = null) {
+    calendarSubtaskAssigneeMenuStyle.value = floatingMenuStyleFromEvent(event);
     calendarSubtaskAssigneeMenuOpen.value = calendarSubtaskAssigneeMenuOpen.value === subtaskId ? null : subtaskId;
 }
 
@@ -1787,6 +1804,12 @@ function saveCalendarSubtaskInline(subtask, delay = 650) {
 }
 
 function setCalendarSubtaskStatus(subtask, done) {
+    calendarSubtaskStatusPulse.value = subtask.id;
+    window.setTimeout(() => {
+        if (calendarSubtaskStatusPulse.value === subtask.id) {
+            calendarSubtaskStatusPulse.value = null;
+        }
+    }, 360);
     const status = done ? 'done' : 'todo';
     if (calendarSubtaskDrafts.value[subtask.id]) {
         calendarSubtaskDrafts.value[subtask.id].status = status;
@@ -2056,6 +2079,10 @@ function setCalendarTaskType(type) {
 
 function toggleCalendarTaskComplete() {
     if (!calendarTaskForm.id) return;
+    calendarTaskStatusPulse.value = true;
+    window.setTimeout(() => {
+        calendarTaskStatusPulse.value = false;
+    }, 360);
     calendarTaskForm.status = calendarTaskForm.status === 'done' ? 'todo' : 'done';
     saveCalendarTaskInline(0);
 }
@@ -2742,7 +2769,7 @@ function visibleCalendarTasks(cell) {
                             <button
                                 v-if="calendarTaskForm.id"
                                 type="button"
-                                class="btn btn-outline"
+                                :class="['btn btn-outline', calendarTaskStatusPulse ? 'status-action-pulse' : '']"
                                 @click="toggleCalendarTaskComplete"
                             >
                                 <Check class="h-4 w-4" :stroke-width="1.7" />
@@ -2970,7 +2997,7 @@ function visibleCalendarTasks(cell) {
                                             />
                                         </div>
                                         <div v-if="calendarSubtaskDrafts[subtask.id]" class="relative" :data-calendar-subtask-assignees="subtask.id">
-                                            <button type="button" class="form-control mt-0 flex items-center justify-between gap-2 text-left" @click.stop="toggleCalendarSubtaskAssigneeMenu(subtask.id)">
+                                            <button type="button" class="form-control mt-0 flex items-center justify-between gap-2 text-left" @click.stop="toggleCalendarSubtaskAssigneeMenu(subtask.id, $event)">
                                                 <span class="flex min-w-0 items-center -space-x-2">
                                                     <UserAvatar v-for="user in calendarSubtaskAssignees(subtask.id).slice(0, 3)" :key="`calendar-subtask-assignee-${subtask.id}-${user.id}`" :user="user" size="xs" class="ring-2 ring-white" />
                                                     <span v-if="!calendarSubtaskAssignees(subtask.id).length" class="truncate text-gray-500">Assegnatari</span>
@@ -2985,7 +3012,7 @@ function visibleCalendarTasks(cell) {
                                                     :data-calendar-subtask-assignees="subtask.id"
                                                     @click.self="calendarSubtaskAssigneeMenuOpen = null"
                                                 >
-                                                    <div class="app-popover field-dropdown-menu fixed right-6 top-1/2 w-72 -translate-y-1/2 p-3" @click.stop>
+                                                    <div class="app-popover field-dropdown-menu fixed w-72 p-3" :style="calendarSubtaskAssigneeMenuStyle" @click.stop>
                                                         <div class="people-avatar-picker max-h-56">
                                                             <button
                                                                 v-for="user in users"
@@ -3016,7 +3043,7 @@ function visibleCalendarTasks(cell) {
                                         <div class="flex self-center items-center justify-end gap-1">
                                             <button
                                                 type="button"
-                                                class="icon-btn h-9 w-9"
+                                                :class="['icon-btn h-9 w-9', calendarSubtaskStatusPulse === subtask.id ? 'status-action-pulse' : '']"
                                                 :title="(calendarSubtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'Riapri sottoattività' : 'Completa sottoattività'"
                                                 @click="setCalendarSubtaskStatus(subtask, (calendarSubtaskDrafts[subtask.id]?.status || subtask.status) !== 'done')"
                                             >

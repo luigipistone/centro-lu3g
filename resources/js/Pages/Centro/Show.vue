@@ -426,6 +426,8 @@ const subtaskDrafts = ref({});
 const subtaskAutosaveStates = ref({});
 const subtaskAutosaveErrors = ref({});
 const subtaskAssigneeMenuOpen = ref(null);
+const subtaskAssigneeMenuStyle = ref({});
+const subtaskStatusPulse = ref(null);
 const subtaskAutosaveTimers = {};
 const subtaskAutosaveSequences = {};
 const selectedAssignees = ref([...(props.related.assignees || [])]);
@@ -806,6 +808,7 @@ function priorityClass(priority) {
 }
 
 function setSubtaskStatus(subtask, done) {
+    pulseSubtaskStatus(subtask.id);
     const status = done ? 'done' : 'todo';
     if (subtaskDrafts.value[subtask.id]) {
         subtaskDrafts.value[subtask.id].status = status;
@@ -1556,6 +1559,23 @@ function subtaskAssignees(subtaskId) {
     return peopleSelected(selected, props.related.users || []);
 }
 
+function floatingMenuStyleFromEvent(event, width = 288) {
+    const rect = event?.currentTarget?.getBoundingClientRect?.();
+    if (!rect) return { right: '1.5rem', top: '50%', transform: 'translateY(-50%)' };
+
+    const left = Math.min(Math.max(12, rect.right - width), window.innerWidth - width - 12);
+    const bottom = Math.max(12, window.innerHeight - rect.top + 8);
+
+    return {
+        left: `${left}px`,
+        bottom: `${bottom}px`,
+    };
+}
+
+function parentTaskRows(tasks = []) {
+    return (tasks || []).filter((task) => task.parent_task_id === null || task.parent_task_id === undefined || task.parent_task_id === '');
+}
+
 function personAvatarClass(selected) {
     return [
         'group/person relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300',
@@ -1565,7 +1585,8 @@ function personAvatarClass(selected) {
     ];
 }
 
-function toggleSubtaskAssigneeMenu(subtaskId) {
+function toggleSubtaskAssigneeMenu(subtaskId, event = null) {
+    subtaskAssigneeMenuStyle.value = floatingMenuStyleFromEvent(event);
     subtaskAssigneeMenuOpen.value = subtaskAssigneeMenuOpen.value === subtaskId ? null : subtaskId;
 }
 
@@ -1609,6 +1630,15 @@ function toggleSubtaskAssignee(subtask, userId) {
             };
         },
     });
+}
+
+function pulseSubtaskStatus(subtaskId) {
+    subtaskStatusPulse.value = subtaskId;
+    window.setTimeout(() => {
+        if (subtaskStatusPulse.value === subtaskId) {
+            subtaskStatusPulse.value = null;
+        }
+    }, 360);
 }
 
 function addSubtask() {
@@ -2450,7 +2480,7 @@ onUnmounted(() => {
                         </div>
                         <div class="rounded-md bg-white p-5 shadow-sm">
                             <div class="text-xs font-medium uppercase tracking-wide text-gray-500">Task aperti</div>
-                            <div class="mt-2 text-3xl font-semibold text-gray-900">{{ related.tasks?.length || 0 }}</div>
+                            <div class="mt-2 text-3xl font-semibold text-gray-900">{{ parentTaskRows(related.tasks).length }}</div>
                         </div>
                         <div class="rounded-md bg-white p-5 shadow-sm">
                             <div class="text-xs font-medium uppercase tracking-wide text-gray-500">Documenti</div>
@@ -2655,11 +2685,11 @@ onUnmounted(() => {
                     <section class="surface rounded-md p-5">
                         <div class="mb-5 flex items-center justify-between">
                             <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Task progetto</h3>
-                            <span class="text-xs text-gray-500">{{ related.tasks?.length || 0 }} elementi</span>
+                            <span class="text-xs text-gray-500">{{ parentTaskRows(related.tasks).length }} elementi</span>
                         </div>
                         <div class="space-y-2">
                             <Link
-                                v-for="task in related.tasks || []"
+                                v-for="task in parentTaskRows(related.tasks)"
                                 :key="task.id"
                                 :href="route('tasks.show', task.id)"
                                 class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-gray-100 bg-gray-50 px-3 py-2 text-sm hover:border-indigo-100 hover:bg-indigo-50"
@@ -2670,7 +2700,7 @@ onUnmounted(() => {
                                     <span v-if="task.due_date">{{ dateIt(task.due_date) }}</span>
                                 </span>
                             </Link>
-                            <p v-if="!related.tasks?.length" class="rounded-md border border-dashed border-gray-300 bg-white px-4 py-8 text-center text-sm text-gray-500">
+                            <p v-if="!parentTaskRows(related.tasks).length" class="rounded-md border border-dashed border-gray-300 bg-white px-4 py-8 text-center text-sm text-gray-500">
                                 Nessuna task collegata a questo progetto.
                             </p>
                         </div>
@@ -3256,7 +3286,7 @@ onUnmounted(() => {
                                 />
                             </div>
                             <div v-if="subtaskDrafts[subtask.id]" class="relative" :data-subtask-assignees="subtask.id">
-                                <button type="button" class="form-control mt-0 flex items-center justify-between gap-2 text-left" @click.stop="toggleSubtaskAssigneeMenu(subtask.id)">
+                                <button type="button" class="form-control mt-0 flex items-center justify-between gap-2 text-left" @click.stop="toggleSubtaskAssigneeMenu(subtask.id, $event)">
                                     <span class="flex min-w-0 items-center -space-x-2">
                                         <UserAvatar v-for="user in subtaskAssignees(subtask.id).slice(0, 3)" :key="`subtask-assignee-${subtask.id}-${user.id}`" :user="user" size="xs" class="ring-2 ring-white" />
                                         <span v-if="!subtaskAssignees(subtask.id).length" class="truncate text-gray-500">Assegnatari</span>
@@ -3271,7 +3301,7 @@ onUnmounted(() => {
                                         :data-subtask-assignees="subtask.id"
                                         @click.self="subtaskAssigneeMenuOpen = null"
                                     >
-                                        <div class="app-popover field-dropdown-menu fixed right-6 top-1/2 w-72 -translate-y-1/2 p-3" @click.stop>
+                                        <div class="app-popover field-dropdown-menu fixed w-72 p-3" :style="subtaskAssigneeMenuStyle" @click.stop>
                                             <div class="people-avatar-picker max-h-56">
                                                 <button
                                                     v-for="user in related.users"
@@ -3300,7 +3330,7 @@ onUnmounted(() => {
                             <div class="flex self-center items-center justify-end gap-1">
                                 <button
                                     type="button"
-                                    class="icon-btn h-9 w-9"
+                                    :class="['icon-btn h-9 w-9', subtaskStatusPulse === subtask.id ? 'status-action-pulse' : '']"
                                     :title="(subtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'Riapri sottoattività' : 'Completa sottoattività'"
                                     @click="setSubtaskStatus(subtask, (subtaskDrafts[subtask.id]?.status || subtask.status) !== 'done')"
                                 >

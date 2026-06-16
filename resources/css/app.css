@@ -217,6 +217,10 @@
         opacity: 0.76;
     }
 
+    .status-action-pulse {
+        animation: status-action-pulse 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+
     .app-popover {
         animation: popover-rise-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
         border-radius: var(--radius);
@@ -540,5 +544,20 @@
             animation: none;
             transition-duration: 1ms;
         }
+    }
+}
+
+@keyframes status-action-pulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 hsl(var(--primary-app) / 0.22);
+    }
+    45% {
+        transform: scale(1.08);
+        box-shadow: 0 0 0 7px hsl(var(--primary-app) / 0.10);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 hsl(var(--primary-app) / 0);
     }
 }
