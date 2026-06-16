@@ -2106,6 +2106,7 @@ function taskTypeClass(type) {
 
 function tasksForDay(date) {
     return props.rows
+        .filter((row) => row.parent_task_id === null || row.parent_task_id === undefined || row.parent_task_id === '')
         .filter((row) => taskSpansDate(row, date))
         .filter((row) => {
             if (calendarType.value === 'all') return true;

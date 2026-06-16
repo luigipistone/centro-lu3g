@@ -263,7 +263,7 @@ class CentroPageController extends Controller
                     ->leftJoin('projects', 'projects.id', '=', 'tasks.project_id')
                     ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
                     ->leftJoin('services', 'services.id', '=', 'tasks.service_id')
-                    ->whereNull('tasks.parent_task_id')
+                    ->where(fn ($query) => $query->whereNull('tasks.parent_task_id')->orWhere('tasks.parent_task_id', ''))
                     ->whereNotNull('tasks.due_date')
                     ->select('tasks.*', 'projects.name as project_name', 'projects.color as project_color', 'clients.name as client_name', 'services.name as service_name', 'services.color as service_color')
                 )
@@ -570,11 +570,8 @@ class CentroPageController extends Controller
         DB::table($this->config($section)['table'])->where('id', $id)->delete();
 
         if ($section === 'tasks') {
-            $previousPath = (string) parse_url(url()->previous(), PHP_URL_PATH);
-            if ($previousPath === '/tasks/'.$id) {
-                return redirect($task?->parent_task_id ? route('tasks.show', $task->parent_task_id) : route('tasks.index'))
-                    ->with('status', 'Eliminato.');
-            }
+            return redirect($task?->parent_task_id ? route('tasks.show', $task->parent_task_id) : route('tasks.index'))
+                ->with('status', 'Eliminato.');
         }
 
         return back()->with('status', 'Eliminato.');
