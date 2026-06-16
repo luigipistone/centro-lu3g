@@ -3382,46 +3382,48 @@ function visibleCalendarTasks(cell) {
                                     v-for="task in tasksByStatus(status)"
                                     :key="task.id"
                                     :class="[
-                                        'content-card rounded-md border border-gray-200 bg-white p-3 shadow-sm transition hover:border-indigo-200 hover:shadow',
+                                        'content-card relative rounded-md border border-gray-200 bg-white p-3 shadow-sm transition hover:border-indigo-200 hover:shadow',
                                         task.status === 'done' ? 'task-card-done' : '',
                                     ]"
                                 >
-                                    <div class="flex items-start justify-between gap-3">
-                                        <Link :href="route('tasks.show', task.id)" class="min-w-0 flex-1">
-                                            <div class="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        class="absolute right-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-red-100 bg-white/86 text-red-500 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-200"
+                                        :aria-label="`Elimina ${task.title}`"
+                                        @click.stop.prevent="remove(task)"
+                                    >
+                                        <Trash2 class="h-4 w-4" :stroke-width="1.8" />
+                                    </button>
+                                    <Link :href="route('tasks.show', task.id)" class="block min-w-0 pr-9">
+                                        <div class="flex items-start justify-between gap-3">
+                                            <div class="min-w-0">
                                                 <h4 :class="['truncate text-sm font-semibold text-gray-900', task.status === 'done' ? 'line-through opacity-60' : '']">{{ task.title }}</h4>
                                             </div>
-                                            <div class="mt-2 flex flex-wrap items-center gap-1.5">
-                                                <span :class="['rounded-full border px-2 py-0.5 text-[10px] font-medium', taskTypeClass(task.task_type)]">{{ displayValue(task.task_type || 'task') }}</span>
-                                                <span
-                                                    class="rounded-full px-2 py-0.5 text-[10px] font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.28)]"
-                                                    :style="{ backgroundColor: priorityColor(task.priority), color: priorityTextColor(task.priority) }"
-                                                >
-                                                    {{ displayValue(task.priority) }}
-                                                </span>
-                                                <span v-if="task.client_name" class="min-w-0 max-w-full truncate rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">{{ task.client_name }}</span>
-                                            </div>
-                                            <div class="mt-3 flex items-center justify-between gap-3 text-xs text-gray-500">
-                                                <span v-if="task.subtask_count" class="inline-flex items-center gap-1 font-semibold text-gray-500">
-                                                    <span>{{ task.subtask_count }}</span>
-                                                    <svg class="h-3.5 w-3.5 fill-current" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                                                        <path :d="subtaskIconPath" />
-                                                    </svg>
-                                                </span>
-                                                <span v-else></span>
-                                                <span class="shrink-0">{{ task.due_date ? dateIt(task.due_date) : 'Senza scadenza' }}</span>
-                                            </div>
-                                        </Link>
-                                    </div>
-                                    <div class="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-2">
-                                        <span class="text-xs font-bold text-gray-700">
-                                            {{ (task.task_type || 'task') === 'meeting' && task.due_time ? String(task.due_time).slice(0, 5) : '' }}
-                                        </span>
-                                        <div class="flex justify-end gap-3">
-                                            <Link :href="route('tasks.show', task.id)" class="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-500"><ExternalLink class="h-3.5 w-3.5" :stroke-width="1.7" />Apri</Link>
-                                            <button type="button" class="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-500" @click="remove(task)"><Trash2 class="h-3.5 w-3.5" :stroke-width="1.7" />Elimina</button>
                                         </div>
-                                    </div>
+                                        <div class="mt-2 flex flex-wrap items-center gap-1.5">
+                                            <span :class="['rounded-full border px-2 py-0.5 text-[10px] font-medium', taskTypeClass(task.task_type)]">{{ displayValue(task.task_type || 'task') }}</span>
+                                            <span
+                                                class="rounded-full px-2 py-0.5 text-[10px] font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.28)]"
+                                                :style="{ backgroundColor: priorityColor(task.priority), color: priorityTextColor(task.priority) }"
+                                            >
+                                                {{ displayValue(task.priority) }}
+                                            </span>
+                                            <span v-if="task.client_name" class="min-w-0 max-w-full truncate rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">{{ task.client_name }}</span>
+                                        </div>
+                                        <div class="mt-3 flex items-center justify-between gap-3 text-xs text-gray-500">
+                                            <span v-if="task.subtask_count" class="inline-flex items-center gap-1 font-semibold text-gray-500">
+                                                <span>{{ task.subtask_count }}</span>
+                                                <svg class="h-3.5 w-3.5 fill-current" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                                    <path :d="subtaskIconPath" />
+                                                </svg>
+                                            </span>
+                                            <span v-else></span>
+                                            <span class="shrink-0">{{ task.due_date ? dateIt(task.due_date) : 'Senza scadenza' }}</span>
+                                        </div>
+                                        <div v-if="(task.task_type || 'task') === 'meeting' && task.due_time" class="mt-3 border-t border-gray-100 pt-2 text-xs font-bold text-gray-700">
+                                            {{ String(task.due_time).slice(0, 5) }}
+                                        </div>
+                                    </Link>
                                 </article>
                                 <div v-if="!tasksByStatus(status).length" class="content-card rounded-md border border-dashed border-gray-300 bg-white px-3 py-8 text-center text-xs text-gray-500">
                                     Nessun task.
