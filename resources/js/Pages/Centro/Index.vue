@@ -3472,8 +3472,7 @@ function visibleCalendarTasks(cell) {
                                                     <path :d="subtaskIconPath" />
                                                 </svg>
                                             </span>
-                                            <span v-else></span>
-                                            <span class="shrink-0">{{ task.due_date ? dateIt(task.due_date) : 'Senza scadenza' }}</span>
+                                            <span class="ml-auto shrink-0 text-right">{{ task.due_date ? dateIt(task.due_date) : 'Senza scadenza' }}</span>
                                         </div>
                                         <div v-if="(task.task_type || 'task') === 'meeting' && task.due_time" class="mt-3 border-t border-gray-100 pt-2 text-xs font-bold text-gray-700">
                                             {{ String(task.due_time).slice(0, 5) }}
