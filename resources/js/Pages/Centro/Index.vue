@@ -3449,9 +3449,9 @@ function visibleCalendarTasks(cell) {
                                     >
                                         <Trash2 class="h-4 w-4" :stroke-width="1.8" />
                                     </button>
-                                    <Link :href="route('tasks.show', task.id)" class="block min-w-0 pr-9">
+                                    <Link :href="route('tasks.show', task.id)" class="block min-w-0">
                                         <div class="flex items-start justify-between gap-3">
-                                            <div class="min-w-0">
+                                            <div class="min-w-0 pr-9">
                                                 <h4 :class="['truncate text-sm font-semibold text-gray-900', task.status === 'done' ? 'line-through opacity-60' : '']">{{ task.title }}</h4>
                                             </div>
                                         </div>
