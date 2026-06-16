@@ -105,6 +105,7 @@ const calendarSubtaskAutosaveSequences = {};
 const calendarCommentAutosaveTimers = {};
 const calendarCommentAutosaveSequences = {};
 let calendarBodyOverflow = '';
+const taskWeekStart = ref(startOfWeek(new Date()));
 const taskSearch = ref('');
 const taskStatus = ref('all');
 const taskPriority = ref('all');
@@ -1028,6 +1029,41 @@ function dateIt(value) {
     return new Date(value).toLocaleDateString('it-IT');
 }
 
+function parseDateOnly(value) {
+    if (!value) return null;
+    const [year, month, day] = String(value).slice(0, 10).split('-').map(Number);
+    if (!year || !month || !day) return null;
+
+    return new Date(year, month - 1, day);
+}
+
+function startOfWeek(value) {
+    const date = new Date(value);
+    date.setHours(0, 0, 0, 0);
+    const day = date.getDay() || 7;
+    date.setDate(date.getDate() - day + 1);
+
+    return date;
+}
+
+function addTaskDays(value, days) {
+    const date = new Date(value);
+    date.setDate(date.getDate() + days);
+
+    return date;
+}
+
+function changeTaskWeek(offset) {
+    taskWeekStart.value = addTaskDays(taskWeekStart.value, offset * 7);
+}
+
+function resetTaskWeek() {
+    taskWeekStart.value = startOfWeek(new Date());
+}
+
+const taskWeekEnd = computed(() => addTaskDays(taskWeekStart.value, 6));
+const taskWeekLabel = computed(() => `${dateIt(taskWeekStart.value)} - ${dateIt(taskWeekEnd.value)}`);
+
 function statusClass(status) {
     return {
         draft: 'bg-gray-100 text-gray-700',
@@ -1272,6 +1308,8 @@ function saveDraftField(row, field) {
 const taskRows = computed(() => props.rows.filter((row) => {
     if (row.parent_task_id) return false;
 
+    const dueDate = parseDateOnly(row.due_date);
+    const matchesWeek = dueDate && dueDate >= taskWeekStart.value && dueDate <= taskWeekEnd.value;
     const search = taskSearch.value.trim().toLowerCase();
     const matchesSearch = !search
         || (row.title || '').toLowerCase().includes(search)
@@ -1282,7 +1320,7 @@ const taskRows = computed(() => props.rows.filter((row) => {
     const matchesPriority = taskPriority.value === 'all' || row.priority === taskPriority.value;
     const matchesType = taskType.value === 'all' || (row.task_type || 'task') === taskType.value;
 
-    return matchesSearch && matchesStatus && matchesPriority && matchesType;
+    return matchesWeek && matchesSearch && matchesStatus && matchesPriority && matchesType;
 }));
 
 function tasksByStatus(status) {
@@ -3261,6 +3299,23 @@ function visibleCalendarTasks(cell) {
 
         <div v-else-if="section === 'tasks'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
+                <div class="surface flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Vista settimanale</p>
+                        <h2 class="text-lg font-bold text-gray-950">{{ taskWeekLabel }}</h2>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button type="button" class="icon-btn" @click="changeTaskWeek(-1)">
+                            <span class="sr-only">Settimana precedente</span>
+                            <ChevronLeft class="h-4 w-4" :stroke-width="1.7" />
+                        </button>
+                        <button type="button" class="btn btn-outline" @click="resetTaskWeek">Oggi</button>
+                        <button type="button" class="icon-btn" @click="changeTaskWeek(1)">
+                            <span class="sr-only">Settimana successiva</span>
+                            <ChevronRight class="h-4 w-4" :stroke-width="1.7" />
+                        </button>
+                    </div>
+                </div>
                 <div class="grid gap-3 md:grid-cols-[1fr_150px_150px_150px_auto_auto_auto_auto]">
                     <input v-model="taskSearch" class="form-control mt-0" placeholder="Cerca task, cliente, progetto o servizio..." />
                     <AppSelect v-model="taskStatus" :options="taskStatusOptions" />
