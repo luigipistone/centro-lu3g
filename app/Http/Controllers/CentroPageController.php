@@ -440,7 +440,12 @@ class CentroPageController extends Controller
         $related = match ($section) {
             'clients' => [
                 'projects' => DB::table('projects')->where('client_id', $id)->latest()->get(),
-                'tasks' => DB::table('tasks')->where('client_id', $id)->latest()->limit(20)->get(),
+                'tasks' => DB::table('tasks')
+                    ->where('client_id', $id)
+                    ->where(fn ($query) => $query->whereNull('parent_task_id')->orWhere('parent_task_id', ''))
+                    ->latest()
+                    ->limit(20)
+                    ->get(),
                 'documents' => DB::table('documents')->where('client_id', $id)->latest()->limit(20)->get(),
                 'contacts' => DB::table('client_contacts')->where('client_id', $id)->latest()->get(),
                 'clientServices' => DB::table('client_services')->where('client_id', $id)->pluck('service_id'),
@@ -1872,7 +1877,7 @@ class CentroPageController extends Controller
         abort_if(! $task, 404);
 
         if ($task->parent_task_id) {
-            return back()->withErrors(['subtasks' => 'Le sottoattivita non possono avere ulteriori sottoattivita.']);
+            return back()->withErrors(['subtasks' => 'Le sottoattività non possono avere ulteriori sottoattività.']);
         }
 
         $payload = $request->validate([
@@ -1906,10 +1911,10 @@ class CentroPageController extends Controller
             $id,
             $request->user()->id,
             'subtask_created',
-            $request->user()->name.' ha creato una sottoattivita in "'.$task->title.'".',
+            $request->user()->name.' ha creato una sottoattività in "'.$task->title.'".',
         );
 
-        return back()->with('status', 'Sottoattivita creata.');
+        return back()->with('status', 'Sottoattività creata.');
     }
 
     public function syncTaskPeople(Request $request, string $id, string $type): RedirectResponse

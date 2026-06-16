@@ -316,7 +316,7 @@
     .field-dropdown-menu {
         border: 1px solid hsl(0 0% 100% / 0.8);
         border-radius: var(--radius);
-        background: hsl(0 0% 100% / 0.96);
+        background: hsl(0 0% 100%);
         box-shadow: var(--shadow-elevated);
         backdrop-filter: blur(22px) saturate(1.25);
         -webkit-backdrop-filter: blur(22px) saturate(1.25);

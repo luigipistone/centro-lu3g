@@ -1839,6 +1839,21 @@ function removeCalendarSubtask(subtask) {
     });
 }
 
+function removeCalendarTask() {
+    if (!calendarTaskForm.id) return;
+
+    remove({ id: calendarTaskForm.id, title: calendarTaskForm.title || 'Task' }, () => {
+        router.delete(route('tasks.destroy', calendarTaskForm.id), {
+            data: { stay: true },
+            preserveScroll: true,
+            preserveState: true,
+            only: ['rows', 'errors', 'flash'],
+            onSuccess: closeCalendarTaskPanel,
+            onFinish: cancelDelete,
+        });
+    });
+}
+
 function calendarCommentPayload(commentId) {
     return {
         content: calendarCommentDrafts.value[commentId]?.content || '',
@@ -2733,6 +2748,15 @@ function visibleCalendarTasks(cell) {
                                 <Check class="h-4 w-4" :stroke-width="1.7" />
                                 {{ calendarTaskForm.status === 'done' ? 'Riapri' : 'Completa' }}
                             </button>
+                            <button
+                                v-if="calendarTaskForm.id"
+                                type="button"
+                                class="btn btn-danger"
+                                @click="removeCalendarTask"
+                            >
+                                <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                Elimina
+                            </button>
                             <button type="button" class="icon-btn" @click="closeCalendarTaskPanel">
                                 <X class="h-4 w-4" :stroke-width="1.8" />
                             </button>
@@ -2936,23 +2960,15 @@ function visibleCalendarTasks(cell) {
                                             calendarSubtaskAssigneeMenuOpen === subtask.id ? 'z-[6600]' : 'z-0',
                                         ]"
                                     >
-                                        <label class="flex min-w-0 items-center gap-2">
+                                        <div class="min-w-0">
                                             <input
-                                                type="checkbox"
-                                                class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
-                                                :checked="(calendarSubtaskDrafts[subtask.id]?.status || subtask.status) === 'done'"
-                                                @change="setCalendarSubtaskStatus(subtask, $event.target.checked)"
+                                                v-if="calendarSubtaskDrafts[subtask.id]"
+                                                v-model="calendarSubtaskDrafts[subtask.id].title"
+                                                :class="['form-control mt-0', (calendarSubtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'text-gray-400 line-through' : '']"
+                                                placeholder="Titolo sottoattività"
+                                                @input="saveCalendarSubtaskInline(subtask)"
                                             />
-                                            <div class="min-w-0 flex-1">
-                                                <input
-                                                    v-if="calendarSubtaskDrafts[subtask.id]"
-                                                    v-model="calendarSubtaskDrafts[subtask.id].title"
-                                                    :class="['form-control mt-0', (calendarSubtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'text-gray-400 line-through' : '']"
-                                                    placeholder="Titolo sottoattività"
-                                                    @input="saveCalendarSubtaskInline(subtask)"
-                                                />
-                                            </div>
-                                        </label>
+                                        </div>
                                         <div v-if="calendarSubtaskDrafts[subtask.id]" class="relative" :data-calendar-subtask-assignees="subtask.id">
                                             <button type="button" class="form-control mt-0 flex items-center justify-between gap-2 text-left" @click.stop="toggleCalendarSubtaskAssigneeMenu(subtask.id)">
                                                 <span class="flex min-w-0 items-center -space-x-2">
@@ -3004,7 +3020,8 @@ function visibleCalendarTasks(cell) {
                                                 :title="(calendarSubtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'Riapri sottoattività' : 'Completa sottoattività'"
                                                 @click="setCalendarSubtaskStatus(subtask, (calendarSubtaskDrafts[subtask.id]?.status || subtask.status) !== 'done')"
                                             >
-                                                <Check class="h-4 w-4" :stroke-width="1.7" />
+                                                <RotateCcw v-if="(calendarSubtaskDrafts[subtask.id]?.status || subtask.status) === 'done'" class="h-4 w-4" :stroke-width="1.7" />
+                                                <Check v-else class="h-4 w-4" :stroke-width="1.7" />
                                             </button>
                                             <button type="button" class="icon-btn h-9 w-9" title="Apri sottoattività" @click="openCalendarSubtask(subtask)">
                                                 <ExternalLink class="h-4 w-4" :stroke-width="1.7" />

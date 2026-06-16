@@ -19,6 +19,7 @@ import {
     Plus,
     Printer,
     Quote,
+    RotateCcw,
     Send,
     Trash2,
     Underline,
@@ -44,7 +45,7 @@ const labels = {
     tax_code: 'Codice fiscale',
     website: 'Sito web',
     status: 'Stato',
-    priority: 'Priorita',
+    priority: 'Priorità',
     task_type: 'Tipo',
     start_date: 'Inizio',
     due_date: 'Scadenza',
@@ -2753,7 +2754,7 @@ onUnmounted(() => {
                                 <AppSelect v-model="taskForm.status" :options="taskStatusOptions" @change="setTaskStatus" />
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700">Priorita</label>
+                                <label class="block text-sm font-medium text-gray-700">Priorità</label>
                                 <AppSelect v-model="taskForm.priority" :options="priorityOptions" />
                             </div>
                             <div>
@@ -3227,11 +3228,11 @@ onUnmounted(() => {
 
                 <section v-if="section === 'tasks' && !related.parentTask" class="surface rounded-md p-5 lg:col-span-2">
                     <div class="mb-4 flex items-center justify-between">
-                        <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Sottoattivita</h3>
+                        <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Sottoattività</h3>
                         <span class="text-xs text-gray-500">{{ related.subtasks?.length || 0 }} elementi</span>
                     </div>
                     <form class="mb-4 grid gap-3 md:grid-cols-[1fr_150px_150px_auto]" @submit.prevent="addSubtask">
-                        <input v-model="subtaskForm.title" class="form-control mt-0" placeholder="Nuova sottoattivita..." required />
+                        <input v-model="subtaskForm.title" class="form-control mt-0" placeholder="Nuova sottoattività..." required />
                         <AppSelect v-model="subtaskForm.priority" :options="priorityOptions" />
                         <input v-model="subtaskForm.due_date" class="form-control mt-0" type="date" />
                         <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
@@ -3245,23 +3246,15 @@ onUnmounted(() => {
                                 subtaskAssigneeMenuOpen === subtask.id ? 'z-[6600]' : 'z-0',
                             ]"
                         >
-                            <label class="flex min-w-0 items-center gap-2">
+                            <div class="min-w-0">
                                 <input
-                                    type="checkbox"
-                                    class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
-                                    :checked="(subtaskDrafts[subtask.id]?.status || subtask.status) === 'done'"
-                                    @change="setSubtaskStatus(subtask, $event.target.checked)"
+                                    v-if="subtaskDrafts[subtask.id]"
+                                    v-model="subtaskDrafts[subtask.id].title"
+                                    :class="['form-control mt-0', (subtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'text-gray-400 line-through' : '']"
+                                    placeholder="Titolo sottoattività"
+                                    @input="saveSubtaskInline(subtask)"
                                 />
-                                <div class="min-w-0 flex-1">
-                                    <input
-                                        v-if="subtaskDrafts[subtask.id]"
-                                        v-model="subtaskDrafts[subtask.id].title"
-                                        :class="['form-control mt-0', (subtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'text-gray-400 line-through' : '']"
-                                        placeholder="Titolo sottoattivita"
-                                        @input="saveSubtaskInline(subtask)"
-                                    />
-                                </div>
-                            </label>
+                            </div>
                             <div v-if="subtaskDrafts[subtask.id]" class="relative" :data-subtask-assignees="subtask.id">
                                 <button type="button" class="form-control mt-0 flex items-center justify-between gap-2 text-left" @click.stop="toggleSubtaskAssigneeMenu(subtask.id)">
                                     <span class="flex min-w-0 items-center -space-x-2">
@@ -3304,11 +3297,22 @@ onUnmounted(() => {
                                 type="date"
                                 @input="saveSubtaskInline(subtask)"
                             />
-                            <Link :href="route('tasks.show', subtask.id)" class="inline-flex h-9 self-center items-center justify-center rounded-[var(--radius-sm)] px-3 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-50 hover:text-indigo-700">
-                                Apri
-                            </Link>
+                            <div class="flex self-center items-center justify-end gap-1">
+                                <button
+                                    type="button"
+                                    class="icon-btn h-9 w-9"
+                                    :title="(subtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'Riapri sottoattività' : 'Completa sottoattività'"
+                                    @click="setSubtaskStatus(subtask, (subtaskDrafts[subtask.id]?.status || subtask.status) !== 'done')"
+                                >
+                                    <RotateCcw v-if="(subtaskDrafts[subtask.id]?.status || subtask.status) === 'done'" class="h-4 w-4" :stroke-width="1.7" />
+                                    <Check v-else class="h-4 w-4" :stroke-width="1.7" />
+                                </button>
+                                <Link :href="route('tasks.show', subtask.id)" class="inline-flex h-9 items-center justify-center rounded-[var(--radius-sm)] px-3 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-50 hover:text-indigo-700">
+                                    Apri
+                                </Link>
+                            </div>
                         </div>
-                        <p v-if="!related.subtasks?.length" class="text-sm text-gray-500">Nessuna sottoattivita.</p>
+                        <p v-if="!related.subtasks?.length" class="text-sm text-gray-500">Nessuna sottoattività.</p>
                     </div>
                 </section>
 
