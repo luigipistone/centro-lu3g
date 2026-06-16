@@ -24,7 +24,7 @@ import {
     Underline,
     X,
 } from '@lucide/vue';
-import { nextTick, ref, watch } from 'vue';
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps({
     section: String,
@@ -424,6 +424,7 @@ const subtaskForm = useForm({
 const subtaskDrafts = ref({});
 const subtaskAutosaveStates = ref({});
 const subtaskAutosaveErrors = ref({});
+const subtaskAssigneeMenuOpen = ref(null);
 const subtaskAutosaveTimers = {};
 const subtaskAutosaveSequences = {};
 const selectedAssignees = ref([...(props.related.assignees || [])]);
@@ -1548,6 +1549,12 @@ function peopleAvailable(list, users) {
     return (users || []).filter((user) => !values.includes(user.id));
 }
 
+function subtaskAssignees(subtaskId) {
+    const selected = subtaskDrafts.value[subtaskId]?.assignee_ids || [];
+
+    return peopleSelected(selected, props.related.users || []);
+}
+
 function personAvatarClass(selected) {
     return [
         'group/person relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300',
@@ -1555,6 +1562,37 @@ function personAvatarClass(selected) {
             ? 'bg-indigo-50 ring-2 ring-indigo-500 ring-offset-2 ring-offset-white'
             : 'bg-white/70 ring-1 ring-gray-200 hover:-translate-y-0.5 hover:ring-indigo-200 hover:shadow-[0_10px_24px_rgba(79,70,229,0.10)]',
     ];
+}
+
+function toggleSubtaskAssigneeMenu(subtaskId) {
+    subtaskAssigneeMenuOpen.value = subtaskAssigneeMenuOpen.value === subtaskId ? null : subtaskId;
+}
+
+function closeSubtaskAssigneeMenuOnOutside(event) {
+    if (!subtaskAssigneeMenuOpen.value) return;
+    if (event.target instanceof Element && event.target.closest(`[data-subtask-assignees="${subtaskAssigneeMenuOpen.value}"]`)) return;
+
+    subtaskAssigneeMenuOpen.value = null;
+}
+
+function toggleSubtaskAssignee(subtask, userId) {
+    if (!subtaskDrafts.value[subtask.id]) return;
+
+    const values = [...(subtaskDrafts.value[subtask.id].assignee_ids || [])];
+    const index = values.indexOf(userId);
+    if (index >= 0) {
+        values.splice(index, 1);
+    } else {
+        values.push(userId);
+    }
+
+    subtaskDrafts.value[subtask.id].assignee_ids = values;
+    router.put(route('tasks.people.sync', [subtask.id, 'assignees']), {
+        user_ids: values,
+    }, {
+        preserveScroll: true,
+        preserveState: true,
+    });
 }
 
 function addSubtask() {
@@ -1792,6 +1830,7 @@ watch(
                 project_id: subtask.project_id || '',
                 client_id: subtask.client_id || '',
                 service_id: subtask.service_id || '',
+                assignee_ids: subtask.assignee_ids || [],
                 start_date: subtask.start_date || '',
                 due_date: subtask.due_date || '',
                 due_time: subtask.due_time ? String(subtask.due_time).slice(0, 5) : '',
@@ -1831,6 +1870,14 @@ watch(
     ],
     () => saveUserInline(),
 );
+
+onMounted(() => {
+    document.addEventListener('pointerdown', closeSubtaskAssigneeMenuOnOutside, true);
+});
+
+onUnmounted(() => {
+    document.removeEventListener('pointerdown', closeSubtaskAssigneeMenuOnOutside, true);
+});
 </script>
 
 <template>
@@ -3171,7 +3218,7 @@ watch(
                         <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
                     </form>
                     <div class="space-y-2">
-                        <div v-for="subtask in related.subtasks" :key="subtask.id" class="grid gap-3 rounded-md border border-gray-100 bg-gray-50 px-3 py-3 text-sm transition hover:border-indigo-100 hover:bg-white md:grid-cols-[minmax(0,1fr)_140px_150px_auto]">
+                        <div v-for="subtask in related.subtasks" :key="subtask.id" class="grid gap-3 rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50 px-3 py-3 text-sm transition hover:border-indigo-100 hover:bg-white md:grid-cols-[minmax(0,1fr)_160px_150px_auto]">
                             <label class="flex min-w-0 items-center gap-2">
                                 <input
                                     type="checkbox"
@@ -3189,12 +3236,32 @@ watch(
                                     />
                                 </div>
                             </label>
-                            <AppSelect
-                                v-if="subtaskDrafts[subtask.id]"
-                                v-model="subtaskDrafts[subtask.id].priority"
-                                :options="priorityOptions"
-                                @change="saveSubtaskInline(subtask, 0)"
-                            />
+                            <div v-if="subtaskDrafts[subtask.id]" class="relative" :data-subtask-assignees="subtask.id">
+                                <button type="button" class="form-control mt-0 flex items-center justify-between gap-2 text-left" @click.stop="toggleSubtaskAssigneeMenu(subtask.id)">
+                                    <span class="flex min-w-0 items-center -space-x-2">
+                                        <UserAvatar v-for="user in subtaskAssignees(subtask.id).slice(0, 3)" :key="`subtask-assignee-${subtask.id}-${user.id}`" :user="user" size="xs" class="ring-2 ring-white" />
+                                        <span v-if="!subtaskAssignees(subtask.id).length" class="truncate text-gray-500">Assegnatari</span>
+                                        <span v-else-if="subtaskAssignees(subtask.id).length > 3" class="ml-3 text-xs font-semibold text-gray-500">+{{ subtaskAssignees(subtask.id).length - 3 }}</span>
+                                    </span>
+                                    <span class="text-xs font-semibold text-gray-400">{{ subtaskAssignees(subtask.id).length }}</span>
+                                </button>
+                                <div v-if="subtaskAssigneeMenuOpen === subtask.id" class="app-popover field-dropdown-menu absolute right-0 top-full z-[5300] mt-2 w-64 p-3" @click.stop>
+                                    <div class="people-avatar-picker max-h-44">
+                                        <button
+                                            v-for="user in related.users"
+                                            :key="`subtask-person-${subtask.id}-${user.id}`"
+                                            type="button"
+                                            :class="personAvatarClass((subtaskDrafts[subtask.id].assignee_ids || []).includes(user.id))"
+                                            :aria-pressed="(subtaskDrafts[subtask.id].assignee_ids || []).includes(user.id)"
+                                            :aria-label="`${(subtaskDrafts[subtask.id].assignee_ids || []).includes(user.id) ? 'Rimuovi' : 'Assegna'} ${user.name || user.email}`"
+                                            @click="toggleSubtaskAssignee(subtask, user.id)"
+                                        >
+                                            <UserAvatar :user="user" size="md" />
+                                        </button>
+                                    </div>
+                                    <p v-if="!related.users?.length" class="text-sm text-gray-500">Nessun utente disponibile.</p>
+                                </div>
+                            </div>
                             <input
                                 v-if="subtaskDrafts[subtask.id]"
                                 v-model="subtaskDrafts[subtask.id].due_date"
@@ -3292,9 +3359,6 @@ watch(
                                     @input="saveCommentInline(comment)"
                                     @blur="stopEditingComment(comment)"
                                 ></div>
-                            </div>
-                            <div v-if="commentAutosaveStates[comment.id] && commentAutosaveStates[comment.id] !== 'idle'" :class="['mt-1 text-[11px] font-medium', commentAutosaveStates[comment.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
-                                {{ autosaveLabel(commentAutosaveStates[comment.id], commentAutosaveErrors[comment.id]) }}
                             </div>
                         </div>
                         <p v-if="!related.comments?.length" class="text-sm text-gray-500">Nessun commento.</p>

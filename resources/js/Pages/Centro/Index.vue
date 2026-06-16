@@ -68,6 +68,7 @@ const props = defineProps({
 const editing = ref(null);
 const formOpen = ref(false);
 const deleteTarget = ref(null);
+const deleteTargetAction = ref(null);
 const deleteConfirmText = ref('');
 const updateDrafts = ref({});
 const savingUpdateKeys = ref([]);
@@ -296,6 +297,7 @@ const calendarSubtaskForm = useForm({
     priority: 'medium',
     due_date: '',
 });
+const calendarSubtaskAssigneeMenuOpen = ref(null);
 const calendarCommentForm = useForm({
     content: '',
 });
@@ -652,6 +654,12 @@ function selectedCalendarTaskUsers(field) {
     return (props.users || []).filter((user) => selected.includes(user.id));
 }
 
+function calendarSubtaskAssignees(subtaskId) {
+    const selected = calendarSubtaskDrafts.value[subtaskId]?.assignee_ids || [];
+
+    return (props.users || []).filter((user) => selected.includes(user.id));
+}
+
 function calendarTaskPeopleLabel(field) {
     const selected = selectedCalendarTaskUsers(field);
     if (!selected.length) return field === 'assignee_ids' ? 'Nessuna persona' : 'Nessun follower';
@@ -670,6 +678,38 @@ function toggleCalendarTaskPerson(field, userId) {
     }
     calendarTaskForm[field] = current;
     saveCalendarTaskInline(0);
+}
+
+function toggleCalendarSubtaskAssigneeMenu(subtaskId) {
+    calendarSubtaskAssigneeMenuOpen.value = calendarSubtaskAssigneeMenuOpen.value === subtaskId ? null : subtaskId;
+}
+
+function closeCalendarSubtaskAssigneeMenuOnOutside(event) {
+    if (!calendarSubtaskAssigneeMenuOpen.value) return;
+    if (event.target instanceof Element && event.target.closest(`[data-calendar-subtask-assignees="${calendarSubtaskAssigneeMenuOpen.value}"]`)) return;
+
+    calendarSubtaskAssigneeMenuOpen.value = null;
+}
+
+function toggleCalendarSubtaskAssignee(subtask, userId) {
+    if (!calendarSubtaskDrafts.value[subtask.id]) return;
+
+    const values = [...(calendarSubtaskDrafts.value[subtask.id].assignee_ids || [])];
+    const index = values.indexOf(userId);
+    if (index >= 0) {
+        values.splice(index, 1);
+    } else {
+        values.push(userId);
+    }
+
+    calendarSubtaskDrafts.value[subtask.id].assignee_ids = values;
+    router.put(route('tasks.people.sync', [subtask.id, 'assignees']), {
+        user_ids: values,
+    }, {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['rows', 'errors', 'flash'],
+    });
 }
 
 function toggleTaskPeopleMenu(field) {
@@ -943,8 +983,9 @@ function runBackup() {
     router.post(route('settings.backup.run'), {}, { preserveScroll: true });
 }
 
-function remove(row) {
+function remove(row, action = null) {
     deleteTarget.value = row;
+    deleteTargetAction.value = action;
     deleteConfirmText.value = '';
 }
 
@@ -954,11 +995,17 @@ function deleteTargetName() {
 
 function cancelDelete() {
     deleteTarget.value = null;
+    deleteTargetAction.value = null;
     deleteConfirmText.value = '';
 }
 
 function confirmDelete() {
     if (!deleteTarget.value || deleteConfirmText.value !== 'ELIMINA') return;
+    if (deleteTargetAction.value) {
+        deleteTargetAction.value();
+        return;
+    }
+
     router.delete(route(`${routeBase.value}.destroy`, deleteTarget.value.id), {
         preserveScroll: true,
         onFinish: cancelDelete,
@@ -1762,12 +1809,13 @@ function addCalendarSubtask() {
 }
 
 function removeCalendarSubtask(subtask) {
-    if (!window.confirm('Eliminare questa sottoattività?')) return;
-
-    router.delete(route('tasks.destroy', subtask.id), {
-        preserveScroll: true,
-        preserveState: true,
-        only: ['rows', 'errors', 'flash'],
+    remove(subtask, () => {
+        router.delete(route('tasks.destroy', subtask.id), {
+            preserveScroll: true,
+            preserveState: true,
+            only: ['rows', 'errors', 'flash'],
+            onFinish: cancelDelete,
+        });
     });
 }
 
@@ -1834,12 +1882,13 @@ function addCalendarComment() {
 }
 
 function removeCalendarComment(comment) {
-    if (!window.confirm('Eliminare questo commento?')) return;
-
-    router.delete(route('tasks.comments.destroy', [calendarTaskForm.id, comment.id]), {
-        preserveScroll: true,
-        preserveState: true,
-        only: ['rows', 'errors', 'flash'],
+    remove({ ...comment, title: 'Commento' }, () => {
+        router.delete(route('tasks.comments.destroy', [calendarTaskForm.id, comment.id]), {
+            preserveScroll: true,
+            preserveState: true,
+            only: ['rows', 'errors', 'flash'],
+            onFinish: cancelDelete,
+        });
     });
 }
 
@@ -2009,6 +2058,7 @@ watch(
 
 onMounted(() => {
     document.addEventListener('pointerdown', closeCalendarCreateMenuOnOutside, true);
+    document.addEventListener('pointerdown', closeCalendarSubtaskAssigneeMenuOnOutside, true);
     document.addEventListener('pointerdown', closeProjectPeopleMenuOnOutside, true);
     document.addEventListener('pointerdown', closeTaskPeopleMenuOnOutside, true);
     document.addEventListener('pointerdown', closeTaskSearchSelectOnOutside, true);
@@ -2018,6 +2068,7 @@ onUnmounted(() => {
         document.body.style.overflow = calendarBodyOverflow;
     }
     document.removeEventListener('pointerdown', closeCalendarCreateMenuOnOutside, true);
+    document.removeEventListener('pointerdown', closeCalendarSubtaskAssigneeMenuOnOutside, true);
     document.removeEventListener('pointerdown', closeProjectPeopleMenuOnOutside, true);
     document.removeEventListener('pointerdown', closeTaskPeopleMenuOnOutside, true);
     document.removeEventListener('pointerdown', closeTaskSearchSelectOnOutside, true);
@@ -2842,7 +2893,7 @@ function visibleCalendarTasks(cell) {
                                     </button>
                                 </form>
                                 <div class="space-y-2">
-                                    <div v-for="subtask in calendarPanelSubtasks()" :key="subtask.id" class="grid gap-3 rounded-[var(--radius-sm)] border border-gray-100 bg-white px-3 py-3 text-sm transition hover:border-indigo-100 hover:shadow-sm md:grid-cols-[minmax(0,1fr)_140px_145px_auto]">
+                                    <div v-for="subtask in calendarPanelSubtasks()" :key="subtask.id" class="grid gap-3 rounded-[var(--radius-sm)] border border-gray-100 bg-white px-3 py-3 text-sm transition hover:border-indigo-100 hover:shadow-sm md:grid-cols-[minmax(0,1fr)_160px_145px_auto]">
                                         <label class="flex min-w-0 items-center gap-2">
                                             <input
                                                 type="checkbox"
@@ -2858,17 +2909,34 @@ function visibleCalendarTasks(cell) {
                                                     placeholder="Titolo sottoattività"
                                                     @input="saveCalendarSubtaskInline(subtask)"
                                                 />
-                                                <div v-if="calendarSubtaskAutosaveStates[subtask.id] && calendarSubtaskAutosaveStates[subtask.id] !== 'idle'" :class="['mt-1 text-[11px] font-medium', calendarSubtaskAutosaveStates[subtask.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
-                                                    {{ autosaveLabel(calendarSubtaskAutosaveStates[subtask.id], calendarSubtaskAutosaveErrors[subtask.id]) }}
-                                                </div>
                                             </div>
                                         </label>
-                                        <AppSelect
-                                            v-if="calendarSubtaskDrafts[subtask.id]"
-                                            v-model="calendarSubtaskDrafts[subtask.id].priority"
-                                            :options="taskPriorityOptions.filter((option) => option.value !== 'all')"
-                                            @change="saveCalendarSubtaskInline(subtask, 0)"
-                                        />
+                                        <div v-if="calendarSubtaskDrafts[subtask.id]" class="relative" :data-calendar-subtask-assignees="subtask.id">
+                                            <button type="button" class="form-control mt-0 flex items-center justify-between gap-2 text-left" @click.stop="toggleCalendarSubtaskAssigneeMenu(subtask.id)">
+                                                <span class="flex min-w-0 items-center -space-x-2">
+                                                    <UserAvatar v-for="user in calendarSubtaskAssignees(subtask.id).slice(0, 3)" :key="`calendar-subtask-assignee-${subtask.id}-${user.id}`" :user="user" size="xs" class="ring-2 ring-white" />
+                                                    <span v-if="!calendarSubtaskAssignees(subtask.id).length" class="truncate text-gray-500">Assegnatari</span>
+                                                    <span v-else-if="calendarSubtaskAssignees(subtask.id).length > 3" class="ml-3 text-xs font-semibold text-gray-500">+{{ calendarSubtaskAssignees(subtask.id).length - 3 }}</span>
+                                                </span>
+                                                <span class="text-xs font-semibold text-gray-400">{{ calendarSubtaskAssignees(subtask.id).length }}</span>
+                                            </button>
+                                            <div v-if="calendarSubtaskAssigneeMenuOpen === subtask.id" class="app-popover field-dropdown-menu absolute right-0 top-full z-[5400] mt-2 w-64 p-3" @click.stop>
+                                                <div class="people-avatar-picker max-h-44">
+                                                    <button
+                                                        v-for="user in users"
+                                                        :key="`calendar-subtask-person-${subtask.id}-${user.id}`"
+                                                        type="button"
+                                                        :class="personAvatarClass((calendarSubtaskDrafts[subtask.id].assignee_ids || []).includes(user.id))"
+                                                        :aria-pressed="(calendarSubtaskDrafts[subtask.id].assignee_ids || []).includes(user.id)"
+                                                        :aria-label="`${(calendarSubtaskDrafts[subtask.id].assignee_ids || []).includes(user.id) ? 'Rimuovi' : 'Assegna'} ${user.name || user.email}`"
+                                                        @click="toggleCalendarSubtaskAssignee(subtask, user.id)"
+                                                    >
+                                                        <UserAvatar :user="user" size="md" />
+                                                    </button>
+                                                </div>
+                                                <p v-if="!users?.length" class="text-sm text-gray-500">Nessun utente disponibile.</p>
+                                            </div>
+                                        </div>
                                         <input
                                             v-if="calendarSubtaskDrafts[subtask.id]"
                                             v-model="calendarSubtaskDrafts[subtask.id].due_date"
@@ -2979,9 +3047,6 @@ function visibleCalendarTasks(cell) {
                                                 @input="saveCalendarCommentInline(comment)"
                                                 @blur="stopEditingCalendarComment(comment)"
                                             ></div>
-                                        </div>
-                                        <div v-if="calendarCommentAutosaveStates[comment.id] && calendarCommentAutosaveStates[comment.id] !== 'idle'" :class="['mt-1 text-[11px] font-medium', calendarCommentAutosaveStates[comment.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
-                                            {{ autosaveLabel(calendarCommentAutosaveStates[comment.id], calendarCommentAutosaveErrors[comment.id]) }}
                                         </div>
                                     </div>
                                     <p v-if="!calendarPanelComments().length" class="text-sm text-gray-500">Nessun commento.</p>
@@ -3438,7 +3503,7 @@ function visibleCalendarTasks(cell) {
                                     v-for="task in tasksByStatus(status)"
                                     :key="task.id"
                                     :class="[
-                                        'content-card relative rounded-md border p-3 shadow-sm transition hover:shadow',
+                                        'content-card relative rounded-[var(--radius-sm)] border p-3 shadow-sm transition hover:shadow',
                                         taskTypeClass(task.task_type),
                                         task.status === 'done' ? 'task-card-done' : '',
                                     ]"
