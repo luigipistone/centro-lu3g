@@ -1830,6 +1830,7 @@ function addCalendarSubtask() {
 function removeCalendarSubtask(subtask) {
     remove(subtask, () => {
         router.delete(route('tasks.destroy', subtask.id), {
+            data: { stay: true },
             preserveScroll: true,
             preserveState: true,
             only: ['rows', 'errors', 'flash'],
@@ -2471,7 +2472,7 @@ function visibleCalendarTasks(cell) {
             </div>
         </div>
 
-        <div v-if="deleteTarget" class="fixed inset-0 z-[7000] flex items-center justify-center bg-gray-900/40 px-4 py-6" @click.self="cancelDelete">
+        <div v-if="deleteTarget" class="fixed inset-0 z-[7000] flex items-center justify-center bg-gray-900 px-4 py-6" @click.self="cancelDelete">
             <div class="w-full max-w-md rounded-md bg-white p-5 shadow-xl">
                 <h3 class="text-base font-semibold text-gray-900">Conferma eliminazione</h3>
                 <p class="mt-2 text-sm text-gray-600">
@@ -2912,7 +2913,14 @@ function visibleCalendarTasks(cell) {
                                     </button>
                                 </form>
                                 <div class="space-y-2">
-                                    <div v-for="subtask in calendarPanelSubtasks()" :key="subtask.id" class="grid gap-3 rounded-[var(--radius-sm)] border border-gray-100 bg-white px-3 py-3 text-sm transition hover:border-indigo-100 hover:shadow-sm md:grid-cols-[minmax(0,1fr)_160px_145px_auto]">
+                                    <div
+                                        v-for="subtask in calendarPanelSubtasks()"
+                                        :key="subtask.id"
+                                        :class="[
+                                            'relative grid gap-3 overflow-visible rounded-[var(--radius-sm)] border border-gray-100 bg-white px-3 py-3 text-sm transition hover:border-indigo-100 hover:shadow-sm md:grid-cols-[minmax(0,1fr)_160px_145px_auto]',
+                                            calendarSubtaskAssigneeMenuOpen === subtask.id ? 'z-[6600]' : 'z-0',
+                                        ]"
+                                    >
                                         <label class="flex min-w-0 items-center gap-2">
                                             <input
                                                 type="checkbox"
@@ -2965,7 +2973,7 @@ function visibleCalendarTasks(cell) {
                                             @focus="openDatePicker"
                                             @input="saveCalendarSubtaskInline(subtask)"
                                         />
-                                        <div class="flex items-center justify-end gap-1">
+                                        <div class="flex self-center items-center justify-end gap-1">
                                             <button type="button" class="icon-btn h-9 w-9" title="Apri sottoattività" @click="openCalendarSubtask(subtask)">
                                                 <ExternalLink class="h-4 w-4" :stroke-width="1.7" />
                                             </button>

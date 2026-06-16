@@ -578,6 +578,10 @@ class CentroPageController extends Controller
         DB::table($this->config($section)['table'])->where('id', $id)->delete();
 
         if ($section === 'tasks') {
+            if ($request->boolean('stay')) {
+                return back()->with('status', 'Eliminato.');
+            }
+
             return redirect($task?->parent_task_id ? route('tasks.show', $task->parent_task_id) : route('tasks.index'))
                 ->with('status', 'Eliminato.');
         }
