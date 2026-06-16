@@ -460,6 +460,7 @@ class CentroPageController extends Controller
                     ->where('parent_task_id', $id)
                     ->latest()
                     ->get(['id', 'title', 'status', 'priority', 'due_date', 'due_time']),
+                'parentTask' => $record->parent_task_id ? DB::table('tasks')->where('id', $record->parent_task_id)->first(['id', 'title']) : null,
                 'project' => $record->project_id ? DB::table('projects')->where('id', $record->project_id)->first() : null,
                 'client' => $record->client_id ? DB::table('clients')->where('id', $record->client_id)->first() : null,
             ],

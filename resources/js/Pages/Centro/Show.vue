@@ -4,20 +4,27 @@ import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import {
+    Bold,
     Check,
     ChevronLeft,
     Copy,
     Download,
     FileText,
+    Heading3,
+    Italic,
+    Link2,
+    List,
+    ListOrdered,
     Mail,
     Plus,
     Printer,
+    Quote,
     Send,
     Trash2,
-    Undo2,
+    Underline,
     X,
 } from '@lucide/vue';
-import { ref, watch } from 'vue';
+import { nextTick, ref, watch } from 'vue';
 
 const props = defineProps({
     section: String,
@@ -273,6 +280,7 @@ const commentAutosaveStates = ref({});
 const commentAutosaveErrors = ref({});
 const commentAutosaveTimers = {};
 const commentAutosaveSequences = {};
+const editingCommentId = ref(null);
 const lineForm = useForm({
     description: '',
     quantity: 1,
@@ -424,6 +432,7 @@ const taskAutosaveState = ref('idle');
 const taskAutosaveError = ref('');
 let taskAutosaveTimer = null;
 let taskAutosaveSequence = 0;
+const taskDescriptionEditor = ref(null);
 const projectForm = useForm({
     name: props.record.name || '',
     description: props.record.description || '',
@@ -464,10 +473,99 @@ function normalizeHexColor(value, fallback = '#2563eb') {
     return fallback;
 }
 
+function backHref() {
+    if (props.section === 'tasks' && props.related?.parentTask) {
+        return route('tasks.show', props.related.parentTask.id);
+    }
+
+    return route(`${props.section}.index`);
+}
+
+function backLabel() {
+    if (props.section === 'tasks' && props.related?.parentTask) {
+        return `Torna a ${props.related.parentTask.title || 'task genitore'}`;
+    }
+
+    return `Torna a ${props.title}`;
+}
+
+function updateTaskDescriptionFromEditor() {
+    taskForm.description = taskDescriptionEditor.value?.innerHTML || '';
+}
+
+function runTaskEditorCommand(command, value = null) {
+    taskDescriptionEditor.value?.focus();
+    document.execCommand(command, false, value);
+    updateTaskDescriptionFromEditor();
+}
+
+function addTaskEditorLink() {
+    const url = window.prompt('URL del link');
+    if (!url) return;
+
+    runTaskEditorCommand('createLink', url);
+}
+
+function commentEditorSelector(commentId = 'new') {
+    return `[data-task-comment-editor="${commentId}"]`;
+}
+
+function commentEditorElement(commentId = 'new') {
+    return document.querySelector(commentEditorSelector(commentId));
+}
+
+function updateCommentFromEditor(commentId = 'new') {
+    const html = commentEditorElement(commentId)?.innerHTML || '';
+
+    if (commentId === 'new') {
+        commentForm.content = html;
+        return;
+    }
+
+    if (commentDrafts.value[commentId]) {
+        commentDrafts.value[commentId].content = html;
+    }
+}
+
+function refreshCommentEditor(commentId = 'new') {
+    nextTick(() => {
+        const editor = commentEditorElement(commentId);
+        if (!editor) return;
+
+        const html = commentId === 'new'
+            ? commentForm.content || ''
+            : commentDrafts.value[commentId]?.content || '';
+
+        if (editor.innerHTML !== html) {
+            editor.innerHTML = html;
+        }
+    });
+}
+
+function runCommentEditorCommand(commentId, command, value = null) {
+    const editor = commentEditorElement(commentId);
+    editor?.focus();
+    document.execCommand(command, false, value);
+    updateCommentFromEditor(commentId);
+}
+
+function addCommentEditorLink(commentId = 'new') {
+    const url = window.prompt('URL del link');
+    if (!url) return;
+
+    runCommentEditorCommand(commentId, 'createLink', url);
+}
+
 function addComment() {
+    updateCommentFromEditor('new');
+    if (!String(commentForm.content || '').trim()) return;
+
     commentForm.post(route('tasks.comments.store', props.record.id), {
         preserveScroll: true,
-        onSuccess: () => commentForm.reset(),
+        onSuccess: () => {
+            commentForm.reset();
+            refreshCommentEditor('new');
+        },
     });
 }
 
@@ -480,6 +578,7 @@ function commentDraftPayload(commentId) {
 function saveCommentInline(comment, delay = 650) {
     if (props.section !== 'tasks') return;
 
+    updateCommentFromEditor(comment.id);
     const payload = commentDraftPayload(comment.id);
     if (!String(payload.content).trim()) {
         setInlineState(commentAutosaveStates, comment.id, 'idle');
@@ -524,6 +623,24 @@ function removeComment(comment) {
         danger: true,
         action: () => router.delete(route('tasks.comments.destroy', [props.record.id, comment.id]), { preserveScroll: true, onFinish: closeConfirm }),
     });
+}
+
+function editComment(comment) {
+    editingCommentId.value = comment.id;
+    if (!commentDrafts.value[comment.id]) {
+        commentDrafts.value = {
+            ...commentDrafts.value,
+            [comment.id]: { content: comment.content || '' },
+        };
+    }
+    refreshCommentEditor(comment.id);
+}
+
+function stopEditingComment(comment) {
+    if (editingCommentId.value !== comment.id) return;
+
+    saveCommentInline(comment, 0);
+    editingCommentId.value = null;
 }
 
 function setTaskStatus(status) {
@@ -1725,11 +1842,11 @@ watch(
             <div class="flex items-center justify-between gap-4">
                 <div>
                     <Link
-                        :href="route(`${section}.index`)"
+                        :href="backHref()"
                         class="inline-flex items-center gap-1 text-xs font-medium text-gray-500 transition hover:text-indigo-600"
                     >
                         <ChevronLeft class="h-3.5 w-3.5" :stroke-width="1.8" />
-                        Torna a {{ title }}
+                        {{ backLabel() }}
                     </Link>
                     <div class="mt-1 flex items-center gap-2">
                         <span v-if="section === 'projects'" class="h-3 w-3 rounded-full" :style="{ backgroundColor: normalizeHexColor(projectForm.color) }"></span>
@@ -1739,20 +1856,6 @@ watch(
                     </div>
                 </div>
                 <div v-if="section === 'tasks'" class="flex flex-wrap justify-end gap-2">
-                    <button
-                        type="button"
-                        :class="[
-                            'btn',
-                        taskForm.status === 'done'
-                                ? 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-                                : 'bg-indigo-600 text-white hover:bg-indigo-500',
-                        ]"
-                        @click="toggleTaskComplete"
-                    >
-                        <Undo2 v-if="taskForm.status === 'done'" class="h-4 w-4" :stroke-width="1.7" />
-                        <Check v-else class="h-4 w-4" :stroke-width="1.7" />
-                        {{ taskForm.status === 'done' ? 'Riapri' : 'Completa task' }}
-                    </button>
                     <button type="button" class="btn btn-outline" @click="duplicateTask">
                         <Copy class="h-4 w-4" :stroke-width="1.7" />
                         Duplica
@@ -2541,7 +2644,7 @@ watch(
                             <button
                                 type="button"
                                 :class="[
-                                    'rounded-md border px-3 py-2 text-left text-sm font-semibold transition',
+                                    'rounded-[var(--radius-sm)] border px-3 py-2 text-left text-sm font-semibold transition',
                                     taskForm.task_type === 'project' || taskForm.task_type === 'task'
                                         ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm'
                                         : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50',
@@ -2554,7 +2657,7 @@ watch(
                             <button
                                 type="button"
                                 :class="[
-                                    'rounded-md border px-3 py-2 text-left text-sm font-semibold transition',
+                                    'rounded-[var(--radius-sm)] border px-3 py-2 text-left text-sm font-semibold transition',
                                     taskForm.task_type === 'ongoing'
                                         ? 'border-amber-500 bg-amber-50 text-amber-800 shadow-sm'
                                         : 'border-amber-200 bg-white text-amber-700 hover:bg-amber-50',
@@ -2567,7 +2670,7 @@ watch(
                             <button
                                 type="button"
                                 :class="[
-                                    'rounded-md border px-3 py-2 text-left text-sm font-semibold transition',
+                                    'rounded-[var(--radius-sm)] border px-3 py-2 text-left text-sm font-semibold transition',
                                     taskForm.task_type === 'meeting'
                                         ? 'border-violet-500 bg-violet-50 text-violet-800 shadow-sm'
                                         : 'border-violet-200 bg-white text-violet-700 hover:bg-violet-50',
@@ -2661,7 +2764,48 @@ watch(
 
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Descrizione</label>
-                            <textarea v-model="taskForm.description" rows="5" class="form-control" placeholder="Aggiungi una descrizione..."></textarea>
+                            <div class="mt-2 overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white/90 shadow-inner">
+                                <div class="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50/80 p-2">
+                                    <button type="button" class="icon-btn h-8 w-8" title="Titolo" @mousedown.prevent @click="runTaskEditorCommand('formatBlock', 'h3')">
+                                        <Heading3 class="h-4 w-4" :stroke-width="1.7" />
+                                    </button>
+                                    <button type="button" class="icon-btn h-8 w-8 text-xs font-bold" title="Testo normale" @mousedown.prevent @click="runTaskEditorCommand('formatBlock', 'p')">
+                                        P
+                                    </button>
+                                    <span class="mx-1 h-5 w-px bg-gray-200"></span>
+                                    <button type="button" class="icon-btn h-8 w-8" title="Grassetto" @mousedown.prevent @click="runTaskEditorCommand('bold')">
+                                        <Bold class="h-4 w-4" :stroke-width="1.7" />
+                                    </button>
+                                    <button type="button" class="icon-btn h-8 w-8" title="Corsivo" @mousedown.prevent @click="runTaskEditorCommand('italic')">
+                                        <Italic class="h-4 w-4" :stroke-width="1.7" />
+                                    </button>
+                                    <button type="button" class="icon-btn h-8 w-8" title="Sottolineato" @mousedown.prevent @click="runTaskEditorCommand('underline')">
+                                        <Underline class="h-4 w-4" :stroke-width="1.7" />
+                                    </button>
+                                    <span class="mx-1 h-5 w-px bg-gray-200"></span>
+                                    <button type="button" class="icon-btn h-8 w-8" title="Elenco puntato" @mousedown.prevent @click="runTaskEditorCommand('insertUnorderedList')">
+                                        <List class="h-4 w-4" :stroke-width="1.7" />
+                                    </button>
+                                    <button type="button" class="icon-btn h-8 w-8" title="Elenco numerato" @mousedown.prevent @click="runTaskEditorCommand('insertOrderedList')">
+                                        <ListOrdered class="h-4 w-4" :stroke-width="1.7" />
+                                    </button>
+                                    <button type="button" class="icon-btn h-8 w-8" title="Citazione" @mousedown.prevent @click="runTaskEditorCommand('formatBlock', 'blockquote')">
+                                        <Quote class="h-4 w-4" :stroke-width="1.7" />
+                                    </button>
+                                    <button type="button" class="icon-btn h-8 w-8" title="Link" @mousedown.prevent @click="addTaskEditorLink">
+                                        <Link2 class="h-4 w-4" :stroke-width="1.7" />
+                                    </button>
+                                </div>
+                                <div
+                                    ref="taskDescriptionEditor"
+                                    class="min-h-[150px] px-4 py-3 text-sm leading-6 text-gray-800 outline-none empty:before:text-gray-400 empty:before:content-[attr(data-placeholder)]"
+                                    contenteditable="true"
+                                    data-placeholder="Aggiungi una descrizione..."
+                                    v-html="taskForm.description"
+                                    @input="updateTaskDescriptionFromEditor"
+                                    @blur="updateTaskDescriptionFromEditor"
+                                ></div>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -2786,19 +2930,19 @@ watch(
                         <p v-if="!related.services?.length" class="mt-3 text-sm text-gray-500">Nessun servizio configurato.</p>
                     </section>
 
-                    <section v-if="section === 'tasks'" class="surface rounded-md p-5">
-                        <h3 class="text-sm font-semibold text-gray-900">Stato</h3>
-                        <div class="mt-3 grid grid-cols-2 gap-2">
-                            <button
-                                v-for="status in ['todo', 'in_progress', 'in_review', 'done']"
-                                :key="status"
-                                type="button"
-                                :class="['rounded-md border px-3 py-2 text-xs font-medium', taskForm.status === status ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50']"
-                                @click="setTaskStatus(status)"
-                            >
-                                {{ displayValue(status) }}
-                            </button>
-                        </div>
+                    <section v-if="section === 'tasks' && related.client" class="surface rounded-md p-5">
+                        <h3 class="text-sm font-semibold text-gray-900">Cliente</h3>
+                        <Link
+                            :href="route('clients.show', related.client.id)"
+                            class="group/item mt-2 block rounded-md border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm transition duration-200 hover:-translate-y-0.5 hover:border-indigo-100 hover:bg-white hover:shadow-[0_12px_28px_rgba(28,42,73,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                        >
+                            <span class="block truncate font-semibold text-gray-900 transition group-hover/item:text-indigo-600">
+                                {{ related.client.name }}
+                            </span>
+                            <span v-if="related.client.legal_name || related.client.vat_number || related.client.tax_code" class="mt-1 block truncate text-xs text-gray-500">
+                                {{ [related.client.legal_name, related.client.vat_number || related.client.tax_code].filter(Boolean).join(' · ') }}
+                            </span>
+                        </Link>
                     </section>
 
                     <section v-if="section === 'tasks'" class="surface rounded-md p-5">
@@ -2894,7 +3038,7 @@ watch(
                         </p>
                     </section>
 
-                    <section v-if="related.client" class="surface rounded-md p-5">
+                    <section v-if="section !== 'tasks' && related.client" class="surface rounded-md p-5">
                         <h3 class="text-sm font-semibold text-gray-900">Cliente</h3>
                         <Link
                             :href="route('clients.show', related.client.id)"
@@ -3073,25 +3217,84 @@ watch(
 
                     <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Commenti</h3>
                     <form class="mb-5 grid gap-3 md:grid-cols-[1fr_auto]" @submit.prevent="addComment">
-                        <textarea v-model="commentForm.content" rows="2" class="form-control mt-0" placeholder="Scrivi un commento..." required></textarea>
+                        <div class="overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white/90 shadow-inner">
+                            <div class="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50/80 p-2">
+                                <button type="button" class="icon-btn h-8 w-8" title="Grassetto" @mousedown.prevent @click="runCommentEditorCommand('new', 'bold')">
+                                    <Bold class="h-4 w-4" :stroke-width="1.7" />
+                                </button>
+                                <button type="button" class="icon-btn h-8 w-8" title="Corsivo" @mousedown.prevent @click="runCommentEditorCommand('new', 'italic')">
+                                    <Italic class="h-4 w-4" :stroke-width="1.7" />
+                                </button>
+                                <button type="button" class="icon-btn h-8 w-8" title="Sottolineato" @mousedown.prevent @click="runCommentEditorCommand('new', 'underline')">
+                                    <Underline class="h-4 w-4" :stroke-width="1.7" />
+                                </button>
+                                <span class="mx-1 h-5 w-px bg-gray-200"></span>
+                                <button type="button" class="icon-btn h-8 w-8" title="Elenco puntato" @mousedown.prevent @click="runCommentEditorCommand('new', 'insertUnorderedList')">
+                                    <List class="h-4 w-4" :stroke-width="1.7" />
+                                </button>
+                                <button type="button" class="icon-btn h-8 w-8" title="Elenco numerato" @mousedown.prevent @click="runCommentEditorCommand('new', 'insertOrderedList')">
+                                    <ListOrdered class="h-4 w-4" :stroke-width="1.7" />
+                                </button>
+                                <button type="button" class="icon-btn h-8 w-8" title="Link" @mousedown.prevent @click="addCommentEditorLink('new')">
+                                    <Link2 class="h-4 w-4" :stroke-width="1.7" />
+                                </button>
+                            </div>
+                            <div
+                                class="min-h-[92px] px-4 py-3 text-sm leading-6 text-gray-800 outline-none empty:before:text-gray-400 empty:before:content-[attr(data-placeholder)]"
+                                contenteditable="true"
+                                data-task-comment-editor="new"
+                                data-placeholder="Scrivi un commento..."
+                                @input="updateCommentFromEditor('new')"
+                                @blur="updateCommentFromEditor('new')"
+                            ></div>
+                        </div>
                         <button type="submit" class="self-start rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Invia</button>
                     </form>
                     <div class="space-y-3">
                         <div v-for="comment in related.comments" :key="comment.id" class="rounded-md border border-gray-100 bg-gray-50 px-3 py-3 text-sm transition hover:border-indigo-100 hover:bg-white">
                             <div class="mb-2 flex items-center justify-between gap-3">
                                 <div class="text-xs font-medium text-gray-500">{{ comment.user_name || 'Utente' }} · {{ comment.created_at }}</div>
-                                <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-md text-red-600 transition hover:bg-red-50 hover:text-red-700" aria-label="Elimina commento" @click="removeComment(comment)">
-                                    <Trash2 class="h-4 w-4" :stroke-width="1.7" />
-                                </button>
+                                <div class="flex items-center gap-2">
+                                    <button type="button" class="text-xs font-semibold text-indigo-600 transition hover:text-indigo-500" @click="editComment(comment)">
+                                        Modifica
+                                    </button>
+                                    <button type="button" class="text-xs font-semibold text-red-600 transition hover:text-red-500" @click="removeComment(comment)">
+                                        Elimina
+                                    </button>
+                                </div>
                             </div>
-                            <textarea
-                                v-if="commentDrafts[comment.id]"
-                                v-model="commentDrafts[comment.id].content"
-                                rows="3"
-                                class="form-control mt-0"
-                                placeholder="Commento..."
-                                @input="saveCommentInline(comment)"
-                            ></textarea>
+                            <div v-if="editingCommentId !== comment.id" class="min-h-10 rounded-[var(--radius-sm)] bg-white/70 px-3 py-2 text-sm leading-6 text-gray-700" v-html="comment.content"></div>
+                            <div v-else-if="commentDrafts[comment.id]" class="overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white/90 shadow-inner">
+                                <div class="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50/80 p-2">
+                                    <button type="button" class="icon-btn h-8 w-8" title="Grassetto" @mousedown.prevent @click="runCommentEditorCommand(comment.id, 'bold')">
+                                        <Bold class="h-4 w-4" :stroke-width="1.7" />
+                                    </button>
+                                    <button type="button" class="icon-btn h-8 w-8" title="Corsivo" @mousedown.prevent @click="runCommentEditorCommand(comment.id, 'italic')">
+                                        <Italic class="h-4 w-4" :stroke-width="1.7" />
+                                    </button>
+                                    <button type="button" class="icon-btn h-8 w-8" title="Sottolineato" @mousedown.prevent @click="runCommentEditorCommand(comment.id, 'underline')">
+                                        <Underline class="h-4 w-4" :stroke-width="1.7" />
+                                    </button>
+                                    <span class="mx-1 h-5 w-px bg-gray-200"></span>
+                                    <button type="button" class="icon-btn h-8 w-8" title="Elenco puntato" @mousedown.prevent @click="runCommentEditorCommand(comment.id, 'insertUnorderedList')">
+                                        <List class="h-4 w-4" :stroke-width="1.7" />
+                                    </button>
+                                    <button type="button" class="icon-btn h-8 w-8" title="Elenco numerato" @mousedown.prevent @click="runCommentEditorCommand(comment.id, 'insertOrderedList')">
+                                        <ListOrdered class="h-4 w-4" :stroke-width="1.7" />
+                                    </button>
+                                    <button type="button" class="icon-btn h-8 w-8" title="Link" @mousedown.prevent @click="addCommentEditorLink(comment.id)">
+                                        <Link2 class="h-4 w-4" :stroke-width="1.7" />
+                                    </button>
+                                </div>
+                                <div
+                                    class="min-h-[110px] px-4 py-3 text-sm leading-6 text-gray-800 outline-none empty:before:text-gray-400 empty:before:content-[attr(data-placeholder)]"
+                                    contenteditable="true"
+                                    :data-task-comment-editor="comment.id"
+                                    data-placeholder="Commento..."
+                                    @input="saveCommentInline(comment)"
+                                    @blur="stopEditingComment(comment)"
+                                ></div>
+                            </div>
                             <div v-if="commentAutosaveStates[comment.id] && commentAutosaveStates[comment.id] !== 'idle'" :class="['mt-1 text-[11px] font-medium', commentAutosaveStates[comment.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
                                 {{ autosaveLabel(commentAutosaveStates[comment.id], commentAutosaveErrors[comment.id]) }}
                             </div>
