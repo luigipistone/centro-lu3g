@@ -790,7 +790,6 @@ function deleteTaskFromDetail() {
         action: () => router.delete(route('tasks.destroy', props.record.id), {
             preserveScroll: true,
             onFinish: closeConfirm,
-            onSuccess: () => router.visit(route('tasks.index')),
         }),
     });
 }
@@ -3160,7 +3159,7 @@ watch(
                     <p v-else class="text-sm text-gray-500">Nessun referente inserito.</p>
                 </section>
 
-                <section v-if="section === 'tasks'" class="surface rounded-md p-5 lg:col-span-2">
+                <section v-if="section === 'tasks' && !related.parentTask" class="surface rounded-md p-5 lg:col-span-2">
                     <div class="mb-4 flex items-center justify-between">
                         <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Sottoattivita</h3>
                         <span class="text-xs text-gray-500">{{ related.subtasks?.length || 0 }} elementi</span>
@@ -3188,9 +3187,6 @@ watch(
                                         placeholder="Titolo sottoattivita"
                                         @input="saveSubtaskInline(subtask)"
                                     />
-                                    <div v-if="subtaskAutosaveStates[subtask.id] && subtaskAutosaveStates[subtask.id] !== 'idle'" :class="['mt-1 text-[11px] font-medium', subtaskAutosaveStates[subtask.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
-                                        {{ autosaveLabel(subtaskAutosaveStates[subtask.id], subtaskAutosaveErrors[subtask.id]) }}
-                                    </div>
                                 </div>
                             </label>
                             <AppSelect

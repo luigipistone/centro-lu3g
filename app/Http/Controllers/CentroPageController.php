@@ -256,7 +256,7 @@ class CentroPageController extends Controller
                     ->leftJoin('projects', 'projects.id', '=', 'tasks.project_id')
                     ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
                     ->leftJoin('services', 'services.id', '=', 'tasks.service_id')
-                    ->whereNull('tasks.parent_task_id')
+                    ->where(fn ($query) => $query->whereNull('tasks.parent_task_id')->orWhere('tasks.parent_task_id', ''))
                     ->select('tasks.*', 'projects.name as project_name', 'clients.name as client_name', 'services.name as service_name', 'services.color as service_color')
                 )
                 ->when($section === 'calendar', fn ($query) => $query
@@ -1842,6 +1842,10 @@ class CentroPageController extends Controller
     {
         $task = DB::table('tasks')->where('id', $id)->first();
         abort_if(! $task, 404);
+
+        if ($task->parent_task_id) {
+            return back()->withErrors(['subtasks' => 'Le sottoattivita non possono avere ulteriori sottoattivita.']);
+        }
 
         $payload = $request->validate([
             'title' => ['required', 'string', 'max:255'],

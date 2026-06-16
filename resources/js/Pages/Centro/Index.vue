@@ -1306,7 +1306,7 @@ function saveDraftField(row, field) {
 }
 
 const taskRows = computed(() => props.rows.filter((row) => {
-    if (row.parent_task_id) return false;
+    if (row.parent_task_id !== null && row.parent_task_id !== undefined && row.parent_task_id !== '') return false;
 
     const dueDate = parseDateOnly(row.due_date);
     const matchesWeek = dueDate && dueDate >= taskWeekStart.value && dueDate <= taskWeekEnd.value;
@@ -3437,7 +3437,8 @@ function visibleCalendarTasks(cell) {
                                     v-for="task in tasksByStatus(status)"
                                     :key="task.id"
                                     :class="[
-                                        'content-card relative rounded-md border border-gray-200 bg-white p-3 shadow-sm transition hover:border-indigo-200 hover:shadow',
+                                        'content-card relative rounded-md border p-3 shadow-sm transition hover:shadow',
+                                        taskTypeClass(task.task_type),
                                         task.status === 'done' ? 'task-card-done' : '',
                                     ]"
                                 >
@@ -3456,7 +3457,6 @@ function visibleCalendarTasks(cell) {
                                             </div>
                                         </div>
                                         <div class="mt-3 flex flex-wrap items-center gap-1.5">
-                                            <span :class="['rounded-full border px-2 py-0.5 text-[10px] font-medium', taskTypeClass(task.task_type)]">{{ displayValue(task.task_type || 'task') }}</span>
                                             <span
                                                 class="rounded-full px-2 py-0.5 text-[10px] font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.28)]"
                                                 :style="{ backgroundColor: priorityColor(task.priority), color: priorityTextColor(task.priority) }"
