@@ -3455,7 +3455,7 @@ function visibleCalendarTasks(cell) {
                                                 <h4 :class="['truncate text-sm font-semibold text-gray-900', task.status === 'done' ? 'line-through opacity-60' : '']">{{ task.title }}</h4>
                                             </div>
                                         </div>
-                                        <div class="mt-2 flex flex-wrap items-center gap-1.5">
+                                        <div class="mt-3 flex flex-wrap items-center gap-1.5">
                                             <span :class="['rounded-full border px-2 py-0.5 text-[10px] font-medium', taskTypeClass(task.task_type)]">{{ displayValue(task.task_type || 'task') }}</span>
                                             <span
                                                 class="rounded-full px-2 py-0.5 text-[10px] font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.28)]"
@@ -3465,7 +3465,7 @@ function visibleCalendarTasks(cell) {
                                             </span>
                                             <span v-if="task.client_name" class="min-w-0 max-w-full truncate rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">{{ task.client_name }}</span>
                                         </div>
-                                        <div class="mt-3 flex items-center justify-between gap-3 text-xs text-gray-500">
+                                        <div class="mt-4 flex items-center justify-between gap-3 text-xs text-gray-500">
                                             <span v-if="task.subtask_count" class="inline-flex items-center gap-1 font-semibold text-gray-500">
                                                 <span>{{ task.subtask_count }}</span>
                                                 <svg class="h-3.5 w-3.5 fill-current" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -3474,7 +3474,7 @@ function visibleCalendarTasks(cell) {
                                             </span>
                                             <span class="ml-auto shrink-0 text-right">{{ task.due_date ? dateIt(task.due_date) : 'Senza scadenza' }}</span>
                                         </div>
-                                        <div v-if="(task.task_type || 'task') === 'meeting' && task.due_time" class="mt-3 border-t border-gray-100 pt-2 text-xs font-bold text-gray-700">
+                                        <div v-if="(task.task_type || 'task') === 'meeting' && task.due_time" class="mt-4 border-t border-gray-100 pt-2.5 text-xs font-bold text-gray-700">
                                             {{ String(task.due_time).slice(0, 5) }}
                                         </div>
                                     </Link>
