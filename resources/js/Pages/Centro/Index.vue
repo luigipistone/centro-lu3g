@@ -3381,7 +3381,10 @@ function visibleCalendarTasks(cell) {
                                 <article
                                     v-for="task in tasksByStatus(status)"
                                     :key="task.id"
-                                    class="content-card rounded-md border border-gray-200 bg-white p-3 shadow-sm transition hover:border-indigo-200 hover:shadow"
+                                    :class="[
+                                        'content-card rounded-md border border-gray-200 bg-white p-3 shadow-sm transition hover:border-indigo-200 hover:shadow',
+                                        task.status === 'done' ? 'opacity-55 hover:opacity-80' : '',
+                                    ]"
                                 >
                                     <div class="flex items-start justify-between gap-3">
                                         <Link :href="route('tasks.show', task.id)" class="min-w-0 flex-1">
