@@ -753,15 +753,32 @@ html.dark .task-type-card {
     box-shadow: var(--shadow-soft);
 }
 
+html.dark .task-type-card [class*="text-gray-900"],
+html.dark .task-type-card [class*="text-gray-800"],
+html.dark .task-type-card [class*="text-gray-700"] {
+    color: hsl(222 26% 13%) !important;
+}
+
+html.dark .task-type-card [class*="text-gray-600"],
+html.dark .task-type-card [class*="text-gray-500"],
+html.dark .task-type-card [class*="text-gray-400"] {
+    color: hsl(222 16% 32%) !important;
+}
+
 html.dark .field-dropdown-option {
     color: hsl(216 28% 94%) !important;
 }
 
-html.dark .field-dropdown-option:hover,
 html.dark .field-dropdown-option[class*="bg-indigo-50"],
-html.dark .field-dropdown-option[class*="bg-gray-50"],
-html.dark .field-dropdown-option[class*="hover:bg-gray-50"]:hover {
-    background: hsl(221 54% 28% / 0.72) !important;
+html.dark .field-dropdown-option[class*="bg-gray-50"] {
+    background: transparent !important;
+    color: hsl(216 28% 96%) !important;
+}
+
+html.dark .field-dropdown-option:hover,
+html.dark .field-dropdown-option[class*="hover:bg-gray-50"]:hover,
+html.dark .field-dropdown-option[class*="hover:bg-indigo-50"]:hover {
+    background: hsl(220 20% 20% / 0.88) !important;
     color: hsl(216 28% 98%) !important;
 }
 
@@ -844,7 +861,7 @@ html.dark .calendar-cell {
     --hue: calc(18 * var(--i) + 190);
     position: absolute;
     left: calc((var(--i) * 5.5%) - 4%);
-    bottom: -15vh;
+    bottom: -18vh;
     width: clamp(28px, 4vw, 54px);
     height: clamp(36px, 5vw, 68px);
     border-radius: 50% 50% 46% 46%;
@@ -852,6 +869,23 @@ html.dark .calendar-cell {
     box-shadow: inset -8px -10px 18px hsl(0 0% 0% / 0.14), inset 7px 8px 12px hsl(0 0% 100% / 0.32);
     animation: completion-balloon-rise 3.2s cubic-bezier(0.18, 0.72, 0.2, 1) forwards;
     animation-delay: calc(var(--i) * 32ms);
+}
+
+.completion-balloon:nth-child(3n) {
+    bottom: -30vh;
+    scale: 0.86;
+}
+
+.completion-balloon:nth-child(4n) {
+    left: calc((var(--i) * 4.4%) + 8%);
+    bottom: -6vh;
+    scale: 1.08;
+}
+
+.completion-balloon:nth-child(5n) {
+    left: calc((var(--i) * 6.2%) - 18%);
+    bottom: -42vh;
+    scale: 0.74;
 }
 
 .completion-balloon::after {
@@ -865,12 +899,10 @@ html.dark .calendar-cell {
 }
 
 .completion-firework {
-    --x: calc(8% + var(--i) * 9%);
-    --y: calc(16% + var(--i) * 5.8%);
     --hue: calc(35 * var(--i) + 190);
     position: absolute;
-    left: var(--x);
-    top: var(--y);
+    left: calc(10% + var(--i) * 8%);
+    top: calc(12% + var(--i) * 4%);
     width: 9px;
     height: 9px;
     border-radius: 999px;
@@ -889,10 +921,23 @@ html.dark .calendar-cell {
     opacity: 0;
 }
 
+.completion-firework:nth-child(2n) {
+    top: calc(72% - var(--i) * 3%);
+}
+
+.completion-firework:nth-child(3n) {
+    left: calc(86% - var(--i) * 7%);
+    top: calc(22% + var(--i) * 6%);
+}
+
+.completion-firework:nth-child(4n) {
+    left: calc(18% + var(--i) * 5%);
+    top: calc(82% - var(--i) * 5%);
+}
+
 .completion-snowflake {
-    --x: calc((var(--i) - 1) * 2.35%);
     position: absolute;
-    left: var(--x);
+    left: calc((var(--i) - 1) * 2.35%);
     top: -8vh;
     width: 7px;
     height: 7px;
@@ -903,6 +948,15 @@ html.dark .calendar-cell {
     animation-delay: calc(var(--i) * 28ms);
 }
 
+.completion-snowflake:nth-child(3n) {
+    top: -22vh;
+}
+
+.completion-snowflake:nth-child(4n) {
+    top: -34vh;
+    opacity: 0.72;
+}
+
 .completion-glitch-panel {
     position: absolute;
     inset: 0;
@@ -911,10 +965,34 @@ html.dark .calendar-cell {
     font-size: clamp(2.4rem, 9vw, 7rem);
     font-weight: 850;
     letter-spacing: 0;
-    color: hsl(216 28% 98%);
-    text-shadow: -4px 0 hsl(185 95% 58% / 0.9), 4px 0 hsl(330 95% 58% / 0.82);
-    background: hsl(222 34% 7% / 0.22);
-    animation: completion-glitch-flash 1.55s steps(2, end) forwards;
+    color: hsl(216 28% 98% / 0.94);
+    text-shadow: -5px 0 hsl(185 95% 58% / 0.86), 5px 0 hsl(330 95% 58% / 0.78);
+    background:
+        repeating-linear-gradient(0deg, hsl(0 0% 100% / 0.06) 0 1px, transparent 1px 4px),
+        repeating-linear-gradient(90deg, hsl(185 100% 60% / 0.08) 0 2px, hsl(330 100% 58% / 0.08) 2px 4px, transparent 4px 8px),
+        hsl(222 38% 6% / 0.34);
+    animation: completion-tv-glitch 1.9s steps(2, end) forwards;
+}
+
+.completion-glitch-panel::before,
+.completion-glitch-panel::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(transparent 8%, hsl(0 0% 100% / 0.22) 8.4%, transparent 9.2%),
+        linear-gradient(90deg, transparent, hsl(185 100% 65% / 0.16), transparent);
+    mix-blend-mode: screen;
+    animation: completion-tv-roll 420ms steps(3, end) infinite;
+}
+
+.completion-glitch-panel::after {
+    background:
+        radial-gradient(circle at 20% 30%, hsl(0 0% 100% / 0.26), transparent 2px),
+        radial-gradient(circle at 76% 62%, hsl(0 0% 100% / 0.2), transparent 2px),
+        repeating-radial-gradient(circle, hsl(0 0% 100% / 0.12) 0 1px, transparent 1px 4px);
+    opacity: 0.64;
+    animation: completion-tv-noise 180ms steps(2, end) infinite;
 }
 
 @keyframes completion-balloon-rise {
@@ -961,25 +1039,48 @@ html.dark .calendar-cell {
     }
 }
 
-@keyframes completion-glitch-flash {
+@keyframes completion-tv-glitch {
     0% {
         opacity: 0;
-        clip-path: inset(42% 0 40% 0);
-        transform: translateX(-8px);
+        clip-path: inset(0 0 0 0);
+        transform: translateX(-18px) skewX(-8deg);
     }
-    12%, 58% {
+    8%, 18% {
+        opacity: 1;
+        clip-path: inset(12% 0 72% 0);
+        transform: translateX(16px) skewX(7deg);
+    }
+    28%, 52% {
         opacity: 1;
         clip-path: inset(0 0 0 0);
-        transform: translateX(0);
+        transform: translateX(0) skewX(0);
     }
-    72% {
+    64% {
         opacity: 1;
-        clip-path: inset(18% 0 62% 0);
-        transform: translateX(10px);
+        clip-path: inset(64% 0 18% 0);
+        transform: translateX(-12px) skewX(-5deg);
     }
     100% {
         opacity: 0;
         clip-path: inset(0 0 0 0);
         transform: translateX(0);
+    }
+}
+
+@keyframes completion-tv-roll {
+    from {
+        transform: translateY(-18%);
+    }
+    to {
+        transform: translateY(18%);
+    }
+}
+
+@keyframes completion-tv-noise {
+    0% {
+        transform: translate3d(-2%, 1%, 0);
+    }
+    100% {
+        transform: translate3d(2%, -1%, 0);
     }
 }

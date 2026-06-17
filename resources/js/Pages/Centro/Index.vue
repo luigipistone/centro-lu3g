@@ -3223,7 +3223,7 @@ function visibleCalendarTasks(cell) {
                                         :key="subtask.id"
                                         draggable="true"
                                         :class="[
-                                            'subtask-line md:grid-cols-[68px_minmax(0,1fr)_54px_54px_auto]',
+                                            'subtask-line md:grid-cols-[68px_minmax(0,1fr)_96px_72px_auto]',
                                             calendarSubtaskAssigneeMenuOpen === subtask.id ? 'z-[6600]' : 'z-0',
                                             calendarDraggedSubtaskId === subtask.id ? 'is-dragging' : '',
                                             calendarSubtaskDropTarget === subtask.id && calendarSubtaskDropPlacement === 'before' ? 'drop-before' : '',
