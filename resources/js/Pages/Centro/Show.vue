@@ -1687,8 +1687,10 @@ function plainText(value) {
     return String(value || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
 }
 
-function activityValue(value) {
+function activityValue(value, field = null) {
     if (value === null || value === undefined || value === '') return 'vuoto';
+    if (['start_date', 'due_date'].includes(field) && /^\d{4}-\d{2}-\d{2}/.test(String(value))) return dateIt(value);
+    if (field === 'due_time') return String(value).slice(0, 5);
     if (value === '1') return 'Si';
     if (value === '0') return 'No';
     return displayValue(value);
@@ -1713,7 +1715,7 @@ function activityText(activity) {
     if (activity.action === 'people_updated') return `${actor} ha aggiornato ${field}`;
 
     if (activity.old_value !== activity.new_value) {
-        return `${actor} ha modificato ${field} da "${activityValue(activity.old_value)}" a "${activityValue(activity.new_value)}"`;
+        return `${actor} ha modificato ${field} da "${activityValue(activity.old_value, activity.field)}" a "${activityValue(activity.new_value, activity.field)}"`;
     }
 
     return `${actor} ha aggiornato ${field}`;
@@ -1990,7 +1992,7 @@ onUnmounted(() => {
                     </div>
                 </div>
                 <div v-if="section === 'tasks'" class="flex flex-wrap justify-end gap-2">
-                    <button type="button" class="btn btn-outline" @click="toggleTaskComplete">
+                    <button type="button" class="btn btn-outline status-action-button" @click="toggleTaskComplete">
                         <Check class="h-4 w-4" :stroke-width="1.7" />
                         {{ taskForm.status === 'done' ? 'Riapri' : 'Completa' }}
                     </button>
@@ -3372,7 +3374,7 @@ onUnmounted(() => {
                             <div class="flex self-center items-center justify-end gap-1">
                                 <button
                                     type="button"
-                                    :class="['icon-btn h-9 w-9', subtaskStatusPulse === subtask.id ? 'status-action-pulse' : '']"
+                                    :class="['icon-btn status-action-button h-9 w-9', subtaskStatusPulse === subtask.id ? 'status-action-pulse' : '']"
                                     :title="(subtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'Riapri sottoattività' : 'Completa sottoattività'"
                                     @click="setSubtaskStatus(subtask, (subtaskDrafts[subtask.id]?.status || subtask.status) !== 'done')"
                                 >

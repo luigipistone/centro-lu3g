@@ -1117,8 +1117,10 @@ function dateTimeIt(value) {
     return new Date(value).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-function activityValue(value) {
+function activityValue(value, field = null) {
     if (value === null || value === undefined || value === '') return 'vuoto';
+    if (['start_date', 'due_date'].includes(field) && /^\d{4}-\d{2}-\d{2}/.test(String(value))) return dateIt(value);
+    if (field === 'due_time') return String(value).slice(0, 5);
     if (value === '1') return 'Si';
     if (value === '0') return 'No';
     return displayValue(value);
@@ -1143,7 +1145,7 @@ function activityText(activity) {
     if (activity.action === 'people_updated') return `${actor} ha aggiornato ${field}`;
 
     if (activity.old_value !== activity.new_value) {
-        return `${actor} ha modificato ${field} da "${activityValue(activity.old_value)}" a "${activityValue(activity.new_value)}"`;
+        return `${actor} ha modificato ${field} da "${activityValue(activity.old_value, activity.field)}" a "${activityValue(activity.new_value, activity.field)}"`;
     }
 
     return `${actor} ha aggiornato ${field}`;
@@ -2789,7 +2791,7 @@ function visibleCalendarTasks(cell) {
                                             <div class="flex items-start">
                                                 <button
                                                     type="button"
-                                                    :class="['absolute left-2 top-2 h-3.5 w-3.5 shrink-0 -translate-x-5 rounded-md border opacity-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] transition duration-200 group-hover/task:translate-x-0 group-hover/task:opacity-100 group-focus/task:translate-x-0 group-focus/task:opacity-100', task.status === 'done' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300 bg-white/78 hover:border-indigo-400']"
+                                                    :class="['status-action-button absolute left-2 top-2 h-3.5 w-3.5 shrink-0 -translate-x-5 rounded-md border opacity-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] transition duration-200 group-hover/task:translate-x-0 group-hover/task:opacity-100 group-focus/task:translate-x-0 group-focus/task:opacity-100', task.status === 'done' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300 bg-white/78 hover:border-indigo-400']"
                                                     :title="task.status === 'done' ? 'Riapri task' : 'Completa task'"
                                                     @click.stop="toggleTaskDone(task)"
                                                 >
@@ -2872,7 +2874,7 @@ function visibleCalendarTasks(cell) {
                             <button
                                 v-if="calendarTaskForm.id"
                                 type="button"
-                                :class="['btn btn-outline', calendarTaskStatusPulse ? 'status-action-pulse' : '']"
+                                :class="['btn btn-outline status-action-button', calendarTaskStatusPulse ? 'status-action-pulse' : '']"
                                 @click="toggleCalendarTaskComplete"
                             >
                                 <Check class="h-4 w-4" :stroke-width="1.7" />
@@ -3146,7 +3148,7 @@ function visibleCalendarTasks(cell) {
                                         <div class="flex self-center items-center justify-end gap-1">
                                             <button
                                                 type="button"
-                                                :class="['icon-btn h-9 w-9', calendarSubtaskStatusPulse === subtask.id ? 'status-action-pulse' : '']"
+                                                :class="['icon-btn status-action-button h-9 w-9', calendarSubtaskStatusPulse === subtask.id ? 'status-action-pulse' : '']"
                                                 :title="(calendarSubtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'Riapri sottoattività' : 'Completa sottoattività'"
                                                 @click="setCalendarSubtaskStatus(subtask, (calendarSubtaskDrafts[subtask.id]?.status || subtask.status) !== 'done')"
                                             >
