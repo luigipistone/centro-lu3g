@@ -156,42 +156,44 @@ const groups = [
                         </span>
                     </button>
 
-                    <button
-                        v-if="notificationMenuOpen"
-                        type="button"
-                        class="fixed inset-0 z-30 cursor-default bg-transparent"
-                        aria-label="Chiudi notifiche"
-                        @click="notificationMenuOpen = false"
-                    ></button>
+                    <Teleport to="body">
+                        <button
+                            v-if="notificationMenuOpen"
+                            type="button"
+                            class="fixed inset-0 z-[7800] cursor-default bg-transparent"
+                            aria-label="Chiudi notifiche"
+                            @click="notificationMenuOpen = false"
+                        ></button>
 
-                    <div
-                        v-if="notificationMenuOpen"
-                        class="app-popover fixed left-[17rem] top-4 z-40 w-96 max-w-[calc(100vw-18rem)] overflow-hidden rounded-2xl border border-white bg-white shadow-[0_24px_70px_rgba(28,42,73,0.14)]"
-                        @click.stop
-                    >
-                        <div class="flex items-center justify-between border-b border-white/60 px-3 py-2">
-                            <span class="text-sm font-semibold text-gray-900">Notifiche</span>
-                            <Link :href="route('notifications.index')" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="notificationMenuOpen = false">Vedi tutte</Link>
+                        <div
+                            v-if="notificationMenuOpen"
+                            class="app-popover fixed left-[17rem] top-4 z-[7900] w-96 max-w-[calc(100vw-18rem)] overflow-hidden rounded-2xl border border-white bg-white shadow-[0_24px_70px_rgba(28,42,73,0.14)]"
+                            @click.stop
+                        >
+                            <div class="flex items-center justify-between border-b border-white/60 px-3 py-2">
+                                <span class="text-sm font-semibold text-gray-900">Notifiche</span>
+                                <Link :href="route('notifications.index')" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="notificationMenuOpen = false">Vedi tutte</Link>
+                            </div>
+                            <div v-if="notificationPermission === 'default'" class="border-b border-white/60 px-3 py-2">
+                                <button type="button" class="text-xs font-semibold text-indigo-600 transition hover:text-indigo-500" @click="enableBrowserNotifications">
+                                    Attiva notifiche browser
+                                </button>
+                            </div>
+                            <div v-if="$page.props.notifications?.latest?.length" class="max-h-80 overflow-y-auto py-1">
+                                <Link
+                                    v-for="notification in $page.props.notifications.latest"
+                                    :key="notification.id"
+                                    :href="notification.task_id ? route('tasks.show', notification.task_id) : route('notifications.index')"
+                                    :class="['block border-l-2 px-3 py-2 text-sm transition hover:bg-white/58', notification.read ? 'border-transparent text-gray-600' : 'border-indigo-600 bg-indigo-50/70 text-gray-900']"
+                                    @click="notificationMenuOpen = false"
+                                >
+                                    <span class="line-clamp-2">{{ notification.message }}</span>
+                                    <span class="mt-1 block text-[11px] text-gray-400">{{ notification.read ? 'Letta' : 'Da leggere' }}</span>
+                                </Link>
+                            </div>
+                            <div v-else class="px-3 py-8 text-center text-sm text-gray-500">Nessuna notifica</div>
                         </div>
-                        <div v-if="notificationPermission === 'default'" class="border-b border-white/60 px-3 py-2">
-                            <button type="button" class="text-xs font-semibold text-indigo-600 transition hover:text-indigo-500" @click="enableBrowserNotifications">
-                                Attiva notifiche browser
-                            </button>
-                        </div>
-                        <div v-if="$page.props.notifications?.latest?.length" class="max-h-80 overflow-y-auto py-1">
-                            <Link
-                                v-for="notification in $page.props.notifications.latest"
-                                :key="notification.id"
-                                :href="notification.task_id ? route('tasks.show', notification.task_id) : route('notifications.index')"
-                                :class="['block border-l-2 px-3 py-2 text-sm transition hover:bg-white/58', notification.read ? 'border-transparent text-gray-600' : 'border-indigo-600 bg-indigo-50/70 text-gray-900']"
-                                @click="notificationMenuOpen = false"
-                            >
-                                <span class="line-clamp-2">{{ notification.message }}</span>
-                                <span class="mt-1 block text-[11px] text-gray-400">{{ notification.read ? 'Letta' : 'Da leggere' }}</span>
-                            </Link>
-                        </div>
-                        <div v-else class="px-3 py-8 text-center text-sm text-gray-500">Nessuna notifica</div>
-                    </div>
+                    </Teleport>
                 </div>
             </div>
 
