@@ -447,7 +447,7 @@ class CentroPageController extends Controller
                 'projects' => DB::table('projects')->where('client_id', $id)->latest()->get(),
                 'tasks' => DB::table('tasks')
                     ->where('client_id', $id)
-                    ->where(fn ($query) => $query->whereNull('parent_task_id')->orWhere('parent_task_id', ''))
+                    ->where(fn ($query) => $query->whereNull('parent_task_id')->orWhereRaw("TRIM(parent_task_id) = ''"))
                     ->latest()
                     ->limit(20)
                     ->get(),

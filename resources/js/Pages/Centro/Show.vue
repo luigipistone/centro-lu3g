@@ -1574,7 +1574,7 @@ function floatingMenuStyleFromEvent(event, width = 288) {
 }
 
 function parentTaskRows(tasks = []) {
-    return (tasks || []).filter((task) => task.parent_task_id === null || task.parent_task_id === undefined || task.parent_task_id === '');
+    return (tasks || []).filter((task) => !String(task.parent_task_id || '').trim());
 }
 
 function personAvatarClass(selected) {
