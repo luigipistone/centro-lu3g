@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import { APP_TIME_ZONE } from '@/utils/formatters';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import {
@@ -403,7 +404,7 @@ function stopResize() {
 
 function dateShort(value) {
     if (!value) return '';
-    return new Date(value).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', day: 'numeric', month: 'short' });
+    return new Date(value).toLocaleDateString('it-IT', { timeZone: APP_TIME_ZONE, day: 'numeric', month: 'short' });
 }
 
 function priorityDot(priority) {

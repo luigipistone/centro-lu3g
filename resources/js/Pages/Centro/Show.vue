@@ -2,6 +2,14 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
+import {
+    activityText as formatActivityText,
+    dateIt,
+    dateTimeIt,
+    displayValue,
+    money,
+    plainText,
+} from '@/utils/formatters';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import {
     Bold,
@@ -63,89 +71,6 @@ const labels = {
     description: 'Descrizione',
     notes: 'Note',
 };
-const appTimeZone = 'Europe/Rome';
-
-const valueLabels = {
-    active: 'Attivo',
-    completed: 'Completato',
-    on_hold: 'In pausa',
-    archived: 'Archiviato',
-    todo: 'Da fare',
-    in_progress: 'In corso',
-    in_review: 'Review',
-    done: 'Fatte',
-    low: 'Bassa',
-    medium: 'Media',
-    high: 'Alta',
-    urgent: 'Urgente',
-    project: 'Task',
-    task: 'Task',
-    ongoing: 'Continuativa',
-    meeting: 'Meeting',
-    draft: 'Bozza',
-    sent: 'Inviato',
-    accepted: 'Accettato',
-    rejected: 'Rifiutato',
-    paid: 'Pagato',
-    partially_paid: 'Parziale',
-    overdue: 'Scaduto',
-    cancelled: 'Annullato',
-    week: 'Settimana',
-    month: 'Mese',
-    fixed: 'Fissa',
-    relative: 'Relativa',
-    srl: 'SRL',
-    srls: 'SRLS',
-    spa: 'SPA',
-    sas: 'SAS',
-    snc: 'SNC',
-    ditta_individuale: 'Ditta individuale',
-    libero_professionista: 'Libero professionista',
-    associazione: 'Associazione',
-    ente_pubblico: 'Ente pubblico',
-    ecommerce: 'E-commerce',
-    retail: 'Retail',
-    servizi: 'Servizi',
-    immobiliare: 'Immobiliare',
-    turismo: 'Turismo',
-    ristorazione: 'Ristorazione',
-    salute_benessere: 'Salute e benessere',
-    formazione: 'Formazione',
-    industria: 'Industria',
-    no_profit: 'No profit',
-    passaparola: 'Passaparola',
-    sito_web: 'Sito web',
-    social: 'Social',
-    campagna_adv: 'Campagna ADV',
-    evento: 'Evento',
-    partner: 'Partner',
-    chiamata: 'Chiamata',
-    ordinario: 'IVA ordinaria',
-    split_payment: 'Split payment',
-    reverse_charge: 'Reverse charge',
-    esente: 'Esente IVA',
-    non_imponibile: 'Non imponibile',
-    fuori_campo: 'Fuori campo IVA',
-    forfettario: 'Regime forfettario',
-    altro: 'Altro',
-    superadmin: 'Superadmin',
-    admin: 'Admin',
-    editor: 'Editor',
-    guest: 'Guest',
-    IT: 'Italia',
-    SM: 'San Marino',
-    VA: 'Citta del Vaticano',
-    FR: 'Francia',
-    DE: 'Germania',
-    ES: 'Spagna',
-    CH: 'Svizzera',
-    AT: 'Austria',
-    GB: 'Regno Unito',
-    US: 'Stati Uniti',
-    0: 'No',
-    1: 'Si',
-};
-
 const clientSelectOptions = {
     legal_form: ['srl', 'srls', 'spa', 'sas', 'snc', 'ditta_individuale', 'libero_professionista', 'associazione', 'ente_pubblico', 'altro'],
     business_sector: ['ecommerce', 'retail', 'servizi', 'immobiliare', 'turismo', 'ristorazione', 'salute_benessere', 'formazione', 'industria', 'no_profit', 'altro'],
@@ -204,12 +129,6 @@ const subscriptionFrequencyOptions = [
     { value: 'month', label: 'Mese/i' },
     { value: 'year', label: 'Anno/i' },
 ];
-
-function displayValue(value) {
-    if (value === true) return 'Si';
-    if (value === false) return 'No';
-    return valueLabels[value] || value || '-';
-}
 
 function clientOptionLabel(field, value) {
     if (field === 'payment_terms_days') {
@@ -1664,62 +1583,14 @@ function fullClientAddress(record) {
     ].filter(Boolean).join(' - ') || record.address;
 }
 
-function money(value) {
-    return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(Number(value || 0));
-}
-
 function subscriptionFrequency(subscription) {
     const unit = subscription.frequency_unit === 'year' ? 'anno' : 'mese';
     const plural = Number(subscription.frequency_value) > 1 ? (subscription.frequency_unit === 'year' ? 'anni' : 'mesi') : unit;
     return `ogni ${subscription.frequency_value} ${plural}`;
 }
 
-function dateIt(value) {
-    if (!value) return '-';
-    return new Date(value).toLocaleDateString('it-IT', { timeZone: appTimeZone });
-}
-
-function dateTimeIt(value) {
-    if (!value) return '-';
-    return new Date(value).toLocaleString('it-IT', { timeZone: appTimeZone, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
-
-function plainText(value) {
-    return String(value || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
-}
-
-function activityValue(value, field = null) {
-    if (value === null || value === undefined || value === '') return 'vuoto';
-    if (['start_date', 'due_date'].includes(field) && /^\d{4}-\d{2}-\d{2}/.test(String(value))) return dateIt(value);
-    if (field === 'due_time') return String(value).slice(0, 5);
-    if (value === '1') return 'Si';
-    if (value === '0') return 'No';
-    return displayValue(value);
-}
-
-function activityFieldLabel(field) {
-    if (field === 'assignee_ids') return 'assegnatari';
-    if (field === 'follower_ids') return 'follower';
-    if (field === 'content') return 'commento';
-    return (labels[field] || field || 'dettaglio').toLowerCase();
-}
-
 function activityText(activity) {
-    const actor = activity.user_name || 'Qualcuno';
-    const field = activityFieldLabel(activity.field);
-
-    if (activity.action === 'comment_created') return `${actor} ha aggiunto un commento`;
-    if (activity.action === 'comment_updated') return `${actor} ha modificato un commento`;
-    if (activity.action === 'comment_deleted') return `${actor} ha eliminato un commento`;
-    if (activity.action === 'subtask_created') return `${actor} ha creato la sottoattività "${plainText(activity.new_value) || 'senza titolo'}"`;
-    if (activity.action === 'task_created') return `${actor} ha creato questa attività`;
-    if (activity.action === 'people_updated') return `${actor} ha aggiornato ${field}`;
-
-    if (activity.old_value !== activity.new_value) {
-        return `${actor} ha modificato ${field} da "${activityValue(activity.old_value, activity.field)}" a "${activityValue(activity.new_value, activity.field)}"`;
-    }
-
-    return `${actor} ha aggiornato ${field}`;
+    return formatActivityText(activity, labels);
 }
 
 function docTypeLabel(type) {
