@@ -351,6 +351,19 @@
         overflow: hidden;
     }
 
+    .subtask-line {
+        @apply relative grid gap-3 overflow-visible px-1 py-2.5 text-sm transition hover:bg-gray-50/70;
+        border-radius: var(--radius-sm);
+    }
+
+    .subtask-line-control {
+        @apply mt-0 block w-full border-0 bg-transparent px-0 py-1 text-sm text-gray-900 shadow-none outline-none transition placeholder:text-gray-400 focus:outline-none focus:ring-0;
+    }
+
+    .subtask-line-people {
+        @apply mt-0 flex min-h-9 w-full items-center justify-between gap-2 border-0 bg-transparent px-0 py-1 text-left text-sm font-medium text-gray-700 shadow-none transition hover:text-gray-900 focus:outline-none focus:ring-0;
+    }
+
     .field-dropdown-menu {
         border: 1px solid hsl(0 0% 100% / 0.8);
         border-radius: var(--radius);

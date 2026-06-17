@@ -2963,7 +2963,7 @@ function visibleCalendarTasks(cell) {
                                         v-for="subtask in calendarPanelSubtasks()"
                                         :key="subtask.id"
                                         :class="[
-                                            'relative grid gap-3 overflow-visible rounded-[var(--radius-sm)] border border-gray-100 bg-white px-3 py-3 text-sm transition hover:border-indigo-100 hover:shadow-sm md:grid-cols-[minmax(0,1fr)_160px_145px_auto]',
+                                            'subtask-line md:grid-cols-[minmax(0,1fr)_160px_145px_auto]',
                                             calendarSubtaskAssigneeMenuOpen === subtask.id ? 'z-[6600]' : 'z-0',
                                         ]"
                                     >
@@ -2971,13 +2971,13 @@ function visibleCalendarTasks(cell) {
                                             <input
                                                 v-if="calendarSubtaskDrafts[subtask.id]"
                                                 v-model="calendarSubtaskDrafts[subtask.id].title"
-                                                :class="['form-control mt-0', (calendarSubtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'text-gray-400 line-through' : '']"
+                                                :class="['subtask-line-control font-medium', (calendarSubtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'text-gray-400 line-through' : '']"
                                                 placeholder="Titolo sottoattività"
                                                 @input="saveCalendarSubtaskInline(subtask)"
                                             />
                                         </div>
                                         <div v-if="calendarSubtaskDrafts[subtask.id]" class="relative" :data-calendar-subtask-assignees="subtask.id">
-                                            <button type="button" class="form-control mt-0 flex items-center justify-between gap-2 text-left" @click.stop="toggleCalendarSubtaskAssigneeMenu(subtask.id, $event)">
+                                            <button type="button" class="subtask-line-people" @click.stop="toggleCalendarSubtaskAssigneeMenu(subtask.id, $event)">
                                                 <span class="flex min-w-0 items-center -space-x-2">
                                                     <UserAvatar v-for="user in calendarSubtaskAssignees(subtask.id).slice(0, 3)" :key="`calendar-subtask-assignee-${subtask.id}-${user.id}`" :user="user" size="xs" class="ring-2 ring-white" />
                                                     <span v-if="!calendarSubtaskAssignees(subtask.id).length" class="truncate text-gray-500">Assegnatari</span>
@@ -3014,7 +3014,7 @@ function visibleCalendarTasks(cell) {
                                         <input
                                             v-if="calendarSubtaskDrafts[subtask.id]"
                                             v-model="calendarSubtaskDrafts[subtask.id].due_date"
-                                            class="form-control mt-0"
+                                            class="subtask-line-control cursor-pointer text-gray-500"
                                             type="date"
                                             @click="openDatePicker"
                                             @focus="openDatePicker"

@@ -3188,7 +3188,7 @@ onUnmounted(() => {
                             v-for="subtask in related.subtasks"
                             :key="subtask.id"
                             :class="[
-                                'relative grid gap-3 overflow-visible rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50 px-3 py-3 text-sm transition hover:border-indigo-100 hover:bg-white md:grid-cols-[minmax(0,1fr)_160px_150px_auto]',
+                                'subtask-line md:grid-cols-[minmax(0,1fr)_160px_150px_auto]',
                                 subtaskAssigneeMenuOpen === subtask.id ? 'z-[6600]' : 'z-0',
                             ]"
                         >
@@ -3196,13 +3196,13 @@ onUnmounted(() => {
                                 <input
                                     v-if="subtaskDrafts[subtask.id]"
                                     v-model="subtaskDrafts[subtask.id].title"
-                                    :class="['form-control mt-0', (subtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'text-gray-400 line-through' : '']"
+                                    :class="['subtask-line-control font-medium', (subtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'text-gray-400 line-through' : '']"
                                     placeholder="Titolo sottoattività"
                                     @input="saveSubtaskInline(subtask)"
                                 />
                             </div>
                             <div v-if="subtaskDrafts[subtask.id]" class="relative" :data-subtask-assignees="subtask.id">
-                                <button type="button" class="form-control mt-0 flex items-center justify-between gap-2 text-left" @click.stop="toggleSubtaskAssigneeMenu(subtask.id, $event)">
+                                <button type="button" class="subtask-line-people" @click.stop="toggleSubtaskAssigneeMenu(subtask.id, $event)">
                                     <span class="flex min-w-0 items-center -space-x-2">
                                         <UserAvatar v-for="user in subtaskAssignees(subtask.id).slice(0, 3)" :key="`subtask-assignee-${subtask.id}-${user.id}`" :user="user" size="xs" class="ring-2 ring-white" />
                                         <span v-if="!subtaskAssignees(subtask.id).length" class="truncate text-gray-500">Assegnatari</span>
@@ -3239,7 +3239,7 @@ onUnmounted(() => {
                             <input
                                 v-if="subtaskDrafts[subtask.id]"
                                 v-model="subtaskDrafts[subtask.id].due_date"
-                                class="form-control mt-0"
+                                class="subtask-line-control cursor-pointer text-gray-500"
                                 type="date"
                                 @input="saveSubtaskInline(subtask)"
                             />
