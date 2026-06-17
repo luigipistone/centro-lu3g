@@ -9,6 +9,7 @@ import {
     displayValue,
     money,
     plainText,
+    shortDateIt,
 } from '@/utils/formatters';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import {
@@ -18,6 +19,7 @@ import {
     Briefcase,
     Building2,
     CalendarClock,
+    CalendarDays,
     ChevronDown,
     Check,
     ChevronLeft,
@@ -27,6 +29,7 @@ import {
     ExternalLink,
     FileText,
     Filter,
+    GripVertical,
     Heading3,
     Italic,
     Link2,
@@ -47,6 +50,7 @@ import {
     Underline,
     UserCog,
     UserPlus,
+    UserRound,
     Users,
     Wallet,
     X,
@@ -312,6 +316,7 @@ const calendarSubtaskForm = useForm({
 const calendarSubtaskAssigneeMenuOpen = ref(null);
 const calendarSubtaskAssigneeMenuStyle = ref({});
 const calendarSubtaskStatusPulse = ref(null);
+const calendarDraggedSubtaskId = ref(null);
 const calendarTaskStatusPulse = ref(false);
 const calendarCommentForm = useForm({
     content: '',
@@ -588,6 +593,52 @@ function calendarSubtaskAssignees(subtaskId) {
     const selected = calendarSubtaskDrafts.value[subtaskId]?.assignee_ids || [];
 
     return (props.users || []).filter((user) => selected.includes(user.id));
+}
+
+function openInlineDatePicker(event) {
+    const input = event.currentTarget?.closest('[data-inline-date]')?.querySelector('input[type="date"]');
+    if (!input) return;
+
+    if (typeof input.showPicker === 'function') {
+        input.showPicker();
+        return;
+    }
+
+    input.focus();
+    input.click();
+}
+
+function startCalendarSubtaskDrag(subtask) {
+    calendarDraggedSubtaskId.value = subtask.id;
+}
+
+function dropCalendarSubtask(targetSubtask) {
+    const fromId = calendarDraggedSubtaskId.value;
+    calendarDraggedSubtaskId.value = null;
+    if (!fromId || fromId === targetSubtask.id || !calendarTaskPanel.value) return;
+
+    const current = [...(calendarTaskPanel.value.subtasks || [])];
+    const fromIndex = current.findIndex((subtask) => subtask.id === fromId);
+    const toIndex = current.findIndex((subtask) => subtask.id === targetSubtask.id);
+    if (fromIndex < 0 || toIndex < 0) return;
+
+    const [moved] = current.splice(fromIndex, 1);
+    current.splice(toIndex, 0, moved);
+    calendarTaskPanel.value = {
+        ...calendarTaskPanel.value,
+        subtasks: current,
+    };
+
+    router.put(route('tasks.subtasks.reorder', calendarTaskForm.id), {
+        ids: current.map((subtask) => subtask.id),
+    }, {
+        preserveScroll: true,
+        preserveState: true,
+    });
+}
+
+function endCalendarSubtaskDrag() {
+    calendarDraggedSubtaskId.value = null;
 }
 
 function floatingMenuStyleFromEvent(event, width = 288) {
@@ -2962,11 +3013,20 @@ function visibleCalendarTasks(cell) {
                                     <div
                                         v-for="subtask in calendarPanelSubtasks()"
                                         :key="subtask.id"
+                                        draggable="true"
                                         :class="[
-                                            'subtask-line md:grid-cols-[minmax(0,1fr)_160px_145px_auto]',
+                                            'subtask-line md:grid-cols-[24px_minmax(0,1fr)_132px_86px_auto]',
                                             calendarSubtaskAssigneeMenuOpen === subtask.id ? 'z-[6600]' : 'z-0',
+                                            calendarDraggedSubtaskId === subtask.id ? 'is-dragging' : '',
                                         ]"
+                                        @dragstart="startCalendarSubtaskDrag(subtask)"
+                                        @dragover.prevent
+                                        @drop.prevent="dropCalendarSubtask(subtask)"
+                                        @dragend="endCalendarSubtaskDrag"
                                     >
+                                        <button type="button" class="mt-1 inline-flex h-8 w-6 cursor-grab items-center justify-center text-gray-300 transition hover:text-gray-500 active:cursor-grabbing" title="Sposta sottoattività">
+                                            <GripVertical class="h-4 w-4" :stroke-width="1.7" />
+                                        </button>
                                         <div class="min-w-0">
                                             <input
                                                 v-if="calendarSubtaskDrafts[subtask.id]"
@@ -2978,12 +3038,13 @@ function visibleCalendarTasks(cell) {
                                         </div>
                                         <div v-if="calendarSubtaskDrafts[subtask.id]" class="relative" :data-calendar-subtask-assignees="subtask.id">
                                             <button type="button" class="subtask-line-people" @click.stop="toggleCalendarSubtaskAssigneeMenu(subtask.id, $event)">
-                                                <span class="flex min-w-0 items-center -space-x-2">
-                                                    <UserAvatar v-for="user in calendarSubtaskAssignees(subtask.id).slice(0, 3)" :key="`calendar-subtask-assignee-${subtask.id}-${user.id}`" :user="user" size="xs" class="ring-2 ring-white" />
-                                                    <span v-if="!calendarSubtaskAssignees(subtask.id).length" class="truncate text-gray-500">Assegnatari</span>
-                                                    <span v-else-if="calendarSubtaskAssignees(subtask.id).length > 3" class="ml-3 text-xs font-semibold text-gray-500">+{{ calendarSubtaskAssignees(subtask.id).length - 3 }}</span>
+                                                <span v-if="calendarSubtaskAssignees(subtask.id).length" class="flex min-w-0 items-center -space-x-2">
+                                                    <UserAvatar v-for="user in calendarSubtaskAssignees(subtask.id).slice(0, 4)" :key="`calendar-subtask-assignee-${subtask.id}-${user.id}`" :user="user" size="xs" class="ring-2 ring-white" />
+                                                    <span v-if="calendarSubtaskAssignees(subtask.id).length > 4" class="ml-3 text-xs font-semibold text-gray-500">+{{ calendarSubtaskAssignees(subtask.id).length - 4 }}</span>
                                                 </span>
-                                                <span class="text-xs font-semibold text-gray-400">{{ calendarSubtaskAssignees(subtask.id).length }}</span>
+                                                <span v-else class="subtask-line-token">
+                                                    <UserRound class="h-4 w-4" :stroke-width="1.7" />
+                                                </span>
                                             </button>
                                             <Teleport to="body">
                                                 <div
@@ -3011,15 +3072,21 @@ function visibleCalendarTasks(cell) {
                                                 </div>
                                             </Teleport>
                                         </div>
-                                        <input
-                                            v-if="calendarSubtaskDrafts[subtask.id]"
-                                            v-model="calendarSubtaskDrafts[subtask.id].due_date"
-                                            class="subtask-line-control cursor-pointer text-gray-500"
-                                            type="date"
-                                            @click="openDatePicker"
-                                            @focus="openDatePicker"
-                                            @input="saveCalendarSubtaskInline(subtask)"
-                                        />
+                                        <div v-if="calendarSubtaskDrafts[subtask.id]" class="relative flex items-center justify-start" data-inline-date>
+                                            <button type="button" :class="[calendarSubtaskDrafts[subtask.id].due_date ? 'subtask-line-token rounded-full px-2.5' : 'subtask-line-token']" @click="openInlineDatePicker">
+                                                <span v-if="calendarSubtaskDrafts[subtask.id].due_date">{{ shortDateIt(calendarSubtaskDrafts[subtask.id].due_date) }}</span>
+                                                <CalendarDays v-else class="h-4 w-4" :stroke-width="1.7" />
+                                            </button>
+                                            <input
+                                                v-model="calendarSubtaskDrafts[subtask.id].due_date"
+                                                class="pointer-events-none absolute h-px w-px opacity-0"
+                                                type="date"
+                                                tabindex="-1"
+                                                @click="openDatePicker"
+                                                @focus="openDatePicker"
+                                                @input="saveCalendarSubtaskInline(subtask)"
+                                            />
+                                        </div>
                                         <div class="flex self-center items-center justify-end gap-1">
                                             <button
                                                 type="button"

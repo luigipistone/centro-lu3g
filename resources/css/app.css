@@ -352,8 +352,12 @@
     }
 
     .subtask-line {
-        @apply relative grid gap-3 overflow-visible px-1 py-2.5 text-sm transition hover:bg-gray-50/70;
+        @apply relative grid gap-3 overflow-visible border-t border-gray-100 px-1 py-2.5 text-sm transition hover:bg-gray-50/70;
         border-radius: var(--radius-sm);
+    }
+
+    .subtask-line.is-dragging {
+        @apply bg-indigo-50/60 opacity-80;
     }
 
     .subtask-line-control {
@@ -361,7 +365,11 @@
     }
 
     .subtask-line-people {
-        @apply mt-0 flex min-h-9 w-full items-center justify-between gap-2 border-0 bg-transparent px-0 py-1 text-left text-sm font-medium text-gray-700 shadow-none transition hover:text-gray-900 focus:outline-none focus:ring-0;
+        @apply mt-0 flex min-h-9 w-full items-center gap-2 border-0 bg-transparent px-0 py-1 text-left text-sm font-medium text-gray-700 shadow-none transition hover:text-gray-900 focus:outline-none focus:ring-0;
+    }
+
+    .subtask-line-token {
+        @apply inline-flex h-8 min-w-8 items-center justify-center rounded-full border border-gray-200 bg-white px-2 text-xs font-semibold text-gray-500 shadow-sm transition hover:border-indigo-200 hover:text-indigo-600 hover:shadow;
     }
 
     .field-dropdown-menu {

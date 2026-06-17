@@ -9,15 +9,18 @@ import {
     displayValue,
     money,
     plainText,
+    shortDateIt,
 } from '@/utils/formatters';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import {
     Bold,
+    CalendarDays,
     Check,
     ChevronLeft,
     Copy,
     Download,
     FileText,
+    GripVertical,
     Heading3,
     Italic,
     Link2,
@@ -31,6 +34,7 @@ import {
     Send,
     Trash2,
     Underline,
+    UserRound,
     X,
 } from '@lucide/vue';
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
@@ -349,6 +353,8 @@ const subtaskAutosaveErrors = ref({});
 const subtaskAssigneeMenuOpen = ref(null);
 const subtaskAssigneeMenuStyle = ref({});
 const subtaskStatusPulse = ref(null);
+const orderedSubtasks = ref([]);
+const draggedSubtaskId = ref(null);
 const subtaskAutosaveTimers = {};
 const subtaskAutosaveSequences = {};
 const selectedAssignees = ref([...(props.related.assignees || [])]);
@@ -1480,6 +1486,49 @@ function subtaskAssignees(subtaskId) {
     return peopleSelected(selected, props.related.users || []);
 }
 
+function openInlineDatePicker(event) {
+    const input = event.currentTarget?.closest('[data-inline-date]')?.querySelector('input[type="date"]');
+    if (!input) return;
+
+    if (typeof input.showPicker === 'function') {
+        input.showPicker();
+        return;
+    }
+
+    input.focus();
+    input.click();
+}
+
+function startSubtaskDrag(subtask) {
+    draggedSubtaskId.value = subtask.id;
+}
+
+function dropSubtask(targetSubtask) {
+    const fromId = draggedSubtaskId.value;
+    draggedSubtaskId.value = null;
+    if (!fromId || fromId === targetSubtask.id) return;
+
+    const current = [...orderedSubtasks.value];
+    const fromIndex = current.findIndex((subtask) => subtask.id === fromId);
+    const toIndex = current.findIndex((subtask) => subtask.id === targetSubtask.id);
+    if (fromIndex < 0 || toIndex < 0) return;
+
+    const [moved] = current.splice(fromIndex, 1);
+    current.splice(toIndex, 0, moved);
+    orderedSubtasks.value = current;
+
+    router.put(route('tasks.subtasks.reorder', props.record.id), {
+        ids: current.map((subtask) => subtask.id),
+    }, {
+        preserveScroll: true,
+        preserveState: true,
+    });
+}
+
+function endSubtaskDrag() {
+    draggedSubtaskId.value = null;
+}
+
 function floatingMenuStyleFromEvent(event, width = 288) {
     const rect = event?.currentTarget?.getBoundingClientRect?.();
     if (!rect) return { right: '1.5rem', top: '50%', transform: 'translateY(-50%)' };
@@ -1782,6 +1831,7 @@ watch(
     () => props.related?.subtasks || [],
     (subtasks) => {
         const next = {};
+        orderedSubtasks.value = [...subtasks];
         for (const subtask of subtasks) {
             next[subtask.id] = {
                 ...(subtaskDrafts.value[subtask.id] || {}),
@@ -3185,13 +3235,22 @@ onUnmounted(() => {
                     </form>
                     <div class="space-y-2">
                         <div
-                            v-for="subtask in related.subtasks"
+                            v-for="subtask in orderedSubtasks"
                             :key="subtask.id"
+                            draggable="true"
                             :class="[
-                                'subtask-line md:grid-cols-[minmax(0,1fr)_160px_150px_auto]',
+                                'subtask-line md:grid-cols-[24px_minmax(0,1fr)_132px_86px_auto]',
                                 subtaskAssigneeMenuOpen === subtask.id ? 'z-[6600]' : 'z-0',
+                                draggedSubtaskId === subtask.id ? 'is-dragging' : '',
                             ]"
+                            @dragstart="startSubtaskDrag(subtask)"
+                            @dragover.prevent
+                            @drop.prevent="dropSubtask(subtask)"
+                            @dragend="endSubtaskDrag"
                         >
+                            <button type="button" class="mt-1 inline-flex h-8 w-6 cursor-grab items-center justify-center text-gray-300 transition hover:text-gray-500 active:cursor-grabbing" title="Sposta sottoattività">
+                                <GripVertical class="h-4 w-4" :stroke-width="1.7" />
+                            </button>
                             <div class="min-w-0">
                                 <input
                                     v-if="subtaskDrafts[subtask.id]"
@@ -3203,12 +3262,13 @@ onUnmounted(() => {
                             </div>
                             <div v-if="subtaskDrafts[subtask.id]" class="relative" :data-subtask-assignees="subtask.id">
                                 <button type="button" class="subtask-line-people" @click.stop="toggleSubtaskAssigneeMenu(subtask.id, $event)">
-                                    <span class="flex min-w-0 items-center -space-x-2">
-                                        <UserAvatar v-for="user in subtaskAssignees(subtask.id).slice(0, 3)" :key="`subtask-assignee-${subtask.id}-${user.id}`" :user="user" size="xs" class="ring-2 ring-white" />
-                                        <span v-if="!subtaskAssignees(subtask.id).length" class="truncate text-gray-500">Assegnatari</span>
-                                        <span v-else-if="subtaskAssignees(subtask.id).length > 3" class="ml-3 text-xs font-semibold text-gray-500">+{{ subtaskAssignees(subtask.id).length - 3 }}</span>
+                                    <span v-if="subtaskAssignees(subtask.id).length" class="flex min-w-0 items-center -space-x-2">
+                                        <UserAvatar v-for="user in subtaskAssignees(subtask.id).slice(0, 4)" :key="`subtask-assignee-${subtask.id}-${user.id}`" :user="user" size="xs" class="ring-2 ring-white" />
+                                        <span v-if="subtaskAssignees(subtask.id).length > 4" class="ml-3 text-xs font-semibold text-gray-500">+{{ subtaskAssignees(subtask.id).length - 4 }}</span>
                                     </span>
-                                    <span class="text-xs font-semibold text-gray-400">{{ subtaskAssignees(subtask.id).length }}</span>
+                                    <span v-else class="subtask-line-token">
+                                        <UserRound class="h-4 w-4" :stroke-width="1.7" />
+                                    </span>
                                 </button>
                                 <Teleport to="body">
                                     <div
@@ -3236,13 +3296,19 @@ onUnmounted(() => {
                                     </div>
                                 </Teleport>
                             </div>
-                            <input
-                                v-if="subtaskDrafts[subtask.id]"
-                                v-model="subtaskDrafts[subtask.id].due_date"
-                                class="subtask-line-control cursor-pointer text-gray-500"
-                                type="date"
-                                @input="saveSubtaskInline(subtask)"
-                            />
+                            <div v-if="subtaskDrafts[subtask.id]" class="relative flex items-center justify-start" data-inline-date>
+                                <button type="button" :class="[subtaskDrafts[subtask.id].due_date ? 'subtask-line-token rounded-full px-2.5' : 'subtask-line-token']" @click="openInlineDatePicker">
+                                    <span v-if="subtaskDrafts[subtask.id].due_date">{{ shortDateIt(subtaskDrafts[subtask.id].due_date) }}</span>
+                                    <CalendarDays v-else class="h-4 w-4" :stroke-width="1.7" />
+                                </button>
+                                <input
+                                    v-model="subtaskDrafts[subtask.id].due_date"
+                                    class="pointer-events-none absolute h-px w-px opacity-0"
+                                    type="date"
+                                    tabindex="-1"
+                                    @input="saveSubtaskInline(subtask)"
+                                />
+                            </div>
                             <div class="flex self-center items-center justify-end gap-1">
                                 <button
                                     type="button"

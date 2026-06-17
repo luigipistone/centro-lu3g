@@ -96,6 +96,17 @@ export function dateIt(value) {
     return new Date(value).toLocaleDateString('it-IT', { timeZone: APP_TIME_ZONE });
 }
 
+export function shortDateIt(value) {
+    if (!value) return '';
+    const formatted = new Date(value).toLocaleDateString('it-IT', {
+        timeZone: APP_TIME_ZONE,
+        day: 'numeric',
+        month: 'short',
+    }).replace('.', '');
+
+    return formatted.replace(/\b([a-zà-ù])/, (match) => match.toUpperCase());
+}
+
 export function dateTimeIt(value) {
     if (!value) return '-';
     return new Date(value).toLocaleString('it-IT', {

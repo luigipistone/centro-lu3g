@@ -287,8 +287,9 @@ class CentroPageController extends Controller
             $taskIds = $rows->pluck('id');
             $subtasksByTask = DB::table('tasks')
                 ->whereIn('parent_task_id', $taskIds)
-                ->latest()
-                ->get(['id', 'parent_task_id', 'title', 'status', 'priority', 'due_date', 'due_time', 'project_id', 'client_id', 'service_id', 'description'])
+                ->orderBy('position')
+                ->orderBy('created_at')
+                ->get(['id', 'parent_task_id', 'title', 'status', 'priority', 'due_date', 'due_time', 'project_id', 'client_id', 'service_id', 'description', 'position'])
                 ->groupBy('parent_task_id');
             $subtaskIds = $subtasksByTask->flatten(1)->pluck('id');
             $assigneesBySubtask = DB::table('task_assignees')
@@ -1391,8 +1392,9 @@ class CentroPageController extends Controller
     {
         $subtasks = DB::table('tasks')
             ->where('parent_task_id', $taskId)
-            ->latest()
-            ->get(['id', 'title', 'status', 'priority', 'due_date', 'due_time']);
+            ->orderBy('position')
+            ->orderBy('created_at')
+            ->get(['id', 'title', 'status', 'priority', 'due_date', 'due_time', 'position']);
 
         $assigneesBySubtask = DB::table('task_assignees')
             ->whereIn('task_id', $subtasks->pluck('id'))
@@ -1952,6 +1954,7 @@ class CentroPageController extends Controller
         }
 
         $subtaskId = (string) str()->uuid();
+        $position = DB::table('tasks')->where('parent_task_id', $id)->count();
 
         DB::table('tasks')->insert([
             'id' => $subtaskId,
@@ -1964,6 +1967,7 @@ class CentroPageController extends Controller
             'client_id' => $task->client_id,
             'service_id' => $task->service_id,
             'parent_task_id' => $id,
+            'position' => $position,
             'created_by' => $request->user()->id,
             'created_at' => now(),
             'updated_at' => now(),
@@ -1980,6 +1984,38 @@ class CentroPageController extends Controller
         );
 
         return back()->with('status', 'Sottoattività creata.');
+    }
+
+    public function reorderSubtasks(Request $request, string $id): RedirectResponse
+    {
+        DB::table('tasks')->where('id', $id)->whereNull('parent_task_id')->exists() || abort(404);
+
+        $payload = $request->validate([
+            'ids' => ['required', 'array'],
+            'ids.*' => ['uuid'],
+        ]);
+
+        $validIds = DB::table('tasks')
+            ->where('parent_task_id', $id)
+            ->whereIn('id', $payload['ids'])
+            ->pluck('id')
+            ->all();
+
+        foreach (array_values($payload['ids']) as $position => $subtaskId) {
+            if (! in_array($subtaskId, $validIds, true)) {
+                continue;
+            }
+
+            DB::table('tasks')
+                ->where('id', $subtaskId)
+                ->where('parent_task_id', $id)
+                ->update([
+                    'position' => $position,
+                    'updated_at' => now(),
+                ]);
+        }
+
+        return back()->with('status', 'Ordine sottoattività aggiornato.');
     }
 
     public function syncTaskPeople(Request $request, string $id, string $type): RedirectResponse
