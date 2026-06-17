@@ -2706,6 +2706,8 @@ class CentroPageController extends Controller
                 'task_activity.created_at',
                 'users.name as user_name',
             ])
+            ->filter(fn ($activity) => $this->normalizeActivityValue($activity->old_value, $activity->field) !== $this->normalizeActivityValue($activity->new_value, $activity->field)
+                || in_array($activity->action, ['comment_created', 'comment_updated', 'comment_deleted', 'subtask_created', 'task_created', 'people_updated'], true))
             ->groupBy('task_id')
             ->map(fn ($activities) => $activities->take(60)->values());
     }
@@ -2718,7 +2720,7 @@ class CentroPageController extends Controller
             }
 
             $oldValue = $oldTask->{$field};
-            if ($this->normalizeActivityValue($oldValue) === $this->normalizeActivityValue($newValue)) {
+            if ($this->normalizeActivityValue($oldValue, $field) === $this->normalizeActivityValue($newValue, $field)) {
                 continue;
             }
 
@@ -2748,16 +2750,16 @@ class CentroPageController extends Controller
             'user_id' => $userId,
             'action' => $action,
             'field' => $field,
-            'old_value' => $this->normalizeActivityValue($oldValue),
-            'new_value' => $this->normalizeActivityValue($newValue),
+            'old_value' => $this->normalizeActivityValue($oldValue, $field),
+            'new_value' => $this->normalizeActivityValue($newValue, $field),
             'created_at' => now(),
             'updated_at' => now(),
         ]);
     }
 
-    private function normalizeActivityValue(mixed $value): ?string
+    private function normalizeActivityValue(mixed $value, ?string $field = null): ?string
     {
-        if ($value === null) {
+        if ($value === null || $value === '') {
             return null;
         }
 
@@ -2767,6 +2769,22 @@ class CentroPageController extends Controller
 
         if (is_array($value) || is_object($value)) {
             return json_encode($value);
+        }
+
+        if ($field === 'due_time') {
+            return substr((string) $value, 0, 5);
+        }
+
+        if (in_array($field, ['start_date', 'due_date'], true)) {
+            return substr((string) $value, 0, 10);
+        }
+
+        if (in_array($field, ['recurring_enabled'], true)) {
+            return filter_var($value, FILTER_VALIDATE_BOOLEAN) ? '1' : '0';
+        }
+
+        if (in_array($field, ['recurring_interval_value', 'recurring_weekday', 'recurring_month_day'], true)) {
+            return (string) (int) $value;
         }
 
         return (string) $value;
