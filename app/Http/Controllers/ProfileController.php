@@ -23,6 +23,7 @@ class ProfileController extends Controller
         return Inertia::render('Profile/Edit', [
             'mustVerifyEmail' => $request->user() instanceof MustVerifyEmail,
             'status' => session('status'),
+            'profile' => DB::table('profiles')->where('user_id', $request->user()->id)->first(['completion_effect']),
         ]);
     }
 
@@ -31,13 +32,28 @@ class ProfileController extends Controller
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
-        $request->user()->fill($request->validated());
+        $payload = $request->validated();
+        $request->user()->fill([
+            'name' => $payload['name'],
+            'email' => $payload['email'],
+        ]);
 
         if ($request->user()->isDirty('email')) {
             $request->user()->email_verified_at = null;
         }
 
         $request->user()->save();
+
+        DB::table('profiles')->updateOrInsert(
+            ['user_id' => $request->user()->id],
+            [
+                'id' => (string) str()->uuid(),
+                'full_name' => $request->user()->name,
+                'completion_effect' => $payload['completion_effect'] ?? 'balloons',
+                'updated_at' => now(),
+                'created_at' => now(),
+            ],
+        );
 
         return Redirect::route('profile.edit');
     }

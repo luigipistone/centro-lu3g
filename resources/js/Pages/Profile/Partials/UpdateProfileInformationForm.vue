@@ -17,10 +17,23 @@ defineProps({
 });
 
 const user = usePage().props.auth.user;
+const profile = usePage().props.profile || {};
+
+const completionEffectOptions = [
+    { value: 'balloons', label: 'Palloncini' },
+    { value: 'fireworks', label: "Fuochi d'artificio" },
+    { value: 'snow', label: 'Nevicata' },
+    { value: 'glitch', label: 'Glitch' },
+];
+const completionEffectValues = completionEffectOptions.map((option) => option.value);
+const currentCompletionEffect = completionEffectValues.includes(profile.completion_effect || user.completion_effect)
+    ? (profile.completion_effect || user.completion_effect)
+    : 'balloons';
 
 const form = useForm({
     name: user.name,
     email: user.email,
+    completion_effect: currentCompletionEffect,
 });
 
 const avatarInput = ref(null);
@@ -127,6 +140,23 @@ function uploadAvatar(event) {
                 >
                     Email di verifica inviata.
                 </div>
+            </div>
+
+            <div>
+                <InputLabel for="completion_effect" value="Animazione completamento task" />
+
+                <select
+                    id="completion_effect"
+                    v-model="form.completion_effect"
+                    class="form-control"
+                >
+                    <option v-for="option in completionEffectOptions" :key="option.value" :value="option.value">
+                        {{ option.label }}
+                    </option>
+                </select>
+
+                <p class="mt-1 text-xs text-gray-500">Viene mostrata a fullscreen per qualche secondo quando completi una task.</p>
+                <InputError class="mt-2" :message="form.errors.completion_effect" />
             </div>
 
             <div class="flex items-center gap-4">

@@ -1918,6 +1918,7 @@ function saveCalendarSubtaskInline(subtask, delay = 650) {
 }
 
 function setCalendarSubtaskStatus(subtask, done) {
+    const wasDone = (calendarSubtaskDrafts.value[subtask.id]?.status || subtask.status) === 'done';
     calendarSubtaskStatusPulse.value = subtask.id;
     window.setTimeout(() => {
         if (calendarSubtaskStatusPulse.value === subtask.id) {
@@ -1937,6 +1938,9 @@ function setCalendarSubtaskStatus(subtask, done) {
         only: ['rows', 'errors', 'flash'],
         onSuccess: () => {
             setInlineState(calendarSubtaskAutosaveStates, subtask.id, 'saved');
+            if (!wasDone && status === 'done') {
+                window.dispatchEvent(new CustomEvent('centro:task-completed'));
+            }
             window.setTimeout(() => {
                 if (calendarSubtaskAutosaveStates.value[subtask.id] === 'saved') {
                     setInlineState(calendarSubtaskAutosaveStates, subtask.id, 'idle');
@@ -2227,11 +2231,22 @@ function setCalendarTaskType(type) {
 
 function toggleCalendarTaskComplete() {
     if (!calendarTaskForm.id) return;
+    const willComplete = calendarTaskForm.status !== 'done';
     calendarTaskStatusPulse.value = true;
     window.setTimeout(() => {
         calendarTaskStatusPulse.value = false;
     }, 360);
     calendarTaskForm.status = calendarTaskForm.status === 'done' ? 'todo' : 'done';
+    if (willComplete) {
+        window.dispatchEvent(new CustomEvent('centro:task-completed'));
+    }
+    saveCalendarTaskInline(0);
+}
+
+function setCalendarTaskStatusFromSelect(value) {
+    if (value === 'done') {
+        window.dispatchEvent(new CustomEvent('centro:task-completed'));
+    }
     saveCalendarTaskInline(0);
 }
 
@@ -2296,9 +2311,17 @@ onUnmounted(() => {
 });
 
 function toggleTaskDone(task) {
+    const willComplete = task.status !== 'done';
     router.patch(route('tasks.status.update', task.id), {
         status: task.status === 'done' ? 'todo' : 'done',
-    }, { preserveScroll: true });
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            if (willComplete) {
+                window.dispatchEvent(new CustomEvent('centro:task-completed'));
+            }
+        },
+    });
 }
 
 function daysBetween(start, end) {
@@ -2996,7 +3019,7 @@ function visibleCalendarTasks(cell) {
                             <div class="grid gap-4 md:grid-cols-2">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Stato</label>
-                                    <AppSelect v-model="calendarTaskForm.status" :options="taskStatusOptions.filter((option) => option.value !== 'all')" @change="saveCalendarTaskInline(0)" />
+                                    <AppSelect v-model="calendarTaskForm.status" :options="taskStatusOptions.filter((option) => option.value !== 'all')" @change="setCalendarTaskStatusFromSelect" />
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Priorità</label>
@@ -3150,8 +3173,8 @@ function visibleCalendarTasks(cell) {
                                     <h4 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Sottoattività</h4>
                                     <span class="text-xs text-gray-400">{{ calendarPanelSubtasks().length }} elementi</span>
                                 </div>
-                                <form class="mb-4 grid items-center gap-2 md:grid-cols-[minmax(0,1fr)_96px_72px_auto]" @submit.prevent="addCalendarSubtask">
-                                    <input v-model="calendarSubtaskForm.title" class="form-control mt-0" placeholder="Nuova sottoattività..." required />
+                                <form class="mb-4 grid items-center gap-1.5 md:grid-cols-[minmax(0,1fr)_48px_48px_auto]" @submit.prevent="addCalendarSubtask">
+                                    <input v-model="calendarSubtaskForm.title" class="subtask-line-control font-medium" placeholder="Nuova sottoattività..." required />
                                     <div class="relative" data-calendar-subtask-create-assignees>
                                         <button type="button" class="subtask-line-people justify-end" @click.stop="toggleCalendarCreateSubtaskAssigneeMenu($event)">
                                             <span v-if="calendarCreateSubtaskAssignees().length" class="flex min-w-0 items-center -space-x-2">
@@ -3200,7 +3223,7 @@ function visibleCalendarTasks(cell) {
                                         :key="subtask.id"
                                         draggable="true"
                                         :class="[
-                                            'subtask-line md:grid-cols-[68px_minmax(0,1fr)_96px_72px_auto]',
+                                            'subtask-line md:grid-cols-[68px_minmax(0,1fr)_54px_54px_auto]',
                                             calendarSubtaskAssigneeMenuOpen === subtask.id ? 'z-[6600]' : 'z-0',
                                             calendarDraggedSubtaskId === subtask.id ? 'is-dragging' : '',
                                             calendarSubtaskDropTarget === subtask.id && calendarSubtaskDropPlacement === 'before' ? 'drop-before' : '',
@@ -3887,7 +3910,7 @@ function visibleCalendarTasks(cell) {
                                     v-for="task in tasksByStatus(status)"
                                     :key="task.id"
                                     :class="[
-                                        'content-card relative rounded-[var(--radius-sm)] border p-3 shadow-sm transition hover:shadow',
+                                        'content-card task-type-card relative rounded-[var(--radius-sm)] border p-3 shadow-sm transition hover:shadow',
                                         taskTypeClass(task.task_type),
                                         task.status === 'done' ? 'task-card-done' : '',
                                     ]"

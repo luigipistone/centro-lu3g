@@ -134,6 +134,13 @@ const subscriptionFrequencyOptions = [
     { value: 'month', label: 'Mese/i' },
     { value: 'year', label: 'Anno/i' },
 ];
+const completionEffectOptions = [
+    { value: 'balloons', label: 'Palloncini' },
+    { value: 'fireworks', label: "Fuochi d'artificio" },
+    { value: 'snow', label: 'Nevicata' },
+    { value: 'glitch', label: 'Glitch' },
+];
+const completionEffectValues = completionEffectOptions.map((option) => option.value);
 
 function clientOptionLabel(field, value) {
     if (field === 'payment_terms_days') {
@@ -395,6 +402,7 @@ const userForm = useForm({
     job_title: props.record.job_title || '',
     phone: props.record.phone || '',
     bio: props.record.bio || '',
+    completion_effect: completionEffectValues.includes(props.record.completion_effect) ? props.record.completion_effect : 'balloons',
     password: '',
 });
 const userAutosaveState = ref('idle');
@@ -585,6 +593,7 @@ function stopEditingComment(comment) {
 }
 
 function setTaskStatus(status) {
+    const wasDone = taskForm.status === 'done';
     taskForm.status = status;
     taskAutosaveState.value = 'saving';
     taskAutosaveError.value = '';
@@ -594,6 +603,9 @@ function setTaskStatus(status) {
         preserveState: true,
         onSuccess: () => {
             taskAutosaveState.value = 'saved';
+            if (!wasDone && status === 'done') {
+                window.dispatchEvent(new CustomEvent('centro:task-completed'));
+            }
             window.setTimeout(() => {
                 if (taskAutosaveState.value === 'saved') {
                     taskAutosaveState.value = 'idle';
@@ -791,6 +803,7 @@ function priorityClass(priority) {
 }
 
 function setSubtaskStatus(subtask, done) {
+    const wasDone = (subtaskDrafts.value[subtask.id]?.status || subtask.status) === 'done';
     pulseSubtaskStatus(subtask.id);
     const status = done ? 'done' : 'todo';
     if (subtaskDrafts.value[subtask.id]) {
@@ -803,6 +816,9 @@ function setSubtaskStatus(subtask, done) {
         preserveState: true,
         onSuccess: () => {
             setInlineState(subtaskAutosaveStates, subtask.id, 'saved');
+            if (!wasDone && status === 'done') {
+                window.dispatchEvent(new CustomEvent('centro:task-completed'));
+            }
             window.setTimeout(() => {
                 if (subtaskAutosaveStates.value[subtask.id] === 'saved') {
                     setInlineState(subtaskAutosaveStates, subtask.id, 'idle');
@@ -1287,6 +1303,7 @@ function userPayload() {
         job_title: userForm.job_title,
         phone: userForm.phone,
         bio: userForm.bio,
+        completion_effect: userForm.completion_effect,
         password: userForm.password,
     };
 }
@@ -3064,6 +3081,11 @@ onUnmounted(() => {
                                 <div v-if="userForm.errors.phone" class="mt-1 text-sm text-red-600">{{ userForm.errors.phone }}</div>
                             </div>
                             <div>
+                                <label class="block text-sm font-medium text-gray-700">Animazione completamento</label>
+                                <AppSelect v-model="userForm.completion_effect" :options="completionEffectOptions" @change="saveUserInline(0)" />
+                                <div v-if="userForm.errors.completion_effect" class="mt-1 text-sm text-red-600">{{ userForm.errors.completion_effect }}</div>
+                            </div>
+                            <div>
                                 <label class="block text-sm font-medium text-gray-700">Nuova password</label>
                                 <input v-model="userForm.password" type="password" autocomplete="new-password" class="form-control" placeholder="Lascia vuoto per non cambiarla" />
                                 <div v-if="userForm.errors.password" class="mt-1 text-sm text-red-600">{{ userForm.errors.password }}</div>
@@ -3354,8 +3376,8 @@ onUnmounted(() => {
                         <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Sottoattività</h3>
                         <span class="text-xs text-gray-500">{{ related.subtasks?.length || 0 }} elementi</span>
                     </div>
-                    <form class="mb-4 grid items-center gap-2 md:grid-cols-[minmax(0,1fr)_96px_72px_auto]" @submit.prevent="addSubtask">
-                        <input v-model="subtaskForm.title" class="form-control mt-0" placeholder="Nuova sottoattività..." required />
+                    <form class="mb-4 grid items-center gap-1.5 md:grid-cols-[minmax(0,1fr)_48px_48px_auto]" @submit.prevent="addSubtask">
+                        <input v-model="subtaskForm.title" class="subtask-line-control font-medium" placeholder="Nuova sottoattività..." required />
                         <div class="relative" data-subtask-create-assignees>
                             <button type="button" class="subtask-line-people justify-end" @click.stop="toggleCreateSubtaskAssigneeMenu($event)">
                                 <span v-if="createSubtaskAssignees().length" class="flex min-w-0 items-center -space-x-2">
@@ -3402,7 +3424,7 @@ onUnmounted(() => {
                             :key="subtask.id"
                             draggable="true"
                             :class="[
-                                'subtask-line md:grid-cols-[68px_minmax(0,1fr)_96px_72px_auto]',
+                                'subtask-line md:grid-cols-[68px_minmax(0,1fr)_54px_54px_auto]',
                                 subtaskAssigneeMenuOpen === subtask.id ? 'z-[6600]' : 'z-0',
                                 draggedSubtaskId === subtask.id ? 'is-dragging' : '',
                                 subtaskDropTarget === subtask.id && subtaskDropPlacement === 'before' ? 'drop-before' : '',

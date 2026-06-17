@@ -31,6 +31,10 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         $user = $request->user();
+        $completionEffect = $user ? DB::table('profiles')->where('user_id', $user->id)->value('completion_effect') : null;
+        if (! in_array($completionEffect, ['balloons', 'fireworks', 'snow', 'glitch'], true)) {
+            $completionEffect = 'balloons';
+        }
 
         return [
             ...parent::share($request),
@@ -38,6 +42,7 @@ class HandleInertiaRequests extends Middleware
                 'user' => fn () => $user ? [
                     ...$user->only(['id', 'name', 'email', 'email_verified_at']),
                     'avatar_url' => DB::table('profiles')->where('user_id', $user->id)->value('avatar_url'),
+                    'completion_effect' => $completionEffect,
                 ] : null,
             ],
             'notifications' => fn () => $user ? [

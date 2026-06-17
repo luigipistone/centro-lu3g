@@ -383,6 +383,7 @@
 
     .subtask-line-control {
         @apply mt-0 block w-full border-0 bg-transparent px-0 py-1 text-sm text-gray-900 shadow-none outline-none transition placeholder:text-gray-400 focus:outline-none focus:ring-0;
+        min-height: 36px;
     }
 
     .subtask-line-people {
@@ -698,7 +699,7 @@ html.dark body {
 html.dark .surface,
 html.dark .app-popover,
 html.dark .field-dropdown-menu,
-html.dark .content-card:not(.project-preview-card),
+html.dark .content-card:not(.project-preview-card):not(.task-type-card),
 html.dark .widget-card,
 html.dark [class*="bg-white"],
 html.dark [class*="bg-gray-50"],
@@ -739,6 +740,43 @@ html.dark [contenteditable="true"] {
     background: hsl(222 26% 12% / 0.88) !important;
     color: hsl(216 28% 94%) !important;
     box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.05), 0 1px 2px hsl(0 0% 0% / 0.16);
+}
+
+html.dark .subtask-line-control,
+html.dark input.subtask-line-control {
+    border-color: transparent !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+html.dark .task-type-card {
+    box-shadow: var(--shadow-soft);
+}
+
+html.dark .field-dropdown-option {
+    color: hsl(216 28% 94%) !important;
+}
+
+html.dark .field-dropdown-option:hover,
+html.dark .field-dropdown-option[class*="bg-indigo-50"],
+html.dark .field-dropdown-option[class*="bg-gray-50"],
+html.dark .field-dropdown-option[class*="hover:bg-gray-50"]:hover {
+    background: hsl(221 54% 28% / 0.72) !important;
+    color: hsl(216 28% 98%) !important;
+}
+
+html.dark .field-dropdown-option[class*="text-red-600"] {
+    color: hsl(0 84% 72%) !important;
+}
+
+html.dark .field-dropdown-option[class*="text-red-600"]:hover {
+    background: hsl(0 48% 24% / 0.72) !important;
+}
+
+html.dark .section-title + p,
+html.dark .app-card .section-title,
+html.dark .app-card span[class*="bg-white"] {
+    color: hsl(216 28% 94%) !important;
 }
 
 html.dark .btn-outline,
@@ -791,4 +829,157 @@ html.dark [class*="text-indigo-700"] {
 html.dark .calendar-day,
 html.dark .calendar-cell {
     background: hsl(222 26% 11% / 0.72);
+}
+
+.completion-effect {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    overflow: hidden;
+    pointer-events: none;
+    background: transparent;
+}
+
+.completion-balloon {
+    --hue: calc(18 * var(--i) + 190);
+    position: absolute;
+    left: calc((var(--i) * 5.5%) - 4%);
+    bottom: -15vh;
+    width: clamp(28px, 4vw, 54px);
+    height: clamp(36px, 5vw, 68px);
+    border-radius: 50% 50% 46% 46%;
+    background: linear-gradient(145deg, hsl(var(--hue) 88% 68%), hsl(var(--hue) 82% 48%));
+    box-shadow: inset -8px -10px 18px hsl(0 0% 0% / 0.14), inset 7px 8px 12px hsl(0 0% 100% / 0.32);
+    animation: completion-balloon-rise 3.2s cubic-bezier(0.18, 0.72, 0.2, 1) forwards;
+    animation-delay: calc(var(--i) * 32ms);
+}
+
+.completion-balloon::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 96%;
+    width: 1px;
+    height: 44px;
+    background: hsl(220 18% 65% / 0.72);
+}
+
+.completion-firework {
+    --x: calc(8% + var(--i) * 9%);
+    --y: calc(16% + var(--i) * 5.8%);
+    --hue: calc(35 * var(--i) + 190);
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    color: hsl(var(--hue) 95% 64%);
+    box-shadow:
+        0 -42px currentColor,
+        30px -30px currentColor,
+        42px 0 currentColor,
+        30px 30px currentColor,
+        0 42px currentColor,
+        -30px 30px currentColor,
+        -42px 0 currentColor,
+        -30px -30px currentColor;
+    animation: completion-firework-pop 1.45s ease-out forwards;
+    animation-delay: calc(var(--i) * 120ms);
+    opacity: 0;
+}
+
+.completion-snowflake {
+    --x: calc((var(--i) - 1) * 2.35%);
+    position: absolute;
+    left: var(--x);
+    top: -8vh;
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: hsl(206 100% 94% / 0.96);
+    box-shadow: 0 0 14px hsl(206 100% 92% / 0.68);
+    animation: completion-snow-fall 3.35s linear forwards;
+    animation-delay: calc(var(--i) * 28ms);
+}
+
+.completion-glitch-panel {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: clamp(2.4rem, 9vw, 7rem);
+    font-weight: 850;
+    letter-spacing: 0;
+    color: hsl(216 28% 98%);
+    text-shadow: -4px 0 hsl(185 95% 58% / 0.9), 4px 0 hsl(330 95% 58% / 0.82);
+    background: hsl(222 34% 7% / 0.22);
+    animation: completion-glitch-flash 1.55s steps(2, end) forwards;
+}
+
+@keyframes completion-balloon-rise {
+    0% {
+        transform: translate3d(0, 0, 0) rotate(-4deg);
+        opacity: 0;
+    }
+    12% {
+        opacity: 1;
+    }
+    100% {
+        transform: translate3d(calc((var(--i) - 9) * 4px), -125vh, 0) rotate(8deg);
+        opacity: 0;
+    }
+}
+
+@keyframes completion-firework-pop {
+    0% {
+        transform: scale(0.12);
+        opacity: 0;
+        filter: blur(0);
+    }
+    18% {
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1.8);
+        opacity: 0;
+        filter: blur(2px);
+    }
+}
+
+@keyframes completion-snow-fall {
+    0% {
+        transform: translate3d(0, 0, 0);
+        opacity: 0;
+    }
+    12% {
+        opacity: 1;
+    }
+    100% {
+        transform: translate3d(calc((var(--i) - 22) * 2px), 112vh, 0);
+        opacity: 0;
+    }
+}
+
+@keyframes completion-glitch-flash {
+    0% {
+        opacity: 0;
+        clip-path: inset(42% 0 40% 0);
+        transform: translateX(-8px);
+    }
+    12%, 58% {
+        opacity: 1;
+        clip-path: inset(0 0 0 0);
+        transform: translateX(0);
+    }
+    72% {
+        opacity: 1;
+        clip-path: inset(18% 0 62% 0);
+        transform: translateX(10px);
+    }
+    100% {
+        opacity: 0;
+        clip-path: inset(0 0 0 0);
+        transform: translateX(0);
+    }
 }

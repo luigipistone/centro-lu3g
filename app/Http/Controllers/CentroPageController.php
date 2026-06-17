@@ -407,6 +407,8 @@ class CentroPageController extends Controller
 
     public function notifications(Request $request): Response
     {
+        $this->purgeExpiredArchivedNotifications($request->user()->id);
+
         $archived = $request->boolean('archived');
 
         return Inertia::render('Centro/Notifications', [
@@ -1294,6 +1296,7 @@ class CentroPageController extends Controller
             'job_title' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:255'],
             'bio' => ['nullable', 'string'],
+            'completion_effect' => ['nullable', Rule::in(['balloons', 'fireworks', 'snow', 'glitch'])],
         ]);
 
         $user->name = $payload['name'];
@@ -1312,6 +1315,7 @@ class CentroPageController extends Controller
                 'job_title' => $payload['job_title'] ?? null,
                 'phone' => $payload['phone'] ?? null,
                 'bio' => $payload['bio'] ?? null,
+                'completion_effect' => $payload['completion_effect'] ?? 'balloons',
                 'updated_at' => now(),
                 'created_at' => now(),
             ],
@@ -2181,6 +2185,15 @@ class CentroPageController extends Controller
         );
 
         return back()->with('status', 'Stato task aggiornato.');
+    }
+
+    private function purgeExpiredArchivedNotifications(?string $userId = null): void
+    {
+        DB::table('notifications')
+            ->whereNotNull('archived_at')
+            ->where('archived_at', '<', now()->subDays(30))
+            ->when($userId, fn ($query) => $query->where('user_id', $userId))
+            ->delete();
     }
 
     public function duplicateTask(Request $request, string $id): RedirectResponse

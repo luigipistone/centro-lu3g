@@ -32,9 +32,11 @@ import {
 const showingNavigationDropdown = ref(false);
 const notificationMenuOpen = ref(false);
 const darkMode = ref(false);
+const completionEffect = ref(null);
 const page = usePage();
 const notificationPermission = ref('unsupported');
 let notificationPoller = null;
+let completionEffectTimer = null;
 
 const latestNotifications = computed(() => page.props.notifications?.latest || []);
 const latestUnreadNotification = computed(() => latestNotifications.value.find((notification) => !notification.read));
@@ -56,6 +58,15 @@ function initializeTheme() {
 
 function toggleDarkMode() {
     applyTheme(!darkMode.value);
+}
+
+function playCompletionEffect(event = null) {
+    const effect = event?.detail?.effect || page.props.auth?.user?.completion_effect || 'balloons';
+    completionEffect.value = effect;
+    window.clearTimeout(completionEffectTimer);
+    completionEffectTimer = window.setTimeout(() => {
+        completionEffect.value = null;
+    }, 3400);
 }
 
 function refreshNotificationPermission() {
@@ -122,6 +133,7 @@ onMounted(() => {
     initializeTheme();
     refreshNotificationPermission();
     rememberLatestNotification();
+    window.addEventListener('centro:task-completed', playCompletionEffect);
     notificationPoller = window.setInterval(() => {
         router.reload({ only: ['notifications'], preserveScroll: true, preserveState: true });
     }, 45000);
@@ -129,6 +141,8 @@ onMounted(() => {
 
 onUnmounted(() => {
     window.clearInterval(notificationPoller);
+    window.clearTimeout(completionEffectTimer);
+    window.removeEventListener('centro:task-completed', playCompletionEffect);
 });
 
 const groups = [
@@ -436,5 +450,24 @@ const groups = [
                 <slot />
             </main>
         </div>
+
+        <Teleport to="body">
+            <div v-if="completionEffect" :class="['completion-effect', `completion-effect-${completionEffect}`]" aria-hidden="true">
+                <template v-if="completionEffect === 'balloons'">
+                    <span v-for="index in 18" :key="`balloon-${index}`" class="completion-balloon" :style="{ '--i': index }"></span>
+                </template>
+                <template v-else-if="completionEffect === 'fireworks'">
+                    <span v-for="index in 9" :key="`firework-${index}`" class="completion-firework" :style="{ '--i': index }"></span>
+                </template>
+                <template v-else-if="completionEffect === 'snow'">
+                    <span v-for="index in 44" :key="`snow-${index}`" class="completion-snowflake" :style="{ '--i': index }"></span>
+                </template>
+                <template v-else-if="completionEffect === 'glitch'">
+                    <div class="completion-glitch-panel">
+                        <span>COMPLETATA</span>
+                    </div>
+                </template>
+            </div>
+        </Teleport>
     </div>
 </template>
