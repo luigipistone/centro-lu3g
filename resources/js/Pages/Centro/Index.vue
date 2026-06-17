@@ -2635,8 +2635,8 @@ function visibleCalendarTasks(cell) {
                     </div>
                 </div>
 
-                <div ref="calendarScrollArea" class="max-h-[calc(100vh-210px)] min-h-[620px] overflow-y-auto pr-1" @scroll.passive="handleCalendarScroll">
-                    <section v-for="sectionMonth in calendarMonthSections" :key="sectionMonth.key" class="surface mb-5 overflow-visible" :data-current-calendar-month="sectionMonth.delta === 0">
+                <div ref="calendarScrollArea" class="surface max-h-[calc(100vh-210px)] min-h-[620px] overflow-y-auto" @scroll.passive="handleCalendarScroll">
+                    <section v-for="sectionMonth in calendarMonthSections" :key="sectionMonth.key" class="overflow-visible border-b border-gray-100 last:border-b-0" :data-current-calendar-month="sectionMonth.delta === 0">
                         <div class="border-b border-gray-100 bg-white px-4 py-3">
                             <h3 class="text-sm font-bold uppercase tracking-wide text-gray-500">{{ sectionMonth.label }}</h3>
                         </div>
