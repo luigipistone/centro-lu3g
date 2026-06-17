@@ -41,6 +41,10 @@ class HandleInertiaRequests extends Middleware
                 ] : null,
             ],
             'notifications' => fn () => $user ? [
+                'active' => DB::table('notifications')
+                    ->where('user_id', $user->id)
+                    ->whereNull('archived_at')
+                    ->count(),
                 'unread' => DB::table('notifications')
                     ->where('user_id', $user->id)
                     ->whereNull('archived_at')
@@ -52,7 +56,7 @@ class HandleInertiaRequests extends Middleware
                     ->latest()
                     ->limit(8)
                     ->get(['id', 'task_id', 'type', 'message', 'read', 'created_at']),
-            ] : ['unread' => 0, 'latest' => []],
+            ] : ['active' => 0, 'unread' => 0, 'latest' => []],
             'flash' => [
                 'status' => fn () => $request->session()->get('status'),
                 'created_id' => fn () => $request->session()->get('created_id'),

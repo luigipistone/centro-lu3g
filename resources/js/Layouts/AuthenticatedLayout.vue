@@ -35,6 +35,7 @@ let notificationPoller = null;
 
 const latestNotifications = computed(() => page.props.notifications?.latest || []);
 const latestUnreadNotification = computed(() => latestNotifications.value.find((notification) => !notification.read));
+const notificationBadgeCount = computed(() => page.props.notifications?.active || 0);
 const notificationStorageKey = computed(() => `centro:last-browser-notification:${page.props.auth?.user?.id || 'guest'}`);
 
 function refreshNotificationPermission() {
@@ -148,10 +149,10 @@ const groups = [
                     >
                         <Bell class="h-[18px] w-[18px]" :stroke-width="1.6" />
                         <span
-                            v-if="$page.props.notifications?.unread"
+                            v-if="notificationBadgeCount"
                             class="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white"
                         >
-                            {{ $page.props.notifications.unread > 9 ? '9+' : $page.props.notifications.unread }}
+                            {{ notificationBadgeCount > 9 ? '9+' : notificationBadgeCount }}
                         </span>
                     </button>
 
@@ -165,7 +166,7 @@ const groups = [
 
                     <div
                         v-if="notificationMenuOpen"
-                        class="app-popover absolute right-0 top-11 z-40 w-80 overflow-hidden rounded-2xl border border-white bg-white shadow-[0_24px_70px_rgba(28,42,73,0.14)]"
+                        class="app-popover fixed left-[17rem] top-4 z-40 w-96 max-w-[calc(100vw-18rem)] overflow-hidden rounded-2xl border border-white bg-white shadow-[0_24px_70px_rgba(28,42,73,0.14)]"
                         @click.stop
                     >
                         <div class="flex items-center justify-between border-b border-white/60 px-3 py-2">
@@ -186,6 +187,7 @@ const groups = [
                                 @click="notificationMenuOpen = false"
                             >
                                 <span class="line-clamp-2">{{ notification.message }}</span>
+                                <span class="mt-1 block text-[11px] text-gray-400">{{ notification.read ? 'Letta' : 'Da leggere' }}</span>
                             </Link>
                         </div>
                         <div v-else class="px-3 py-8 text-center text-sm text-gray-500">Nessuna notifica</div>
@@ -246,10 +248,10 @@ const groups = [
                             >
                                 <Bell class="h-[18px] w-[18px]" :stroke-width="1.6" />
                                 <span
-                                    v-if="$page.props.notifications?.unread"
+                                    v-if="notificationBadgeCount"
                                     class="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white"
                                 >
-                                    {{ $page.props.notifications.unread > 9 ? '9+' : $page.props.notifications.unread }}
+                                    {{ notificationBadgeCount > 9 ? '9+' : notificationBadgeCount }}
                                 </span>
                             </Link>
                             <!-- Settings Dropdown -->
