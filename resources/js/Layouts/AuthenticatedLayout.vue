@@ -20,6 +20,8 @@ import {
     RefreshCcw,
     Search,
     Settings,
+    Moon,
+    Sun,
     Target,
     User,
     UserCog,
@@ -29,6 +31,7 @@ import {
 
 const showingNavigationDropdown = ref(false);
 const notificationMenuOpen = ref(false);
+const darkMode = ref(false);
 const page = usePage();
 const notificationPermission = ref('unsupported');
 let notificationPoller = null;
@@ -37,6 +40,23 @@ const latestNotifications = computed(() => page.props.notifications?.latest || [
 const latestUnreadNotification = computed(() => latestNotifications.value.find((notification) => !notification.read));
 const notificationBadgeCount = computed(() => page.props.notifications?.unread || 0);
 const notificationStorageKey = computed(() => `centro:last-browser-notification:${page.props.auth?.user?.id || 'guest'}`);
+const themeStorageKey = 'centro:theme';
+
+function applyTheme(enabled) {
+    darkMode.value = enabled;
+    document.documentElement.classList.toggle('dark', enabled);
+    window.localStorage.setItem(themeStorageKey, enabled ? 'dark' : 'light');
+}
+
+function initializeTheme() {
+    const savedTheme = window.localStorage.getItem(themeStorageKey);
+    const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+    applyTheme(savedTheme ? savedTheme === 'dark' : prefersDark);
+}
+
+function toggleDarkMode() {
+    applyTheme(!darkMode.value);
+}
 
 function refreshNotificationPermission() {
     notificationPermission.value = typeof window !== 'undefined' && 'Notification' in window ? window.Notification.permission : 'unsupported';
@@ -99,6 +119,7 @@ watch(latestUnreadNotification, (notification) => {
 });
 
 onMounted(() => {
+    initializeTheme();
     refreshNotificationPermission();
     rememberLatestNotification();
     notificationPoller = window.setInterval(() => {
@@ -157,24 +178,35 @@ const groups = [
                     <span class="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-white/80 text-sm font-extrabold text-indigo-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_12px_24px_rgba(79,70,229,0.14)]">L</span>
                     <span>Agency Hub</span>
                 </Link>
-                <div class="relative">
+                <div class="flex items-center gap-1">
                     <button
                         type="button"
-                        class="relative inline-flex h-9 w-9 items-center justify-center rounded-2xl text-gray-500 transition hover:bg-white/70 hover:text-indigo-600 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]"
-                        :aria-expanded="notificationMenuOpen"
-                        aria-label="Apri notifiche"
-                        @click="notificationMenuOpen = !notificationMenuOpen"
+                        class="inline-flex h-9 w-9 items-center justify-center rounded-2xl text-gray-500 transition hover:bg-white/70 hover:text-indigo-600 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]"
+                        :aria-label="darkMode ? 'Disattiva modalità dark' : 'Attiva modalità dark'"
+                        :title="darkMode ? 'Modalità chiara' : 'Modalità dark'"
+                        @click="toggleDarkMode"
                     >
-                        <Bell class="h-[18px] w-[18px]" :stroke-width="1.6" />
-                        <span
-                            v-if="notificationBadgeCount"
-                            class="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white"
-                        >
-                            {{ notificationBadgeCount > 9 ? '9+' : notificationBadgeCount }}
-                        </span>
+                        <Sun v-if="darkMode" class="h-[18px] w-[18px]" :stroke-width="1.7" />
+                        <Moon v-else class="h-[18px] w-[18px]" :stroke-width="1.7" />
                     </button>
+                    <div class="relative">
+                        <button
+                            type="button"
+                            class="relative inline-flex h-9 w-9 items-center justify-center rounded-2xl text-gray-500 transition hover:bg-white/70 hover:text-indigo-600 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]"
+                            :aria-expanded="notificationMenuOpen"
+                            aria-label="Apri notifiche"
+                            @click="notificationMenuOpen = !notificationMenuOpen"
+                        >
+                            <Bell class="h-[18px] w-[18px]" :stroke-width="1.6" />
+                            <span
+                                v-if="notificationBadgeCount"
+                                class="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white"
+                            >
+                                {{ notificationBadgeCount > 9 ? '9+' : notificationBadgeCount }}
+                            </span>
+                        </button>
 
-                    <Teleport to="body">
+                        <Teleport to="body">
                         <button
                             v-if="notificationMenuOpen"
                             type="button"
@@ -211,7 +243,8 @@ const groups = [
                             </div>
                             <div v-else class="px-3 py-8 text-center text-sm text-gray-500">Nessuna notifica</div>
                         </div>
-                    </Teleport>
+                        </Teleport>
+                    </div>
                 </div>
             </div>
 
@@ -262,6 +295,16 @@ const groups = [
                         </div>
 
                         <div class="flex items-center gap-2">
+                            <button
+                                type="button"
+                                class="inline-flex h-10 w-10 items-center justify-center rounded-2xl text-gray-500 transition hover:bg-white/70 hover:text-indigo-600"
+                                :aria-label="darkMode ? 'Disattiva modalità dark' : 'Attiva modalità dark'"
+                                :title="darkMode ? 'Modalità chiara' : 'Modalità dark'"
+                                @click="toggleDarkMode"
+                            >
+                                <Sun v-if="darkMode" class="h-[18px] w-[18px]" :stroke-width="1.7" />
+                                <Moon v-else class="h-[18px] w-[18px]" :stroke-width="1.7" />
+                            </button>
                             <Link
                                 :href="route('notifications.index')"
                                 class="relative inline-flex h-10 w-10 items-center justify-center rounded-2xl text-gray-500 transition hover:bg-white/70 hover:text-indigo-600"

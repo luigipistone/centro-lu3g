@@ -667,3 +667,132 @@
         opacity: 0;
     }
 }
+
+html.dark {
+    color-scheme: dark;
+    --background: 222 30% 8%;
+    --foreground: 216 28% 94%;
+    --card: 222 28% 12%;
+    --glass: 222 28% 12%;
+    --glass-border: 220 22% 28%;
+    --muted: 221 24% 15%;
+    --muted-foreground: 218 12% 72%;
+    --border-soft: 220 18% 24%;
+    --shadow-soft: 0 18px 50px hsl(0 0% 0% / 0.28), inset 0 1px 0 hsl(0 0% 100% / 0.07);
+    --shadow-elevated: 0 26px 78px hsl(0 0% 0% / 0.42), inset 0 1px 0 hsl(0 0% 100% / 0.08);
+    --shadow-control: 0 10px 26px hsl(0 0% 0% / 0.26), inset 0 1px 0 hsl(0 0% 100% / 0.06);
+    --sidebar-bg: 222 28% 10%;
+    --sidebar-fg: 218 18% 82%;
+    --sidebar-accent: 221 82% 66%;
+}
+
+html.dark,
+html.dark body {
+    background:
+        radial-gradient(circle at 12% 0%, hsl(221 72% 21% / 0.28), transparent 32rem),
+        radial-gradient(circle at 92% 12%, hsl(262 54% 20% / 0.24), transparent 34rem),
+        linear-gradient(135deg, hsl(222 31% 8%) 0%, hsl(224 28% 10%) 48%, hsl(222 30% 8%) 100%);
+    color: hsl(var(--foreground));
+}
+
+html.dark .surface,
+html.dark .app-popover,
+html.dark .field-dropdown-menu,
+html.dark .content-card,
+html.dark .widget-card,
+html.dark [class*="bg-white"],
+html.dark [class*="bg-gray-50"],
+html.dark [class*="bg-slate-50"] {
+    border-color: hsl(220 22% 28% / 0.72) !important;
+    background: linear-gradient(180deg, hsl(222 26% 14% / 0.94), hsl(222 26% 11% / 0.84)) !important;
+    box-shadow: var(--shadow-soft);
+}
+
+html.dark aside,
+html.dark nav,
+html.dark header {
+    border-color: hsl(220 22% 28% / 0.72) !important;
+    background: hsl(222 28% 10% / 0.78) !important;
+    box-shadow: 0 18px 48px hsl(0 0% 0% / 0.28);
+}
+
+html.dark .nav-link-active {
+    border-color: hsl(221 82% 66% / 0.34);
+    background: linear-gradient(180deg, hsl(221 45% 22% / 0.78), hsl(222 28% 15% / 0.72));
+    color: hsl(216 28% 96%);
+}
+
+html.dark .nav-link:hover,
+html.dark .btn-ghost:hover,
+html.dark .icon-btn:hover {
+    background: hsl(221 45% 24% / 0.48);
+    color: hsl(216 28% 96%);
+}
+
+html.dark .form-control,
+html.dark input,
+html.dark textarea,
+html.dark select,
+html.dark button.form-control,
+html.dark [contenteditable="true"] {
+    border-color: hsl(220 22% 30% / 0.86) !important;
+    background: hsl(222 26% 12% / 0.88) !important;
+    color: hsl(216 28% 94%) !important;
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.05), 0 1px 2px hsl(0 0% 0% / 0.16);
+}
+
+html.dark .btn-outline,
+html.dark .subtask-line-token {
+    border-color: hsl(220 22% 30% / 0.82) !important;
+    background: linear-gradient(180deg, hsl(222 26% 17% / 0.96), hsl(222 26% 13% / 0.9)) !important;
+    color: hsl(216 28% 92%) !important;
+    box-shadow: var(--shadow-control);
+}
+
+html.dark .btn-danger {
+    border-color: hsl(0 74% 45% / 0.28);
+    background: linear-gradient(180deg, hsl(0 36% 18% / 0.92), hsl(222 26% 13% / 0.9));
+}
+
+html.dark [class*="border-white"],
+html.dark [class*="border-gray-100"],
+html.dark [class*="border-gray-200"],
+html.dark [class*="border-gray-300"] {
+    border-color: hsl(220 22% 28% / 0.72) !important;
+}
+
+html.dark [class*="divide-gray-100"] > :not([hidden]) ~ :not([hidden]) {
+    border-color: hsl(220 22% 26% / 0.74) !important;
+}
+
+html.dark [class*="text-gray-950"],
+html.dark [class*="text-gray-900"],
+html.dark [class*="text-gray-800"],
+html.dark [class*="text-gray-700"] {
+    color: hsl(216 28% 94%) !important;
+}
+
+html.dark [class*="text-gray-600"],
+html.dark [class*="text-gray-500"],
+html.dark [class*="text-gray-400"] {
+    color: hsl(218 14% 72%) !important;
+}
+
+html.dark [class*="placeholder:text-gray-400"]::placeholder,
+html.dark ::placeholder {
+    color: hsl(218 12% 58%) !important;
+}
+
+html.dark [class*="bg-indigo-50"] {
+    background: hsl(221 52% 22% / 0.64) !important;
+}
+
+html.dark [class*="text-indigo-600"],
+html.dark [class*="text-indigo-700"] {
+    color: hsl(224 88% 76%) !important;
+}
+
+html.dark .calendar-day,
+html.dark .calendar-cell {
+    background: hsl(222 26% 11% / 0.72);
+}
