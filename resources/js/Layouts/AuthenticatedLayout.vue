@@ -1,10 +1,10 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
-import { Link } from '@inertiajs/vue3';
+import { Link, router, usePage } from '@inertiajs/vue3';
 import {
     Bell,
     Briefcase,
@@ -29,6 +29,67 @@ import {
 
 const showingNavigationDropdown = ref(false);
 const notificationMenuOpen = ref(false);
+const page = usePage();
+const notificationPermission = ref('unsupported');
+let notificationPoller = null;
+
+const latestNotifications = computed(() => page.props.notifications?.latest || []);
+const latestUnreadNotification = computed(() => latestNotifications.value.find((notification) => !notification.read));
+const notificationStorageKey = computed(() => `centro:last-browser-notification:${page.props.auth?.user?.id || 'guest'}`);
+
+function refreshNotificationPermission() {
+    notificationPermission.value = typeof window !== 'undefined' && 'Notification' in window ? window.Notification.permission : 'unsupported';
+}
+
+function rememberLatestNotification() {
+    const latest = latestNotifications.value[0];
+    if (latest?.id) {
+        window.localStorage.setItem(notificationStorageKey.value, latest.id);
+    }
+}
+
+async function enableBrowserNotifications() {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    const permission = await window.Notification.requestPermission();
+    notificationPermission.value = permission;
+    rememberLatestNotification();
+}
+
+function maybeShowBrowserNotification(notification) {
+    if (typeof window === 'undefined' || !notification || notificationPermission.value !== 'granted') return;
+
+    const lastId = window.localStorage.getItem(notificationStorageKey.value);
+    if (lastId === notification.id) return;
+
+    window.localStorage.setItem(notificationStorageKey.value, notification.id);
+    const browserNotification = new window.Notification('Centro LU3G', {
+        body: notification.message,
+        tag: notification.id,
+        renotify: false,
+    });
+
+    browserNotification.onclick = () => {
+        window.focus();
+        router.visit(notification.task_id ? route('tasks.show', notification.task_id) : route('notifications.index'));
+        browserNotification.close();
+    };
+}
+
+watch(latestUnreadNotification, (notification) => {
+    maybeShowBrowserNotification(notification);
+});
+
+onMounted(() => {
+    refreshNotificationPermission();
+    rememberLatestNotification();
+    notificationPoller = window.setInterval(() => {
+        router.reload({ only: ['notifications'], preserveScroll: true, preserveState: true });
+    }, 45000);
+});
+
+onUnmounted(() => {
+    window.clearInterval(notificationPoller);
+});
 
 const groups = [
     {
@@ -110,6 +171,11 @@ const groups = [
                         <div class="flex items-center justify-between border-b border-white/60 px-3 py-2">
                             <span class="text-sm font-semibold text-gray-900">Notifiche</span>
                             <Link :href="route('notifications.index')" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="notificationMenuOpen = false">Vedi tutte</Link>
+                        </div>
+                        <div v-if="notificationPermission === 'default'" class="border-b border-white/60 px-3 py-2">
+                            <button type="button" class="text-xs font-semibold text-indigo-600 transition hover:text-indigo-500" @click="enableBrowserNotifications">
+                                Attiva notifiche browser
+                            </button>
                         </div>
                         <div v-if="$page.props.notifications?.latest?.length" class="max-h-80 overflow-y-auto py-1">
                             <Link

@@ -43,13 +43,15 @@ class HandleInertiaRequests extends Middleware
             'notifications' => fn () => $user ? [
                 'unread' => DB::table('notifications')
                     ->where('user_id', $user->id)
+                    ->whereNull('archived_at')
                     ->where('read', false)
                     ->count(),
                 'latest' => DB::table('notifications')
                     ->where('user_id', $user->id)
+                    ->whereNull('archived_at')
                     ->latest()
                     ->limit(8)
-                    ->get(['id', 'task_id', 'message', 'read', 'created_at']),
+                    ->get(['id', 'task_id', 'type', 'message', 'read', 'created_at']),
             ] : ['unread' => 0, 'latest' => []],
             'flash' => [
                 'status' => fn () => $request->session()->get('status'),

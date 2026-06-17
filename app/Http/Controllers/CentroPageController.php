@@ -406,21 +406,34 @@ class CentroPageController extends Controller
 
     public function notifications(Request $request): Response
     {
+        $archived = $request->boolean('archived');
+
         return Inertia::render('Centro/Notifications', [
             'notifications' => DB::table('notifications')
                 ->leftJoin('tasks', 'tasks.id', '=', 'notifications.task_id')
                 ->where('notifications.user_id', $request->user()->id)
+                ->when($archived, fn ($query) => $query->whereNotNull('notifications.archived_at'), fn ($query) => $query->whereNull('notifications.archived_at'))
                 ->latest('notifications.created_at')
-                ->limit(100)
+                ->limit(120)
                 ->get([
                     'notifications.id',
                     'notifications.task_id',
                     'notifications.type',
                     'notifications.message',
                     'notifications.read',
+                    'notifications.archived_at',
                     'notifications.created_at',
                     'tasks.title as task_title',
                 ]),
+            'archived' => $archived,
+            'activeCount' => DB::table('notifications')
+                ->where('user_id', $request->user()->id)
+                ->whereNull('archived_at')
+                ->count(),
+            'archivedCount' => DB::table('notifications')
+                ->where('user_id', $request->user()->id)
+                ->whereNotNull('archived_at')
+                ->count(),
         ]);
     }
 
@@ -529,6 +542,15 @@ class CentroPageController extends Controller
 
         if ($section === 'tasks') {
             $this->syncTaskPeopleLists($payload['id'], $taskPeople['assignees'] ?? [], $taskPeople['followers'] ?? []);
+
+            if (! empty($taskPeople['assignees']) || ! empty($taskPeople['followers'])) {
+                $this->notifyTaskPeople(
+                    $payload['id'],
+                    $request->user()->id,
+                    'task_created',
+                    $request->user()->name.' ti ha coinvolto nella task "'.$payload['title'].'".',
+                );
+            }
         }
 
         return back()
@@ -569,10 +591,21 @@ class CentroPageController extends Controller
         }
 
         if ($section === 'tasks' && $oldTask) {
+            $changedFields = $this->changedTaskFields($oldTask, $payload);
             $this->recordTaskFieldChanges($id, $request->user()->id, $oldTask, $payload);
 
             if ($taskPeople !== null && $oldTaskPeople !== null) {
                 $this->recordTaskPeopleChanges($id, $request->user()->id, $oldTaskPeople, $taskPeople);
+            }
+
+            if ($changedFields || $taskPeople !== null) {
+                $details = $changedFields ? 'campi: '.implode(', ', array_map(fn ($field) => $this->taskFieldLabel($field), $changedFields)) : 'persone coinvolte';
+                $this->notifyTaskPeople(
+                    $id,
+                    $request->user()->id,
+                    'task_updated',
+                    $request->user()->name.' ha modificato "'.$oldTask->title.'" ('.$details.').',
+                );
             }
         }
 
@@ -1978,6 +2011,14 @@ class CentroPageController extends Controller
                 implode(',', $oldUserIds),
                 implode(',', $newUserIds),
             );
+
+            $task = DB::table('tasks')->where('id', $id)->first(['title']);
+            $this->notifyTaskPeople(
+                $id,
+                $request->user()->id,
+                'task_people',
+                $request->user()->name.' ha aggiornato '.($type === 'assignees' ? 'gli assegnatari' : 'i follower').' di "'.($task->title ?? 'task').'".',
+            );
         }
 
         return back()->with('status', $type === 'assignees' ? 'Assegnatari aggiornati.' : 'Follower aggiornati.');
@@ -2299,6 +2340,7 @@ class CentroPageController extends Controller
         DB::table('notifications')
             ->where('user_id', $request->user()->id)
             ->where('id', $id)
+            ->whereNull('archived_at')
             ->update(['read' => true, 'updated_at' => now()]);
 
         return back()->with('status', 'Notifica letta.');
@@ -2308,29 +2350,43 @@ class CentroPageController extends Controller
     {
         DB::table('notifications')
             ->where('user_id', $request->user()->id)
+            ->whereNull('archived_at')
             ->where('read', false)
             ->update(['read' => true, 'updated_at' => now()]);
 
         return back()->with('status', 'Notifiche segnate come lette.');
     }
 
-    public function destroyNotification(Request $request, string $id): RedirectResponse
+    public function archiveNotification(Request $request, string $id): RedirectResponse
     {
         DB::table('notifications')
             ->where('user_id', $request->user()->id)
             ->where('id', $id)
-            ->delete();
+            ->whereNull('archived_at')
+            ->update(['archived_at' => now(), 'read' => true, 'updated_at' => now()]);
 
-        return back()->with('status', 'Notifica eliminata.');
+        return back()->with('status', 'Notifica archiviata.');
     }
 
-    public function destroyAllNotifications(Request $request): RedirectResponse
+    public function archiveAllNotifications(Request $request): RedirectResponse
     {
         DB::table('notifications')
             ->where('user_id', $request->user()->id)
-            ->delete();
+            ->whereNull('archived_at')
+            ->update(['archived_at' => now(), 'read' => true, 'updated_at' => now()]);
 
-        return back()->with('status', 'Notifiche svuotate.');
+        return back()->with('status', 'Notifiche archiviate.');
+    }
+
+    public function restoreNotification(Request $request, string $id): RedirectResponse
+    {
+        DB::table('notifications')
+            ->where('user_id', $request->user()->id)
+            ->where('id', $id)
+            ->whereNotNull('archived_at')
+            ->update(['archived_at' => null, 'updated_at' => now()]);
+
+        return back()->with('status', 'Notifica ripristinata.');
     }
 
     public function storeDocumentLine(Request $request, string $id): RedirectResponse
@@ -2714,18 +2770,47 @@ class CentroPageController extends Controller
 
     private function recordTaskFieldChanges(string $taskId, string $userId, object $oldTask, array $newValues): void
     {
+        foreach ($this->changedTaskFields($oldTask, $newValues) as $field) {
+            $oldValue = $oldTask->{$field};
+            $newValue = $newValues[$field];
+            $this->recordTaskActivity($taskId, $userId, 'task_updated', $field, $oldValue, $newValue);
+        }
+    }
+
+    private function changedTaskFields(object $oldTask, array $newValues): array
+    {
+        $fields = [];
+
         foreach ($newValues as $field => $newValue) {
             if (in_array($field, ['updated_at'], true) || ! property_exists($oldTask, $field)) {
                 continue;
             }
 
-            $oldValue = $oldTask->{$field};
-            if ($this->normalizeActivityValue($oldValue, $field) === $this->normalizeActivityValue($newValue, $field)) {
-                continue;
+            if ($this->normalizeActivityValue($oldTask->{$field}, $field) !== $this->normalizeActivityValue($newValue, $field)) {
+                $fields[] = $field;
             }
-
-            $this->recordTaskActivity($taskId, $userId, 'task_updated', $field, $oldValue, $newValue);
         }
+
+        return $fields;
+    }
+
+    private function taskFieldLabel(string $field): string
+    {
+        return [
+            'title' => 'titolo',
+            'description' => 'descrizione',
+            'task_type' => 'tipologia',
+            'status' => 'stato',
+            'priority' => 'priorità',
+            'project_id' => 'progetto',
+            'client_id' => 'cliente',
+            'service_id' => 'servizio',
+            'start_date' => 'inizio',
+            'due_date' => 'scadenza',
+            'due_time' => 'ora',
+            'location' => 'luogo/link',
+            'recurring_enabled' => 'ricorrenza',
+        ][$field] ?? str_replace('_', ' ', $field);
     }
 
     private function recordTaskPeopleChanges(string $taskId, string $userId, array $oldPeople, array $newPeople): void

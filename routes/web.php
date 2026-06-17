@@ -53,8 +53,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/notifications', [CentroPageController::class, 'notifications'])->name('notifications.index');
     Route::patch('/notifications/read-all', [CentroPageController::class, 'markAllNotificationsRead'])->name('notifications.read-all');
     Route::patch('/notifications/{id}/read', [CentroPageController::class, 'markNotificationRead'])->name('notifications.read');
-    Route::delete('/notifications', [CentroPageController::class, 'destroyAllNotifications'])->name('notifications.destroy-all');
-    Route::delete('/notifications/{id}', [CentroPageController::class, 'destroyNotification'])->name('notifications.destroy');
+    Route::patch('/notifications/{id}/restore', [CentroPageController::class, 'restoreNotification'])->name('notifications.restore');
+    Route::delete('/notifications', [CentroPageController::class, 'archiveAllNotifications'])->name('notifications.destroy-all');
+    Route::delete('/notifications/{id}', [CentroPageController::class, 'archiveNotification'])->name('notifications.destroy');
     Route::get('/updates/social', [CentroPageController::class, 'index'])->defaults('section', 'updates-social')->name('updates.social');
     Route::post('/updates/social', [CentroPageController::class, 'store'])->defaults('section', 'updates-social')->name('updates-social.store');
     Route::put('/updates/social/{id}', [CentroPageController::class, 'update'])->defaults('section', 'updates-social')->name('updates-social.update');
