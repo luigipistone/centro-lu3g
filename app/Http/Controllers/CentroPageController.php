@@ -542,15 +542,12 @@ class CentroPageController extends Controller
 
         if ($section === 'tasks') {
             $this->syncTaskPeopleLists($payload['id'], $taskPeople['assignees'] ?? [], $taskPeople['followers'] ?? []);
-
-            if (! empty($taskPeople['assignees']) || ! empty($taskPeople['followers'])) {
-                $this->notifyTaskPeople(
-                    $payload['id'],
-                    $request->user()->id,
-                    'task_created',
-                    $request->user()->name.' ti ha coinvolto nella task "'.$payload['title'].'".',
-                );
-            }
+            $this->notifyTaskPeople(
+                $payload['id'],
+                $request->user()->id,
+                'task_created',
+                $request->user()->name.' ha creato la task "'.$payload['title'].'".',
+            );
         }
 
         return back()
@@ -629,7 +626,15 @@ class CentroPageController extends Controller
 
         $task = null;
         if ($section === 'tasks') {
-            $task = DB::table('tasks')->where('id', $id)->first(['id', 'parent_task_id']);
+            $task = DB::table('tasks')->where('id', $id)->first();
+            if ($task) {
+                $this->notifyTaskPeople(
+                    $id,
+                    $request->user()->id,
+                    'task_deleted',
+                    $request->user()->name.' ha eliminato la task "'.$task->title.'".',
+                );
+            }
         }
 
         DB::table($this->config($section)['table'])->where('id', $id)->delete();
@@ -2887,7 +2892,6 @@ class CentroPageController extends Controller
             ->merge(DB::table('task_followers')->where('task_id', $taskId)->pluck('user_id'))
             ->filter()
             ->unique()
-            ->reject(fn ($userId) => $userId === $actorId)
             ->values();
 
         foreach ($userIds as $userId) {
