@@ -15,6 +15,7 @@ const page = usePage();
 const confirmArchiveAll = ref(false);
 const confirmText = ref('');
 const browserPermission = ref(typeof window !== 'undefined' && 'Notification' in window ? window.Notification.permission : 'unsupported');
+const appTimeZone = 'Europe/Rome';
 
 const emptyLabel = computed(() => props.archived ? 'Nessuna notifica archiviata.' : 'Nessuna notifica attiva.');
 
@@ -57,6 +58,7 @@ async function enableBrowserNotifications() {
 function formatDate(value) {
     if (!value) return '';
     return new Date(value).toLocaleString('it-IT', {
+        timeZone: appTimeZone,
         day: '2-digit',
         month: 'short',
         hour: '2-digit',

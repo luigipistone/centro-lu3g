@@ -63,6 +63,7 @@ const labels = {
     description: 'Descrizione',
     notes: 'Note',
 };
+const appTimeZone = 'Europe/Rome';
 
 const valueLabels = {
     active: 'Attivo',
@@ -1675,12 +1676,12 @@ function subscriptionFrequency(subscription) {
 
 function dateIt(value) {
     if (!value) return '-';
-    return new Date(value).toLocaleDateString('it-IT');
+    return new Date(value).toLocaleDateString('it-IT', { timeZone: appTimeZone });
 }
 
 function dateTimeIt(value) {
     if (!value) return '-';
-    return new Date(value).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return new Date(value).toLocaleString('it-IT', { timeZone: appTimeZone, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function plainText(value) {
@@ -3447,7 +3448,7 @@ onUnmounted(() => {
                     <div class="space-y-3">
                         <div v-for="comment in related.comments" :key="comment.id" class="rounded-md border border-gray-100 bg-gray-50 px-3 py-3 text-sm transition hover:border-indigo-100 hover:bg-white">
                             <div class="mb-2 flex items-center justify-between gap-3">
-                                <div class="text-xs font-medium text-gray-500">{{ comment.user_name || 'Utente' }} · {{ comment.created_at }}</div>
+                                <div class="text-xs font-medium text-gray-500">{{ comment.user_name || 'Utente' }} · {{ dateTimeIt(comment.created_at) }}</div>
                                 <div class="flex items-center gap-2">
                                     <button type="button" class="text-xs font-semibold text-indigo-600 transition hover:text-indigo-500" @click="editComment(comment)">
                                         Modifica
