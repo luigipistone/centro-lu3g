@@ -89,8 +89,9 @@ const calendarTaskPanel = ref(null);
 const calendarTaskParentStack = ref([]);
 const calendarTaskPanelMode = ref('edit');
 const calendarTaskDrawerBody = ref(null);
-let calendarWheelLock = false;
-let calendarWheelTimer = null;
+const calendarScrollArea = ref(null);
+let calendarScrollResetting = false;
+let calendarScrollTimer = null;
 const calendarTaskAutosaveState = ref('idle');
 const calendarTaskAutosaveError = ref('');
 let calendarTaskAutosaveTimer = null;
@@ -1504,56 +1505,87 @@ const monthNames = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno'
 const dayNames = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const calendarYear = computed(() => currentCalendarDate.value.getFullYear());
 const calendarMonth = computed(() => currentCalendarDate.value.getMonth());
-const calendarDays = computed(() => new Date(calendarYear.value, calendarMonth.value + 1, 0).getDate());
-const calendarOffset = computed(() => (new Date(calendarYear.value, calendarMonth.value, 1).getDay() + 6) % 7);
-const calendarGrid = computed(() => {
+const calendarMonthSections = computed(() => [-1, 0, 1].map((delta) => {
+    const date = new Date(calendarYear.value, calendarMonth.value + delta, 1);
+    const year = date.getFullYear();
+    const month = date.getMonth();
+
+    return {
+        key: `${year}-${month}`,
+        delta,
+        year,
+        month,
+        label: `${monthNames[month]} ${year}`,
+        cells: buildCalendarGrid(year, month),
+    };
+}));
+
+function buildCalendarGrid(year, month) {
+    const days = new Date(year, month + 1, 0).getDate();
+    const offset = (new Date(year, month, 1).getDay() + 6) % 7;
     const cells = [];
-    for (let index = 0; index < calendarOffset.value; index += 1) {
+    for (let index = 0; index < offset; index += 1) {
         cells.push({ key: `empty-${index}`, empty: true });
     }
-    for (let day = 1; day <= calendarDays.value; day += 1) {
-        const date = formatCalendarDate(calendarYear.value, calendarMonth.value, day);
-        const weekday = (new Date(calendarYear.value, calendarMonth.value, day).getDay() + 6) % 7;
+    for (let day = 1; day <= days; day += 1) {
+        const date = formatCalendarDate(year, month, day);
+        const weekday = (new Date(year, month, day).getDay() + 6) % 7;
         cells.push({
             key: date,
             day,
             date,
             weekday,
             weekend: weekday >= 5,
-            today: isCalendarToday(day),
+            today: isCalendarToday(year, month, day),
             tasks: tasksForDay(date),
         });
     }
     return cells;
-});
+}
 
 function formatCalendarDate(year, month, day) {
     return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
-function isCalendarToday(day) {
+function isCalendarToday(year, month, day) {
     const today = new Date();
-    return today.getFullYear() === calendarYear.value && today.getMonth() === calendarMonth.value && today.getDate() === day;
+    return today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
 }
 
 function changeMonth(delta) {
     calendarCreateDate.value = null;
     currentCalendarDate.value = new Date(calendarYear.value, calendarMonth.value + delta, 1);
+    centerCalendarScroll();
 }
 
-function handleCalendarWheel(event) {
-    if (Math.abs(event.deltaY) < Math.abs(event.deltaX)) return;
-    if (Math.abs(event.deltaY) < 18) return;
+function centerCalendarScroll() {
+    nextTick(() => {
+        const element = calendarScrollArea.value;
+        if (!element) return;
 
-    event.preventDefault();
-    if (calendarWheelLock) return;
+        calendarScrollResetting = true;
+        const currentMonth = element.querySelector('[data-current-calendar-month="true"]');
+        element.scrollTop = currentMonth?.offsetTop || (element.scrollHeight / 3);
+        window.clearTimeout(calendarScrollTimer);
+        calendarScrollTimer = window.setTimeout(() => {
+            calendarScrollResetting = false;
+        }, 140);
+    });
+}
 
-    changeMonth(event.deltaY > 0 ? 1 : -1);
-    calendarWheelLock = true;
-    window.clearTimeout(calendarWheelTimer);
-    calendarWheelTimer = window.setTimeout(() => {
-        calendarWheelLock = false;
-    }, 420);
+function handleCalendarScroll(event) {
+    if (calendarScrollResetting) return;
+    const element = event.currentTarget;
+    const threshold = 140;
+
+    if (element.scrollTop < threshold) {
+        changeMonth(-1);
+        return;
+    }
+
+    if (element.scrollTop + element.clientHeight > element.scrollHeight - threshold) {
+        changeMonth(1);
+    }
 }
 
 function taskTypeLabel(type) {
@@ -2147,6 +2179,9 @@ onMounted(() => {
     document.addEventListener('pointerdown', closeProjectPeopleMenuOnOutside, true);
     document.addEventListener('pointerdown', closeTaskPeopleMenuOnOutside, true);
     document.addEventListener('pointerdown', closeTaskSearchSelectOnOutside, true);
+    if (props.section === 'calendar') {
+        centerCalendarScroll();
+    }
 });
 onUnmounted(() => {
     if (typeof document !== 'undefined') {
@@ -2157,7 +2192,7 @@ onUnmounted(() => {
     document.removeEventListener('pointerdown', closeProjectPeopleMenuOnOutside, true);
     document.removeEventListener('pointerdown', closeTaskPeopleMenuOnOutside, true);
     document.removeEventListener('pointerdown', closeTaskSearchSelectOnOutside, true);
-    window.clearTimeout(calendarWheelTimer);
+    window.clearTimeout(calendarScrollTimer);
     cancelClientServicesDrag();
 });
 
@@ -2600,148 +2635,153 @@ function visibleCalendarTasks(cell) {
                     </div>
                 </div>
 
-                <div class="surface overflow-hidden" @wheel="handleCalendarWheel">
-                    <div :class="['grid gap-px bg-gray-200/55', compactWeekend ? 'grid-cols-[repeat(5,minmax(0,1fr))_minmax(58px,0.34fr)_minmax(58px,0.34fr)]' : 'grid-cols-7']">
-                        <div
-                            v-for="(day, index) in dayNames"
-                            :key="day"
-                            :class="['bg-white px-2 py-3 text-center text-xs font-bold uppercase tracking-wide text-gray-500', compactWeekend && index >= 5 ? 'text-[10px]' : '']"
-                        >
-                            {{ compactWeekend && index >= 5 ? day.slice(0, 1) : day }}
+                <div ref="calendarScrollArea" class="max-h-[calc(100vh-210px)] min-h-[620px] overflow-y-auto pr-1" @scroll.passive="handleCalendarScroll">
+                    <section v-for="sectionMonth in calendarMonthSections" :key="sectionMonth.key" class="surface mb-5 overflow-visible" :data-current-calendar-month="sectionMonth.delta === 0">
+                        <div class="border-b border-gray-100 bg-white px-4 py-3">
+                            <h3 class="text-sm font-bold uppercase tracking-wide text-gray-500">{{ sectionMonth.label }}</h3>
                         </div>
-                    </div>
+                        <div :class="['grid gap-px bg-gray-200/55', compactWeekend ? 'grid-cols-[repeat(5,minmax(0,1fr))_minmax(58px,0.34fr)_minmax(58px,0.34fr)]' : 'grid-cols-7']">
+                            <div
+                                v-for="(day, index) in dayNames"
+                                :key="`${sectionMonth.key}-${day}`"
+                                :class="['bg-white px-2 py-3 text-center text-xs font-bold uppercase tracking-wide text-gray-500', compactWeekend && index >= 5 ? 'text-[10px]' : '']"
+                            >
+                                {{ compactWeekend && index >= 5 ? day.slice(0, 1) : day }}
+                            </div>
+                        </div>
 
-                    <div :class="['grid gap-px bg-gray-200/55', compactWeekend ? 'grid-cols-[repeat(5,minmax(0,1fr))_minmax(58px,0.34fr)_minmax(58px,0.34fr)]' : 'grid-cols-7']">
-                        <div
-                            v-for="cell in calendarGrid"
-                            :key="cell.key"
-                            :class="[
-                                'group min-h-[170px] bg-white p-2 transition',
-                                cell.empty ? 'bg-white/70' : '',
-                                cell.today ? 'ring-2 ring-inset ring-indigo-500/70' : '',
-                                calendarDropDate === cell.date ? 'bg-indigo-50/80' : '',
-                                calendarDraggedTask && !cell.empty ? 'outline outline-1 outline-transparent transition hover:outline-indigo-200' : '',
-                                compactWeekend && cell.weekend ? 'min-h-[170px] px-1' : '',
-                            ]"
-                            @dragover.prevent="!cell.empty && (calendarDropDate = cell.date)"
-                            @dragleave="calendarDropDate === cell.date && (calendarDropDate = null)"
-                            @drop.prevent="!cell.empty && moveCalendarTask(cell.date)"
-                        >
-                            <template v-if="!cell.empty">
-                                <div class="mb-2 flex items-center justify-between">
-                                    <span :class="['text-sm font-semibold', cell.today ? 'text-indigo-600' : 'text-gray-500']">{{ cell.day }}</span>
-                                    <div v-if="!(compactWeekend && cell.weekend)" class="relative" data-calendar-create-menu>
-                                        <button
-                                            type="button"
-                                            class="rounded-xl bg-white/58 px-2 py-1 text-[11px] font-semibold text-gray-400 opacity-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] transition hover:bg-indigo-50/90 hover:text-indigo-600 group-hover:opacity-100"
-                                            @click.stop="openCalendarCreateMenu(cell.date)"
-                                        >
-                                            + crea
-                                        </button>
-                                        <div
-                                            v-if="calendarCreateDate === cell.date"
-                                            class="absolute right-0 top-7 z-20 w-44 overflow-hidden rounded-2xl border border-white bg-white p-1 shadow-[0_20px_55px_rgba(28,42,73,0.16)]"
-                                            @click.stop
-                                        >
+                        <div :class="['grid gap-px bg-gray-200/55', compactWeekend ? 'grid-cols-[repeat(5,minmax(0,1fr))_minmax(58px,0.34fr)_minmax(58px,0.34fr)]' : 'grid-cols-7']">
+                            <div
+                                v-for="cell in sectionMonth.cells"
+                                :key="`${sectionMonth.key}-${cell.key}`"
+                                :class="[
+                                    'group min-h-[170px] bg-white p-2 transition',
+                                    cell.empty ? 'bg-white/70' : '',
+                                    cell.today ? 'ring-2 ring-inset ring-indigo-500/70' : '',
+                                    calendarDropDate === cell.date ? 'bg-indigo-50/80' : '',
+                                    calendarDraggedTask && !cell.empty ? 'outline outline-1 outline-transparent transition hover:outline-indigo-200' : '',
+                                    compactWeekend && cell.weekend ? 'min-h-[170px] px-1' : '',
+                                ]"
+                                @dragover.prevent="!cell.empty && (calendarDropDate = cell.date)"
+                                @dragleave="calendarDropDate === cell.date && (calendarDropDate = null)"
+                                @drop.prevent="!cell.empty && moveCalendarTask(cell.date)"
+                            >
+                                <template v-if="!cell.empty">
+                                    <div class="mb-2 flex items-center justify-between">
+                                        <span :class="['text-sm font-semibold', cell.today ? 'text-indigo-600' : 'text-gray-500']">{{ cell.day }}</span>
+                                        <div v-if="!(compactWeekend && cell.weekend)" class="relative" data-calendar-create-menu>
                                             <button
                                                 type="button"
-                                                class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-indigo-50/80"
-                                                @click="openCalendarTaskCreate('project', cell.date)"
+                                                class="rounded-xl bg-white/58 px-2 py-1 text-[11px] font-semibold text-gray-400 opacity-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] transition hover:bg-indigo-50/90 hover:text-indigo-600 group-hover:opacity-100"
+                                                @click.stop="openCalendarCreateMenu(cell.date)"
                                             >
-                                                <span class="h-2 w-2 rounded-full bg-blue-500"></span>
-                                                Task
+                                                + crea
                                             </button>
-                                            <button
-                                                type="button"
-                                                class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-amber-50/80"
-                                                @click="openCalendarTaskCreate('ongoing', cell.date)"
+                                            <div
+                                                v-if="calendarCreateDate === cell.date"
+                                                class="absolute right-0 top-7 z-20 w-44 overflow-hidden rounded-2xl border border-white bg-white p-1 shadow-[0_20px_55px_rgba(28,42,73,0.16)]"
+                                                @click.stop
                                             >
-                                                <span class="h-2 w-2 rounded-full bg-amber-500"></span>
-                                                Continuativa
-                                            </button>
-                                            <button
-                                                type="button"
-                                                class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-violet-50/80"
-                                                @click="openCalendarTaskCreate('meeting', cell.date)"
-                                            >
-                                                <span class="h-2 w-2 rounded-full bg-violet-500"></span>
-                                                Meeting
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div v-if="compactWeekend && cell.weekend" class="flex flex-wrap justify-center gap-1 pt-1">
-                                    <button
-                                        v-for="task in cell.tasks"
-                                        :key="task.id"
-                                        type="button"
-                                        class="h-3 w-3 rounded-full ring-2 ring-white/85 transition hover:scale-125 focus:outline-none focus:ring-indigo-300"
-                                        :style="{ backgroundColor: priorityColor(task.priority) }"
-                                        @click="openCalendarTask(task)"
-                                    />
-                                </div>
-
-                                <div v-else class="space-y-1.5">
-                                    <div
-                                        v-for="task in visibleCalendarTasks(cell)"
-                                        :key="task.id"
-                                        :class="[
-                                            'group/task relative cursor-grab overflow-hidden border px-2 py-1.5 text-xs shadow-[inset_0_1px_0_rgba(255,255,255,0.68)] backdrop-blur-xl transition hover:border-indigo-300 hover:shadow-md active:cursor-grabbing',
-                                            taskTypeClass(task.task_type),
-                                            taskSpanClass(task),
-                                            task.status === 'done' ? 'opacity-55 hover:opacity-80' : '',
-                                            calendarDraggedTask?.id === task.id ? 'opacity-50' : '',
-                                        ]"
-                                        role="link"
-                                        tabindex="0"
-                                        draggable="true"
-                                        :title="task.title"
-                                        @click="openCalendarTask(task)"
-                                        @keydown.enter.prevent="openCalendarTask(task)"
-                                        @dragstart="startCalendarDrag(task)"
-                                        @dragend="endCalendarDrag"
-                                    >
-                                        <div class="flex items-start">
-                                            <button
-                                                type="button"
-                                                :class="['absolute left-2 top-2 h-3.5 w-3.5 shrink-0 -translate-x-5 rounded-md border opacity-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] transition duration-200 group-hover/task:translate-x-0 group-hover/task:opacity-100 group-focus/task:translate-x-0 group-focus/task:opacity-100', task.status === 'done' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300 bg-white/78 hover:border-indigo-400']"
-                                                :title="task.status === 'done' ? 'Riapri task' : 'Completa task'"
-                                                @click.stop="toggleTaskDone(task)"
-                                            >
-                                                <Check v-if="task.status === 'done'" class="h-full w-full p-[2px] text-white" :stroke-width="2.2" />
-                                                <span class="sr-only">{{ task.status === 'done' ? 'Riapri task' : 'Completa task' }}</span>
-                                            </button>
-                                            <div class="min-w-0 flex-1 transition-transform duration-200 group-hover/task:translate-x-5 group-focus/task:translate-x-5">
-                                                <div class="flex items-center gap-1">
-                                                    <span class="h-2 w-2 shrink-0 rounded-full" :style="{ backgroundColor: priorityColor(task.priority) }"></span>
-                                                    <span v-if="(task.task_type || 'task') === 'meeting' && task.due_time" class="shrink-0 text-[10px] text-gray-500">{{ String(task.due_time).slice(0, 5) }}</span>
-                                                    <span :class="['truncate font-medium', task.status === 'done' ? 'line-through opacity-60' : '']">{{ task.title }}</span>
-                                                </div>
-                                                <div class="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-gray-500">
-                                                    <span class="truncate">{{ task.client_name || task.project_name || task.service_name || taskTypeLabel(task.task_type) }}</span>
-                                                    <span v-if="task.subtask_count" class="inline-flex shrink-0 items-center gap-1 font-semibold text-gray-500">
-                                                        <span>{{ task.subtask_count }}</span>
-                                                        <svg class="h-3 w-3 fill-current" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                                                            <path :d="subtaskIconPath" />
-                                                        </svg>
-                                                    </span>
-                                                </div>
+                                                <button
+                                                    type="button"
+                                                    class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-indigo-50/80"
+                                                    @click="openCalendarTaskCreate('project', cell.date)"
+                                                >
+                                                    <span class="h-2 w-2 rounded-full bg-blue-500"></span>
+                                                    Task
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-amber-50/80"
+                                                    @click="openCalendarTaskCreate('ongoing', cell.date)"
+                                                >
+                                                    <span class="h-2 w-2 rounded-full bg-amber-500"></span>
+                                                    Continuativa
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-violet-50/80"
+                                                    @click="openCalendarTaskCreate('meeting', cell.date)"
+                                                >
+                                                    <span class="h-2 w-2 rounded-full bg-violet-500"></span>
+                                                    Meeting
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
-                                    <button
-                                        v-if="!calendarExpanded && cell.tasks.length > 4"
-                                        type="button"
-                                        class="w-full rounded px-2 py-1 text-left text-[11px] font-medium text-gray-500 hover:bg-gray-50 hover:text-indigo-600"
-                                        @click="calendarExpanded = true"
-                                    >
-                                        altre {{ cell.tasks.length - 4 }}
-                                    </button>
-                                </div>
-                            </template>
+
+                                    <div v-if="compactWeekend && cell.weekend" class="flex flex-wrap justify-center gap-1 pt-1">
+                                        <button
+                                            v-for="task in cell.tasks"
+                                            :key="task.id"
+                                            type="button"
+                                            class="h-3 w-3 rounded-full ring-2 ring-white/85 transition hover:scale-125 focus:outline-none focus:ring-indigo-300"
+                                            :style="{ backgroundColor: priorityColor(task.priority) }"
+                                            @click="openCalendarTask(task)"
+                                        />
+                                    </div>
+
+                                    <div v-else class="space-y-1.5">
+                                        <div
+                                            v-for="task in visibleCalendarTasks(cell)"
+                                            :key="task.id"
+                                            :class="[
+                                                'group/task relative cursor-grab overflow-hidden border px-2 py-1.5 text-xs shadow-[inset_0_1px_0_rgba(255,255,255,0.68)] backdrop-blur-xl transition hover:border-indigo-300 hover:shadow-md active:cursor-grabbing',
+                                                taskTypeClass(task.task_type),
+                                                taskSpanClass(task),
+                                                task.status === 'done' ? 'opacity-55 hover:opacity-80' : '',
+                                                calendarDraggedTask?.id === task.id ? 'opacity-50' : '',
+                                            ]"
+                                            role="link"
+                                            tabindex="0"
+                                            draggable="true"
+                                            :title="task.title"
+                                            @click="openCalendarTask(task)"
+                                            @keydown.enter.prevent="openCalendarTask(task)"
+                                            @dragstart="startCalendarDrag(task)"
+                                            @dragend="endCalendarDrag"
+                                        >
+                                            <div class="flex items-start">
+                                                <button
+                                                    type="button"
+                                                    :class="['absolute left-2 top-2 h-3.5 w-3.5 shrink-0 -translate-x-5 rounded-md border opacity-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] transition duration-200 group-hover/task:translate-x-0 group-hover/task:opacity-100 group-focus/task:translate-x-0 group-focus/task:opacity-100', task.status === 'done' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300 bg-white/78 hover:border-indigo-400']"
+                                                    :title="task.status === 'done' ? 'Riapri task' : 'Completa task'"
+                                                    @click.stop="toggleTaskDone(task)"
+                                                >
+                                                    <Check v-if="task.status === 'done'" class="h-full w-full p-[2px] text-white" :stroke-width="2.2" />
+                                                    <span class="sr-only">{{ task.status === 'done' ? 'Riapri task' : 'Completa task' }}</span>
+                                                </button>
+                                                <div class="min-w-0 flex-1 transition-transform duration-200 group-hover/task:translate-x-5 group-focus/task:translate-x-5">
+                                                    <div class="flex items-center gap-1">
+                                                        <span class="h-2 w-2 shrink-0 rounded-full" :style="{ backgroundColor: priorityColor(task.priority) }"></span>
+                                                        <span v-if="(task.task_type || 'task') === 'meeting' && task.due_time" class="shrink-0 text-[10px] text-gray-500">{{ String(task.due_time).slice(0, 5) }}</span>
+                                                        <span :class="['truncate font-medium', task.status === 'done' ? 'line-through opacity-60' : '']">{{ task.title }}</span>
+                                                    </div>
+                                                    <div class="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-gray-500">
+                                                        <span class="truncate">{{ task.client_name || task.project_name || task.service_name || taskTypeLabel(task.task_type) }}</span>
+                                                        <span v-if="task.subtask_count" class="inline-flex shrink-0 items-center gap-1 font-semibold text-gray-500">
+                                                            <span>{{ task.subtask_count }}</span>
+                                                            <svg class="h-3 w-3 fill-current" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                                                <path :d="subtaskIconPath" />
+                                                            </svg>
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button
+                                            v-if="!calendarExpanded && cell.tasks.length > 4"
+                                            type="button"
+                                            class="w-full rounded px-2 py-1 text-left text-[11px] font-medium text-gray-500 hover:bg-gray-50 hover:text-indigo-600"
+                                            @click="calendarExpanded = true"
+                                        >
+                                            altre {{ cell.tasks.length - 4 }}
+                                        </button>
+                                    </div>
+                                </template>
+                            </div>
                         </div>
-                    </div>
+                    </section>
                 </div>
 
                 <div v-if="!rows.length" class="mt-4 rounded-md border border-dashed border-gray-300 bg-white px-5 py-8 text-center text-sm text-gray-500">
