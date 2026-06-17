@@ -700,6 +700,19 @@ function floatingMenuStyleFromEvent(event, width = 288) {
     };
 }
 
+function dropdownMenuStyleFromEvent(event, width = 220) {
+    const rect = event?.currentTarget?.getBoundingClientRect?.();
+    if (!rect) return { right: '1.5rem', top: '4.5rem' };
+
+    const left = Math.min(Math.max(12, rect.right - width), window.innerWidth - width - 12);
+    const top = Math.min(rect.bottom + 8, window.innerHeight - 12);
+
+    return {
+        left: `${left}px`,
+        top: `${top}px`,
+    };
+}
+
 function calendarTaskPeopleLabel(field) {
     const selected = selectedCalendarTaskUsers(field);
     if (!selected.length) return field === 'assignee_ids' ? 'Nessuna persona' : 'Nessun follower';
@@ -2008,7 +2021,7 @@ function printCalendarTask() {
 }
 
 function toggleCalendarTaskActionMenu(event = null) {
-    calendarTaskActionMenuStyle.value = floatingMenuStyleFromEvent(event, 220);
+    calendarTaskActionMenuStyle.value = dropdownMenuStyleFromEvent(event, 220);
     calendarTaskActionMenuOpen.value = !calendarTaskActionMenuOpen.value;
 }
 

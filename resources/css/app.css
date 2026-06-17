@@ -698,7 +698,7 @@ html.dark body {
 html.dark .surface,
 html.dark .app-popover,
 html.dark .field-dropdown-menu,
-html.dark .content-card,
+html.dark .content-card:not(.project-preview-card),
 html.dark .widget-card,
 html.dark [class*="bg-white"],
 html.dark [class*="bg-gray-50"],
@@ -781,10 +781,6 @@ html.dark [class*="text-gray-400"] {
 html.dark [class*="placeholder:text-gray-400"]::placeholder,
 html.dark ::placeholder {
     color: hsl(218 12% 58%) !important;
-}
-
-html.dark [class*="bg-indigo-50"] {
-    background: hsl(221 52% 22% / 0.64) !important;
 }
 
 html.dark [class*="text-indigo-600"],

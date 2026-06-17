@@ -753,7 +753,7 @@ function deleteTaskFromDetail() {
 }
 
 function toggleTaskActionMenu(event = null) {
-    taskActionMenuStyle.value = floatingMenuStyleFromEvent(event, 220);
+    taskActionMenuStyle.value = dropdownMenuStyleFromEvent(event, 220);
     taskActionMenuOpen.value = !taskActionMenuOpen.value;
 }
 
@@ -1629,6 +1629,19 @@ function floatingMenuStyleFromEvent(event, width = 288) {
     return {
         left: `${left}px`,
         bottom: `${bottom}px`,
+    };
+}
+
+function dropdownMenuStyleFromEvent(event, width = 220) {
+    const rect = event?.currentTarget?.getBoundingClientRect?.();
+    if (!rect) return { right: '1.5rem', top: '4.5rem' };
+
+    const left = Math.min(Math.max(12, rect.right - width), window.innerWidth - width - 12);
+    const top = Math.min(rect.bottom + 8, window.innerHeight - 12);
+
+    return {
+        left: `${left}px`,
+        top: `${top}px`,
     };
 }
 
