@@ -225,28 +225,29 @@
         position: relative;
         isolation: isolate;
         overflow: hidden;
-        box-shadow: var(--shadow-control), 0 0 0 1px hsl(221 84% 61% / 0.04);
+        box-shadow: var(--shadow-control), 0 0 0 1px hsl(221 84% 61% / 0.10);
+        animation: status-action-glow 3.6s ease-in-out infinite;
     }
 
     .status-action-button::before {
         content: "";
         position: absolute;
-        inset: -65% auto -65% -88%;
+        inset: -80% auto -80% -96%;
         z-index: 0;
-        width: 72%;
+        width: 88%;
         transform: translateX(0) rotate(16deg);
         border-radius: inherit;
         background:
-            radial-gradient(closest-side, hsl(0 0% 100% / 0.64), hsl(0 0% 100% / 0.22) 45%, transparent 72%),
-            linear-gradient(90deg, transparent, hsl(221 84% 61% / 0.10), transparent);
-        filter: blur(2px);
+            radial-gradient(closest-side, hsl(0 0% 100% / 0.92), hsl(0 0% 100% / 0.36) 43%, transparent 72%),
+            linear-gradient(90deg, transparent, hsl(221 84% 61% / 0.22), hsl(0 0% 100% / 0.58), hsl(221 84% 61% / 0.14), transparent);
+        filter: blur(1px);
         opacity: 0;
-        animation: status-action-shimmer 4.2s cubic-bezier(0.45, 0, 0.22, 1) infinite;
+        animation: status-action-shimmer 3.4s cubic-bezier(0.45, 0, 0.22, 1) infinite;
         pointer-events: none;
     }
 
     .status-action-button.icon-btn::before {
-        width: 92%;
+        width: 130%;
     }
 
     .status-action-button > * {
@@ -570,6 +571,7 @@
         .widget-card,
         .content-card,
         .app-popover,
+        .status-action-button,
         .status-action-button::before,
         .status-action-pulse,
         .calendar-task-drawer-enter-active,
@@ -597,16 +599,25 @@
     }
 }
 
+@keyframes status-action-glow {
+    0%, 100% {
+        box-shadow: var(--shadow-control), 0 0 0 1px hsl(221 84% 61% / 0.08), 0 0 0 hsl(221 84% 61% / 0);
+    }
+    50% {
+        box-shadow: var(--shadow-control), 0 0 0 1px hsl(221 84% 61% / 0.22), 0 0 14px hsl(221 84% 61% / 0.18);
+    }
+}
+
 @keyframes status-action-shimmer {
-    0%, 42% {
+    0%, 30% {
         transform: translateX(0) rotate(16deg);
         opacity: 0;
     }
-    52% {
-        opacity: 0.82;
+    43% {
+        opacity: 1;
     }
-    76%, 100% {
-        transform: translateX(365%) rotate(16deg);
+    68%, 100% {
+        transform: translateX(335%) rotate(16deg);
         opacity: 0;
     }
 }
