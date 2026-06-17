@@ -312,11 +312,16 @@ const calendarSubtaskForm = useForm({
     title: '',
     priority: 'medium',
     due_date: '',
+    assignee_ids: [],
 });
 const calendarSubtaskAssigneeMenuOpen = ref(null);
 const calendarSubtaskAssigneeMenuStyle = ref({});
+const calendarSubtaskCreateAssigneeMenuOpen = ref(false);
+const calendarSubtaskCreateAssigneeMenuStyle = ref({});
 const calendarSubtaskStatusPulse = ref(null);
 const calendarDraggedSubtaskId = ref(null);
+const calendarSubtaskDropTarget = ref(null);
+const calendarSubtaskDropPlacement = ref(null);
 const calendarTaskStatusPulse = ref(false);
 const calendarCommentForm = useForm({
     content: '',
@@ -595,6 +600,26 @@ function calendarSubtaskAssignees(subtaskId) {
     return (props.users || []).filter((user) => selected.includes(user.id));
 }
 
+function calendarCreateSubtaskAssignees() {
+    return (props.users || []).filter((user) => (calendarSubtaskForm.assignee_ids || []).includes(user.id));
+}
+
+function toggleCalendarCreateSubtaskAssigneeMenu(event = null) {
+    calendarSubtaskCreateAssigneeMenuStyle.value = floatingMenuStyleFromEvent(event);
+    calendarSubtaskCreateAssigneeMenuOpen.value = !calendarSubtaskCreateAssigneeMenuOpen.value;
+}
+
+function toggleCalendarCreateSubtaskAssignee(userId) {
+    const values = [...(calendarSubtaskForm.assignee_ids || [])];
+    const index = values.indexOf(userId);
+    if (index >= 0) {
+        values.splice(index, 1);
+    } else {
+        values.push(userId);
+    }
+    calendarSubtaskForm.assignee_ids = values;
+}
+
 function openInlineDatePicker(event) {
     const input = event.currentTarget?.closest('[data-inline-date]')?.querySelector('input[type="date"]');
     if (!input) return;
@@ -612,17 +637,29 @@ function startCalendarSubtaskDrag(subtask) {
     calendarDraggedSubtaskId.value = subtask.id;
 }
 
+function dragOverCalendarSubtask(targetSubtask, event) {
+    if (!calendarDraggedSubtaskId.value || calendarDraggedSubtaskId.value === targetSubtask.id) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    calendarSubtaskDropTarget.value = targetSubtask.id;
+    calendarSubtaskDropPlacement.value = event.clientY < rect.top + (rect.height / 2) ? 'before' : 'after';
+}
+
 function dropCalendarSubtask(targetSubtask) {
     const fromId = calendarDraggedSubtaskId.value;
+    const placement = calendarSubtaskDropPlacement.value || 'before';
     calendarDraggedSubtaskId.value = null;
+    calendarSubtaskDropTarget.value = null;
+    calendarSubtaskDropPlacement.value = null;
     if (!fromId || fromId === targetSubtask.id || !calendarTaskPanel.value) return;
 
     const current = [...(calendarTaskPanel.value.subtasks || [])];
     const fromIndex = current.findIndex((subtask) => subtask.id === fromId);
-    const toIndex = current.findIndex((subtask) => subtask.id === targetSubtask.id);
+    let toIndex = current.findIndex((subtask) => subtask.id === targetSubtask.id);
     if (fromIndex < 0 || toIndex < 0) return;
 
     const [moved] = current.splice(fromIndex, 1);
+    if (fromIndex < toIndex) toIndex -= 1;
+    if (placement === 'after') toIndex += 1;
     current.splice(toIndex, 0, moved);
     calendarTaskPanel.value = {
         ...calendarTaskPanel.value,
@@ -639,6 +676,8 @@ function dropCalendarSubtask(targetSubtask) {
 
 function endCalendarSubtaskDrag() {
     calendarDraggedSubtaskId.value = null;
+    calendarSubtaskDropTarget.value = null;
+    calendarSubtaskDropPlacement.value = null;
 }
 
 function floatingMenuStyleFromEvent(event, width = 288) {
@@ -680,6 +719,9 @@ function toggleCalendarSubtaskAssigneeMenu(subtaskId, event = null) {
 }
 
 function closeCalendarSubtaskAssigneeMenuOnOutside(event) {
+    if (calendarSubtaskCreateAssigneeMenuOpen.value && !(event.target instanceof Element && event.target.closest('[data-calendar-subtask-create-assignees]'))) {
+        calendarSubtaskCreateAssigneeMenuOpen.value = false;
+    }
     if (!calendarSubtaskAssigneeMenuOpen.value) return;
     if (event.target instanceof Element && event.target.closest(`[data-calendar-subtask-assignees="${calendarSubtaskAssigneeMenuOpen.value}"]`)) return;
 
@@ -1868,7 +1910,10 @@ function addCalendarSubtask() {
         preserveScroll: true,
         preserveState: true,
         only: ['rows', 'errors', 'flash'],
-        onSuccess: () => calendarSubtaskForm.reset(),
+        onSuccess: () => {
+            calendarSubtaskForm.reset();
+            calendarSubtaskCreateAssigneeMenuOpen.value = false;
+        },
     });
 }
 
@@ -3001,10 +3046,46 @@ function visibleCalendarTasks(cell) {
                                     <h4 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Sottoattività</h4>
                                     <span class="text-xs text-gray-400">{{ calendarPanelSubtasks().length }} elementi</span>
                                 </div>
-                                <form class="mb-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_140px_145px_auto]" @submit.prevent="addCalendarSubtask">
+                                <form class="mb-4 grid items-center gap-3 md:grid-cols-[minmax(0,1fr)_132px_86px_auto]" @submit.prevent="addCalendarSubtask">
                                     <input v-model="calendarSubtaskForm.title" class="form-control mt-0" placeholder="Nuova sottoattività..." required />
-                                    <AppSelect v-model="calendarSubtaskForm.priority" :options="taskPriorityOptions.filter((option) => option.value !== 'all')" />
-                                    <input v-model="calendarSubtaskForm.due_date" class="form-control mt-0" type="date" @click="openDatePicker" @focus="openDatePicker" />
+                                    <div class="relative" data-calendar-subtask-create-assignees>
+                                        <button type="button" class="subtask-line-people justify-end" @click.stop="toggleCalendarCreateSubtaskAssigneeMenu($event)">
+                                            <span v-if="calendarCreateSubtaskAssignees().length" class="flex min-w-0 items-center -space-x-2">
+                                                <UserAvatar v-for="user in calendarCreateSubtaskAssignees().slice(0, 4)" :key="`calendar-new-subtask-assignee-${user.id}`" :user="user" size="xs" class="ring-2 ring-white" />
+                                                <span v-if="calendarCreateSubtaskAssignees().length > 4" class="ml-3 text-xs font-semibold text-gray-500">+{{ calendarCreateSubtaskAssignees().length - 4 }}</span>
+                                            </span>
+                                            <span v-else class="subtask-line-token">
+                                                <UserRound class="h-4 w-4" :stroke-width="1.7" />
+                                            </span>
+                                        </button>
+                                        <Teleport to="body">
+                                            <div v-if="calendarSubtaskCreateAssigneeMenuOpen" class="fixed inset-0 z-[7600] bg-transparent" data-calendar-subtask-create-assignees @click.self="calendarSubtaskCreateAssigneeMenuOpen = false">
+                                                <div class="app-popover field-dropdown-menu fixed w-72 p-3" :style="calendarSubtaskCreateAssigneeMenuStyle" @click.stop>
+                                                    <div class="people-avatar-picker max-h-56">
+                                                        <button
+                                                            v-for="user in users"
+                                                            :key="`calendar-new-subtask-person-${user.id}`"
+                                                            type="button"
+                                                            :class="personAvatarClass((calendarSubtaskForm.assignee_ids || []).includes(user.id))"
+                                                            :aria-pressed="(calendarSubtaskForm.assignee_ids || []).includes(user.id)"
+                                                            :aria-label="`${(calendarSubtaskForm.assignee_ids || []).includes(user.id) ? 'Rimuovi' : 'Assegna'} ${user.name || user.email}`"
+                                                            @click="toggleCalendarCreateSubtaskAssignee(user.id)"
+                                                        >
+                                                            <UserAvatar :user="user" size="md" />
+                                                        </button>
+                                                    </div>
+                                                    <p v-if="!users?.length" class="text-sm text-gray-500">Nessun utente disponibile.</p>
+                                                </div>
+                                            </div>
+                                        </Teleport>
+                                    </div>
+                                    <div class="relative flex items-center justify-end" data-inline-date>
+                                        <button type="button" :class="[calendarSubtaskForm.due_date ? 'subtask-line-token rounded-full px-2.5' : 'subtask-line-token']" @click="openInlineDatePicker">
+                                            <span v-if="calendarSubtaskForm.due_date">{{ shortDateIt(calendarSubtaskForm.due_date) }}</span>
+                                            <CalendarDays v-else class="h-4 w-4" :stroke-width="1.7" />
+                                        </button>
+                                        <input v-model="calendarSubtaskForm.due_date" class="pointer-events-none absolute h-px w-px opacity-0" type="date" tabindex="-1" />
+                                    </div>
                                     <button type="submit" class="btn btn-primary justify-center px-4" :disabled="calendarSubtaskForm.processing">
                                         <Plus class="h-4 w-4" :stroke-width="1.7" />
                                     </button>
@@ -3015,18 +3096,31 @@ function visibleCalendarTasks(cell) {
                                         :key="subtask.id"
                                         draggable="true"
                                         :class="[
-                                            'subtask-line md:grid-cols-[24px_minmax(0,1fr)_132px_86px_auto]',
+                                            'subtask-line md:grid-cols-[68px_minmax(0,1fr)_132px_86px_auto]',
                                             calendarSubtaskAssigneeMenuOpen === subtask.id ? 'z-[6600]' : 'z-0',
                                             calendarDraggedSubtaskId === subtask.id ? 'is-dragging' : '',
+                                            calendarSubtaskDropTarget === subtask.id && calendarSubtaskDropPlacement === 'before' ? 'drop-before' : '',
+                                            calendarSubtaskDropTarget === subtask.id && calendarSubtaskDropPlacement === 'after' ? 'drop-after' : '',
                                         ]"
                                         @dragstart="startCalendarSubtaskDrag(subtask)"
-                                        @dragover.prevent
+                                        @dragover.prevent="dragOverCalendarSubtask(subtask, $event)"
                                         @drop.prevent="dropCalendarSubtask(subtask)"
                                         @dragend="endCalendarSubtaskDrag"
                                     >
-                                        <button type="button" class="mt-1 inline-flex h-8 w-6 cursor-grab items-center justify-center text-gray-300 transition hover:text-gray-500 active:cursor-grabbing" title="Sposta sottoattività">
-                                            <GripVertical class="h-4 w-4" :stroke-width="1.7" />
-                                        </button>
+                                        <div class="flex items-center gap-1">
+                                            <button type="button" class="inline-flex h-9 w-6 cursor-grab items-center justify-center text-gray-300 transition hover:text-gray-500 active:cursor-grabbing" title="Sposta sottoattività">
+                                                <GripVertical class="h-4 w-4" :stroke-width="1.7" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                :class="['icon-btn status-action-button h-9 w-9', calendarSubtaskStatusPulse === subtask.id ? 'status-action-pulse' : '']"
+                                                :title="(calendarSubtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'Riapri sottoattività' : 'Completa sottoattività'"
+                                                @click="setCalendarSubtaskStatus(subtask, (calendarSubtaskDrafts[subtask.id]?.status || subtask.status) !== 'done')"
+                                            >
+                                                <RotateCcw v-if="(calendarSubtaskDrafts[subtask.id]?.status || subtask.status) === 'done'" class="h-4 w-4" :stroke-width="1.7" />
+                                                <Check v-else class="h-4 w-4" :stroke-width="1.7" />
+                                            </button>
+                                        </div>
                                         <div class="min-w-0">
                                             <input
                                                 v-if="calendarSubtaskDrafts[subtask.id]"
@@ -3037,7 +3131,7 @@ function visibleCalendarTasks(cell) {
                                             />
                                         </div>
                                         <div v-if="calendarSubtaskDrafts[subtask.id]" class="relative" :data-calendar-subtask-assignees="subtask.id">
-                                            <button type="button" class="subtask-line-people" @click.stop="toggleCalendarSubtaskAssigneeMenu(subtask.id, $event)">
+                                            <button type="button" class="subtask-line-people justify-end" @click.stop="toggleCalendarSubtaskAssigneeMenu(subtask.id, $event)">
                                                 <span v-if="calendarSubtaskAssignees(subtask.id).length" class="flex min-w-0 items-center -space-x-2">
                                                     <UserAvatar v-for="user in calendarSubtaskAssignees(subtask.id).slice(0, 4)" :key="`calendar-subtask-assignee-${subtask.id}-${user.id}`" :user="user" size="xs" class="ring-2 ring-white" />
                                                     <span v-if="calendarSubtaskAssignees(subtask.id).length > 4" class="ml-3 text-xs font-semibold text-gray-500">+{{ calendarSubtaskAssignees(subtask.id).length - 4 }}</span>
@@ -3072,7 +3166,7 @@ function visibleCalendarTasks(cell) {
                                                 </div>
                                             </Teleport>
                                         </div>
-                                        <div v-if="calendarSubtaskDrafts[subtask.id]" class="relative flex items-center justify-start" data-inline-date>
+                                        <div v-if="calendarSubtaskDrafts[subtask.id]" class="relative flex items-center justify-end" data-inline-date>
                                             <button type="button" :class="[calendarSubtaskDrafts[subtask.id].due_date ? 'subtask-line-token rounded-full px-2.5' : 'subtask-line-token']" @click="openInlineDatePicker">
                                                 <span v-if="calendarSubtaskDrafts[subtask.id].due_date">{{ shortDateIt(calendarSubtaskDrafts[subtask.id].due_date) }}</span>
                                                 <CalendarDays v-else class="h-4 w-4" :stroke-width="1.7" />
@@ -3087,16 +3181,7 @@ function visibleCalendarTasks(cell) {
                                                 @input="saveCalendarSubtaskInline(subtask)"
                                             />
                                         </div>
-                                        <div class="flex self-center items-center justify-end gap-1">
-                                            <button
-                                                type="button"
-                                                :class="['icon-btn status-action-button h-9 w-9', calendarSubtaskStatusPulse === subtask.id ? 'status-action-pulse' : '']"
-                                                :title="(calendarSubtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'Riapri sottoattività' : 'Completa sottoattività'"
-                                                @click="setCalendarSubtaskStatus(subtask, (calendarSubtaskDrafts[subtask.id]?.status || subtask.status) !== 'done')"
-                                            >
-                                                <RotateCcw v-if="(calendarSubtaskDrafts[subtask.id]?.status || subtask.status) === 'done'" class="h-4 w-4" :stroke-width="1.7" />
-                                                <Check v-else class="h-4 w-4" :stroke-width="1.7" />
-                                            </button>
+                                        <div class="subtask-actions">
                                             <button type="button" class="icon-btn h-9 w-9" title="Apri sottoattività" @click="openCalendarSubtask(subtask)">
                                                 <ExternalLink class="h-4 w-4" :stroke-width="1.7" />
                                             </button>

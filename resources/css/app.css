@@ -352,12 +352,33 @@
     }
 
     .subtask-line {
-        @apply relative grid gap-3 overflow-visible border-t border-gray-100 px-1 py-2.5 text-sm transition hover:bg-gray-50/70;
+        @apply relative grid items-center gap-2 overflow-visible border-t border-gray-100 px-1 py-2.5 text-sm transition hover:bg-gray-50/70;
         border-radius: var(--radius-sm);
     }
 
     .subtask-line.is-dragging {
         @apply bg-indigo-50/60 opacity-80;
+    }
+
+    .subtask-line.drop-before::before,
+    .subtask-line.drop-after::after {
+        content: '';
+        position: absolute;
+        left: 0.25rem;
+        right: 0.25rem;
+        height: 2px;
+        border-radius: 999px;
+        background: hsl(221 83% 53% / 0.82);
+        box-shadow: 0 0 0 4px hsl(221 83% 53% / 0.1);
+        pointer-events: none;
+    }
+
+    .subtask-line.drop-before::before {
+        top: -1px;
+    }
+
+    .subtask-line.drop-after::after {
+        bottom: -1px;
     }
 
     .subtask-line-control {
@@ -370,6 +391,10 @@
 
     .subtask-line-token {
         @apply inline-flex h-8 min-w-8 items-center justify-center rounded-full border border-gray-200 bg-white px-2 text-xs font-semibold text-gray-500 shadow-sm transition hover:border-indigo-200 hover:text-indigo-600 hover:shadow;
+    }
+
+    .subtask-actions {
+        @apply flex items-center justify-end gap-1;
     }
 
     .field-dropdown-menu {

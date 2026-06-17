@@ -346,15 +346,20 @@ const subtaskForm = useForm({
     title: '',
     priority: 'medium',
     due_date: '',
+    assignee_ids: [],
 });
 const subtaskDrafts = ref({});
 const subtaskAutosaveStates = ref({});
 const subtaskAutosaveErrors = ref({});
 const subtaskAssigneeMenuOpen = ref(null);
 const subtaskAssigneeMenuStyle = ref({});
+const subtaskCreateAssigneeMenuOpen = ref(false);
+const subtaskCreateAssigneeMenuStyle = ref({});
 const subtaskStatusPulse = ref(null);
 const orderedSubtasks = ref([]);
 const draggedSubtaskId = ref(null);
+const subtaskDropTarget = ref(null);
+const subtaskDropPlacement = ref(null);
 const subtaskAutosaveTimers = {};
 const subtaskAutosaveSequences = {};
 const selectedAssignees = ref([...(props.related.assignees || [])]);
@@ -1486,6 +1491,26 @@ function subtaskAssignees(subtaskId) {
     return peopleSelected(selected, props.related.users || []);
 }
 
+function createSubtaskAssignees() {
+    return peopleSelected(subtaskForm.assignee_ids || [], props.related.users || []);
+}
+
+function toggleCreateSubtaskAssigneeMenu(event = null) {
+    subtaskCreateAssigneeMenuStyle.value = floatingMenuStyleFromEvent(event);
+    subtaskCreateAssigneeMenuOpen.value = !subtaskCreateAssigneeMenuOpen.value;
+}
+
+function toggleCreateSubtaskAssignee(userId) {
+    const values = [...(subtaskForm.assignee_ids || [])];
+    const index = values.indexOf(userId);
+    if (index >= 0) {
+        values.splice(index, 1);
+    } else {
+        values.push(userId);
+    }
+    subtaskForm.assignee_ids = values;
+}
+
 function openInlineDatePicker(event) {
     const input = event.currentTarget?.closest('[data-inline-date]')?.querySelector('input[type="date"]');
     if (!input) return;
@@ -1503,17 +1528,29 @@ function startSubtaskDrag(subtask) {
     draggedSubtaskId.value = subtask.id;
 }
 
+function dragOverSubtask(targetSubtask, event) {
+    if (!draggedSubtaskId.value || draggedSubtaskId.value === targetSubtask.id) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    subtaskDropTarget.value = targetSubtask.id;
+    subtaskDropPlacement.value = event.clientY < rect.top + (rect.height / 2) ? 'before' : 'after';
+}
+
 function dropSubtask(targetSubtask) {
     const fromId = draggedSubtaskId.value;
+    const placement = subtaskDropPlacement.value || 'before';
     draggedSubtaskId.value = null;
+    subtaskDropTarget.value = null;
+    subtaskDropPlacement.value = null;
     if (!fromId || fromId === targetSubtask.id) return;
 
     const current = [...orderedSubtasks.value];
     const fromIndex = current.findIndex((subtask) => subtask.id === fromId);
-    const toIndex = current.findIndex((subtask) => subtask.id === targetSubtask.id);
+    let toIndex = current.findIndex((subtask) => subtask.id === targetSubtask.id);
     if (fromIndex < 0 || toIndex < 0) return;
 
     const [moved] = current.splice(fromIndex, 1);
+    if (fromIndex < toIndex) toIndex -= 1;
+    if (placement === 'after') toIndex += 1;
     current.splice(toIndex, 0, moved);
     orderedSubtasks.value = current;
 
@@ -1527,6 +1564,8 @@ function dropSubtask(targetSubtask) {
 
 function endSubtaskDrag() {
     draggedSubtaskId.value = null;
+    subtaskDropTarget.value = null;
+    subtaskDropPlacement.value = null;
 }
 
 function floatingMenuStyleFromEvent(event, width = 288) {
@@ -1561,6 +1600,9 @@ function toggleSubtaskAssigneeMenu(subtaskId, event = null) {
 }
 
 function closeSubtaskAssigneeMenuOnOutside(event) {
+    if (subtaskCreateAssigneeMenuOpen.value && !(event.target instanceof Element && event.target.closest('[data-subtask-create-assignees]'))) {
+        subtaskCreateAssigneeMenuOpen.value = false;
+    }
     if (!subtaskAssigneeMenuOpen.value) return;
     if (event.target instanceof Element && event.target.closest(`[data-subtask-assignees="${subtaskAssigneeMenuOpen.value}"]`)) return;
 
@@ -1614,7 +1656,10 @@ function pulseSubtaskStatus(subtaskId) {
 function addSubtask() {
     subtaskForm.post(route('tasks.subtasks.store', props.record.id), {
         preserveScroll: true,
-        onSuccess: () => subtaskForm.reset(),
+        onSuccess: () => {
+            subtaskForm.reset();
+            subtaskCreateAssigneeMenuOpen.value = false;
+        },
     });
 }
 
@@ -3227,10 +3272,46 @@ onUnmounted(() => {
                         <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Sottoattività</h3>
                         <span class="text-xs text-gray-500">{{ related.subtasks?.length || 0 }} elementi</span>
                     </div>
-                    <form class="mb-4 grid gap-3 md:grid-cols-[1fr_150px_150px_auto]" @submit.prevent="addSubtask">
+                    <form class="mb-4 grid items-center gap-3 md:grid-cols-[minmax(0,1fr)_132px_86px_auto]" @submit.prevent="addSubtask">
                         <input v-model="subtaskForm.title" class="form-control mt-0" placeholder="Nuova sottoattività..." required />
-                        <AppSelect v-model="subtaskForm.priority" :options="priorityOptions" />
-                        <input v-model="subtaskForm.due_date" class="form-control mt-0" type="date" />
+                        <div class="relative" data-subtask-create-assignees>
+                            <button type="button" class="subtask-line-people justify-end" @click.stop="toggleCreateSubtaskAssigneeMenu($event)">
+                                <span v-if="createSubtaskAssignees().length" class="flex min-w-0 items-center -space-x-2">
+                                    <UserAvatar v-for="user in createSubtaskAssignees().slice(0, 4)" :key="`new-subtask-assignee-${user.id}`" :user="user" size="xs" class="ring-2 ring-white" />
+                                    <span v-if="createSubtaskAssignees().length > 4" class="ml-3 text-xs font-semibold text-gray-500">+{{ createSubtaskAssignees().length - 4 }}</span>
+                                </span>
+                                <span v-else class="subtask-line-token">
+                                    <UserRound class="h-4 w-4" :stroke-width="1.7" />
+                                </span>
+                            </button>
+                            <Teleport to="body">
+                                <div v-if="subtaskCreateAssigneeMenuOpen" class="fixed inset-0 z-[7600] bg-transparent" data-subtask-create-assignees @click.self="subtaskCreateAssigneeMenuOpen = false">
+                                    <div class="app-popover field-dropdown-menu fixed w-72 p-3" :style="subtaskCreateAssigneeMenuStyle" @click.stop>
+                                        <div class="people-avatar-picker max-h-56">
+                                            <button
+                                                v-for="user in related.users"
+                                                :key="`new-subtask-person-${user.id}`"
+                                                type="button"
+                                                :class="personAvatarClass((subtaskForm.assignee_ids || []).includes(user.id))"
+                                                :aria-pressed="(subtaskForm.assignee_ids || []).includes(user.id)"
+                                                :aria-label="`${(subtaskForm.assignee_ids || []).includes(user.id) ? 'Rimuovi' : 'Assegna'} ${user.name || user.email}`"
+                                                @click="toggleCreateSubtaskAssignee(user.id)"
+                                            >
+                                                <UserAvatar :user="user" size="md" />
+                                            </button>
+                                        </div>
+                                        <p v-if="!related.users?.length" class="text-sm text-gray-500">Nessun utente disponibile.</p>
+                                    </div>
+                                </div>
+                            </Teleport>
+                        </div>
+                        <div class="relative flex items-center justify-end" data-inline-date>
+                            <button type="button" :class="[subtaskForm.due_date ? 'subtask-line-token rounded-full px-2.5' : 'subtask-line-token']" @click="openInlineDatePicker">
+                                <span v-if="subtaskForm.due_date">{{ shortDateIt(subtaskForm.due_date) }}</span>
+                                <CalendarDays v-else class="h-4 w-4" :stroke-width="1.7" />
+                            </button>
+                            <input v-model="subtaskForm.due_date" class="pointer-events-none absolute h-px w-px opacity-0" type="date" tabindex="-1" />
+                        </div>
                         <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
                     </form>
                     <div class="space-y-2">
@@ -3239,18 +3320,31 @@ onUnmounted(() => {
                             :key="subtask.id"
                             draggable="true"
                             :class="[
-                                'subtask-line md:grid-cols-[24px_minmax(0,1fr)_132px_86px_auto]',
+                                'subtask-line md:grid-cols-[68px_minmax(0,1fr)_132px_86px_auto]',
                                 subtaskAssigneeMenuOpen === subtask.id ? 'z-[6600]' : 'z-0',
                                 draggedSubtaskId === subtask.id ? 'is-dragging' : '',
+                                subtaskDropTarget === subtask.id && subtaskDropPlacement === 'before' ? 'drop-before' : '',
+                                subtaskDropTarget === subtask.id && subtaskDropPlacement === 'after' ? 'drop-after' : '',
                             ]"
                             @dragstart="startSubtaskDrag(subtask)"
-                            @dragover.prevent
+                            @dragover.prevent="dragOverSubtask(subtask, $event)"
                             @drop.prevent="dropSubtask(subtask)"
                             @dragend="endSubtaskDrag"
                         >
-                            <button type="button" class="mt-1 inline-flex h-8 w-6 cursor-grab items-center justify-center text-gray-300 transition hover:text-gray-500 active:cursor-grabbing" title="Sposta sottoattività">
-                                <GripVertical class="h-4 w-4" :stroke-width="1.7" />
-                            </button>
+                            <div class="flex items-center gap-1">
+                                <button type="button" class="inline-flex h-9 w-6 cursor-grab items-center justify-center text-gray-300 transition hover:text-gray-500 active:cursor-grabbing" title="Sposta sottoattività">
+                                    <GripVertical class="h-4 w-4" :stroke-width="1.7" />
+                                </button>
+                                <button
+                                    type="button"
+                                    :class="['icon-btn status-action-button h-9 w-9', subtaskStatusPulse === subtask.id ? 'status-action-pulse' : '']"
+                                    :title="(subtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'Riapri sottoattività' : 'Completa sottoattività'"
+                                    @click="setSubtaskStatus(subtask, (subtaskDrafts[subtask.id]?.status || subtask.status) !== 'done')"
+                                >
+                                    <RotateCcw v-if="(subtaskDrafts[subtask.id]?.status || subtask.status) === 'done'" class="h-4 w-4" :stroke-width="1.7" />
+                                    <Check v-else class="h-4 w-4" :stroke-width="1.7" />
+                                </button>
+                            </div>
                             <div class="min-w-0">
                                 <input
                                     v-if="subtaskDrafts[subtask.id]"
@@ -3261,7 +3355,7 @@ onUnmounted(() => {
                                 />
                             </div>
                             <div v-if="subtaskDrafts[subtask.id]" class="relative" :data-subtask-assignees="subtask.id">
-                                <button type="button" class="subtask-line-people" @click.stop="toggleSubtaskAssigneeMenu(subtask.id, $event)">
+                                <button type="button" class="subtask-line-people justify-end" @click.stop="toggleSubtaskAssigneeMenu(subtask.id, $event)">
                                     <span v-if="subtaskAssignees(subtask.id).length" class="flex min-w-0 items-center -space-x-2">
                                         <UserAvatar v-for="user in subtaskAssignees(subtask.id).slice(0, 4)" :key="`subtask-assignee-${subtask.id}-${user.id}`" :user="user" size="xs" class="ring-2 ring-white" />
                                         <span v-if="subtaskAssignees(subtask.id).length > 4" class="ml-3 text-xs font-semibold text-gray-500">+{{ subtaskAssignees(subtask.id).length - 4 }}</span>
@@ -3296,7 +3390,7 @@ onUnmounted(() => {
                                     </div>
                                 </Teleport>
                             </div>
-                            <div v-if="subtaskDrafts[subtask.id]" class="relative flex items-center justify-start" data-inline-date>
+                            <div v-if="subtaskDrafts[subtask.id]" class="relative flex items-center justify-end" data-inline-date>
                                 <button type="button" :class="[subtaskDrafts[subtask.id].due_date ? 'subtask-line-token rounded-full px-2.5' : 'subtask-line-token']" @click="openInlineDatePicker">
                                     <span v-if="subtaskDrafts[subtask.id].due_date">{{ shortDateIt(subtaskDrafts[subtask.id].due_date) }}</span>
                                     <CalendarDays v-else class="h-4 w-4" :stroke-width="1.7" />
@@ -3309,16 +3403,7 @@ onUnmounted(() => {
                                     @input="saveSubtaskInline(subtask)"
                                 />
                             </div>
-                            <div class="flex self-center items-center justify-end gap-1">
-                                <button
-                                    type="button"
-                                    :class="['icon-btn status-action-button h-9 w-9', subtaskStatusPulse === subtask.id ? 'status-action-pulse' : '']"
-                                    :title="(subtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'Riapri sottoattività' : 'Completa sottoattività'"
-                                    @click="setSubtaskStatus(subtask, (subtaskDrafts[subtask.id]?.status || subtask.status) !== 'done')"
-                                >
-                                    <RotateCcw v-if="(subtaskDrafts[subtask.id]?.status || subtask.status) === 'done'" class="h-4 w-4" :stroke-width="1.7" />
-                                    <Check v-else class="h-4 w-4" :stroke-width="1.7" />
-                                </button>
+                            <div class="subtask-actions">
                                 <Link :href="route('tasks.show', subtask.id)" class="inline-flex h-9 items-center justify-center rounded-[var(--radius-sm)] px-3 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-50 hover:text-indigo-700">
                                     Apri
                                 </Link>

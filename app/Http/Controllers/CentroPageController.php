@@ -1943,8 +1943,10 @@ class CentroPageController extends Controller
 
         $payload = $request->validate([
             'title' => ['required', 'string', 'max:255'],
-            'priority' => ['required', Rule::in(['low', 'medium', 'high', 'urgent'])],
+            'priority' => ['nullable', Rule::in(['low', 'medium', 'high', 'urgent'])],
             'due_date' => ['nullable', 'date'],
+            'assignee_ids' => ['array'],
+            'assignee_ids.*' => ['uuid', 'exists:users,id'],
         ]);
 
         foreach ($payload as $key => $value) {
@@ -1959,7 +1961,7 @@ class CentroPageController extends Controller
         DB::table('tasks')->insert([
             'id' => $subtaskId,
             'title' => $payload['title'],
-            'priority' => $payload['priority'],
+            'priority' => $payload['priority'] ?? 'medium',
             'due_date' => $payload['due_date'] ?? null,
             'task_type' => $task->task_type === 'meeting' ? 'ongoing' : ($task->task_type ?: 'task'),
             'status' => 'todo',
@@ -1972,6 +1974,16 @@ class CentroPageController extends Controller
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        foreach (array_unique($payload['assignee_ids'] ?? []) as $userId) {
+            DB::table('task_assignees')->insert([
+                'id' => (string) str()->uuid(),
+                'task_id' => $subtaskId,
+                'user_id' => $userId,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
 
         $this->recordTaskActivity($id, $request->user()->id, 'subtask_created', 'title', null, $payload['title']);
         $this->recordTaskActivity($subtaskId, $request->user()->id, 'task_created', 'title', null, $payload['title']);
