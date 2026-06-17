@@ -35,7 +35,7 @@ let notificationPoller = null;
 
 const latestNotifications = computed(() => page.props.notifications?.latest || []);
 const latestUnreadNotification = computed(() => latestNotifications.value.find((notification) => !notification.read));
-const notificationBadgeCount = computed(() => page.props.notifications?.active || 0);
+const notificationBadgeCount = computed(() => page.props.notifications?.unread || 0);
 const notificationStorageKey = computed(() => `centro:last-browser-notification:${page.props.auth?.user?.id || 'guest'}`);
 
 function refreshNotificationPermission() {
