@@ -27,6 +27,7 @@ import {
     List,
     ListOrdered,
     Mail,
+    MoreHorizontal,
     Plus,
     Printer,
     Quote,
@@ -207,6 +208,10 @@ const commentAutosaveTimers = {};
 const commentAutosaveSequences = {};
 const editingCommentId = ref(null);
 const taskFeedTab = ref('comments');
+const showAllTaskComments = ref(false);
+const showAllTaskActivity = ref(false);
+const taskActionMenuOpen = ref(false);
+const taskActionMenuStyle = ref({});
 const lineForm = useForm({
     description: '',
     quantity: 1,
@@ -713,10 +718,27 @@ function toggleTaskComplete() {
 }
 
 function duplicateTask() {
+    taskActionMenuOpen.value = false;
     router.post(route('tasks.duplicate', props.record.id));
 }
 
+async function copyTaskLink() {
+    taskActionMenuOpen.value = false;
+    const href = route('tasks.show', props.record.id);
+    const absoluteHref = href.startsWith('http') ? href : `${window.location.origin}${href}`;
+
+    if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(absoluteHref);
+    }
+}
+
+function printTask() {
+    taskActionMenuOpen.value = false;
+    window.print();
+}
+
 function deleteTaskFromDetail() {
+    taskActionMenuOpen.value = false;
     openConfirm({
         title: 'Eliminare questa task?',
         description: props.record.title || 'Task',
@@ -728,6 +750,35 @@ function deleteTaskFromDetail() {
             onFinish: closeConfirm,
         }),
     });
+}
+
+function toggleTaskActionMenu(event = null) {
+    taskActionMenuStyle.value = floatingMenuStyleFromEvent(event, 220);
+    taskActionMenuOpen.value = !taskActionMenuOpen.value;
+}
+
+function closeTaskActionMenuOnOutside(event) {
+    if (taskActionMenuOpen.value && !(event.target instanceof Element && event.target.closest('[data-task-actions-menu]'))) {
+        taskActionMenuOpen.value = false;
+    }
+}
+
+function visibleTaskComments() {
+    const comments = props.related?.comments || [];
+    return showAllTaskComments.value ? comments : comments.slice(0, 3);
+}
+
+function hiddenTaskCommentsCount() {
+    return Math.max(0, (props.related?.comments || []).length - 3);
+}
+
+function visibleTaskActivity() {
+    const activity = props.related?.activity || [];
+    return showAllTaskActivity.value ? activity : activity.slice(0, 3);
+}
+
+function hiddenTaskActivityCount() {
+    return Math.max(0, (props.related?.activity || []).length - 3);
 }
 
 function priorityClass(priority) {
@@ -1600,6 +1651,7 @@ function toggleSubtaskAssigneeMenu(subtaskId, event = null) {
 }
 
 function closeSubtaskAssigneeMenuOnOutside(event) {
+    closeTaskActionMenuOnOutside(event);
     if (subtaskCreateAssigneeMenuOpen.value && !(event.target instanceof Element && event.target.closest('[data-subtask-create-assignees]'))) {
         subtaskCreateAssigneeMenuOpen.value = false;
     }
@@ -1963,14 +2015,31 @@ onUnmounted(() => {
                         <Check class="h-4 w-4" :stroke-width="1.7" />
                         {{ taskForm.status === 'done' ? 'Riapri' : 'Completa' }}
                     </button>
-                    <button type="button" class="btn btn-outline" @click="duplicateTask">
-                        <Copy class="h-4 w-4" :stroke-width="1.7" />
-                        Duplica
+                    <button type="button" class="icon-btn h-10 w-10" data-task-actions-menu title="Azioni task" @click.stop="toggleTaskActionMenu($event)">
+                        <MoreHorizontal class="h-5 w-5" :stroke-width="1.8" />
                     </button>
-                    <button type="button" class="btn btn-danger" @click="deleteTaskFromDetail">
-                        <Trash2 class="h-4 w-4" :stroke-width="1.7" />
-                        Elimina
-                    </button>
+                    <Teleport to="body">
+                        <div v-if="taskActionMenuOpen" class="fixed inset-0 z-[7600] bg-transparent" data-task-actions-menu @click.self="taskActionMenuOpen = false">
+                            <div class="app-popover field-dropdown-menu fixed w-56 p-2" :style="taskActionMenuStyle" @click.stop>
+                                <button type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50" @click="copyTaskLink">
+                                    <Copy class="h-4 w-4" :stroke-width="1.7" />
+                                    Copia link
+                                </button>
+                                <button type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50" @click="duplicateTask">
+                                    <Copy class="h-4 w-4" :stroke-width="1.7" />
+                                    Duplica
+                                </button>
+                                <button type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50" @click="printTask">
+                                    <Printer class="h-4 w-4" :stroke-width="1.7" />
+                                    Stampa
+                                </button>
+                                <button type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50" @click="deleteTaskFromDetail">
+                                    <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                    Elimina
+                                </button>
+                            </div>
+                        </div>
+                    </Teleport>
                 </div>
                 <div v-else-if="section === 'projects'" class="flex flex-wrap justify-end gap-2">
                     <button type="button" class="btn btn-danger" @click="deleteProjectFromDetail">
@@ -3272,7 +3341,7 @@ onUnmounted(() => {
                         <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Sottoattività</h3>
                         <span class="text-xs text-gray-500">{{ related.subtasks?.length || 0 }} elementi</span>
                     </div>
-                    <form class="mb-4 grid items-center gap-3 md:grid-cols-[minmax(0,1fr)_132px_86px_auto]" @submit.prevent="addSubtask">
+                    <form class="mb-4 grid items-center gap-2 md:grid-cols-[minmax(0,1fr)_96px_72px_auto]" @submit.prevent="addSubtask">
                         <input v-model="subtaskForm.title" class="form-control mt-0" placeholder="Nuova sottoattività..." required />
                         <div class="relative" data-subtask-create-assignees>
                             <button type="button" class="subtask-line-people justify-end" @click.stop="toggleCreateSubtaskAssigneeMenu($event)">
@@ -3320,7 +3389,7 @@ onUnmounted(() => {
                             :key="subtask.id"
                             draggable="true"
                             :class="[
-                                'subtask-line md:grid-cols-[68px_minmax(0,1fr)_132px_86px_auto]',
+                                'subtask-line md:grid-cols-[68px_minmax(0,1fr)_96px_72px_auto]',
                                 subtaskAssigneeMenuOpen === subtask.id ? 'z-[6600]' : 'z-0',
                                 draggedSubtaskId === subtask.id ? 'is-dragging' : '',
                                 subtaskDropTarget === subtask.id && subtaskDropPlacement === 'before' ? 'drop-before' : '',
@@ -3468,7 +3537,7 @@ onUnmounted(() => {
                         </div>
                     </form>
                     <div class="space-y-3">
-                        <div v-for="comment in related.comments" :key="comment.id" class="rounded-md border border-gray-100 bg-gray-50 px-3 py-3 text-sm transition hover:border-indigo-100 hover:bg-white">
+                        <div v-for="comment in visibleTaskComments()" :key="comment.id" class="rounded-md border border-gray-100 bg-gray-50 px-3 py-3 text-sm transition hover:border-indigo-100 hover:bg-white">
                             <div class="mb-2 flex items-center justify-between gap-3">
                                 <div class="text-xs font-medium text-gray-500">{{ comment.user_name || 'Utente' }} · {{ dateTimeIt(comment.created_at) }}</div>
                                 <div class="flex items-center gap-2">
@@ -3513,11 +3582,19 @@ onUnmounted(() => {
                                 ></div>
                             </div>
                         </div>
+                        <button
+                            v-if="!showAllTaskComments && hiddenTaskCommentsCount()"
+                            type="button"
+                            class="text-sm font-semibold text-indigo-600 transition hover:text-indigo-500"
+                            @click="showAllTaskComments = true"
+                        >
+                            Mostra i {{ hiddenTaskCommentsCount() }} commenti precedenti
+                        </button>
                         <p v-if="!related.comments?.length" class="text-sm text-gray-500">Nessun commento.</p>
                     </div>
                     </div>
                     <div v-else class="space-y-3">
-                        <div v-for="activity in related.activity" :key="activity.id" class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50 px-3 py-3 text-sm transition hover:border-indigo-100 hover:bg-white">
+                        <div v-for="activity in visibleTaskActivity()" :key="activity.id" class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50 px-3 py-3 text-sm transition hover:border-indigo-100 hover:bg-white">
                             <div class="flex items-start gap-3">
                                 <span class="mt-1 h-2 w-2 shrink-0 rounded-full bg-indigo-300"></span>
                                 <div class="min-w-0">
@@ -3526,6 +3603,14 @@ onUnmounted(() => {
                                 </div>
                             </div>
                         </div>
+                        <button
+                            v-if="!showAllTaskActivity && hiddenTaskActivityCount()"
+                            type="button"
+                            class="text-sm font-semibold text-indigo-600 transition hover:text-indigo-500"
+                            @click="showAllTaskActivity = true"
+                        >
+                            Mostra i {{ hiddenTaskActivityCount() }} aggiornamenti precedenti
+                        </button>
                         <p v-if="!related.activity?.length" class="text-sm text-gray-500">Nessuna attività registrata.</p>
                     </div>
                 </section>

@@ -25,6 +25,7 @@ import {
     ChevronLeft,
     ChevronRight,
     Clock,
+    Copy,
     DatabaseBackup,
     ExternalLink,
     FileText,
@@ -36,8 +37,10 @@ import {
     List,
     ListOrdered,
     Mail,
+    MoreHorizontal,
     Pencil,
     Plus,
+    Printer,
     Quote,
     Receipt,
     RefreshCw,
@@ -117,6 +120,10 @@ const calendarCommentAutosaveStates = ref({});
 const calendarCommentAutosaveErrors = ref({});
 const calendarEditingCommentId = ref(null);
 const calendarTaskFeedTab = ref('comments');
+const calendarShowAllComments = ref(false);
+const calendarShowAllActivity = ref(false);
+const calendarTaskActionMenuOpen = ref(false);
+const calendarTaskActionMenuStyle = ref({});
 const calendarSubtaskAutosaveTimers = {};
 const calendarSubtaskAutosaveSequences = {};
 const calendarCommentAutosaveTimers = {};
@@ -719,6 +726,9 @@ function toggleCalendarSubtaskAssigneeMenu(subtaskId, event = null) {
 }
 
 function closeCalendarSubtaskAssigneeMenuOnOutside(event) {
+    if (calendarTaskActionMenuOpen.value && !(event.target instanceof Element && event.target.closest('[data-calendar-task-actions-menu]'))) {
+        calendarTaskActionMenuOpen.value = false;
+    }
     if (calendarSubtaskCreateAssigneeMenuOpen.value && !(event.target instanceof Element && event.target.closest('[data-calendar-subtask-create-assignees]'))) {
         calendarSubtaskCreateAssigneeMenuOpen.value = false;
     }
@@ -1626,6 +1636,9 @@ function openCalendarTask(task, options = {}) {
     if (!options.preserveStack) {
         calendarTaskParentStack.value = [];
     }
+    calendarShowAllComments.value = false;
+    calendarShowAllActivity.value = false;
+    calendarTaskActionMenuOpen.value = false;
     calendarTaskPanel.value = task;
     calendarTaskPanelMode.value = 'edit';
     calendarTaskPanelOpen.value = true;
@@ -1665,6 +1678,9 @@ function openCalendarTaskCreate(type, date) {
     const taskType = type === 'task' ? 'project' : type;
     calendarCreateDate.value = null;
     calendarTaskParentStack.value = [];
+    calendarShowAllComments.value = false;
+    calendarShowAllActivity.value = false;
+    calendarTaskActionMenuOpen.value = false;
     calendarTaskPanelMode.value = 'create';
     calendarTaskPanel.value = {
         id: '',
@@ -1713,6 +1729,9 @@ function closeCalendarTaskPanel() {
     calendarTaskPanelMode.value = 'edit';
     calendarEditingCommentId.value = null;
     calendarTaskFeedTab.value = 'comments';
+    calendarShowAllComments.value = false;
+    calendarShowAllActivity.value = false;
+    calendarTaskActionMenuOpen.value = false;
     calendarTaskAutosaveState.value = 'idle';
     calendarTaskAutosaveError.value = '';
     window.clearTimeout(calendarTaskAutosaveTimer);
@@ -1802,6 +1821,24 @@ function calendarPanelComments() {
 
 function calendarPanelActivity() {
     return calendarTaskPanel.value?.activity || [];
+}
+
+function visibleCalendarPanelComments() {
+    const comments = calendarPanelComments();
+    return calendarShowAllComments.value ? comments : comments.slice(0, 3);
+}
+
+function hiddenCalendarCommentsCount() {
+    return Math.max(0, calendarPanelComments().length - 3);
+}
+
+function visibleCalendarPanelActivity() {
+    const activity = calendarPanelActivity();
+    return calendarShowAllActivity.value ? activity : activity.slice(0, 3);
+}
+
+function hiddenCalendarActivityCount() {
+    return Math.max(0, calendarPanelActivity().length - 3);
 }
 
 function calendarSubtaskPayload(subtaskId) {
@@ -1931,6 +1968,7 @@ function removeCalendarSubtask(subtask) {
 
 function removeCalendarTask() {
     if (!calendarTaskForm.id) return;
+    calendarTaskActionMenuOpen.value = false;
 
     remove({ id: calendarTaskForm.id, title: calendarTaskForm.title || 'Task' }, () => {
         router.delete(route('tasks.destroy', calendarTaskForm.id), {
@@ -1942,6 +1980,36 @@ function removeCalendarTask() {
             onFinish: cancelDelete,
         });
     });
+}
+
+async function copyCalendarTaskLink() {
+    if (!calendarTaskForm.id) return;
+    calendarTaskActionMenuOpen.value = false;
+    const href = route('tasks.show', calendarTaskForm.id);
+    const absoluteHref = href.startsWith('http') ? href : `${window.location.origin}${href}`;
+
+    if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(absoluteHref);
+    }
+}
+
+function duplicateCalendarTask() {
+    if (!calendarTaskForm.id) return;
+    calendarTaskActionMenuOpen.value = false;
+    router.post(route('tasks.duplicate', calendarTaskForm.id), {}, {
+        preserveScroll: true,
+        preserveState: true,
+    });
+}
+
+function printCalendarTask() {
+    calendarTaskActionMenuOpen.value = false;
+    window.print();
+}
+
+function toggleCalendarTaskActionMenu(event = null) {
+    calendarTaskActionMenuStyle.value = floatingMenuStyleFromEvent(event, 220);
+    calendarTaskActionMenuOpen.value = !calendarTaskActionMenuOpen.value;
 }
 
 function calendarCommentPayload(commentId) {
@@ -2854,12 +2922,35 @@ function visibleCalendarTasks(cell) {
                             <button
                                 v-if="calendarTaskForm.id"
                                 type="button"
-                                class="btn btn-danger"
-                                @click="removeCalendarTask"
+                                class="icon-btn h-10 w-10"
+                                data-calendar-task-actions-menu
+                                title="Azioni task"
+                                @click.stop="toggleCalendarTaskActionMenu($event)"
                             >
-                                <Trash2 class="h-4 w-4" :stroke-width="1.7" />
-                                Elimina
+                                <MoreHorizontal class="h-5 w-5" :stroke-width="1.8" />
                             </button>
+                            <Teleport to="body">
+                                <div v-if="calendarTaskActionMenuOpen" class="fixed inset-0 z-[7600] bg-transparent" data-calendar-task-actions-menu @click.self="calendarTaskActionMenuOpen = false">
+                                    <div class="app-popover field-dropdown-menu fixed w-56 p-2" :style="calendarTaskActionMenuStyle" @click.stop>
+                                        <button type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50" @click="copyCalendarTaskLink">
+                                            <Copy class="h-4 w-4" :stroke-width="1.7" />
+                                            Copia link
+                                        </button>
+                                        <button type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50" @click="duplicateCalendarTask">
+                                            <Copy class="h-4 w-4" :stroke-width="1.7" />
+                                            Duplica
+                                        </button>
+                                        <button type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50" @click="printCalendarTask">
+                                            <Printer class="h-4 w-4" :stroke-width="1.7" />
+                                            Stampa
+                                        </button>
+                                        <button type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50" @click="removeCalendarTask">
+                                            <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                            Elimina
+                                        </button>
+                                    </div>
+                                </div>
+                            </Teleport>
                             <button type="button" class="icon-btn" @click="closeCalendarTaskPanel">
                                 <X class="h-4 w-4" :stroke-width="1.8" />
                             </button>
@@ -3046,7 +3137,7 @@ function visibleCalendarTasks(cell) {
                                     <h4 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Sottoattività</h4>
                                     <span class="text-xs text-gray-400">{{ calendarPanelSubtasks().length }} elementi</span>
                                 </div>
-                                <form class="mb-4 grid items-center gap-3 md:grid-cols-[minmax(0,1fr)_132px_86px_auto]" @submit.prevent="addCalendarSubtask">
+                                <form class="mb-4 grid items-center gap-2 md:grid-cols-[minmax(0,1fr)_96px_72px_auto]" @submit.prevent="addCalendarSubtask">
                                     <input v-model="calendarSubtaskForm.title" class="form-control mt-0" placeholder="Nuova sottoattività..." required />
                                     <div class="relative" data-calendar-subtask-create-assignees>
                                         <button type="button" class="subtask-line-people justify-end" @click.stop="toggleCalendarCreateSubtaskAssigneeMenu($event)">
@@ -3096,7 +3187,7 @@ function visibleCalendarTasks(cell) {
                                         :key="subtask.id"
                                         draggable="true"
                                         :class="[
-                                            'subtask-line md:grid-cols-[68px_minmax(0,1fr)_132px_86px_auto]',
+                                            'subtask-line md:grid-cols-[68px_minmax(0,1fr)_96px_72px_auto]',
                                             calendarSubtaskAssigneeMenuOpen === subtask.id ? 'z-[6600]' : 'z-0',
                                             calendarDraggedSubtaskId === subtask.id ? 'is-dragging' : '',
                                             calendarSubtaskDropTarget === subtask.id && calendarSubtaskDropPlacement === 'before' ? 'drop-before' : '',
@@ -3247,7 +3338,7 @@ function visibleCalendarTasks(cell) {
                                     <button type="submit" class="btn btn-primary self-start px-4" :disabled="calendarCommentForm.processing">Invia</button>
                                 </form>
                                 <div class="space-y-3">
-                                    <div v-for="comment in calendarPanelComments()" :key="comment.id" class="rounded-[var(--radius-sm)] border border-gray-100 bg-white px-3 py-3 text-sm transition hover:border-indigo-100 hover:shadow-sm">
+                                    <div v-for="comment in visibleCalendarPanelComments()" :key="comment.id" class="rounded-[var(--radius-sm)] border border-gray-100 bg-white px-3 py-3 text-sm transition hover:border-indigo-100 hover:shadow-sm">
                                         <div class="mb-2 flex items-center justify-between gap-3">
                                             <div class="text-xs font-medium text-gray-500">{{ comment.user_name || 'Utente' }} · {{ dateTimeIt(comment.created_at) }}</div>
                                             <div class="flex items-center gap-2">
@@ -3300,11 +3391,19 @@ function visibleCalendarTasks(cell) {
                                             ></div>
                                         </div>
                                     </div>
+                                    <button
+                                        v-if="!calendarShowAllComments && hiddenCalendarCommentsCount()"
+                                        type="button"
+                                        class="text-sm font-semibold text-indigo-600 transition hover:text-indigo-500"
+                                        @click="calendarShowAllComments = true"
+                                    >
+                                        Mostra i {{ hiddenCalendarCommentsCount() }} commenti precedenti
+                                    </button>
                                     <p v-if="!calendarPanelComments().length" class="text-sm text-gray-500">Nessun commento.</p>
                                 </div>
                                 </div>
                                 <div v-else class="space-y-3">
-                                    <div v-for="activity in calendarPanelActivity()" :key="activity.id" class="rounded-[var(--radius-sm)] border border-gray-100 bg-white px-3 py-3 text-sm transition hover:border-indigo-100 hover:shadow-sm">
+                                    <div v-for="activity in visibleCalendarPanelActivity()" :key="activity.id" class="rounded-[var(--radius-sm)] border border-gray-100 bg-white px-3 py-3 text-sm transition hover:border-indigo-100 hover:shadow-sm">
                                         <div class="flex items-start gap-3">
                                             <span class="mt-1 h-2 w-2 shrink-0 rounded-full bg-indigo-300"></span>
                                             <div class="min-w-0">
@@ -3313,6 +3412,14 @@ function visibleCalendarTasks(cell) {
                                             </div>
                                         </div>
                                     </div>
+                                    <button
+                                        v-if="!calendarShowAllActivity && hiddenCalendarActivityCount()"
+                                        type="button"
+                                        class="text-sm font-semibold text-indigo-600 transition hover:text-indigo-500"
+                                        @click="calendarShowAllActivity = true"
+                                    >
+                                        Mostra i {{ hiddenCalendarActivityCount() }} aggiornamenti precedenti
+                                    </button>
                                     <p v-if="!calendarPanelActivity().length" class="text-sm text-gray-500">Nessuna attività registrata.</p>
                                 </div>
                             </section>
