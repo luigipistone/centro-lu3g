@@ -71,9 +71,27 @@ function maybeShowBrowserNotification(notification) {
 
     browserNotification.onclick = () => {
         window.focus();
-        router.visit(notification.task_id ? route('tasks.show', notification.task_id) : route('notifications.index'));
+        router.visit(notificationHref(notification));
         browserNotification.close();
     };
+}
+
+function notificationHref(notification) {
+    return notification.task_id ? route('tasks.show', notification.task_id) : route('notifications.index');
+}
+
+function openNotification(notification) {
+    notificationMenuOpen.value = false;
+
+    if (notification.read) {
+        router.visit(notificationHref(notification));
+        return;
+    }
+
+    router.patch(route('notifications.read', notification.id), {}, {
+        preserveScroll: true,
+        onFinish: () => router.visit(notificationHref(notification)),
+    });
 }
 
 watch(latestUnreadNotification, (notification) => {
@@ -180,16 +198,16 @@ const groups = [
                                 </button>
                             </div>
                             <div v-if="$page.props.notifications?.latest?.length" class="max-h-80 overflow-y-auto py-1">
-                                <Link
+                                <button
                                     v-for="notification in $page.props.notifications.latest"
                                     :key="notification.id"
-                                    :href="notification.task_id ? route('tasks.show', notification.task_id) : route('notifications.index')"
-                                    :class="['block border-l-2 px-3 py-2 text-sm transition hover:bg-white/58', notification.read ? 'border-transparent text-gray-600' : 'border-indigo-600 bg-indigo-50/70 text-gray-900']"
-                                    @click="notificationMenuOpen = false"
+                                    type="button"
+                                    :class="['block w-full border-l-2 px-3 py-2 text-left text-sm transition hover:bg-white/58', notification.read ? 'border-transparent text-gray-600' : 'border-indigo-600 bg-indigo-50/70 text-gray-900']"
+                                    @click="openNotification(notification)"
                                 >
                                     <span class="line-clamp-2">{{ notification.message }}</span>
                                     <span class="mt-1 block text-[11px] text-gray-400">{{ notification.read ? 'Letta' : 'Da leggere' }}</span>
-                                </Link>
+                                </button>
                             </div>
                             <div v-else class="px-3 py-8 text-center text-sm text-gray-500">Nessuna notifica</div>
                         </div>
