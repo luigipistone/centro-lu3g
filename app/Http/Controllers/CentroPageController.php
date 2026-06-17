@@ -1897,6 +1897,7 @@ class CentroPageController extends Controller
             'title' => $payload['title'],
             'priority' => $payload['priority'],
             'due_date' => $payload['due_date'] ?? null,
+            'task_type' => $task->task_type === 'meeting' ? 'ongoing' : ($task->task_type ?: 'task'),
             'status' => 'todo',
             'project_id' => $task->project_id,
             'client_id' => $task->client_id,

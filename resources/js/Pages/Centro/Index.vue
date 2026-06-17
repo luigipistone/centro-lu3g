@@ -89,6 +89,8 @@ const calendarTaskPanel = ref(null);
 const calendarTaskParentStack = ref([]);
 const calendarTaskPanelMode = ref('edit');
 const calendarTaskDrawerBody = ref(null);
+let calendarWheelLock = false;
+let calendarWheelTimer = null;
 const calendarTaskAutosaveState = ref('idle');
 const calendarTaskAutosaveError = ref('');
 let calendarTaskAutosaveTimer = null;
@@ -1539,6 +1541,21 @@ function changeMonth(delta) {
     currentCalendarDate.value = new Date(calendarYear.value, calendarMonth.value + delta, 1);
 }
 
+function handleCalendarWheel(event) {
+    if (Math.abs(event.deltaY) < Math.abs(event.deltaX)) return;
+    if (Math.abs(event.deltaY) < 18) return;
+
+    event.preventDefault();
+    if (calendarWheelLock) return;
+
+    changeMonth(event.deltaY > 0 ? 1 : -1);
+    calendarWheelLock = true;
+    window.clearTimeout(calendarWheelTimer);
+    calendarWheelTimer = window.setTimeout(() => {
+        calendarWheelLock = false;
+    }, 420);
+}
+
 function taskTypeLabel(type) {
     return {
         task: 'Task',
@@ -2140,6 +2157,7 @@ onUnmounted(() => {
     document.removeEventListener('pointerdown', closeProjectPeopleMenuOnOutside, true);
     document.removeEventListener('pointerdown', closeTaskPeopleMenuOnOutside, true);
     document.removeEventListener('pointerdown', closeTaskSearchSelectOnOutside, true);
+    window.clearTimeout(calendarWheelTimer);
     cancelClientServicesDrag();
 });
 
@@ -2582,7 +2600,7 @@ function visibleCalendarTasks(cell) {
                     </div>
                 </div>
 
-                <div class="surface overflow-hidden">
+                <div class="surface overflow-hidden" @wheel="handleCalendarWheel">
                     <div :class="['grid gap-px bg-gray-200/55', compactWeekend ? 'grid-cols-[repeat(5,minmax(0,1fr))_minmax(58px,0.34fr)_minmax(58px,0.34fr)]' : 'grid-cols-7']">
                         <div
                             v-for="(day, index) in dayNames"
