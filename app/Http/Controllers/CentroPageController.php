@@ -295,13 +295,15 @@ class CentroPageController extends Controller
                 ->whereIn('task_id', $subtaskIds)
                 ->get(['task_id', 'user_id'])
                 ->groupBy('task_id');
+            $activityTaskIds = $taskIds->merge($subtaskIds)->filter()->values();
             $commentsByTask = DB::table('task_comments')
                 ->leftJoin('users', 'users.id', '=', 'task_comments.user_id')
-                ->whereIn('task_comments.task_id', $taskIds)
+                ->whereIn('task_comments.task_id', $activityTaskIds)
                 ->latest('task_comments.created_at')
                 ->get(['task_comments.*', 'users.name as user_name'])
                 ->groupBy('task_id')
                 ->map(fn ($comments) => $comments->take(30)->values());
+            $activityByTask = $this->taskActivityRows($activityTaskIds);
             $assigneesByTask = DB::table('task_assignees')
                 ->whereIn('task_id', $taskIds)
                 ->get(['task_id', 'user_id'])
@@ -311,16 +313,19 @@ class CentroPageController extends Controller
                 ->get(['task_id', 'user_id'])
                 ->groupBy('task_id');
 
-            $rows = $rows->map(function ($row) use ($subtaskCounts, $subtasksByTask, $commentsByTask, $assigneesByTask, $followersByTask, $assigneesBySubtask) {
+            $rows = $rows->map(function ($row) use ($subtaskCounts, $subtasksByTask, $commentsByTask, $activityByTask, $assigneesByTask, $followersByTask, $assigneesBySubtask) {
                 $row->subtask_count = (int) ($subtaskCounts[$row->id] ?? 0);
                 $row->subtasks = ($subtasksByTask[$row->id] ?? collect())
-                    ->map(function ($subtask) use ($assigneesBySubtask) {
+                    ->map(function ($subtask) use ($assigneesBySubtask, $commentsByTask, $activityByTask) {
                         $subtask->assignee_ids = ($assigneesBySubtask[$subtask->id] ?? collect())->pluck('user_id')->values();
+                        $subtask->comments = ($commentsByTask[$subtask->id] ?? collect())->values();
+                        $subtask->activity = ($activityByTask[$subtask->id] ?? collect())->values();
 
                         return $subtask;
                     })
                     ->values();
                 $row->comments = ($commentsByTask[$row->id] ?? collect())->values();
+                $row->activity = ($activityByTask[$row->id] ?? collect())->values();
                 $row->assignee_ids = ($assigneesByTask[$row->id] ?? collect())->pluck('user_id')->values();
                 $row->follower_ids = ($followersByTask[$row->id] ?? collect())->pluck('user_id')->values();
 
@@ -466,6 +471,7 @@ class CentroPageController extends Controller
                     ->latest('task_comments.created_at')
                     ->limit(30)
                     ->get(['task_comments.*', 'users.name as user_name']),
+                'activity' => $this->taskActivityRows(collect([$id]))[$id] ?? collect(),
                 'assignees' => DB::table('task_assignees')->where('task_id', $id)->pluck('user_id'),
                 'followers' => DB::table('task_followers')->where('task_id', $id)->pluck('user_id'),
                 'users' => $this->userOptions(),
@@ -549,12 +555,25 @@ class CentroPageController extends Controller
         $payload = $this->validatedPayload($request, $section);
         $taskPeople = $section === 'tasks' ? $this->extractTaskPeoplePayload($payload) : null;
         $projectFollowers = $section === 'projects' ? $this->extractProjectFollowersPayload($payload) : null;
+        $oldTask = $section === 'tasks' ? DB::table('tasks')->where('id', $id)->first() : null;
+        $oldTaskPeople = $section === 'tasks' && $taskPeople !== null ? [
+            'assignees' => DB::table('task_assignees')->where('task_id', $id)->pluck('user_id')->sort()->values()->all(),
+            'followers' => DB::table('task_followers')->where('task_id', $id)->pluck('user_id')->sort()->values()->all(),
+        ] : null;
         $payload['updated_at'] = now();
 
         DB::table($this->config($section)['table'])->where('id', $id)->update($payload);
 
         if ($section === 'tasks' && $taskPeople !== null) {
             $this->syncTaskPeopleLists($id, $taskPeople['assignees'], $taskPeople['followers']);
+        }
+
+        if ($section === 'tasks' && $oldTask) {
+            $this->recordTaskFieldChanges($id, $request->user()->id, $oldTask, $payload);
+
+            if ($taskPeople !== null && $oldTaskPeople !== null) {
+                $this->recordTaskPeopleChanges($id, $request->user()->id, $oldTaskPeople, $taskPeople);
+            }
         }
 
         if ($section === 'projects' && $projectFollowers !== null) {
@@ -1799,6 +1818,8 @@ class CentroPageController extends Controller
             'updated_at' => now(),
         ]);
 
+        $this->recordTaskActivity($id, $request->user()->id, 'comment_created', 'content', null, $payload['content']);
+
         $this->notifyTaskPeople(
             $id,
             $request->user()->id,
@@ -1892,8 +1913,10 @@ class CentroPageController extends Controller
             }
         }
 
+        $subtaskId = (string) str()->uuid();
+
         DB::table('tasks')->insert([
-            'id' => (string) str()->uuid(),
+            'id' => $subtaskId,
             'title' => $payload['title'],
             'priority' => $payload['priority'],
             'due_date' => $payload['due_date'] ?? null,
@@ -1907,6 +1930,9 @@ class CentroPageController extends Controller
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        $this->recordTaskActivity($id, $request->user()->id, 'subtask_created', 'title', null, $payload['title']);
+        $this->recordTaskActivity($subtaskId, $request->user()->id, 'task_created', 'title', null, $payload['title']);
 
         $this->notifyTaskPeople(
             $id,
@@ -1929,6 +1955,7 @@ class CentroPageController extends Controller
         ]);
 
         $table = $type === 'assignees' ? 'task_assignees' : 'task_followers';
+        $oldUserIds = DB::table($table)->where('task_id', $id)->pluck('user_id')->sort()->values()->all();
         DB::table($table)->where('task_id', $id)->delete();
 
         foreach (array_unique($payload['user_ids'] ?? []) as $userId) {
@@ -1939,6 +1966,18 @@ class CentroPageController extends Controller
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+        }
+
+        $newUserIds = collect($payload['user_ids'] ?? [])->unique()->sort()->values()->all();
+        if ($oldUserIds !== $newUserIds) {
+            $this->recordTaskActivity(
+                $id,
+                $request->user()->id,
+                'people_updated',
+                $type === 'assignees' ? 'assignee_ids' : 'follower_ids',
+                implode(',', $oldUserIds),
+                implode(',', $newUserIds),
+            );
         }
 
         return back()->with('status', $type === 'assignees' ? 'Assegnatari aggiornati.' : 'Follower aggiornati.');
@@ -2035,6 +2074,10 @@ class CentroPageController extends Controller
                 }
             }
         });
+
+        if ($task->status !== $payload['status']) {
+            $this->recordTaskActivity($id, $request->user()->id, 'task_updated', 'status', $task->status, $payload['status']);
+        }
 
         $this->notifyTaskPeople(
             $id,
@@ -2133,6 +2176,11 @@ class CentroPageController extends Controller
             'due_date' => $payload['due_date'],
             'start_date' => $payload['start_date'] ?? null,
             'updated_at' => now(),
+        ]);
+
+        $this->recordTaskFieldChanges($id, $request->user()->id, $task, [
+            'due_date' => $payload['due_date'],
+            'start_date' => $payload['start_date'] ?? null,
         ]);
 
         $this->notifyTaskPeople(
@@ -2634,6 +2682,94 @@ class CentroPageController extends Controller
             'status' => $status,
             'updated_at' => now(),
         ]);
+    }
+
+    private function taskActivityRows($taskIds)
+    {
+        $ids = collect($taskIds)->filter()->unique()->values();
+        if ($ids->isEmpty()) {
+            return collect();
+        }
+
+        return DB::table('task_activity')
+            ->leftJoin('users', 'users.id', '=', 'task_activity.user_id')
+            ->whereIn('task_activity.task_id', $ids)
+            ->latest('task_activity.created_at')
+            ->get([
+                'task_activity.id',
+                'task_activity.task_id',
+                'task_activity.user_id',
+                'task_activity.action',
+                'task_activity.field',
+                'task_activity.old_value',
+                'task_activity.new_value',
+                'task_activity.created_at',
+                'users.name as user_name',
+            ])
+            ->groupBy('task_id')
+            ->map(fn ($activities) => $activities->take(60)->values());
+    }
+
+    private function recordTaskFieldChanges(string $taskId, string $userId, object $oldTask, array $newValues): void
+    {
+        foreach ($newValues as $field => $newValue) {
+            if (in_array($field, ['updated_at'], true) || ! property_exists($oldTask, $field)) {
+                continue;
+            }
+
+            $oldValue = $oldTask->{$field};
+            if ($this->normalizeActivityValue($oldValue) === $this->normalizeActivityValue($newValue)) {
+                continue;
+            }
+
+            $this->recordTaskActivity($taskId, $userId, 'task_updated', $field, $oldValue, $newValue);
+        }
+    }
+
+    private function recordTaskPeopleChanges(string $taskId, string $userId, array $oldPeople, array $newPeople): void
+    {
+        foreach (['assignees' => 'assignee_ids', 'followers' => 'follower_ids'] as $key => $field) {
+            $oldIds = collect($oldPeople[$key] ?? [])->sort()->values()->all();
+            $newIds = collect($newPeople[$key] ?? [])->sort()->values()->all();
+
+            if ($oldIds === $newIds) {
+                continue;
+            }
+
+            $this->recordTaskActivity($taskId, $userId, 'people_updated', $field, implode(',', $oldIds), implode(',', $newIds));
+        }
+    }
+
+    private function recordTaskActivity(string $taskId, ?string $userId, string $action, ?string $field = null, mixed $oldValue = null, mixed $newValue = null): void
+    {
+        DB::table('task_activity')->insert([
+            'id' => (string) str()->uuid(),
+            'task_id' => $taskId,
+            'user_id' => $userId,
+            'action' => $action,
+            'field' => $field,
+            'old_value' => $this->normalizeActivityValue($oldValue),
+            'new_value' => $this->normalizeActivityValue($newValue),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function normalizeActivityValue(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if (is_bool($value)) {
+            return $value ? '1' : '0';
+        }
+
+        if (is_array($value) || is_object($value)) {
+            return json_encode($value);
+        }
+
+        return (string) $value;
     }
 
     private function notifyTaskPeople(string $taskId, string $actorId, string $type, string $message): void

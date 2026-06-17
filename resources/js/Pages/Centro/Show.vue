@@ -282,6 +282,7 @@ const commentAutosaveErrors = ref({});
 const commentAutosaveTimers = {};
 const commentAutosaveSequences = {};
 const editingCommentId = ref(null);
+const taskFeedTab = ref('comments');
 const lineForm = useForm({
     description: '',
     quantity: 1,
@@ -1675,6 +1676,47 @@ function subscriptionFrequency(subscription) {
 function dateIt(value) {
     if (!value) return '-';
     return new Date(value).toLocaleDateString('it-IT');
+}
+
+function dateTimeIt(value) {
+    if (!value) return '-';
+    return new Date(value).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function plainText(value) {
+    return String(value || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function activityValue(value) {
+    if (value === null || value === undefined || value === '') return 'vuoto';
+    if (value === '1') return 'Si';
+    if (value === '0') return 'No';
+    return displayValue(value);
+}
+
+function activityFieldLabel(field) {
+    if (field === 'assignee_ids') return 'assegnatari';
+    if (field === 'follower_ids') return 'follower';
+    if (field === 'content') return 'commento';
+    return (labels[field] || field || 'dettaglio').toLowerCase();
+}
+
+function activityText(activity) {
+    const actor = activity.user_name || 'Qualcuno';
+    const field = activityFieldLabel(activity.field);
+
+    if (activity.action === 'comment_created') return `${actor} ha aggiunto un commento`;
+    if (activity.action === 'comment_updated') return `${actor} ha modificato un commento`;
+    if (activity.action === 'comment_deleted') return `${actor} ha eliminato un commento`;
+    if (activity.action === 'subtask_created') return `${actor} ha creato la sottoattività "${plainText(activity.new_value) || 'senza titolo'}"`;
+    if (activity.action === 'task_created') return `${actor} ha creato questa attività`;
+    if (activity.action === 'people_updated') return `${actor} ha aggiornato ${field}`;
+
+    if (activity.old_value !== activity.new_value) {
+        return `${actor} ha modificato ${field} da "${activityValue(activity.old_value)}" a "${activityValue(activity.new_value)}"`;
+    }
+
+    return `${actor} ha aggiornato ${field}`;
 }
 
 function docTypeLabel(type) {
@@ -3347,7 +3389,23 @@ onUnmounted(() => {
                 </section>
 
                 <section v-if="section === 'tasks'" class="surface rounded-md p-5 lg:col-span-2">
-                    <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Commenti</h3>
+                    <div class="mb-4 flex items-center gap-4 border-b border-gray-100 pb-3">
+                        <button
+                            type="button"
+                            :class="['text-sm font-semibold uppercase tracking-wide transition', taskFeedTab === 'comments' ? 'text-gray-900' : 'text-gray-400 hover:text-gray-700']"
+                            @click="taskFeedTab = 'comments'"
+                        >
+                            Commenti
+                        </button>
+                        <button
+                            type="button"
+                            :class="['text-sm font-semibold uppercase tracking-wide transition', taskFeedTab === 'activity' ? 'text-gray-900' : 'text-gray-400 hover:text-gray-700']"
+                            @click="taskFeedTab = 'activity'"
+                        >
+                            Attività
+                        </button>
+                    </div>
+                    <div v-if="taskFeedTab === 'comments'">
                     <form class="mb-5" @submit.prevent="addComment">
                         <div class="overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white/90 shadow-inner">
                             <div class="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50/80 p-2">
@@ -3431,6 +3489,19 @@ onUnmounted(() => {
                             </div>
                         </div>
                         <p v-if="!related.comments?.length" class="text-sm text-gray-500">Nessun commento.</p>
+                    </div>
+                    </div>
+                    <div v-else class="space-y-3">
+                        <div v-for="activity in related.activity" :key="activity.id" class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50 px-3 py-3 text-sm transition hover:border-indigo-100 hover:bg-white">
+                            <div class="flex items-start gap-3">
+                                <span class="mt-1 h-2 w-2 shrink-0 rounded-full bg-indigo-300"></span>
+                                <div class="min-w-0">
+                                    <div class="font-medium leading-6 text-gray-700">{{ activityText(activity) }}</div>
+                                    <div class="text-xs text-gray-400">{{ dateTimeIt(activity.created_at) }}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p v-if="!related.activity?.length" class="text-sm text-gray-500">Nessuna attività registrata.</p>
                     </div>
                 </section>
 

@@ -104,6 +104,7 @@ const calendarCommentDrafts = ref({});
 const calendarCommentAutosaveStates = ref({});
 const calendarCommentAutosaveErrors = ref({});
 const calendarEditingCommentId = ref(null);
+const calendarTaskFeedTab = ref('comments');
 const calendarSubtaskAutosaveTimers = {};
 const calendarSubtaskAutosaveSequences = {};
 const calendarCommentAutosaveTimers = {};
@@ -1111,6 +1112,43 @@ function dateIt(value) {
     return new Date(value).toLocaleDateString('it-IT');
 }
 
+function dateTimeIt(value) {
+    if (!value) return '-';
+    return new Date(value).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function activityValue(value) {
+    if (value === null || value === undefined || value === '') return 'vuoto';
+    if (value === '1') return 'Si';
+    if (value === '0') return 'No';
+    return displayValue(value);
+}
+
+function activityFieldLabel(field) {
+    if (field === 'assignee_ids') return 'assegnatari';
+    if (field === 'follower_ids') return 'follower';
+    if (field === 'content') return 'commento';
+    return (columnLabels[field] || field || 'dettaglio').toLowerCase();
+}
+
+function activityText(activity) {
+    const actor = activity.user_name || 'Qualcuno';
+    const field = activityFieldLabel(activity.field);
+
+    if (activity.action === 'comment_created') return `${actor} ha aggiunto un commento`;
+    if (activity.action === 'comment_updated') return `${actor} ha modificato un commento`;
+    if (activity.action === 'comment_deleted') return `${actor} ha eliminato un commento`;
+    if (activity.action === 'subtask_created') return `${actor} ha creato la sottoattività "${plainText(activity.new_value) || 'senza titolo'}"`;
+    if (activity.action === 'task_created') return `${actor} ha creato questa attività`;
+    if (activity.action === 'people_updated') return `${actor} ha aggiornato ${field}`;
+
+    if (activity.old_value !== activity.new_value) {
+        return `${actor} ha modificato ${field} da "${activityValue(activity.old_value)}" a "${activityValue(activity.new_value)}"`;
+    }
+
+    return `${actor} ha aggiornato ${field}`;
+}
+
 function parseDateOnly(value) {
     if (!value) return null;
     const [year, month, day] = String(value).slice(0, 10).split('-').map(Number);
@@ -1682,6 +1720,7 @@ function openCalendarTaskCreate(type, date) {
         follower_ids: [],
         subtasks: [],
         comments: [],
+        activity: [],
     };
     calendarTaskPanelOpen.value = true;
     calendarTaskAutosaveState.value = 'idle';
@@ -1703,6 +1742,7 @@ function closeCalendarTaskPanel() {
     calendarTaskParentStack.value = [];
     calendarTaskPanelMode.value = 'edit';
     calendarEditingCommentId.value = null;
+    calendarTaskFeedTab.value = 'comments';
     calendarTaskAutosaveState.value = 'idle';
     calendarTaskAutosaveError.value = '';
     window.clearTimeout(calendarTaskAutosaveTimer);
@@ -1718,6 +1758,7 @@ function openCalendarSubtask(subtask) {
         task_type: subtask.task_type || 'task',
         subtasks: subtask.subtasks || [],
         comments: subtask.comments || [],
+        activity: subtask.activity || [],
         assignee_ids: subtask.assignee_ids || [],
         follower_ids: subtask.follower_ids || [],
         parent_task_id: parent.id,
@@ -1787,6 +1828,10 @@ function isCalendarSubtaskPanel() {
 
 function calendarPanelComments() {
     return calendarTaskPanel.value?.comments || [];
+}
+
+function calendarPanelActivity() {
+    return calendarTaskPanel.value?.activity || [];
 }
 
 function calendarSubtaskPayload(subtaskId) {
@@ -3121,7 +3166,23 @@ function visibleCalendarTasks(cell) {
                             </section>
 
                             <section v-if="calendarTaskForm.id" class="content-card rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
-                                <h4 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Commenti</h4>
+                                <div class="mb-4 flex items-center gap-4 border-b border-gray-100 pb-3">
+                                    <button
+                                        type="button"
+                                        :class="['text-sm font-semibold uppercase tracking-wide transition', calendarTaskFeedTab === 'comments' ? 'text-gray-900' : 'text-gray-400 hover:text-gray-700']"
+                                        @click="calendarTaskFeedTab = 'comments'"
+                                    >
+                                        Commenti
+                                    </button>
+                                    <button
+                                        type="button"
+                                        :class="['text-sm font-semibold uppercase tracking-wide transition', calendarTaskFeedTab === 'activity' ? 'text-gray-900' : 'text-gray-400 hover:text-gray-700']"
+                                        @click="calendarTaskFeedTab = 'activity'"
+                                    >
+                                        Attività
+                                    </button>
+                                </div>
+                                <div v-if="calendarTaskFeedTab === 'comments'">
                                 <form class="mb-5 grid gap-3 md:grid-cols-[1fr_auto]" @submit.prevent="addCalendarComment">
                                     <div class="overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white/90 shadow-inner">
                                         <div class="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50/80 p-2">
@@ -3211,6 +3272,19 @@ function visibleCalendarTasks(cell) {
                                         </div>
                                     </div>
                                     <p v-if="!calendarPanelComments().length" class="text-sm text-gray-500">Nessun commento.</p>
+                                </div>
+                                </div>
+                                <div v-else class="space-y-3">
+                                    <div v-for="activity in calendarPanelActivity()" :key="activity.id" class="rounded-[var(--radius-sm)] border border-gray-100 bg-white px-3 py-3 text-sm transition hover:border-indigo-100 hover:shadow-sm">
+                                        <div class="flex items-start gap-3">
+                                            <span class="mt-1 h-2 w-2 shrink-0 rounded-full bg-indigo-300"></span>
+                                            <div class="min-w-0">
+                                                <div class="font-medium leading-6 text-gray-700">{{ activityText(activity) }}</div>
+                                                <div class="text-xs text-gray-400">{{ dateTimeIt(activity.created_at) }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p v-if="!calendarPanelActivity().length" class="text-sm text-gray-500">Nessuna attività registrata.</p>
                                 </div>
                             </section>
                         </div>
