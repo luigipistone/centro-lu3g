@@ -17,6 +17,14 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    variant: {
+        type: String,
+        default: 'field',
+    },
+    label: {
+        type: String,
+        default: '',
+    },
 });
 
 const emit = defineEmits(['update:modelValue', 'change', 'input']);
@@ -30,6 +38,7 @@ const weekdays = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 
 const selectedLabel = computed(() => {
     if (!props.modelValue) return props.placeholder;
+    if (props.label) return props.label;
     return new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(`${props.modelValue}T00:00:00`));
 });
 
@@ -118,13 +127,19 @@ onUnmounted(() => {
     <div ref="root" :class="['relative w-full', attrs.class]">
         <button
             type="button"
-            class="form-control mt-0 flex h-[38px] items-center justify-between gap-3 text-left"
-            :class="open ? 'border-indigo-300 ring-4 ring-indigo-500/10' : ''"
+            :class="[
+                variant === 'token'
+                    ? 'subtask-line-token cursor-pointer'
+                    : 'form-control mt-0 flex h-[38px] items-center justify-between gap-3 text-left',
+                open && variant !== 'token' ? 'border-indigo-300 ring-4 ring-indigo-500/10' : '',
+                open && variant === 'token' ? 'border-indigo-200 bg-indigo-50 text-indigo-700' : '',
+                variant === 'token' && modelValue ? 'rounded-full px-2.5' : '',
+            ]"
             :disabled="disabled"
             @click.stop="toggle"
         >
-            <span :class="['truncate', modelValue ? 'text-gray-800' : 'text-gray-400']">{{ selectedLabel }}</span>
-            <CalendarDays class="h-4 w-4 shrink-0 text-gray-400" :stroke-width="1.7" />
+            <span v-if="variant !== 'token' || modelValue" :class="['truncate', modelValue ? 'text-gray-800' : 'text-gray-400']">{{ selectedLabel }}</span>
+            <CalendarDays v-if="variant !== 'token' || !modelValue" class="h-4 w-4 shrink-0 text-gray-400" :stroke-width="1.7" />
         </button>
 
         <Teleport to="body">

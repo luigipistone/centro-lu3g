@@ -2,6 +2,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppDateInput from '@/Components/AppDateInput.vue';
 import AppSelect from '@/Components/AppSelect.vue';
+import AppTimeInput from '@/Components/AppTimeInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import {
     activityText as formatActivityText,
@@ -97,10 +98,6 @@ const documentStatusOptions = [
     { value: 'cancelled', label: 'Annullato' },
 ];
 
-const hourOptions = Array.from({ length: 17 }, (_, index) => {
-    const hour = String(index + 7).padStart(2, '0');
-    return { value: `${hour}:00`, label: `${hour}:00` };
-});
 const projectStatusOptions = [
     { value: 'active', label: 'Attivo' },
     { value: 'completed', label: 'Completato' },
@@ -2921,7 +2918,7 @@ onUnmounted(() => {
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Ora</label>
-                                <AppSelect v-model="taskForm.due_time" :options="hourOptions" placeholder="Seleziona ora" @change="saveTaskInline(0)" />
+                                <AppTimeInput v-model="taskForm.due_time" @change="saveTaskInline(0)" />
                             </div>
                             <div v-if="taskForm.task_type === 'project' || taskForm.task_type === 'task'">
                                 <label class="block text-sm font-medium text-gray-700">Progetto</label>
@@ -3428,12 +3425,13 @@ onUnmounted(() => {
                                 </div>
                             </Teleport>
                         </div>
-                        <div class="relative flex items-center justify-end" data-inline-date>
-                            <button type="button" :class="[subtaskForm.due_date ? 'subtask-line-token rounded-full px-2.5' : 'subtask-line-token']" @click="openInlineDatePicker">
-                                <span v-if="subtaskForm.due_date">{{ shortDateIt(subtaskForm.due_date) }}</span>
-                                <CalendarDays v-else class="h-4 w-4" :stroke-width="1.7" />
-                            </button>
-                            <input v-model="subtaskForm.due_date" class="pointer-events-none absolute h-px w-px opacity-0" type="date" tabindex="-1" />
+                        <div class="relative flex items-center justify-end">
+                            <AppDateInput
+                                v-model="subtaskForm.due_date"
+                                variant="token"
+                                :label="shortDateIt(subtaskForm.due_date)"
+                                placeholder="Scadenza"
+                            />
                         </div>
                         <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
                     </form>
@@ -3513,17 +3511,13 @@ onUnmounted(() => {
                                     </div>
                                 </Teleport>
                             </div>
-                            <div v-if="subtaskDrafts[subtask.id]" class="relative flex items-center justify-end" data-inline-date>
-                                <button type="button" :class="[subtaskDrafts[subtask.id].due_date ? 'subtask-line-token rounded-full px-2.5' : 'subtask-line-token']" @click="openInlineDatePicker">
-                                    <span v-if="subtaskDrafts[subtask.id].due_date">{{ shortDateIt(subtaskDrafts[subtask.id].due_date) }}</span>
-                                    <CalendarDays v-else class="h-4 w-4" :stroke-width="1.7" />
-                                </button>
-                                <input
+                            <div v-if="subtaskDrafts[subtask.id]" class="relative flex items-center justify-end">
+                                <AppDateInput
                                     v-model="subtaskDrafts[subtask.id].due_date"
-                                    class="pointer-events-none absolute h-px w-px opacity-0"
-                                    type="date"
-                                    tabindex="-1"
-                                    @input="saveSubtaskInline(subtask)"
+                                    variant="token"
+                                    :label="shortDateIt(subtaskDrafts[subtask.id].due_date)"
+                                    placeholder="Scadenza"
+                                    @change="saveSubtaskInline(subtask, 0)"
                                 />
                             </div>
                             <div class="subtask-actions">

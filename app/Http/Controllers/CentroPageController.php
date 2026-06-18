@@ -243,11 +243,28 @@ class CentroPageController extends Controller
         };
     }
 
-    public function index(string $section): Response
+    public function index(Request $request, string $section): Response
     {
+        if ($section === 'absences') {
+            $this->ensureAdmin($request);
+        }
+
         $config = $this->config($section);
         $limit = $section === 'billing' ? 500 : 100;
-        if (str_starts_with($section, 'updates-')) {
+        if ($section === 'absences') {
+            $rows = DB::table('absence_requests')
+                ->leftJoin('users', 'users.id', '=', 'absence_requests.user_id')
+                ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
+                ->select(
+                    'absence_requests.*',
+                    'users.name as user_name',
+                    'users.email as user_email',
+                    'profiles.avatar_url as user_avatar_url',
+                )
+                ->latest('absence_requests.created_at')
+                ->limit(300)
+                ->get();
+        } elseif (str_starts_with($section, 'updates-')) {
             $rows = $this->serviceUpdateRows($config['serviceName']);
         } else {
             $rows = DB::table($config['table'])
@@ -403,6 +420,24 @@ class CentroPageController extends Controller
             'services' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name']),
             'users' => $this->userOptions(),
         ]);
+    }
+
+    public function updateAbsenceStatus(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+
+        $payload = $request->validate([
+            'status' => ['required', Rule::in(['approved', 'rejected'])],
+        ]);
+
+        DB::table('absence_requests')
+            ->where('id', $id)
+            ->update([
+                'status' => $payload['status'],
+                'updated_at' => now(),
+            ]);
+
+        return back()->with('status', $payload['status'] === 'approved' ? 'Richiesta approvata.' : 'Richiesta rifiutata.');
     }
 
     public function notifications(Request $request): Response
@@ -908,6 +943,14 @@ class CentroPageController extends Controller
                 'columns' => ['title', 'due_date', 'due_time', 'status', 'priority'],
                 'fields' => [],
             ],
+            'absences' => [
+                'section' => 'absences',
+                'title' => 'Assenze',
+                'description' => 'Richieste ferie, permessi, malattie, ritardi e altre assenze del team.',
+                'table' => 'absence_requests',
+                'columns' => ['user_name', 'type', 'start_date', 'end_date', 'status'],
+                'fields' => [],
+            ],
             'updates-social' => $this->updatesConfig('SOCIAL', 'Social'),
             'updates-newsletter' => $this->updatesConfig('NEWSLETTER', 'Newsletter'),
             'updates-seo' => $this->updatesConfig('SEO', 'SEO'),
@@ -1365,6 +1408,11 @@ class CentroPageController extends Controller
     private function ensureSuperadmin(Request $request): void
     {
         abort_unless($this->currentUserRole($request) === 'superadmin', 403);
+    }
+
+    private function ensureAdmin(Request $request): void
+    {
+        abort_unless(in_array($this->currentUserRole($request), ['superadmin', 'admin'], true), 403);
     }
 
     private function syncProfileAndRole(User $user, string $role): void

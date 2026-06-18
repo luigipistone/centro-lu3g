@@ -43,6 +43,7 @@ const latestUnreadNotification = computed(() => latestNotifications.value.find((
 const notificationBadgeCount = computed(() => page.props.notifications?.unread || 0);
 const notificationStorageKey = computed(() => `centro:last-browser-notification:${page.props.auth?.user?.id || 'guest'}`);
 const themeStorageKey = 'centro:theme';
+const canManageAbsences = computed(() => ['admin', 'superadmin'].includes(page.props.auth?.user?.role));
 
 function pseudoRandomPercent(index, salt = 1, min = 0, max = 100) {
     const raw = Math.sin((index + 1) * (salt * 12.9898)) * 43758.5453;
@@ -187,7 +188,7 @@ onUnmounted(() => {
     window.removeEventListener('centro:task-completed', playCompletionEffect);
 });
 
-const groups = [
+const groups = computed(() => [
     {
         label: 'Menu',
         links: [
@@ -219,11 +220,12 @@ const groups = [
         label: 'Amministrazione',
         links: [
             ['billing.index', 'Fatturazione', Receipt],
+            ...(canManageAbsences.value ? [['absences.index', 'Assenze', Calendar]] : []),
             ['users.index', 'Utenti', UserCog],
             ['settings.index', 'Impostazioni', Settings],
         ],
     },
-];
+]);
 </script>
 
 <template>

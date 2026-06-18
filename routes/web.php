@@ -51,6 +51,8 @@ Route::middleware('auth')->group(function () {
     Route::put('/tasks/{id}/people/{type}', [CentroPageController::class, 'syncTaskPeople'])->name('tasks.people.sync');
     Route::delete('/tasks/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'tasks')->name('tasks.destroy');
     Route::get('/calendar', [CentroPageController::class, 'index'])->defaults('section', 'calendar')->name('calendar.index');
+    Route::get('/absences', [CentroPageController::class, 'index'])->defaults('section', 'absences')->name('absences.index');
+    Route::patch('/absences/{id}/status', [CentroPageController::class, 'updateAbsenceStatus'])->name('absences.status.update');
     Route::get('/notifications', [CentroPageController::class, 'notifications'])->name('notifications.index');
     Route::patch('/notifications/read-all', [CentroPageController::class, 'markAllNotificationsRead'])->name('notifications.read-all');
     Route::patch('/notifications/{id}/read', [CentroPageController::class, 'markNotificationRead'])->name('notifications.read');

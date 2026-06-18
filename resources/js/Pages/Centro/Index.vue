@@ -2,6 +2,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppDateInput from '@/Components/AppDateInput.vue';
 import AppSelect from '@/Components/AppSelect.vue';
+import AppTimeInput from '@/Components/AppTimeInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import {
     activityText as formatActivityText,
@@ -84,10 +85,6 @@ const props = defineProps({
 const editing = ref(null);
 const formOpen = ref(false);
 const deleteTarget = ref(null);
-const hourOptions = Array.from({ length: 17 }, (_, index) => {
-    const hour = String(index + 7).padStart(2, '0');
-    return { value: `${hour}:00`, label: `${hour}:00` };
-});
 const deleteTargetAction = ref(null);
 const deleteConfirmText = ref('');
 const updateDrafts = ref({});
@@ -97,6 +94,7 @@ const canWrite = computed(() => props.fields.length > 0);
 const billingSearch = ref('');
 const billingType = ref('all');
 const billingStatus = ref('all');
+const absenceStatus = ref('pending');
 const currentCalendarDate = ref(new Date());
 const calendarType = ref('all');
 const compactWeekend = ref(true);
@@ -1257,6 +1255,24 @@ const roleLabels = {
 };
 
 const roleOrder = ['superadmin', 'admin', 'editor', 'guest'];
+const absenceTypeLabels = {
+    vacation: 'Ferie',
+    permission: 'Permesso',
+    sickness: 'Malattia',
+    late: 'Ritardo',
+    other: 'Altra assenza',
+};
+const absenceStatusLabels = {
+    pending: 'In attesa',
+    approved: 'Approvata',
+    rejected: 'Rifiutata',
+};
+const absenceStatusOptions = [
+    { value: 'all', label: 'Tutte' },
+    { value: 'pending', label: 'In attesa' },
+    { value: 'approved', label: 'Approvate' },
+    { value: 'rejected', label: 'Rifiutate' },
+];
 
 function roleClass(role) {
     return {
@@ -1322,6 +1338,37 @@ const userRows = computed(() => props.rows.filter((row) => userRoleFilter.value 
 const usersByRole = computed(() => roleOrder
     .map((role) => ({ role, rows: userRows.value.filter((row) => (row.role || 'guest') === role) }))
     .filter((group) => group.rows.length));
+const absenceRows = computed(() => props.rows.filter((row) => absenceStatus.value === 'all' || row.status === absenceStatus.value));
+const absenceStats = computed(() => ({
+    pending: props.rows.filter((row) => row.status === 'pending').length,
+    approved: props.rows.filter((row) => row.status === 'approved').length,
+    rejected: props.rows.filter((row) => row.status === 'rejected').length,
+    total: props.rows.length,
+}));
+
+function absenceUser(row) {
+    return {
+        id: row.user_id,
+        name: row.user_name,
+        email: row.user_email,
+        avatar_url: row.user_avatar_url,
+    };
+}
+
+function absenceStatusClass(status) {
+    return {
+        pending: 'bg-amber-50 text-amber-700',
+        approved: 'bg-emerald-50 text-emerald-700',
+        rejected: 'bg-red-50 text-red-700',
+    }[status] || 'bg-gray-100 text-gray-600';
+}
+
+function updateAbsenceStatus(row, status) {
+    router.patch(route('absences.status.update', row.id), { status }, {
+        preserveScroll: true,
+        preserveState: true,
+    });
+}
 
 const isUpdatesSection = computed(() => props.section?.startsWith('updates-'));
 const showUpdateReport = computed(() => props.serviceName === 'ADV');
@@ -3040,7 +3087,7 @@ function visibleCalendarTasks(cell) {
                                 </div>
                                 <div v-if="calendarTaskForm.task_type === 'meeting'">
                                     <label class="block text-sm font-medium text-gray-700">Ora</label>
-                                    <AppSelect v-model="calendarTaskForm.due_time" :options="hourOptions" placeholder="Seleziona ora" @change="saveCalendarTaskInline(0)" />
+                                    <AppTimeInput v-model="calendarTaskForm.due_time" @change="saveCalendarTaskInline(0)" />
                                 </div>
                                 <div v-if="calendarTaskForm.task_type === 'meeting'">
                                     <label class="block text-sm font-medium text-gray-700">Luogo / link</label>
@@ -3211,12 +3258,13 @@ function visibleCalendarTasks(cell) {
                                             </div>
                                         </Teleport>
                                     </div>
-                                    <div class="relative flex items-center justify-end" data-inline-date>
-                                        <button type="button" :class="[calendarSubtaskForm.due_date ? 'subtask-line-token rounded-full px-2.5' : 'subtask-line-token']" @click="openInlineDatePicker">
-                                            <span v-if="calendarSubtaskForm.due_date">{{ shortDateIt(calendarSubtaskForm.due_date) }}</span>
-                                            <CalendarDays v-else class="h-4 w-4" :stroke-width="1.7" />
-                                        </button>
-                                        <input v-model="calendarSubtaskForm.due_date" class="pointer-events-none absolute h-px w-px opacity-0" type="date" tabindex="-1" />
+                                    <div class="relative flex items-center justify-end">
+                                        <AppDateInput
+                                            v-model="calendarSubtaskForm.due_date"
+                                            variant="token"
+                                            :label="shortDateIt(calendarSubtaskForm.due_date)"
+                                            placeholder="Scadenza"
+                                        />
                                     </div>
                                     <button type="submit" class="btn btn-primary justify-center px-4" :disabled="calendarSubtaskForm.processing">
                                         <Plus class="h-4 w-4" :stroke-width="1.7" />
@@ -3298,19 +3346,13 @@ function visibleCalendarTasks(cell) {
                                                 </div>
                                             </Teleport>
                                         </div>
-                                        <div v-if="calendarSubtaskDrafts[subtask.id]" class="relative flex items-center justify-end" data-inline-date>
-                                            <button type="button" :class="[calendarSubtaskDrafts[subtask.id].due_date ? 'subtask-line-token rounded-full px-2.5' : 'subtask-line-token']" @click="openInlineDatePicker">
-                                                <span v-if="calendarSubtaskDrafts[subtask.id].due_date">{{ shortDateIt(calendarSubtaskDrafts[subtask.id].due_date) }}</span>
-                                                <CalendarDays v-else class="h-4 w-4" :stroke-width="1.7" />
-                                            </button>
-                                            <input
+                                        <div v-if="calendarSubtaskDrafts[subtask.id]" class="relative flex items-center justify-end">
+                                            <AppDateInput
                                                 v-model="calendarSubtaskDrafts[subtask.id].due_date"
-                                                class="pointer-events-none absolute h-px w-px opacity-0"
-                                                type="date"
-                                                tabindex="-1"
-                                                @click="openDatePicker"
-                                                @focus="openDatePicker"
-                                                @input="saveCalendarSubtaskInline(subtask)"
+                                                variant="token"
+                                                :label="shortDateIt(calendarSubtaskDrafts[subtask.id].due_date)"
+                                                placeholder="Scadenza"
+                                                @change="saveCalendarSubtaskInline(subtask, 0)"
                                             />
                                         </div>
                                         <div class="subtask-actions">
@@ -3583,6 +3625,95 @@ function visibleCalendarTasks(cell) {
 
                     <div v-if="!projectRows.length" class="content-card rounded-md border border-dashed border-gray-300 bg-white px-5 py-12 text-center text-sm text-gray-500 sm:col-span-2 lg:col-span-4">
                         Nessun progetto trovato.
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <div v-else-if="section === 'absences'" class="py-8">
+            <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
+                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div class="app-card">
+                        <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Totali</div>
+                        <div class="mt-2 text-3xl font-semibold text-gray-900">{{ absenceStats.total }}</div>
+                    </div>
+                    <div class="app-card">
+                        <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">In attesa</div>
+                        <div class="mt-2 text-3xl font-semibold text-amber-700">{{ absenceStats.pending }}</div>
+                    </div>
+                    <div class="app-card">
+                        <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Approvate</div>
+                        <div class="mt-2 text-3xl font-semibold text-emerald-700">{{ absenceStats.approved }}</div>
+                    </div>
+                    <div class="app-card">
+                        <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Rifiutate</div>
+                        <div class="mt-2 text-3xl font-semibold text-red-700">{{ absenceStats.rejected }}</div>
+                    </div>
+                </div>
+
+                <section class="app-card">
+                    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <div class="w-full sm:w-56">
+                            <AppSelect v-model="absenceStatus" :options="absenceStatusOptions" />
+                        </div>
+                        <button type="button" class="btn btn-outline" @click="absenceStatus = 'all'"><RotateCcw class="h-4 w-4" :stroke-width="1.7" />Reset</button>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-3 py-3 text-left font-semibold text-gray-600">Persona</th>
+                                    <th class="px-3 py-3 text-left font-semibold text-gray-600">Tipo</th>
+                                    <th class="px-3 py-3 text-left font-semibold text-gray-600">Periodo</th>
+                                    <th class="px-3 py-3 text-left font-semibold text-gray-600">Orario</th>
+                                    <th class="px-3 py-3 text-left font-semibold text-gray-600">Codice INPS</th>
+                                    <th class="px-3 py-3 text-left font-semibold text-gray-600">Note</th>
+                                    <th class="px-3 py-3 text-left font-semibold text-gray-600">Stato</th>
+                                    <th class="px-3 py-3 text-right font-semibold text-gray-600">Azioni</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <tr v-for="row in absenceRows" :key="row.id" class="hover:bg-gray-50">
+                                    <td class="px-3 py-3">
+                                        <div class="flex items-center gap-3">
+                                            <UserAvatar :user="absenceUser(row)" size="sm" />
+                                            <div class="min-w-0">
+                                                <div class="truncate font-semibold text-gray-900">{{ row.user_name || 'Utente' }}</div>
+                                                <div class="truncate text-xs text-gray-500">{{ row.user_email }}</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="px-3 py-3 font-medium text-gray-700">{{ absenceTypeLabels[row.type] || displayValue(row.type) }}</td>
+                                    <td class="px-3 py-3 text-gray-600">
+                                        {{ dateIt(row.start_date) }}
+                                        <span v-if="row.end_date && row.end_date !== row.start_date"> - {{ dateIt(row.end_date) }}</span>
+                                    </td>
+                                    <td class="px-3 py-3 text-gray-600">
+                                        <span v-if="row.start_time || row.end_time">{{ row.start_time || '--:--' }} - {{ row.end_time || '--:--' }}</span>
+                                        <span v-else>-</span>
+                                    </td>
+                                    <td class="px-3 py-3 text-gray-600">{{ row.inps_code || '-' }}</td>
+                                    <td class="max-w-sm px-3 py-3 text-gray-600">
+                                        <div v-if="row.notes" class="line-clamp-2" v-html="row.notes"></div>
+                                        <span v-else>-</span>
+                                    </td>
+                                    <td class="px-3 py-3">
+                                        <span :class="['rounded-full px-2 py-1 text-xs font-semibold', absenceStatusClass(row.status)]">{{ absenceStatusLabels[row.status] || row.status }}</span>
+                                    </td>
+                                    <td class="whitespace-nowrap px-3 py-3 text-right">
+                                        <template v-if="row.status === 'pending'">
+                                            <button type="button" class="action-link" @click="updateAbsenceStatus(row, 'approved')"><Check class="h-4 w-4" :stroke-width="1.7" />Approva</button>
+                                            <button type="button" class="danger-link ml-4" @click="updateAbsenceStatus(row, 'rejected')"><X class="h-4 w-4" :stroke-width="1.7" />Rifiuta</button>
+                                        </template>
+                                        <span v-else class="text-xs text-gray-400">Gestita</span>
+                                    </td>
+                                </tr>
+                                <tr v-if="!absenceRows.length">
+                                    <td colspan="8" class="px-4 py-8 text-center text-gray-500">Nessuna richiesta trovata.</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </section>
             </div>
