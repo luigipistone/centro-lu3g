@@ -23,7 +23,6 @@ import {
     Moon,
     Sun,
     Target,
-    User,
     UserCog,
     Users,
     X,
@@ -31,6 +30,10 @@ import {
 
 const showingNavigationDropdown = ref(false);
 const notificationMenuOpen = ref(false);
+const collapsedGroups = ref({
+    Aggiornamenti: true,
+    Amministrazione: true,
+});
 const darkMode = ref(false);
 const completionEffect = ref(null);
 const page = usePage();
@@ -44,6 +47,19 @@ const notificationBadgeCount = computed(() => page.props.notifications?.unread |
 const notificationStorageKey = computed(() => `centro:last-browser-notification:${page.props.auth?.user?.id || 'guest'}`);
 const themeStorageKey = 'centro:theme';
 const canManageAbsences = computed(() => ['admin', 'superadmin'].includes(page.props.auth?.user?.role));
+
+function isGroupOpen(group) {
+    return !group.collapsible || !collapsedGroups.value[group.label];
+}
+
+function toggleGroup(group) {
+    if (!group.collapsible) return;
+
+    collapsedGroups.value = {
+        ...collapsedGroups.value,
+        [group.label]: !collapsedGroups.value[group.label],
+    };
+}
 
 function pseudoRandomPercent(index, salt = 1, min = 0, max = 100) {
     const raw = Math.sin((index + 1) * (salt * 12.9898)) * 43758.5453;
@@ -197,11 +213,14 @@ const groups = computed(() => [
             ['projects.index', 'Progetti', Briefcase],
             ['tasks.index', 'Task', CheckSquare],
             ['calendar.index', 'Calendario', Calendar],
+            ...(canManageAbsences.value ? [['absences.index', 'Assenze', Calendar]] : []),
+            ['settings.index', 'Impostazioni', Settings],
         ],
     },
     {
         label: 'Aggiornamenti',
         icon: RefreshCcw,
+        collapsible: true,
         links: [
             ['updates.social', 'Social', Megaphone],
             ['updates.newsletter', 'Newsletter', Mail],
@@ -210,19 +229,12 @@ const groups = computed(() => [
         ],
     },
     {
-        label: 'Account',
+        label: 'Amministrazione',
+        collapsible: true,
         links: [
             ['notifications.index', 'Notifiche', Bell],
-            ['profile.edit', 'Profilo', User],
-        ],
-    },
-    {
-        label: 'Amministrazione',
-        links: [
             ['billing.index', 'Fatturazione', Receipt],
-            ...(canManageAbsences.value ? [['absences.index', 'Assenze', Calendar]] : []),
             ['users.index', 'Utenti', UserCog],
-            ['settings.index', 'Impostazioni', Settings],
         ],
     },
 ]);
@@ -318,11 +330,22 @@ const groups = computed(() => [
 
             <div class="flex-1 overflow-y-auto p-3 pt-4">
                 <div v-for="group in groups" :key="group.label" class="mb-5">
-                    <div class="mb-2 flex items-center gap-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400">
+                    <button
+                        v-if="group.collapsible"
+                        type="button"
+                        class="mb-2 flex w-full items-center gap-1.5 rounded-2xl px-3 py-1.5 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400 transition hover:bg-white/58 hover:text-gray-600"
+                        :aria-expanded="isGroupOpen(group)"
+                        @click="toggleGroup(group)"
+                    >
+                        <component v-if="group.icon" :is="group.icon" class="h-3 w-3" :stroke-width="1.6" />
+                        <span class="min-w-0 flex-1">{{ group.label }}</span>
+                        <ChevronDown :class="['h-3.5 w-3.5 transition-transform', isGroupOpen(group) ? 'rotate-180' : '']" :stroke-width="1.8" />
+                    </button>
+                    <div v-else class="mb-2 flex items-center gap-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400">
                         <component v-if="group.icon" :is="group.icon" class="h-3 w-3" :stroke-width="1.6" />
                         {{ group.label }}
                     </div>
-                    <div class="space-y-1">
+                    <div v-show="isGroupOpen(group)" class="space-y-1">
                         <Link
                             v-for="[name, label, icon] in group.links"
                             :key="name"
@@ -451,14 +474,32 @@ const groups = computed(() => [
                 >
                     <div class="space-y-1 pb-3 pt-2">
                         <template v-for="group in groups" :key="group.label">
-                            <ResponsiveNavLink
-                                v-for="[name, label] in group.links"
-                                :key="name"
-                                :href="route(name)"
-                                :active="route().current(name)"
+                            <button
+                                v-if="group.collapsible"
+                                type="button"
+                                class="flex w-full items-center justify-between px-4 py-2 text-left text-xs font-semibold uppercase tracking-[0.12em] text-gray-400"
+                                :aria-expanded="isGroupOpen(group)"
+                                @click="toggleGroup(group)"
                             >
-                                {{ label }}
-                            </ResponsiveNavLink>
+                                <span class="inline-flex items-center gap-1.5">
+                                    <component v-if="group.icon" :is="group.icon" class="h-3 w-3" :stroke-width="1.6" />
+                                    {{ group.label }}
+                                </span>
+                                <ChevronDown :class="['h-4 w-4 transition-transform', isGroupOpen(group) ? 'rotate-180' : '']" :stroke-width="1.8" />
+                            </button>
+                            <div v-else class="px-4 pb-1 pt-2 text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+                                {{ group.label }}
+                            </div>
+                            <div v-show="isGroupOpen(group)" class="space-y-1">
+                                <ResponsiveNavLink
+                                    v-for="[name, label] in group.links"
+                                    :key="name"
+                                    :href="route(name)"
+                                    :active="route().current(name)"
+                                >
+                                    {{ label }}
+                                </ResponsiveNavLink>
+                            </div>
                         </template>
                     </div>
 
@@ -478,9 +519,6 @@ const groups = computed(() => [
                         </div>
 
                         <div class="mt-3 space-y-1">
-                            <ResponsiveNavLink :href="route('profile.edit')">
-                                Profilo
-                            </ResponsiveNavLink>
                             <ResponsiveNavLink
                                 :href="route('logout')"
                                 method="post"
