@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import AppDateInput from '@/Components/AppDateInput.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import DeleteUserForm from './Partials/DeleteUserForm.vue';
 import UpdatePasswordForm from './Partials/UpdatePasswordForm.vue';
@@ -51,6 +52,7 @@ const absenceForm = useForm({
     end_date: today,
     start_time: '',
     end_time: '',
+    inps_code: '',
     notes: '',
 });
 const absenceNotesEditor = ref(null);
@@ -81,10 +83,13 @@ function submitAbsence() {
         absenceForm.start_time = '';
         absenceForm.end_time = '';
     }
+    if (absenceForm.type !== 'sickness') {
+        absenceForm.inps_code = '';
+    }
     absenceForm.post(route('profile.absences.store'), {
         preserveScroll: true,
         onSuccess: () => {
-            absenceForm.reset('notes', 'start_time', 'end_time');
+            absenceForm.reset('notes', 'start_time', 'end_time', 'inps_code');
             absenceForm.start_date = today;
             absenceForm.end_date = today;
             refreshAbsenceNotesEditor();
@@ -127,6 +132,9 @@ watch(() => absenceForm.type, () => {
     if (!absenceNeedsTime.value) {
         absenceForm.start_time = '';
         absenceForm.end_time = '';
+    }
+    if (absenceForm.type !== 'sickness') {
+        absenceForm.inps_code = '';
     }
 });
 </script>
@@ -175,12 +183,12 @@ watch(() => absenceForm.type, () => {
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">{{ absenceNeedsEndDate ? 'Dal' : 'Giorno' }}</label>
-                            <input v-model="absenceForm.start_date" type="date" class="form-control" />
+                            <AppDateInput v-model="absenceForm.start_date" />
                             <div v-if="absenceForm.errors.start_date" class="mt-1 text-sm text-red-600">{{ absenceForm.errors.start_date }}</div>
                         </div>
                         <div v-if="absenceNeedsEndDate">
                             <label class="block text-sm font-medium text-gray-700">Al</label>
-                            <input v-model="absenceForm.end_date" type="date" class="form-control" />
+                            <AppDateInput v-model="absenceForm.end_date" />
                             <div v-if="absenceForm.errors.end_date" class="mt-1 text-sm text-red-600">{{ absenceForm.errors.end_date }}</div>
                         </div>
                         <div v-if="absenceNeedsTime">
@@ -192,6 +200,11 @@ watch(() => absenceForm.type, () => {
                             <label class="block text-sm font-medium text-gray-700">Ora fine</label>
                             <AppSelect v-model="absenceForm.end_time" :options="hourOptions" placeholder="Seleziona ora" />
                             <div v-if="absenceForm.errors.end_time" class="mt-1 text-sm text-red-600">{{ absenceForm.errors.end_time }}</div>
+                        </div>
+                        <div v-if="absenceForm.type === 'sickness'">
+                            <label class="block text-sm font-medium text-gray-700">Codice INPS</label>
+                            <input v-model="absenceForm.inps_code" class="form-control" placeholder="Inserisci Codice INPS" required />
+                            <div v-if="absenceForm.errors.inps_code" class="mt-1 text-sm text-red-600">{{ absenceForm.errors.inps_code }}</div>
                         </div>
                         <div class="md:col-span-3">
                             <label class="block text-sm font-medium text-gray-700">Note</label>
@@ -252,6 +265,7 @@ watch(() => absenceForm.type, () => {
                                         <span v-if="absence.end_date && absence.end_date !== absence.start_date"> - {{ formatDate(absence.end_date) }}</span>
                                         <span v-if="absence.start_time || absence.end_time"> · {{ absence.start_time || '--:--' }} - {{ absence.end_time || '--:--' }}</span>
                                     </div>
+                                    <div v-if="absence.inps_code" class="mt-1 text-xs font-semibold text-gray-500">Codice INPS: {{ absence.inps_code }}</div>
                                     <div v-if="absence.notes" class="mt-1 text-sm text-gray-600" v-html="absence.notes"></div>
                                 </div>
                                 <div class="flex items-center gap-2">

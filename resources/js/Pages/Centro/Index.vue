@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import AppDateInput from '@/Components/AppDateInput.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import {
@@ -83,6 +84,10 @@ const props = defineProps({
 const editing = ref(null);
 const formOpen = ref(false);
 const deleteTarget = ref(null);
+const hourOptions = Array.from({ length: 17 }, (_, index) => {
+    const hour = String(index + 7).padStart(2, '0');
+    return { value: `${hour}:00`, label: `${hour}:00` };
+});
 const deleteTargetAction = ref(null);
 const deleteConfirmText = ref('');
 const updateDrafts = ref({});
@@ -3027,15 +3032,15 @@ function visibleCalendarTasks(cell) {
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Inizio</label>
-                                    <input v-model="calendarTaskForm.start_date" type="date" class="form-control" @click="openDatePicker" @focus="openDatePicker" @input="saveCalendarTaskInline()" />
+                                    <AppDateInput v-model="calendarTaskForm.start_date" @change="saveCalendarTaskInline(0)" />
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Scadenza</label>
-                                    <input v-model="calendarTaskForm.due_date" type="date" class="form-control" @click="openDatePicker" @focus="openDatePicker" @input="saveCalendarTaskInline()" />
+                                    <AppDateInput v-model="calendarTaskForm.due_date" @change="saveCalendarTaskInline(0)" />
                                 </div>
                                 <div v-if="calendarTaskForm.task_type === 'meeting'">
                                     <label class="block text-sm font-medium text-gray-700">Ora</label>
-                                    <input v-model="calendarTaskForm.due_time" type="time" class="form-control" @input="saveCalendarTaskInline()" />
+                                    <AppSelect v-model="calendarTaskForm.due_time" :options="hourOptions" placeholder="Seleziona ora" @change="saveCalendarTaskInline(0)" />
                                 </div>
                                 <div v-if="calendarTaskForm.task_type === 'meeting'">
                                     <label class="block text-sm font-medium text-gray-700">Luogo / link</label>

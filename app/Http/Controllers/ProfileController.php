@@ -100,6 +100,7 @@ class ProfileController extends Controller
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'start_time' => ['nullable', 'regex:/^([01][0-9]|2[0-3]):00$/'],
             'end_time' => ['nullable', 'regex:/^([01][0-9]|2[0-3]):00$/'],
+            'inps_code' => ['nullable', 'required_if:type,sickness', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:6000'],
         ]);
         if (in_array($payload['type'], ['vacation', 'sickness'], true)) {
@@ -108,6 +109,9 @@ class ProfileController extends Controller
         }
         if (in_array($payload['type'], ['permission', 'late'], true)) {
             $payload['end_date'] = $payload['start_date'];
+        }
+        if ($payload['type'] !== 'sickness') {
+            $payload['inps_code'] = null;
         }
 
         DB::table('absence_requests')->insert([
@@ -118,6 +122,7 @@ class ProfileController extends Controller
             'end_date' => ($payload['end_date'] ?? null) ?: $payload['start_date'],
             'start_time' => ($payload['start_time'] ?? null) ?: null,
             'end_time' => ($payload['end_time'] ?? null) ?: null,
+            'inps_code' => ($payload['inps_code'] ?? null) ?: null,
             'status' => 'pending',
             'notes' => ($payload['notes'] ?? null) ?: null,
             'created_at' => now(),

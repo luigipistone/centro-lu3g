@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import AppDateInput from '@/Components/AppDateInput.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import {
@@ -95,6 +96,11 @@ const documentStatusOptions = [
     { value: 'overdue', label: 'Scaduto' },
     { value: 'cancelled', label: 'Annullato' },
 ];
+
+const hourOptions = Array.from({ length: 17 }, (_, index) => {
+    const hour = String(index + 7).padStart(2, '0');
+    return { value: `${hour}:00`, label: `${hour}:00` };
+});
 const projectStatusOptions = [
     { value: 'active', label: 'Attivo' },
     { value: 'completed', label: 'Completato' },
@@ -2170,11 +2176,11 @@ onUnmounted(() => {
                             <div class="grid gap-4 md:grid-cols-3">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Data emissione</label>
-                                    <input v-model="documentForm.issue_date" type="date" class="form-control" required />
+                                    <AppDateInput v-model="documentForm.issue_date" @change="saveDocumentInline(0)" />
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Scadenza</label>
-                                    <input v-model="documentForm.due_date" type="date" class="form-control" />
+                                    <AppDateInput v-model="documentForm.due_date" @change="saveDocumentInline(0)" />
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Stato</label>
@@ -2314,7 +2320,7 @@ onUnmounted(() => {
                             <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Pagamenti</h3>
                             <form class="mb-5 grid gap-3 md:grid-cols-[120px_150px_1fr_auto]" @submit.prevent="addPayment">
                                 <input v-model="paymentForm.amount" class="form-control mt-0" type="number" step="0.01" min="0" required />
-                                <input v-model="paymentForm.paid_at" class="form-control mt-0" type="date" required />
+                                <AppDateInput v-model="paymentForm.paid_at" />
                                 <input v-model="paymentForm.method" class="form-control mt-0" placeholder="Metodo" />
                                 <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Registra</button>
                             </form>
@@ -2329,12 +2335,10 @@ onUnmounted(() => {
                                         min="0"
                                         @input="savePaymentInline(payment)"
                                     />
-                                    <input
+                                    <AppDateInput
                                         v-if="paymentDrafts[payment.id]"
                                         v-model="paymentDrafts[payment.id].paid_at"
-                                        class="form-control mt-0"
-                                        type="date"
-                                        @input="savePaymentInline(payment)"
+                                        @change="savePaymentInline(payment, 0)"
                                     />
                                     <div class="space-y-1">
                                         <input
@@ -2646,15 +2650,15 @@ onUnmounted(() => {
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Inizio</label>
-                                <input v-model="subscriptionForm.start_date" type="date" class="form-control" required />
+                                <AppDateInput v-model="subscriptionForm.start_date" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Fine</label>
-                                <input v-model="subscriptionForm.end_date" type="date" class="form-control" />
+                                <AppDateInput v-model="subscriptionForm.end_date" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Prossima emissione</label>
-                                <input v-model="subscriptionForm.next_invoice_date" type="date" class="form-control" required />
+                                <AppDateInput v-model="subscriptionForm.next_invoice_date" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Termini pagamento</label>
@@ -2909,15 +2913,15 @@ onUnmounted(() => {
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Inizio</label>
-                                <input v-model="taskForm.start_date" type="date" class="form-control" />
+                                <AppDateInput v-model="taskForm.start_date" @change="saveTaskInline(0)" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Scadenza</label>
-                                <input v-model="taskForm.due_date" type="date" class="form-control" />
+                                <AppDateInput v-model="taskForm.due_date" @change="saveTaskInline(0)" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Ora</label>
-                                <input v-model="taskForm.due_time" type="time" class="form-control" />
+                                <AppSelect v-model="taskForm.due_time" :options="hourOptions" placeholder="Seleziona ora" @change="saveTaskInline(0)" />
                             </div>
                             <div v-if="taskForm.task_type === 'project' || taskForm.task_type === 'task'">
                                 <label class="block text-sm font-medium text-gray-700">Progetto</label>
@@ -3708,7 +3712,7 @@ onUnmounted(() => {
                     <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Pagamenti</h3>
                     <form class="mb-5 grid gap-3 md:grid-cols-[120px_150px_1fr_auto]" @submit.prevent="addPayment">
                         <input v-model="paymentForm.amount" class="form-control mt-0" type="number" step="0.01" min="0" required />
-                        <input v-model="paymentForm.paid_at" class="form-control mt-0" type="date" required />
+                        <AppDateInput v-model="paymentForm.paid_at" />
                         <input v-model="paymentForm.method" class="form-control mt-0" placeholder="Metodo" />
                         <button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Registra</button>
                     </form>
