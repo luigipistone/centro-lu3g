@@ -3286,16 +3286,6 @@ onUnmounted(() => {
 
                     <aside class="space-y-4">
                         <section class="surface rounded-md p-5">
-                            <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Persona</h3>
-                            <div class="mt-4 flex items-center gap-3">
-                                <UserAvatar :user="related.user" size="md" />
-                                <div class="min-w-0">
-                                    <div class="truncate text-sm font-semibold text-gray-900">{{ related.user?.name }}</div>
-                                    <div class="truncate text-xs text-gray-500">{{ related.user?.email }}</div>
-                                </div>
-                            </div>
-                        </section>
-                        <section class="surface rounded-md p-5">
                             <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Azioni</h3>
                             <div class="mt-4 grid gap-2">
                                 <button v-if="absenceForm.status !== 'approved'" type="button" class="btn btn-primary justify-center" @click="setAbsenceStatus('approved')">Approva</button>
@@ -3304,6 +3294,16 @@ onUnmounted(() => {
                                     <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                     Elimina
                                 </button>
+                            </div>
+                        </section>
+                        <section class="surface rounded-md p-5">
+                            <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Persona</h3>
+                            <div class="mt-4 flex items-center gap-3">
+                                <UserAvatar :user="related.user" size="md" />
+                                <div class="min-w-0">
+                                    <div class="truncate text-sm font-semibold text-gray-900">{{ related.user?.name }}</div>
+                                    <div class="truncate text-xs text-gray-500">{{ related.user?.email }}</div>
+                                </div>
                             </div>
                         </section>
                     </aside>
