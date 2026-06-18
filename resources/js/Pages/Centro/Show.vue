@@ -3221,7 +3221,7 @@ onUnmounted(() => {
                     </section>
                 </section>
 
-                <section v-if="section === 'absences'" class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
+                <section v-if="section === 'absences'" class="grid gap-6 lg:col-span-2 xl:grid-cols-[minmax(0,1fr)_300px]">
                     <section class="surface rounded-md p-5">
                         <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
                             <div>

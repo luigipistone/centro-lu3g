@@ -1363,6 +1363,11 @@ const absenceTodayRows = computed(() => props.rows
 
         return String(a.user_name || '').localeCompare(String(b.user_name || ''));
     }));
+const smartworkingDayKeys = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+const smartworkingTodayKey = computed(() => smartworkingDayKeys[new Date().getDay()]);
+const smartworkingTodayRows = computed(() => (props.users || [])
+    .filter((user) => user.smartworking_day === smartworkingTodayKey.value)
+    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))));
 
 function absenceUser(row) {
     return {
@@ -1390,6 +1395,10 @@ function absenceExtraInfo(row) {
     }
 
     return '';
+}
+
+function smartworkingUserLabel(user) {
+    return user.job_title || user.email || 'Smart working';
 }
 
 function absenceStatusClass(status) {
@@ -3747,58 +3756,80 @@ function visibleCalendarTasks(cell) {
 
         <div v-else-if="section === 'absences'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
-                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <div class="app-card">
-                        <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Totali</div>
-                        <div class="mt-2 text-3xl font-semibold text-gray-900">{{ absenceStats.total }}</div>
-                    </div>
-                    <div class="app-card">
-                        <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">In attesa</div>
-                        <div class="mt-2 text-3xl font-semibold text-amber-700">{{ absenceStats.pending }}</div>
-                    </div>
-                    <div class="app-card">
-                        <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Approvate</div>
-                        <div class="mt-2 text-3xl font-semibold text-emerald-700">{{ absenceStats.approved }}</div>
-                    </div>
-                    <div class="app-card">
-                        <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Rifiutate</div>
-                        <div class="mt-2 text-3xl font-semibold text-red-700">{{ absenceStats.rejected }}</div>
-                    </div>
-                </div>
-
-                <section class="app-card">
-                    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                            <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Assenti oggi</h3>
-                            <p class="mt-1 text-sm text-gray-500">{{ dateIt(absenceTodayIso) }}</p>
+                <div class="grid gap-6 lg:grid-cols-2">
+                    <section class="app-card overflow-hidden">
+                        <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-wide text-indigo-500">Oggi</p>
+                                <h3 class="mt-1 text-xl font-semibold text-gray-900">Assenti</h3>
+                                <p class="mt-1 text-sm font-medium text-gray-500">{{ dateIt(absenceTodayIso) }}</p>
+                            </div>
+                            <span class="inline-flex h-10 min-w-10 items-center justify-center rounded-full bg-indigo-50 px-3 text-sm font-semibold text-indigo-700 ring-1 ring-indigo-100">
+                                {{ absenceTodayRows.length }}
+                            </span>
                         </div>
-                        <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">{{ absenceTodayRows.length }}</span>
-                    </div>
-                    <div v-if="absenceTodayRows.length" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-                        <Link
-                            v-for="row in absenceTodayRows"
-                            :key="row.id"
-                            :href="route('absences.show', row.id)"
-                            class="group flex min-h-[86px] items-center gap-3 rounded-md border border-gray-100 bg-gray-50/80 p-3 transition duration-200 hover:-translate-y-0.5 hover:border-indigo-100 hover:bg-white hover:shadow-[0_14px_34px_rgba(15,23,42,0.08)]"
-                        >
-                            <UserAvatar :user="absenceUser(row)" size="md" />
-                            <div class="min-w-0 flex-1">
-                                <div class="truncate text-sm font-semibold text-gray-900">{{ row.user_name || 'Utente' }}</div>
-                                <div class="mt-1 flex flex-wrap items-center gap-2">
-                                    <span class="rounded-full bg-white px-2 py-1 text-xs font-semibold text-gray-700 shadow-sm ring-1 ring-gray-100">
-                                        {{ absenceTypeLabels[row.type] || displayValue(row.type) }}
-                                    </span>
-                                    <span v-if="absenceExtraInfo(row)" class="truncate text-xs font-semibold text-gray-500">
-                                        {{ absenceExtraInfo(row) }}
-                                    </span>
+                        <div v-if="absenceTodayRows.length" class="grid gap-3 sm:grid-cols-2">
+                            <Link
+                                v-for="row in absenceTodayRows"
+                                :key="row.id"
+                                :href="route('absences.show', row.id)"
+                                class="group flex min-h-[92px] items-center gap-3 rounded-[var(--radius)] border border-gray-100 bg-white/72 p-3 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-indigo-100 hover:bg-white hover:shadow-[0_16px_38px_rgba(15,23,42,0.09)]"
+                            >
+                                <UserAvatar :user="absenceUser(row)" size="md" />
+                                <div class="min-w-0 flex-1">
+                                    <div class="truncate text-sm font-semibold text-gray-900">{{ row.user_name || 'Utente' }}</div>
+                                    <div class="mt-1 flex flex-wrap items-center gap-2">
+                                        <span class="rounded-full bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100">
+                                            {{ absenceTypeLabels[row.type] || displayValue(row.type) }}
+                                        </span>
+                                        <span v-if="absenceExtraInfo(row)" class="truncate text-xs font-semibold text-gray-500">
+                                            {{ absenceExtraInfo(row) }}
+                                        </span>
+                                    </div>
+                                </div>
+                            </Link>
+                        </div>
+                        <p v-else class="rounded-[var(--radius)] border border-dashed border-gray-200 bg-white/60 px-4 py-6 text-sm text-gray-500">
+                            Nessuna persona assente oggi.
+                        </p>
+                    </section>
+
+                    <section class="app-card overflow-hidden">
+                        <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-wide text-sky-500">Oggi</p>
+                                <h3 class="mt-1 text-xl font-semibold text-gray-900">Smart working</h3>
+                                <p class="mt-1 text-sm font-medium text-gray-500">{{ dateIt(absenceTodayIso) }}</p>
+                            </div>
+                            <span class="inline-flex h-10 min-w-10 items-center justify-center rounded-full bg-sky-50 px-3 text-sm font-semibold text-sky-700 ring-1 ring-sky-100">
+                                {{ smartworkingTodayRows.length }}
+                            </span>
+                        </div>
+                        <div v-if="smartworkingTodayRows.length" class="grid gap-3 sm:grid-cols-2">
+                            <div
+                                v-for="user in smartworkingTodayRows"
+                                :key="user.id"
+                                class="flex min-h-[92px] items-center gap-3 rounded-[var(--radius)] border border-gray-100 bg-white/72 p-3 shadow-sm"
+                            >
+                                <UserAvatar :user="user" size="md" />
+                                <div class="min-w-0 flex-1">
+                                    <div class="truncate text-sm font-semibold text-gray-900">{{ user.name || 'Utente' }}</div>
+                                    <div class="mt-1 flex flex-wrap items-center gap-2">
+                                        <span class="rounded-full bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700 ring-1 ring-sky-100">
+                                            Smart working
+                                        </span>
+                                        <span class="truncate text-xs font-semibold text-gray-500">
+                                            {{ smartworkingUserLabel(user) }}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
-                        </Link>
-                    </div>
-                    <p v-else class="rounded-md border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-500">
-                        Nessuna persona assente oggi.
-                    </p>
-                </section>
+                        </div>
+                        <p v-else class="rounded-[var(--radius)] border border-dashed border-gray-200 bg-white/60 px-4 py-6 text-sm text-gray-500">
+                            Nessuna persona in smart working oggi.
+                        </p>
+                    </section>
+                </div>
 
                 <section class="app-card">
                     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
