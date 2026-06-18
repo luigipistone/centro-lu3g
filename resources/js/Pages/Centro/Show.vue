@@ -140,6 +140,14 @@ const completionEffectOptions = [
     { value: 'snow', label: 'Nevicata' },
     { value: 'glitch', label: 'Glitch' },
 ];
+const smartworkingDayOptions = [
+    { value: 'none', label: 'Non impostato' },
+    { value: 'monday', label: 'Lunedì' },
+    { value: 'tuesday', label: 'Martedì' },
+    { value: 'wednesday', label: 'Mercoledì' },
+    { value: 'thursday', label: 'Giovedì' },
+    { value: 'friday', label: 'Venerdì' },
+];
 const completionEffectValues = completionEffectOptions.map((option) => option.value);
 
 function clientOptionLabel(field, value) {
@@ -403,6 +411,7 @@ const userForm = useForm({
     phone: props.record.phone || '',
     bio: props.record.bio || '',
     completion_effect: completionEffectValues.includes(props.record.completion_effect) ? props.record.completion_effect : 'balloons',
+    smartworking_day: props.record.smartworking_day || 'none',
     password: '',
 });
 const userAutosaveState = ref('idle');
@@ -1304,6 +1313,7 @@ function userPayload() {
         phone: userForm.phone,
         bio: userForm.bio,
         completion_effect: userForm.completion_effect,
+        smartworking_day: userForm.smartworking_day,
         password: userForm.password,
     };
 }
@@ -3084,6 +3094,11 @@ onUnmounted(() => {
                                 <label class="block text-sm font-medium text-gray-700">Animazione completamento</label>
                                 <AppSelect v-model="userForm.completion_effect" :options="completionEffectOptions" @change="saveUserInline(0)" />
                                 <div v-if="userForm.errors.completion_effect" class="mt-1 text-sm text-red-600">{{ userForm.errors.completion_effect }}</div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Giorno smart working</label>
+                                <AppSelect v-model="userForm.smartworking_day" :options="smartworkingDayOptions" @change="saveUserInline(0)" />
+                                <div v-if="userForm.errors.smartworking_day" class="mt-1 text-sm text-red-600">{{ userForm.errors.smartworking_day }}</div>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Nuova password</label>

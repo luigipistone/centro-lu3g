@@ -108,6 +108,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::post('/profile/avatar', [ProfileController::class, 'updateAvatar'])->name('profile.avatar.update');
+    Route::post('/profile/absences', [ProfileController::class, 'storeAbsence'])->name('profile.absences.store');
+    Route::delete('/profile/absences/{id}', [ProfileController::class, 'destroyAbsence'])->name('profile.absences.destroy');
     Route::get('/avatars/{filename}', [ProfileController::class, 'avatar'])->name('profile.avatar');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });

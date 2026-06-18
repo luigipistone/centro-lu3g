@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -23,7 +24,12 @@ class ProfileController extends Controller
         return Inertia::render('Profile/Edit', [
             'mustVerifyEmail' => $request->user() instanceof MustVerifyEmail,
             'status' => session('status'),
-            'profile' => DB::table('profiles')->where('user_id', $request->user()->id)->first(['completion_effect']),
+            'profile' => DB::table('profiles')->where('user_id', $request->user()->id)->first(['completion_effect', 'smartworking_day']),
+            'absences' => DB::table('absence_requests')
+                ->where('user_id', $request->user()->id)
+                ->latest('start_date')
+                ->limit(30)
+                ->get(),
         ]);
     }
 
@@ -84,6 +90,45 @@ class ProfileController extends Controller
         );
 
         return Redirect::route('profile.edit')->with('status', 'Foto profilo aggiornata.');
+    }
+
+    public function storeAbsence(Request $request): RedirectResponse
+    {
+        $payload = $request->validate([
+            'type' => ['required', Rule::in(['vacation', 'permission', 'sickness', 'late', 'other'])],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            'start_time' => ['nullable', 'date_format:H:i'],
+            'end_time' => ['nullable', 'date_format:H:i'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        DB::table('absence_requests')->insert([
+            'id' => (string) str()->uuid(),
+            'user_id' => $request->user()->id,
+            'type' => $payload['type'],
+            'start_date' => $payload['start_date'],
+            'end_date' => ($payload['end_date'] ?? null) ?: $payload['start_date'],
+            'start_time' => ($payload['start_time'] ?? null) ?: null,
+            'end_time' => ($payload['end_time'] ?? null) ?: null,
+            'status' => 'pending',
+            'notes' => ($payload['notes'] ?? null) ?: null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return Redirect::route('profile.edit')->with('status', 'Richiesta inviata.');
+    }
+
+    public function destroyAbsence(Request $request, string $id): RedirectResponse
+    {
+        DB::table('absence_requests')
+            ->where('id', $id)
+            ->where('user_id', $request->user()->id)
+            ->where('status', 'pending')
+            ->delete();
+
+        return Redirect::route('profile.edit')->with('status', 'Richiesta annullata.');
     }
 
     public function avatar(string $filename)

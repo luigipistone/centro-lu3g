@@ -454,7 +454,7 @@ class CentroPageController extends Controller
                 ->leftJoin('user_roles', 'user_roles.user_id', '=', 'users.id')
                 ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
                 ->where('users.id', $id)
-                ->select('users.*', 'user_roles.role', 'profiles.avatar_url', 'profiles.job_title', 'profiles.phone', 'profiles.bio', 'profiles.completion_effect')
+                ->select('users.*', 'user_roles.role', 'profiles.avatar_url', 'profiles.job_title', 'profiles.phone', 'profiles.bio', 'profiles.completion_effect', 'profiles.smartworking_day')
                 ->first()
             : DB::table($config['table'])->where('id', $id)->first();
         abort_if(! $record, 404);
@@ -1298,6 +1298,7 @@ class CentroPageController extends Controller
             'phone' => ['nullable', 'string', 'max:255'],
             'bio' => ['nullable', 'string'],
             'completion_effect' => ['nullable', Rule::in(['balloons', 'fireworks', 'snow', 'glitch'])],
+            'smartworking_day' => ['nullable', Rule::in(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'none'])],
         ]);
 
         $user->name = $payload['name'];
@@ -1317,6 +1318,7 @@ class CentroPageController extends Controller
                 'phone' => $payload['phone'] ?? null,
                 'bio' => $payload['bio'] ?? null,
                 'completion_effect' => $payload['completion_effect'] ?? 'balloons',
+                'smartworking_day' => ($payload['smartworking_day'] ?? null) === 'none' ? null : ($payload['smartworking_day'] ?? null),
                 'updated_at' => now(),
                 'created_at' => now(),
             ],
