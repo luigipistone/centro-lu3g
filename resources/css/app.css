@@ -901,8 +901,8 @@ html.dark .calendar-cell {
 .completion-firework {
     --hue: calc(35 * var(--i) + 190);
     position: absolute;
-    left: calc(10% + var(--i) * 8%);
-    top: calc(12% + var(--i) * 4%);
+    left: var(--x);
+    top: var(--y);
     width: 9px;
     height: 9px;
     border-radius: 999px;
@@ -917,44 +917,65 @@ html.dark .calendar-cell {
         -42px 0 currentColor,
         -30px -30px currentColor;
     animation: completion-firework-pop 2.55s ease-out forwards;
-    animation-delay: calc(var(--i) * 180ms);
+    animation-delay: var(--delay);
+    scale: var(--scale);
     opacity: 0;
 }
 
 .completion-firework:nth-child(2n) {
-    top: calc(72% - var(--i) * 3%);
+    width: 7px;
+    height: 7px;
 }
 
 .completion-firework:nth-child(3n) {
-    left: calc(86% - var(--i) * 7%);
-    top: calc(22% + var(--i) * 6%);
+    width: 11px;
+    height: 11px;
 }
 
 .completion-firework:nth-child(4n) {
-    left: calc(18% + var(--i) * 5%);
-    top: calc(82% - var(--i) * 5%);
+    color: hsl(calc(var(--hue) + 52) 95% 62%);
+}
+
+.completion-firework:nth-child(5n) {
+    color: hsl(calc(var(--hue) + 118) 95% 68%);
+}
+
+.completion-firework:nth-child(7n) {
+    filter: blur(0.4px);
 }
 
 .completion-snowflake {
     position: absolute;
-    left: calc((var(--i) - 1) * 2.35%);
-    top: -8vh;
-    width: 7px;
-    height: 7px;
+    left: var(--x);
+    top: var(--start-y);
+    width: var(--size);
+    height: var(--size);
     border-radius: 999px;
-    background: hsl(206 100% 94% / 0.96);
-    box-shadow: 0 0 14px hsl(206 100% 92% / 0.68);
-    animation: completion-snow-fall 5.35s linear forwards;
-    animation-delay: calc(var(--i) * 28ms);
+    background: hsl(221 24% 28% / 0.78);
+    box-shadow: 0 0 10px hsl(221 26% 20% / 0.32);
+    animation: completion-snow-fall var(--duration) linear forwards;
+    animation-delay: var(--delay);
 }
 
 .completion-snowflake:nth-child(3n) {
-    top: -22vh;
+    opacity: 0.82;
 }
 
 .completion-snowflake:nth-child(4n) {
-    top: -34vh;
     opacity: 0.72;
+}
+
+.completion-snowflake:nth-child(5n) {
+    opacity: 0.58;
+}
+
+.completion-snowflake:nth-child(7n) {
+    filter: blur(0.5px);
+}
+
+html.dark .completion-snowflake {
+    background: hsl(206 100% 94% / 0.96);
+    box-shadow: 0 0 14px hsl(206 100% 92% / 0.68);
 }
 
 .completion-glitch-panel {
@@ -966,11 +987,11 @@ html.dark .calendar-cell {
     font-weight: 850;
     letter-spacing: 0;
     color: hsl(216 28% 98% / 0.94);
-    text-shadow: -5px 0 hsl(185 95% 58% / 0.86), 5px 0 hsl(330 95% 58% / 0.78);
+    text-shadow: -8px 0 hsl(185 95% 58% / 0.95), 8px 0 hsl(330 95% 58% / 0.9), 0 0 24px hsl(216 28% 98% / 0.42);
     background:
-        repeating-linear-gradient(0deg, hsl(0 0% 100% / 0.06) 0 1px, transparent 1px 4px),
-        repeating-linear-gradient(90deg, hsl(185 100% 60% / 0.08) 0 2px, hsl(330 100% 58% / 0.08) 2px 4px, transparent 4px 8px),
-        hsl(222 38% 6% / 0.34);
+        repeating-linear-gradient(0deg, hsl(0 0% 100% / 0.1) 0 1px, transparent 1px 4px),
+        repeating-linear-gradient(90deg, hsl(185 100% 60% / 0.15) 0 2px, hsl(330 100% 58% / 0.14) 2px 4px, transparent 4px 8px),
+        hsl(222 38% 6% / 0.48);
     animation: completion-tv-glitch 3.9s steps(2, end) forwards;
 }
 
@@ -980,8 +1001,8 @@ html.dark .calendar-cell {
     position: absolute;
     inset: 0;
     background:
-        linear-gradient(transparent 8%, hsl(0 0% 100% / 0.22) 8.4%, transparent 9.2%),
-        linear-gradient(90deg, transparent, hsl(185 100% 65% / 0.16), transparent);
+        linear-gradient(transparent 8%, hsl(0 0% 100% / 0.34) 8.4%, transparent 9.2%),
+        linear-gradient(90deg, transparent, hsl(185 100% 65% / 0.28), transparent);
     mix-blend-mode: screen;
     animation: completion-tv-roll 420ms steps(3, end) infinite;
 }
@@ -991,8 +1012,8 @@ html.dark .calendar-cell {
         radial-gradient(circle at 20% 30%, hsl(0 0% 100% / 0.26), transparent 2px),
         radial-gradient(circle at 76% 62%, hsl(0 0% 100% / 0.2), transparent 2px),
         repeating-radial-gradient(circle, hsl(0 0% 100% / 0.12) 0 1px, transparent 1px 4px);
-    opacity: 0.64;
-    animation: completion-tv-noise 180ms steps(2, end) infinite;
+    opacity: 0.86;
+    animation: completion-tv-noise 110ms steps(2, end) infinite;
 }
 
 @keyframes completion-balloon-rise {
@@ -1034,7 +1055,7 @@ html.dark .calendar-cell {
         opacity: 1;
     }
     100% {
-        transform: translate3d(calc((var(--i) - 22) * 2px), 112vh, 0);
+        transform: translate3d(var(--drift), 142vh, 0);
         opacity: 0;
     }
 }
@@ -1047,8 +1068,8 @@ html.dark .calendar-cell {
     }
     8%, 18% {
         opacity: 1;
-        clip-path: inset(12% 0 72% 0);
-        transform: translateX(16px) skewX(7deg);
+        clip-path: inset(10% 0 70% 0);
+        transform: translateX(26px) skewX(10deg);
     }
     28%, 52% {
         opacity: 1;
@@ -1058,7 +1079,12 @@ html.dark .calendar-cell {
     64% {
         opacity: 1;
         clip-path: inset(64% 0 18% 0);
-        transform: translateX(-12px) skewX(-5deg);
+        transform: translateX(-24px) skewX(-9deg);
+    }
+    76% {
+        opacity: 1;
+        clip-path: inset(28% 0 45% 0);
+        transform: translateX(18px) skewX(6deg);
     }
     100% {
         opacity: 0;

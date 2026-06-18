@@ -44,6 +44,38 @@ const notificationBadgeCount = computed(() => page.props.notifications?.unread |
 const notificationStorageKey = computed(() => `centro:last-browser-notification:${page.props.auth?.user?.id || 'guest'}`);
 const themeStorageKey = 'centro:theme';
 
+function pseudoRandomPercent(index, salt = 1, min = 0, max = 100) {
+    const raw = Math.sin((index + 1) * (salt * 12.9898)) * 43758.5453;
+    const unit = raw - Math.floor(raw);
+    return min + unit * (max - min);
+}
+
+function completionParticleStyle(index, kind) {
+    if (kind === 'firework') {
+        return {
+            '--i': index,
+            '--x': `${pseudoRandomPercent(index, 3.7, 8, 92)}%`,
+            '--y': `${pseudoRandomPercent(index, 8.9, 10, 82)}%`,
+            '--delay': `${pseudoRandomPercent(index, 2.3, 0, 1900)}ms`,
+            '--scale': pseudoRandomPercent(index, 4.1, 0.72, 1.28),
+        };
+    }
+
+    if (kind === 'snow') {
+        return {
+            '--i': index,
+            '--x': `${pseudoRandomPercent(index, 5.1, 0, 100)}%`,
+            '--delay': `${pseudoRandomPercent(index, 1.9, 0, 2200)}ms`,
+            '--duration': `${pseudoRandomPercent(index, 7.3, 4.2, 7.2)}s`,
+            '--size': `${pseudoRandomPercent(index, 9.1, 3, 9)}px`,
+            '--drift': `${pseudoRandomPercent(index, 6.4, -90, 90)}px`,
+            '--start-y': `${pseudoRandomPercent(index, 2.8, -70, -8)}vh`,
+        };
+    }
+
+    return { '--i': index };
+}
+
 function applyTheme(enabled) {
     darkMode.value = enabled;
     document.documentElement.classList.toggle('dark', enabled);
@@ -477,10 +509,10 @@ const groups = [
                     <span v-for="index in 18" :key="`balloon-${index}`" class="completion-balloon" :style="{ '--i': index }"></span>
                 </template>
                 <template v-else-if="completionEffect === 'fireworks'">
-                    <span v-for="index in 9" :key="`firework-${index}`" class="completion-firework" :style="{ '--i': index }"></span>
+                    <span v-for="index in 22" :key="`firework-${index}`" class="completion-firework" :style="completionParticleStyle(index, 'firework')"></span>
                 </template>
                 <template v-else-if="completionEffect === 'snow'">
-                    <span v-for="index in 44" :key="`snow-${index}`" class="completion-snowflake" :style="{ '--i': index }"></span>
+                    <span v-for="index in 96" :key="`snow-${index}`" class="completion-snowflake" :style="completionParticleStyle(index, 'snow')"></span>
                 </template>
                 <template v-else-if="completionEffect === 'glitch'">
                     <div class="completion-glitch-panel">
