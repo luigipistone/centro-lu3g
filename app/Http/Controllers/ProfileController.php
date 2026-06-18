@@ -98,10 +98,17 @@ class ProfileController extends Controller
             'type' => ['required', Rule::in(['vacation', 'permission', 'sickness', 'late', 'other'])],
             'start_date' => ['required', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
-            'start_time' => ['nullable', 'date_format:H:i'],
-            'end_time' => ['nullable', 'date_format:H:i'],
-            'notes' => ['nullable', 'string', 'max:2000'],
+            'start_time' => ['nullable', 'regex:/^([01][0-9]|2[0-3]):00$/'],
+            'end_time' => ['nullable', 'regex:/^([01][0-9]|2[0-3]):00$/'],
+            'notes' => ['nullable', 'string', 'max:6000'],
         ]);
+        if (in_array($payload['type'], ['vacation', 'sickness'], true)) {
+            $payload['start_time'] = null;
+            $payload['end_time'] = null;
+        }
+        if (in_array($payload['type'], ['permission', 'late'], true)) {
+            $payload['end_date'] = $payload['start_date'];
+        }
 
         DB::table('absence_requests')->insert([
             'id' => (string) str()->uuid(),
