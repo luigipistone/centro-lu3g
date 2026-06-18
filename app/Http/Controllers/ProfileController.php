@@ -188,10 +188,6 @@ class ProfileController extends Controller
             ->values();
 
         foreach ($userIds as $userId) {
-            if ($actorId && $userId === $actorId) {
-                continue;
-            }
-
             DB::table('notifications')->insert([
                 'id' => (string) str()->uuid(),
                 'user_id' => $userId,

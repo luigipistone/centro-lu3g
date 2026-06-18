@@ -52,6 +52,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/tasks/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'tasks')->name('tasks.destroy');
     Route::get('/calendar', [CentroPageController::class, 'index'])->defaults('section', 'calendar')->name('calendar.index');
     Route::get('/absences', [CentroPageController::class, 'index'])->defaults('section', 'absences')->name('absences.index');
+    Route::get('/absences/{id}', [CentroPageController::class, 'show'])->defaults('section', 'absences')->name('absences.show');
     Route::put('/absences/{id}', [CentroPageController::class, 'updateAbsence'])->name('absences.update');
     Route::patch('/absences/{id}/status', [CentroPageController::class, 'updateAbsenceStatus'])->name('absences.status.update');
     Route::delete('/absences/{id}', [CentroPageController::class, 'destroyAbsence'])->name('absences.destroy');

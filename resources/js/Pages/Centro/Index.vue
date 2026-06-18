@@ -94,7 +94,7 @@ const canWrite = computed(() => props.fields.length > 0);
 const billingSearch = ref('');
 const billingType = ref('all');
 const billingStatus = ref('all');
-const absenceStatus = ref('pending');
+const absenceStatus = ref('all');
 const absenceDrafts = ref({});
 const absenceAutosaveTimers = {};
 const currentCalendarDate = ref(new Date());
@@ -3768,59 +3768,31 @@ function visibleCalendarTasks(cell) {
                                             </div>
                                         </div>
                                     </td>
-                                    <td class="min-w-40 px-3 py-3 font-medium text-gray-700">
-                                        <AppSelect
-                                            v-model="ensureAbsenceDraft(row).type"
-                                            :options="Object.entries(absenceTypeLabels).map(([value, label]) => ({ value, label }))"
-                                            @change="saveAbsenceInline(row, 0)"
-                                        />
+                                    <td class="px-3 py-3 font-medium text-gray-700">
+                                        <Link :href="route('absences.show', row.id)" class="text-indigo-600 hover:text-indigo-500">
+                                            {{ absenceTypeLabels[row.type] || displayValue(row.type) }}
+                                        </Link>
                                     </td>
-                                    <td class="min-w-64 px-3 py-3 text-gray-600">
-                                        <div class="grid gap-2" :class="absenceNeedsEndDate(ensureAbsenceDraft(row).type) ? 'sm:grid-cols-2' : ''">
-                                            <AppDateInput v-model="ensureAbsenceDraft(row).start_date" @change="saveAbsenceInline(row, 0)" />
-                                            <AppDateInput
-                                                v-if="absenceNeedsEndDate(ensureAbsenceDraft(row).type)"
-                                                v-model="ensureAbsenceDraft(row).end_date"
-                                                @change="saveAbsenceInline(row, 0)"
-                                            />
-                                        </div>
+                                    <td class="px-3 py-3 text-gray-600">
+                                        {{ dateIt(row.start_date) }}
+                                        <span v-if="row.end_date && row.end_date !== row.start_date"> - {{ dateIt(row.end_date) }}</span>
                                     </td>
-                                    <td class="min-w-52 px-3 py-3 text-gray-600">
-                                        <div v-if="absenceNeedsTime(ensureAbsenceDraft(row).type)" class="grid gap-2 sm:grid-cols-2">
-                                            <AppSelect v-model="ensureAbsenceDraft(row).start_time" :options="absenceHourOptions" placeholder="Inizio" @change="saveAbsenceInline(row, 0)" />
-                                            <AppSelect v-model="ensureAbsenceDraft(row).end_time" :options="absenceHourOptions" placeholder="Fine" @change="saveAbsenceInline(row, 0)" />
-                                        </div>
+                                    <td class="px-3 py-3 text-gray-600">
+                                        <span v-if="row.start_time || row.end_time">{{ String(row.start_time || '--:--').slice(0, 5) }} - {{ String(row.end_time || '--:--').slice(0, 5) }}</span>
                                         <span v-else>-</span>
                                     </td>
-                                    <td class="min-w-40 px-3 py-3 text-gray-600">
-                                        <input
-                                            v-if="ensureAbsenceDraft(row).type === 'sickness'"
-                                            v-model="ensureAbsenceDraft(row).inps_code"
-                                            class="form-control mt-0"
-                                            placeholder="Codice INPS"
-                                            @input="saveAbsenceInline(row)"
-                                        />
+                                    <td class="px-3 py-3 text-gray-600">
+                                        {{ row.inps_code || '-' }}
+                                    </td>
+                                    <td class="max-w-xs px-3 py-3 text-gray-600">
+                                        <div v-if="row.notes" class="line-clamp-2" v-html="row.notes"></div>
                                         <span v-else>-</span>
                                     </td>
-                                    <td class="min-w-72 max-w-sm px-3 py-3 text-gray-600">
-                                        <textarea
-                                            v-model="ensureAbsenceDraft(row).notes"
-                                            class="form-control mt-0 min-h-20"
-                                            placeholder="Note"
-                                            @input="saveAbsenceInline(row)"
-                                        ></textarea>
-                                    </td>
-                                    <td class="min-w-40 px-3 py-3">
-                                        <AppSelect
-                                            v-model="ensureAbsenceDraft(row).status"
-                                            :options="absenceStatusOptions.filter((option) => option.value !== 'all')"
-                                            @change="saveAbsenceInline(row, 0)"
-                                        />
-                                        <span :class="['mt-2 inline-flex rounded-full px-2 py-1 text-xs font-semibold', absenceStatusClass(ensureAbsenceDraft(row).status)]">{{ absenceStatusLabels[ensureAbsenceDraft(row).status] || ensureAbsenceDraft(row).status }}</span>
+                                    <td class="px-3 py-3">
+                                        <span :class="['inline-flex rounded-full px-2 py-1 text-xs font-semibold', absenceStatusClass(row.status)]">{{ absenceStatusLabels[row.status] || row.status }}</span>
                                     </td>
                                     <td class="whitespace-nowrap px-3 py-3 text-right">
-                                        <button type="button" class="action-link" @click="updateAbsenceStatus(row, 'approved')"><Check class="h-4 w-4" :stroke-width="1.7" />Approva</button>
-                                        <button type="button" class="danger-link ml-4" @click="updateAbsenceStatus(row, 'rejected')"><X class="h-4 w-4" :stroke-width="1.7" />Rifiuta</button>
+                                        <Link :href="route('absences.show', row.id)" class="action-link"><ExternalLink class="h-4 w-4" :stroke-width="1.7" />Apri</Link>
                                         <button type="button" class="danger-link ml-4" @click="remove(row)"><Trash2 class="h-4 w-4" :stroke-width="1.7" />Elimina</button>
                                     </td>
                                 </tr>

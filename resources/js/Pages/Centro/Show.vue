@@ -133,6 +133,22 @@ const weekdayOptions = [
     { value: 6, label: 'Sabato' },
     { value: 7, label: 'Domenica' },
 ];
+const absenceTypeOptions = [
+    { value: 'vacation', label: 'Ferie' },
+    { value: 'permission', label: 'Permesso' },
+    { value: 'sickness', label: 'Malattia' },
+    { value: 'late', label: 'Ritardo' },
+    { value: 'other', label: 'Altra assenza' },
+];
+const absenceStatusOptions = [
+    { value: 'pending', label: 'In attesa' },
+    { value: 'approved', label: 'Approvata' },
+    { value: 'rejected', label: 'Rifiutata' },
+];
+const absenceHourOptions = Array.from({ length: 14 }, (_, index) => {
+    const hour = String(index + 7).padStart(2, '0');
+    return { value: `${hour}:00`, label: `${hour}:00` };
+});
 const subscriptionFrequencyOptions = [
     { value: 'month', label: 'Mese/i' },
     { value: 'year', label: 'Anno/i' },
@@ -424,6 +440,20 @@ let userAutosaveSequence = 0;
 const userAvatarInput = ref(null);
 const userAvatarPreview = ref(null);
 const userAvatarForm = useForm({ avatar: null });
+const absenceForm = useForm({
+    type: props.record.type || 'vacation',
+    start_date: props.record.start_date || '',
+    end_date: props.record.end_date || props.record.start_date || '',
+    start_time: props.record.start_time ? String(props.record.start_time).slice(0, 5) : '',
+    end_time: props.record.end_time ? String(props.record.end_time).slice(0, 5) : '',
+    inps_code: props.record.inps_code || '',
+    status: props.record.status || 'pending',
+    notes: props.record.notes || '',
+});
+const absenceAutosaveState = ref('idle');
+const absenceAutosaveError = ref('');
+let absenceAutosaveTimer = null;
+let absenceAutosaveSequence = 0;
 
 function normalizeHexColor(value, fallback = '#2563eb') {
     const color = String(value || '').trim();
@@ -448,6 +478,82 @@ function backLabel() {
     }
 
     return `Torna a ${props.title}`;
+}
+
+function absenceNeedsEndDate(type = absenceForm.type) {
+    return ['vacation', 'sickness', 'other'].includes(type);
+}
+
+function absenceNeedsTime(type = absenceForm.type) {
+    return ['permission', 'late', 'other'].includes(type);
+}
+
+function absencePayload() {
+    return {
+        type: absenceForm.type,
+        start_date: absenceForm.start_date,
+        end_date: absenceNeedsEndDate() ? (absenceForm.end_date || absenceForm.start_date) : absenceForm.start_date,
+        start_time: absenceNeedsTime() ? (absenceForm.start_time || null) : null,
+        end_time: absenceNeedsTime() ? (absenceForm.end_time || null) : null,
+        inps_code: absenceForm.type === 'sickness' ? (absenceForm.inps_code || null) : null,
+        status: absenceForm.status,
+        notes: absenceForm.notes || null,
+    };
+}
+
+function saveAbsenceInline(delay = 650) {
+    if (props.section !== 'absences') return;
+    if (!absenceForm.start_date) return;
+
+    window.clearTimeout(absenceAutosaveTimer);
+    absenceAutosaveState.value = 'queued';
+    absenceAutosaveError.value = '';
+
+    absenceAutosaveTimer = window.setTimeout(() => {
+        const sequence = ++absenceAutosaveSequence;
+        absenceAutosaveState.value = 'saving';
+        absenceForm.transform(() => absencePayload()).put(route('absences.update', props.record.id), {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                if (sequence !== absenceAutosaveSequence) return;
+                absenceAutosaveState.value = 'saved';
+                window.setTimeout(() => {
+                    if (absenceAutosaveState.value === 'saved') absenceAutosaveState.value = 'idle';
+                }, 1600);
+            },
+            onError: () => {
+                if (sequence !== absenceAutosaveSequence) return;
+                absenceAutosaveState.value = 'error';
+                absenceAutosaveError.value = 'Non salvato';
+            },
+            onFinish: () => absenceForm.transform((data) => data),
+        });
+    }, delay);
+}
+
+function setAbsenceStatus(status) {
+    absenceForm.status = status;
+    router.patch(route('absences.status.update', props.record.id), { status }, {
+        preserveScroll: true,
+        preserveState: true,
+    });
+}
+
+function deleteAbsenceFromDetail() {
+    confirmAction.value = {
+        title: 'Elimina richiesta',
+        description: 'Vuoi eliminare questa richiesta assenza?',
+        keyword: 'ELIMINA',
+        button: 'Elimina',
+        danger: true,
+        action: () => router.delete(route('absences.destroy', props.record.id), {
+            preserveScroll: true,
+            onSuccess: () => router.visit(route('absences.index')),
+            onFinish: closeConfirm,
+        }),
+    };
+    confirmText.value = '';
 }
 
 function updateTaskDescriptionFromEditor() {
@@ -2049,7 +2155,7 @@ onUnmounted(() => {
                     <div class="mt-1 flex items-center gap-2">
                         <span v-if="section === 'projects'" class="h-3 w-3 rounded-full" :style="{ backgroundColor: normalizeHexColor(projectForm.color) }"></span>
                         <h2 class="text-xl font-semibold leading-tight text-gray-800">
-                            {{ section === 'projects' ? projectForm.name : (section === 'clients' ? clientForm.name : (section === 'users' ? userForm.name : (record.name || record.title || record.number))) }}
+                            {{ section === 'projects' ? projectForm.name : (section === 'clients' ? clientForm.name : (section === 'users' ? userForm.name : (section === 'absences' ? 'Richiesta assenza' : (record.name || record.title || record.number)))) }}
                         </h2>
                     </div>
                 </div>
@@ -3115,7 +3221,95 @@ onUnmounted(() => {
                     </section>
                 </section>
 
-                <section v-if="section !== 'clients' && section !== 'tasks' && section !== 'projects' && section !== 'users'" class="surface rounded-md p-5">
+                <section v-if="section === 'absences'" class="grid gap-6 lg:grid-cols-[1fr_340px]">
+                    <section class="surface rounded-md p-5">
+                        <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Richiesta assenza</h3>
+                                <p class="mt-1 text-sm text-gray-500">Le modifiche si salvano automaticamente mentre lavori.</p>
+                            </div>
+                            <div
+                                v-if="absenceAutosaveState !== 'idle'"
+                                :class="[
+                                    'inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold transition',
+                                    absenceAutosaveState === 'saving' || absenceAutosaveState === 'queued' ? 'bg-sky-50 text-sky-700' : '',
+                                    absenceAutosaveState === 'saved' ? 'bg-emerald-50 text-emerald-700' : '',
+                                    absenceAutosaveState === 'error' ? 'bg-red-50 text-red-700' : '',
+                                ]"
+                            >
+                                <span v-if="absenceAutosaveState === 'queued'">In attesa...</span>
+                                <span v-else-if="absenceAutosaveState === 'saving'">Salvataggio...</span>
+                                <span v-else-if="absenceAutosaveState === 'saved'">Salvato</span>
+                                <span v-else>{{ absenceAutosaveError || 'Errore salvataggio' }}</span>
+                            </div>
+                        </div>
+
+                        <div class="grid gap-4 md:grid-cols-3">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Tipo richiesta</label>
+                                <AppSelect v-model="absenceForm.type" :options="absenceTypeOptions" @change="saveAbsenceInline(0)" />
+                                <div v-if="absenceForm.errors.type" class="mt-1 text-sm text-red-600">{{ absenceForm.errors.type }}</div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">{{ absenceNeedsEndDate() ? 'Dal' : 'Giorno' }}</label>
+                                <AppDateInput v-model="absenceForm.start_date" @change="saveAbsenceInline(0)" />
+                                <div v-if="absenceForm.errors.start_date" class="mt-1 text-sm text-red-600">{{ absenceForm.errors.start_date }}</div>
+                            </div>
+                            <div v-if="absenceNeedsEndDate()">
+                                <label class="block text-sm font-medium text-gray-700">Al</label>
+                                <AppDateInput v-model="absenceForm.end_date" @change="saveAbsenceInline(0)" />
+                                <div v-if="absenceForm.errors.end_date" class="mt-1 text-sm text-red-600">{{ absenceForm.errors.end_date }}</div>
+                            </div>
+                            <div v-if="absenceNeedsTime()">
+                                <label class="block text-sm font-medium text-gray-700">Ora inizio</label>
+                                <AppSelect v-model="absenceForm.start_time" :options="absenceHourOptions" placeholder="Seleziona ora" @change="saveAbsenceInline(0)" />
+                            </div>
+                            <div v-if="absenceNeedsTime()">
+                                <label class="block text-sm font-medium text-gray-700">Ora fine</label>
+                                <AppSelect v-model="absenceForm.end_time" :options="absenceHourOptions" placeholder="Seleziona ora" @change="saveAbsenceInline(0)" />
+                            </div>
+                            <div v-if="absenceForm.type === 'sickness'">
+                                <label class="block text-sm font-medium text-gray-700">Codice INPS</label>
+                                <input v-model="absenceForm.inps_code" class="form-control" placeholder="Codice INPS" @input="saveAbsenceInline()" />
+                                <div v-if="absenceForm.errors.inps_code" class="mt-1 text-sm text-red-600">{{ absenceForm.errors.inps_code }}</div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Stato</label>
+                                <AppSelect v-model="absenceForm.status" :options="absenceStatusOptions" @change="saveAbsenceInline(0)" />
+                            </div>
+                            <div class="md:col-span-3">
+                                <label class="block text-sm font-medium text-gray-700">Note</label>
+                                <textarea v-model="absenceForm.notes" rows="6" class="form-control" @input="saveAbsenceInline()"></textarea>
+                            </div>
+                        </div>
+                    </section>
+
+                    <aside class="space-y-4">
+                        <section class="surface rounded-md p-5">
+                            <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Persona</h3>
+                            <div class="mt-4 flex items-center gap-3">
+                                <UserAvatar :user="related.user" size="md" />
+                                <div class="min-w-0">
+                                    <div class="truncate text-sm font-semibold text-gray-900">{{ related.user?.name }}</div>
+                                    <div class="truncate text-xs text-gray-500">{{ related.user?.email }}</div>
+                                </div>
+                            </div>
+                        </section>
+                        <section class="surface rounded-md p-5">
+                            <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Azioni</h3>
+                            <div class="mt-4 grid gap-2">
+                                <button v-if="absenceForm.status !== 'approved'" type="button" class="btn btn-primary justify-center" @click="setAbsenceStatus('approved')">Approva</button>
+                                <button v-if="absenceForm.status !== 'rejected'" type="button" class="btn btn-outline justify-center" @click="setAbsenceStatus('rejected')">Rifiuta</button>
+                                <button type="button" class="btn border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 justify-center" @click="deleteAbsenceFromDetail">
+                                    <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                    Elimina
+                                </button>
+                            </div>
+                        </section>
+                    </aside>
+                </section>
+
+                <section v-if="section !== 'clients' && section !== 'tasks' && section !== 'projects' && section !== 'users' && section !== 'absences'" class="surface rounded-md p-5">
                     <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Dettagli</h3>
                     <dl class="grid gap-4 md:grid-cols-2">
                         <div v-for="[key, value] in visibleEntries" :key="key" class="rounded-md border border-gray-100 bg-gray-50 px-3 py-2">

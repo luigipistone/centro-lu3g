@@ -534,16 +534,26 @@ class CentroPageController extends Controller
         if ($section === 'users') {
             $this->ensureSuperadmin($request);
         }
+        if ($section === 'absences') {
+            $this->ensureAdmin($request);
+        }
 
         $config = $this->config($section);
-        $record = $section === 'users'
-            ? DB::table('users')
+        $record = match ($section) {
+            'users' => DB::table('users')
                 ->leftJoin('user_roles', 'user_roles.user_id', '=', 'users.id')
                 ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
                 ->where('users.id', $id)
                 ->select('users.*', 'user_roles.role', 'profiles.avatar_url', 'profiles.job_title', 'profiles.phone', 'profiles.bio', 'profiles.completion_effect', 'profiles.smartworking_day')
-                ->first()
-            : DB::table($config['table'])->where('id', $id)->first();
+                ->first(),
+            'absences' => DB::table('absence_requests')
+                ->leftJoin('users', 'users.id', '=', 'absence_requests.user_id')
+                ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
+                ->where('absence_requests.id', $id)
+                ->select('absence_requests.*', 'users.name as user_name', 'users.email as user_email', 'profiles.avatar_url as user_avatar_url')
+                ->first(),
+            default => DB::table($config['table'])->where('id', $id)->first(),
+        };
         abort_if(! $record, 404);
 
         $related = match ($section) {
@@ -594,6 +604,14 @@ class CentroPageController extends Controller
             ],
             'users' => [
                 'roleOptions' => ['superadmin', 'admin', 'editor', 'guest'],
+            ],
+            'absences' => [
+                'user' => [
+                    'id' => $record->user_id,
+                    'name' => $record->user_name,
+                    'email' => $record->user_email,
+                    'avatar_url' => $record->user_avatar_url,
+                ],
             ],
             default => [],
         };
@@ -3127,10 +3145,6 @@ class CentroPageController extends Controller
     private function notifyUsers(iterable $userIds, ?string $actorId, string $type, string $message, ?string $taskId = null): void
     {
         foreach (collect($userIds)->filter()->unique()->values() as $userId) {
-            if ($actorId && $userId === $actorId) {
-                continue;
-            }
-
             DB::table('notifications')->insert([
                 'id' => (string) str()->uuid(),
                 'user_id' => $userId,
