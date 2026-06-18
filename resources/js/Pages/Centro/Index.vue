@@ -3792,8 +3792,24 @@ function visibleCalendarTasks(cell) {
                                         <span :class="['inline-flex rounded-full px-2 py-1 text-xs font-semibold', absenceStatusClass(row.status)]">{{ absenceStatusLabels[row.status] || row.status }}</span>
                                     </td>
                                     <td class="whitespace-nowrap px-3 py-3 text-right">
-                                        <Link :href="route('absences.show', row.id)" class="action-link"><ExternalLink class="h-4 w-4" :stroke-width="1.7" />Apri</Link>
-                                        <button type="button" class="danger-link ml-4" @click="remove(row)"><Trash2 class="h-4 w-4" :stroke-width="1.7" />Elimina</button>
+                                        <div class="inline-flex items-center justify-end gap-1">
+                                            <Link :href="route('absences.show', row.id)" class="icon-btn h-9 w-9" title="Apri richiesta" aria-label="Apri richiesta">
+                                                <ExternalLink class="h-4 w-4" :stroke-width="1.7" />
+                                            </Link>
+                                            <button
+                                                v-if="row.status !== 'approved'"
+                                                type="button"
+                                                class="icon-btn h-9 w-9 text-emerald-600 hover:bg-emerald-50"
+                                                title="Approva richiesta"
+                                                aria-label="Approva richiesta"
+                                                @click="updateAbsenceStatus(row, 'approved')"
+                                            >
+                                                <Check class="h-4 w-4" :stroke-width="1.7" />
+                                            </button>
+                                            <button type="button" class="icon-btn h-9 w-9 text-red-600 hover:bg-red-50" title="Elimina richiesta" aria-label="Elimina richiesta" @click="remove(row)">
+                                                <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                                 <tr v-if="!absenceRows.length">
