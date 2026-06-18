@@ -1541,7 +1541,7 @@ class CentroPageController extends Controller
         return DB::table('users')
             ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
             ->orderBy('users.name')
-            ->get(['users.id', 'users.name', 'users.email', 'profiles.avatar_url']);
+            ->get(['users.id', 'users.name', 'users.email', 'profiles.avatar_url', 'profiles.job_title', 'profiles.smartworking_day']);
     }
 
     private function taskSubtaskRows(string $taskId)
