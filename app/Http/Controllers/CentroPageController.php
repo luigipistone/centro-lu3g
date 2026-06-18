@@ -612,25 +612,6 @@ class CentroPageController extends Controller
                     'email' => $record->user_email,
                     'avatar_url' => $record->user_avatar_url,
                 ],
-                'sameDayAbsences' => DB::table('absence_requests')
-                    ->leftJoin('users', 'users.id', '=', 'absence_requests.user_id')
-                    ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
-                    ->where('absence_requests.start_date', '<=', $record->start_date)
-                    ->where('absence_requests.end_date', '>=', $record->start_date)
-                    ->whereIn('absence_requests.status', ['pending', 'approved'])
-                    ->orderBy('absence_requests.start_time')
-                    ->orderBy('users.name')
-                    ->get([
-                        'absence_requests.id',
-                        'absence_requests.user_id',
-                        'absence_requests.type',
-                        'absence_requests.status',
-                        'absence_requests.start_time',
-                        'absence_requests.end_time',
-                        'users.name as user_name',
-                        'users.email as user_email',
-                        'profiles.avatar_url as user_avatar_url',
-                    ]),
             ],
             default => [],
         };

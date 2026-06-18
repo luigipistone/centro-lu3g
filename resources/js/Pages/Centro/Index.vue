@@ -1351,6 +1351,18 @@ const absenceStats = computed(() => ({
     rejected: props.rows.filter((row) => row.status === 'rejected').length,
     total: props.rows.length,
 }));
+const absenceTodayIso = computed(() => {
+    const today = new Date();
+    return formatCalendarDate(today.getFullYear(), today.getMonth(), today.getDate());
+});
+const absenceTodayRows = computed(() => props.rows
+    .filter((row) => row.status !== 'rejected' && isAbsenceActiveOn(row, absenceTodayIso.value))
+    .sort((a, b) => {
+        const timeCompare = String(a.start_time || '').localeCompare(String(b.start_time || ''));
+        if (timeCompare) return timeCompare;
+
+        return String(a.user_name || '').localeCompare(String(b.user_name || ''));
+    }));
 
 function absenceUser(row) {
     return {
@@ -1359,6 +1371,25 @@ function absenceUser(row) {
         email: row.user_email,
         avatar_url: row.user_avatar_url,
     };
+}
+
+function isAbsenceActiveOn(row, day) {
+    const start = String(row.start_date || '').slice(0, 10);
+    const end = String(row.end_date || row.start_date || '').slice(0, 10);
+
+    return start && day >= start && day <= end;
+}
+
+function absenceExtraInfo(row) {
+    if (['permission', 'late'].includes(row.type) && (row.start_time || row.end_time)) {
+        return `${String(row.start_time || '--:--').slice(0, 5)} - ${String(row.end_time || '--:--').slice(0, 5)}`;
+    }
+
+    if (row.type === 'sickness' && row.inps_code) {
+        return `INPS ${row.inps_code}`;
+    }
+
+    return '';
 }
 
 function absenceStatusClass(status) {
@@ -3734,6 +3765,40 @@ function visibleCalendarTasks(cell) {
                         <div class="mt-2 text-3xl font-semibold text-red-700">{{ absenceStats.rejected }}</div>
                     </div>
                 </div>
+
+                <section class="app-card">
+                    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Assenti oggi</h3>
+                            <p class="mt-1 text-sm text-gray-500">{{ dateIt(absenceTodayIso) }}</p>
+                        </div>
+                        <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">{{ absenceTodayRows.length }}</span>
+                    </div>
+                    <div v-if="absenceTodayRows.length" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                        <Link
+                            v-for="row in absenceTodayRows"
+                            :key="row.id"
+                            :href="route('absences.show', row.id)"
+                            class="group flex min-h-[86px] items-center gap-3 rounded-md border border-gray-100 bg-gray-50/80 p-3 transition duration-200 hover:-translate-y-0.5 hover:border-indigo-100 hover:bg-white hover:shadow-[0_14px_34px_rgba(15,23,42,0.08)]"
+                        >
+                            <UserAvatar :user="absenceUser(row)" size="md" />
+                            <div class="min-w-0 flex-1">
+                                <div class="truncate text-sm font-semibold text-gray-900">{{ row.user_name || 'Utente' }}</div>
+                                <div class="mt-1 flex flex-wrap items-center gap-2">
+                                    <span class="rounded-full bg-white px-2 py-1 text-xs font-semibold text-gray-700 shadow-sm ring-1 ring-gray-100">
+                                        {{ absenceTypeLabels[row.type] || displayValue(row.type) }}
+                                    </span>
+                                    <span v-if="absenceExtraInfo(row)" class="truncate text-xs font-semibold text-gray-500">
+                                        {{ absenceExtraInfo(row) }}
+                                    </span>
+                                </div>
+                            </div>
+                        </Link>
+                    </div>
+                    <p v-else class="rounded-md border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-500">
+                        Nessuna persona assente oggi.
+                    </p>
+                </section>
 
                 <section class="app-card">
                     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">

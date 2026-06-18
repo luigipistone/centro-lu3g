@@ -149,8 +149,6 @@ const absenceHourOptions = Array.from({ length: 14 }, (_, index) => {
     const hour = String(index + 7).padStart(2, '0');
     return { value: `${hour}:00`, label: `${hour}:00` };
 });
-const absenceTypeLabels = Object.fromEntries(absenceTypeOptions.map((option) => [option.value, option.label]));
-const absenceStatusLabels = Object.fromEntries(absenceStatusOptions.map((option) => [option.value, option.label]));
 const subscriptionFrequencyOptions = [
     { value: 'month', label: 'Mese/i' },
     { value: 'year', label: 'Anno/i' },
@@ -556,15 +554,6 @@ function deleteAbsenceFromDetail() {
         }),
     };
     confirmText.value = '';
-}
-
-function absenceRowUser(absence) {
-    return {
-        id: absence.user_id,
-        name: absence.user_name,
-        email: absence.user_email,
-        avatar_url: absence.user_avatar_url,
-    };
 }
 
 function updateTaskDescriptionFromEditor() {
@@ -3232,46 +3221,30 @@ onUnmounted(() => {
                     </section>
                 </section>
 
-                <section v-if="section === 'absences'" class="space-y-6">
+                <section v-if="section === 'absences'" class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
                     <section class="surface rounded-md p-5">
                         <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
                             <div>
                                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Richiesta assenza</h3>
                                 <p class="mt-1 text-sm text-gray-500">Le modifiche si salvano automaticamente mentre lavori.</p>
                             </div>
-                            <div class="flex flex-wrap items-center justify-end gap-2">
-                                <div
-                                    v-if="absenceAutosaveState !== 'idle'"
-                                    :class="[
-                                        'inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold transition',
-                                        absenceAutosaveState === 'saving' || absenceAutosaveState === 'queued' ? 'bg-sky-50 text-sky-700' : '',
-                                        absenceAutosaveState === 'saved' ? 'bg-emerald-50 text-emerald-700' : '',
-                                        absenceAutosaveState === 'error' ? 'bg-red-50 text-red-700' : '',
-                                    ]"
-                                >
-                                    <span v-if="absenceAutosaveState === 'queued'">In attesa...</span>
-                                    <span v-else-if="absenceAutosaveState === 'saving'">Salvataggio...</span>
-                                    <span v-else-if="absenceAutosaveState === 'saved'">Salvato</span>
-                                    <span v-else>{{ absenceAutosaveError || 'Errore salvataggio' }}</span>
-                                </div>
-                                <button v-if="absenceForm.status !== 'approved'" type="button" class="btn btn-primary" @click="setAbsenceStatus('approved')">Approva</button>
-                                <button v-if="absenceForm.status !== 'rejected'" type="button" class="btn btn-outline" @click="setAbsenceStatus('rejected')">Rifiuta</button>
-                                <button type="button" class="btn border border-red-200 bg-red-50 text-red-700 hover:bg-red-100" @click="deleteAbsenceFromDetail">
-                                    <Trash2 class="h-4 w-4" :stroke-width="1.7" />
-                                    Elimina
-                                </button>
+                            <div
+                                v-if="absenceAutosaveState !== 'idle'"
+                                :class="[
+                                    'inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold transition',
+                                    absenceAutosaveState === 'saving' || absenceAutosaveState === 'queued' ? 'bg-sky-50 text-sky-700' : '',
+                                    absenceAutosaveState === 'saved' ? 'bg-emerald-50 text-emerald-700' : '',
+                                    absenceAutosaveState === 'error' ? 'bg-red-50 text-red-700' : '',
+                                ]"
+                            >
+                                <span v-if="absenceAutosaveState === 'queued'">In attesa...</span>
+                                <span v-else-if="absenceAutosaveState === 'saving'">Salvataggio...</span>
+                                <span v-else-if="absenceAutosaveState === 'saved'">Salvato</span>
+                                <span v-else>{{ absenceAutosaveError || 'Errore salvataggio' }}</span>
                             </div>
                         </div>
 
-                        <div class="mb-5 flex items-center gap-3 rounded-md border border-gray-100 bg-gray-50 p-4">
-                            <UserAvatar :user="related.user" size="md" />
-                            <div class="min-w-0">
-                                <div class="truncate text-sm font-semibold text-gray-900">{{ related.user?.name }}</div>
-                                <div class="truncate text-xs text-gray-500">{{ related.user?.email }}</div>
-                            </div>
-                        </div>
-
-                        <div class="grid gap-4 md:grid-cols-4">
+                        <div class="grid gap-4 md:grid-cols-3 2xl:grid-cols-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Tipo richiesta</label>
                                 <AppSelect v-model="absenceForm.type" :options="absenceTypeOptions" @change="saveAbsenceInline(0)" />
@@ -3304,40 +3277,36 @@ onUnmounted(() => {
                                 <label class="block text-sm font-medium text-gray-700">Stato</label>
                                 <AppSelect v-model="absenceForm.status" :options="absenceStatusOptions" @change="saveAbsenceInline(0)" />
                             </div>
-                            <div class="md:col-span-4">
+                            <div class="md:col-span-3 2xl:col-span-4">
                                 <label class="block text-sm font-medium text-gray-700">Note</label>
                                 <textarea v-model="absenceForm.notes" rows="6" class="form-control" @input="saveAbsenceInline()"></textarea>
                             </div>
                         </div>
                     </section>
 
-                    <section class="surface rounded-md p-5">
-                        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                                <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Assenti nello stesso giorno</h3>
-                                <p class="mt-1 text-sm text-gray-500">{{ dateIt(absenceForm.start_date) }}</p>
-                            </div>
-                            <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">{{ related.sameDayAbsences?.length || 0 }}</span>
-                        </div>
-                        <div v-if="related.sameDayAbsences?.length" class="divide-y divide-gray-100 rounded-md border border-gray-100">
-                            <div v-for="absence in related.sameDayAbsences" :key="absence.id" class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-                                <div class="flex min-w-0 items-center gap-3">
-                                    <UserAvatar :user="absenceRowUser(absence)" size="sm" />
-                                    <div class="min-w-0">
-                                        <div class="truncate text-sm font-semibold text-gray-900">{{ absence.user_name }}</div>
-                                        <div class="text-xs text-gray-500">
-                                            {{ absenceTypeLabels[absence.type] || displayValue(absence.type) }}
-                                            <span v-if="absence.start_time || absence.end_time"> · {{ String(absence.start_time || '--:--').slice(0, 5) }} - {{ String(absence.end_time || '--:--').slice(0, 5) }}</span>
-                                        </div>
-                                    </div>
+                    <aside class="space-y-4">
+                        <section class="surface rounded-md p-5">
+                            <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Persona</h3>
+                            <div class="mt-4 flex items-center gap-3">
+                                <UserAvatar :user="related.user" size="md" />
+                                <div class="min-w-0">
+                                    <div class="truncate text-sm font-semibold text-gray-900">{{ related.user?.name }}</div>
+                                    <div class="truncate text-xs text-gray-500">{{ related.user?.email }}</div>
                                 </div>
-                                <span :class="['rounded-full px-2 py-1 text-xs font-semibold', absence.status === 'approved' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700']">
-                                    {{ absenceStatusLabels[absence.status] || displayValue(absence.status) }}
-                                </span>
                             </div>
-                        </div>
-                        <p v-else class="text-sm text-gray-500">Nessuna altra assenza registrata per questo giorno.</p>
-                    </section>
+                        </section>
+                        <section class="surface rounded-md p-5">
+                            <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Azioni</h3>
+                            <div class="mt-4 grid gap-2">
+                                <button v-if="absenceForm.status !== 'approved'" type="button" class="btn btn-primary justify-center" @click="setAbsenceStatus('approved')">Approva</button>
+                                <button v-if="absenceForm.status !== 'rejected'" type="button" class="btn btn-outline justify-center" @click="setAbsenceStatus('rejected')">Rifiuta</button>
+                                <button type="button" class="btn border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 justify-center" @click="deleteAbsenceFromDetail">
+                                    <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                    Elimina
+                                </button>
+                            </div>
+                        </section>
+                    </aside>
                 </section>
 
                 <section v-if="section !== 'clients' && section !== 'tasks' && section !== 'projects' && section !== 'users' && section !== 'absences'" class="surface rounded-md p-5">
