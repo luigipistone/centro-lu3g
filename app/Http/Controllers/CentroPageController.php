@@ -425,6 +425,8 @@ class CentroPageController extends Controller
     public function updateAbsenceStatus(Request $request, string $id): RedirectResponse
     {
         $this->ensureAdmin($request);
+        $absence = DB::table('absence_requests')->where('id', $id)->first();
+        abort_if(! $absence, 404);
 
         $payload = $request->validate([
             'status' => ['required', Rule::in(['approved', 'rejected'])],
@@ -437,7 +439,57 @@ class CentroPageController extends Controller
                 'updated_at' => now(),
             ]);
 
+        $this->notifyAbsencePeople(
+            $absence->user_id,
+            $request->user()->id,
+            'absence_status',
+            $request->user()->name.' ha '.($payload['status'] === 'approved' ? 'approvato' : 'rifiutato').' una richiesta assenza.',
+        );
+
         return back()->with('status', $payload['status'] === 'approved' ? 'Richiesta approvata.' : 'Richiesta rifiutata.');
+    }
+
+    public function updateAbsence(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        $absence = DB::table('absence_requests')->where('id', $id)->first();
+        abort_if(! $absence, 404);
+
+        $payload = $this->validatedAbsencePayload($request);
+
+        DB::table('absence_requests')
+            ->where('id', $id)
+            ->update([
+                ...$payload,
+                'updated_at' => now(),
+            ]);
+
+        $this->notifyAbsencePeople(
+            $absence->user_id,
+            $request->user()->id,
+            'absence_updated',
+            $request->user()->name.' ha modificato una richiesta assenza.',
+        );
+
+        return back()->with('status', 'Richiesta aggiornata.');
+    }
+
+    public function destroyAbsence(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        $absence = DB::table('absence_requests')->where('id', $id)->first();
+        abort_if(! $absence, 404);
+
+        DB::table('absence_requests')->where('id', $id)->delete();
+
+        $this->notifyAbsencePeople(
+            $absence->user_id,
+            $request->user()->id,
+            'absence_deleted',
+            $request->user()->name.' ha eliminato una richiesta assenza.',
+        );
+
+        return back()->with('status', 'Richiesta eliminata.');
     }
 
     public function notifications(Request $request): Response
@@ -1413,6 +1465,37 @@ class CentroPageController extends Controller
     private function ensureAdmin(Request $request): void
     {
         abort_unless(in_array($this->currentUserRole($request), ['superadmin', 'admin'], true), 403);
+    }
+
+    private function validatedAbsencePayload(Request $request): array
+    {
+        $payload = $request->validate([
+            'type' => ['required', Rule::in(['vacation', 'permission', 'sickness', 'late', 'other'])],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            'start_time' => ['nullable', 'regex:/^([01][0-9]|2[0-3]):00$/'],
+            'end_time' => ['nullable', 'regex:/^([01][0-9]|2[0-3]):00$/'],
+            'inps_code' => ['nullable', 'required_if:type,sickness', 'string', 'max:255'],
+            'status' => ['required', Rule::in(['pending', 'approved', 'rejected'])],
+            'notes' => ['nullable', 'string', 'max:6000'],
+        ]);
+
+        if (in_array($payload['type'], ['vacation', 'sickness'], true)) {
+            $payload['start_time'] = null;
+            $payload['end_time'] = null;
+        }
+
+        if (in_array($payload['type'], ['permission', 'late'], true)) {
+            $payload['end_date'] = $payload['start_date'];
+        }
+
+        $payload['end_date'] = ($payload['end_date'] ?? null) ?: $payload['start_date'];
+        $payload['start_time'] = ($payload['start_time'] ?? null) ?: null;
+        $payload['end_time'] = ($payload['end_time'] ?? null) ?: null;
+        $payload['inps_code'] = $payload['type'] === 'sickness' ? (($payload['inps_code'] ?? null) ?: null) : null;
+        $payload['notes'] = ($payload['notes'] ?? null) ?: null;
+
+        return $payload;
     }
 
     private function syncProfileAndRole(User $user, string $role): void
@@ -3003,19 +3086,51 @@ class CentroPageController extends Controller
 
     private function notifyTaskPeople(string $taskId, string $actorId, string $type, string $message): void
     {
-        $task = DB::table('tasks')->where('id', $taskId)->first();
+        $this->notifyUsers($this->taskNotificationUserIds($taskId), $actorId, $type, $message, $taskId);
+    }
+
+    private function taskNotificationUserIds(string $taskId): \Illuminate\Support\Collection
+    {
+        $task = DB::table('tasks')->where('id', $taskId)->first(['id', 'parent_task_id']);
         if (! $task) {
-            return;
+            return collect();
         }
 
-        $userIds = collect([$task->created_by])
-            ->merge(DB::table('task_assignees')->where('task_id', $taskId)->pluck('user_id'))
-            ->merge(DB::table('task_followers')->where('task_id', $taskId)->pluck('user_id'))
+        $rootTaskId = $task->parent_task_id ?: $task->id;
+        $taskIds = DB::table('tasks')
+            ->where('id', $rootTaskId)
+            ->orWhere('parent_task_id', $rootTaskId)
+            ->pluck('id');
+
+        return DB::table('task_assignees')
+            ->whereIn('task_id', $taskIds)
+            ->pluck('user_id')
+            ->merge(DB::table('task_followers')->whereIn('task_id', $taskIds)->pluck('user_id'))
+            ->filter()
+            ->unique()
+            ->values();
+    }
+
+    private function notifyAbsencePeople(string $requestUserId, ?string $actorId, string $type, string $message): void
+    {
+        $userIds = DB::table('user_roles')
+            ->whereIn('role', ['superadmin', 'admin'])
+            ->pluck('user_id')
+            ->push($requestUserId)
             ->filter()
             ->unique()
             ->values();
 
-        foreach ($userIds as $userId) {
+        $this->notifyUsers($userIds, $actorId, $type, $message);
+    }
+
+    private function notifyUsers(iterable $userIds, ?string $actorId, string $type, string $message, ?string $taskId = null): void
+    {
+        foreach (collect($userIds)->filter()->unique()->values() as $userId) {
+            if ($actorId && $userId === $actorId) {
+                continue;
+            }
+
             DB::table('notifications')->insert([
                 'id' => (string) str()->uuid(),
                 'user_id' => $userId,

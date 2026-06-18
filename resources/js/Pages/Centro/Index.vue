@@ -95,6 +95,8 @@ const billingSearch = ref('');
 const billingType = ref('all');
 const billingStatus = ref('all');
 const absenceStatus = ref('pending');
+const absenceDrafts = ref({});
+const absenceAutosaveTimers = {};
 const currentCalendarDate = ref(new Date());
 const calendarType = ref('all');
 const compactWeekend = ref(true);
@@ -1068,7 +1070,7 @@ function remove(row, action = null) {
 }
 
 function deleteTargetName() {
-    return deleteTarget.value?.name || deleteTarget.value?.title || deleteTarget.value?.number || deleteTarget.value?.email || deleteTarget.value?.client_name || 'elemento';
+    return deleteTarget.value?.name || deleteTarget.value?.title || deleteTarget.value?.number || deleteTarget.value?.email || deleteTarget.value?.client_name || deleteTarget.value?.user_name || 'elemento';
 }
 
 function cancelDelete() {
@@ -1273,6 +1275,10 @@ const absenceStatusOptions = [
     { value: 'approved', label: 'Approvate' },
     { value: 'rejected', label: 'Rifiutate' },
 ];
+const absenceHourOptions = Array.from({ length: 14 }, (_, index) => {
+    const hour = String(index + 7).padStart(2, '0');
+    return { value: `${hour}:00`, label: `${hour}:00` };
+});
 
 function roleClass(role) {
     return {
@@ -1363,7 +1369,63 @@ function absenceStatusClass(status) {
     }[status] || 'bg-gray-100 text-gray-600';
 }
 
+function absenceNeedsEndDate(type) {
+    return ['vacation', 'sickness', 'other'].includes(type);
+}
+
+function absenceNeedsTime(type) {
+    return ['permission', 'late', 'other'].includes(type);
+}
+
+function ensureAbsenceDraft(row) {
+    if (absenceDrafts.value[row.id]) return absenceDrafts.value[row.id];
+
+    absenceDrafts.value = {
+        ...absenceDrafts.value,
+        [row.id]: {
+            type: row.type || 'vacation',
+            start_date: row.start_date || '',
+            end_date: row.end_date || row.start_date || '',
+            start_time: row.start_time ? String(row.start_time).slice(0, 5) : '',
+            end_time: row.end_time ? String(row.end_time).slice(0, 5) : '',
+            inps_code: row.inps_code || '',
+            status: row.status || 'pending',
+            notes: row.notes || '',
+        },
+    };
+
+    return absenceDrafts.value[row.id];
+}
+
+function absencePayload(row) {
+    const draft = ensureAbsenceDraft(row);
+    const type = draft.type || 'vacation';
+
+    return {
+        type,
+        start_date: draft.start_date || row.start_date,
+        end_date: absenceNeedsEndDate(type) ? (draft.end_date || draft.start_date || row.start_date) : (draft.start_date || row.start_date),
+        start_time: absenceNeedsTime(type) ? (draft.start_time || null) : null,
+        end_time: absenceNeedsTime(type) ? (draft.end_time || null) : null,
+        inps_code: type === 'sickness' ? (draft.inps_code || null) : null,
+        status: draft.status || 'pending',
+        notes: draft.notes || null,
+    };
+}
+
+function saveAbsenceInline(row, delay = 650) {
+    window.clearTimeout(absenceAutosaveTimers[row.id]);
+    absenceAutosaveTimers[row.id] = window.setTimeout(() => {
+        router.put(route('absences.update', row.id), absencePayload(row), {
+            preserveScroll: true,
+            preserveState: true,
+            only: ['rows', 'errors', 'flash'],
+        });
+    }, delay);
+}
+
 function updateAbsenceStatus(row, status) {
+    ensureAbsenceDraft(row).status = status;
     router.patch(route('absences.status.update', row.id), { status }, {
         preserveScroll: true,
         preserveState: true,
@@ -2349,6 +2411,28 @@ onMounted(() => {
         centerCalendarScroll();
     }
 });
+
+watch(
+    () => props.rows,
+    (rows) => {
+        if (props.section !== 'absences') return;
+        const nextDrafts = {};
+        (rows || []).forEach((row) => {
+            nextDrafts[row.id] = absenceDrafts.value[row.id] || {
+                type: row.type || 'vacation',
+                start_date: row.start_date || '',
+                end_date: row.end_date || row.start_date || '',
+                start_time: row.start_time ? String(row.start_time).slice(0, 5) : '',
+                end_time: row.end_time ? String(row.end_time).slice(0, 5) : '',
+                inps_code: row.inps_code || '',
+                status: row.status || 'pending',
+                notes: row.notes || '',
+            };
+        });
+        absenceDrafts.value = nextDrafts;
+    },
+    { immediate: true },
+);
 onUnmounted(() => {
     if (typeof document !== 'undefined') {
         document.body.style.overflow = calendarBodyOverflow;
@@ -3684,29 +3768,60 @@ function visibleCalendarTasks(cell) {
                                             </div>
                                         </div>
                                     </td>
-                                    <td class="px-3 py-3 font-medium text-gray-700">{{ absenceTypeLabels[row.type] || displayValue(row.type) }}</td>
-                                    <td class="px-3 py-3 text-gray-600">
-                                        {{ dateIt(row.start_date) }}
-                                        <span v-if="row.end_date && row.end_date !== row.start_date"> - {{ dateIt(row.end_date) }}</span>
+                                    <td class="min-w-40 px-3 py-3 font-medium text-gray-700">
+                                        <AppSelect
+                                            v-model="ensureAbsenceDraft(row).type"
+                                            :options="Object.entries(absenceTypeLabels).map(([value, label]) => ({ value, label }))"
+                                            @change="saveAbsenceInline(row, 0)"
+                                        />
                                     </td>
-                                    <td class="px-3 py-3 text-gray-600">
-                                        <span v-if="row.start_time || row.end_time">{{ row.start_time || '--:--' }} - {{ row.end_time || '--:--' }}</span>
+                                    <td class="min-w-64 px-3 py-3 text-gray-600">
+                                        <div class="grid gap-2" :class="absenceNeedsEndDate(ensureAbsenceDraft(row).type) ? 'sm:grid-cols-2' : ''">
+                                            <AppDateInput v-model="ensureAbsenceDraft(row).start_date" @change="saveAbsenceInline(row, 0)" />
+                                            <AppDateInput
+                                                v-if="absenceNeedsEndDate(ensureAbsenceDraft(row).type)"
+                                                v-model="ensureAbsenceDraft(row).end_date"
+                                                @change="saveAbsenceInline(row, 0)"
+                                            />
+                                        </div>
+                                    </td>
+                                    <td class="min-w-52 px-3 py-3 text-gray-600">
+                                        <div v-if="absenceNeedsTime(ensureAbsenceDraft(row).type)" class="grid gap-2 sm:grid-cols-2">
+                                            <AppSelect v-model="ensureAbsenceDraft(row).start_time" :options="absenceHourOptions" placeholder="Inizio" @change="saveAbsenceInline(row, 0)" />
+                                            <AppSelect v-model="ensureAbsenceDraft(row).end_time" :options="absenceHourOptions" placeholder="Fine" @change="saveAbsenceInline(row, 0)" />
+                                        </div>
                                         <span v-else>-</span>
                                     </td>
-                                    <td class="px-3 py-3 text-gray-600">{{ row.inps_code || '-' }}</td>
-                                    <td class="max-w-sm px-3 py-3 text-gray-600">
-                                        <div v-if="row.notes" class="line-clamp-2" v-html="row.notes"></div>
+                                    <td class="min-w-40 px-3 py-3 text-gray-600">
+                                        <input
+                                            v-if="ensureAbsenceDraft(row).type === 'sickness'"
+                                            v-model="ensureAbsenceDraft(row).inps_code"
+                                            class="form-control mt-0"
+                                            placeholder="Codice INPS"
+                                            @input="saveAbsenceInline(row)"
+                                        />
                                         <span v-else>-</span>
                                     </td>
-                                    <td class="px-3 py-3">
-                                        <span :class="['rounded-full px-2 py-1 text-xs font-semibold', absenceStatusClass(row.status)]">{{ absenceStatusLabels[row.status] || row.status }}</span>
+                                    <td class="min-w-72 max-w-sm px-3 py-3 text-gray-600">
+                                        <textarea
+                                            v-model="ensureAbsenceDraft(row).notes"
+                                            class="form-control mt-0 min-h-20"
+                                            placeholder="Note"
+                                            @input="saveAbsenceInline(row)"
+                                        ></textarea>
+                                    </td>
+                                    <td class="min-w-40 px-3 py-3">
+                                        <AppSelect
+                                            v-model="ensureAbsenceDraft(row).status"
+                                            :options="absenceStatusOptions.filter((option) => option.value !== 'all')"
+                                            @change="saveAbsenceInline(row, 0)"
+                                        />
+                                        <span :class="['mt-2 inline-flex rounded-full px-2 py-1 text-xs font-semibold', absenceStatusClass(ensureAbsenceDraft(row).status)]">{{ absenceStatusLabels[ensureAbsenceDraft(row).status] || ensureAbsenceDraft(row).status }}</span>
                                     </td>
                                     <td class="whitespace-nowrap px-3 py-3 text-right">
-                                        <template v-if="row.status === 'pending'">
-                                            <button type="button" class="action-link" @click="updateAbsenceStatus(row, 'approved')"><Check class="h-4 w-4" :stroke-width="1.7" />Approva</button>
-                                            <button type="button" class="danger-link ml-4" @click="updateAbsenceStatus(row, 'rejected')"><X class="h-4 w-4" :stroke-width="1.7" />Rifiuta</button>
-                                        </template>
-                                        <span v-else class="text-xs text-gray-400">Gestita</span>
+                                        <button type="button" class="action-link" @click="updateAbsenceStatus(row, 'approved')"><Check class="h-4 w-4" :stroke-width="1.7" />Approva</button>
+                                        <button type="button" class="danger-link ml-4" @click="updateAbsenceStatus(row, 'rejected')"><X class="h-4 w-4" :stroke-width="1.7" />Rifiuta</button>
+                                        <button type="button" class="danger-link ml-4" @click="remove(row)"><Trash2 class="h-4 w-4" :stroke-width="1.7" />Elimina</button>
                                     </td>
                                 </tr>
                                 <tr v-if="!absenceRows.length">

@@ -114,8 +114,10 @@ class ProfileController extends Controller
             $payload['inps_code'] = null;
         }
 
+        $absenceId = (string) str()->uuid();
+
         DB::table('absence_requests')->insert([
-            'id' => (string) str()->uuid(),
+            'id' => $absenceId,
             'user_id' => $request->user()->id,
             'type' => $payload['type'],
             'start_date' => $payload['start_date'],
@@ -129,16 +131,38 @@ class ProfileController extends Controller
             'updated_at' => now(),
         ]);
 
+        $this->notifyAbsencePeople(
+            $request->user()->id,
+            $request->user()->id,
+            'absence_created',
+            $request->user()->name.' ha inviato una richiesta assenza.',
+        );
+
         return Redirect::route('profile.edit')->with('status', 'Richiesta inviata.');
     }
 
     public function destroyAbsence(Request $request, string $id): RedirectResponse
     {
+        $absence = DB::table('absence_requests')
+            ->where('id', $id)
+            ->where('user_id', $request->user()->id)
+            ->where('status', 'pending')
+            ->first();
+
         DB::table('absence_requests')
             ->where('id', $id)
             ->where('user_id', $request->user()->id)
             ->where('status', 'pending')
             ->delete();
+
+        if ($absence) {
+            $this->notifyAbsencePeople(
+                $request->user()->id,
+                $request->user()->id,
+                'absence_deleted',
+                $request->user()->name.' ha annullato una richiesta assenza.',
+            );
+        }
 
         return Redirect::route('profile.edit')->with('status', 'Richiesta annullata.');
     }
@@ -151,6 +175,35 @@ class ProfileController extends Controller
         abort_unless(is_file($path), 404);
 
         return response()->file($path);
+    }
+
+    private function notifyAbsencePeople(string $requestUserId, ?string $actorId, string $type, string $message): void
+    {
+        $userIds = DB::table('user_roles')
+            ->whereIn('role', ['superadmin', 'admin'])
+            ->pluck('user_id')
+            ->push($requestUserId)
+            ->filter()
+            ->unique()
+            ->values();
+
+        foreach ($userIds as $userId) {
+            if ($actorId && $userId === $actorId) {
+                continue;
+            }
+
+            DB::table('notifications')->insert([
+                'id' => (string) str()->uuid(),
+                'user_id' => $userId,
+                'actor_id' => $actorId,
+                'task_id' => null,
+                'type' => $type,
+                'message' => $message,
+                'read' => false,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
     }
 
     /**
