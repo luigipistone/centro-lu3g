@@ -407,6 +407,7 @@ class CentroPageController extends Controller
 
     public function notifications(Request $request): Response
     {
+        $this->archiveExpiredNotifications($request->user()->id);
         $this->purgeExpiredArchivedNotifications($request->user()->id);
 
         $archived = $request->boolean('archived');
@@ -2194,6 +2195,15 @@ class CentroPageController extends Controller
             ->where('archived_at', '<', now()->subDays(30))
             ->when($userId, fn ($query) => $query->where('user_id', $userId))
             ->delete();
+    }
+
+    private function archiveExpiredNotifications(?string $userId = null): void
+    {
+        DB::table('notifications')
+            ->whereNull('archived_at')
+            ->where('created_at', '<', now()->subDays(30))
+            ->when($userId, fn ($query) => $query->where('user_id', $userId))
+            ->update(['archived_at' => now(), 'read' => true, 'updated_at' => now()]);
     }
 
     public function duplicateTask(Request $request, string $id): RedirectResponse

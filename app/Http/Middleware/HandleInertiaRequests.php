@@ -31,6 +31,10 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         $user = $request->user();
+        if ($user) {
+            $this->maintainNotifications($user->id);
+        }
+
         $completionEffect = $user ? DB::table('profiles')->where('user_id', $user->id)->value('completion_effect') : null;
         if (! in_array($completionEffect, ['balloons', 'fireworks', 'snow', 'glitch'], true)) {
             $completionEffect = 'balloons';
@@ -68,5 +72,20 @@ class HandleInertiaRequests extends Middleware
                 'created_id' => fn () => $request->session()->get('created_id'),
             ],
         ];
+    }
+
+    private function maintainNotifications(string $userId): void
+    {
+        DB::table('notifications')
+            ->where('user_id', $userId)
+            ->whereNull('archived_at')
+            ->where('created_at', '<', now()->subDays(30))
+            ->update(['archived_at' => now(), 'read' => true, 'updated_at' => now()]);
+
+        DB::table('notifications')
+            ->where('user_id', $userId)
+            ->whereNotNull('archived_at')
+            ->where('archived_at', '<', now()->subDays(30))
+            ->delete();
     }
 }

@@ -66,7 +66,7 @@ function playCompletionEffect(event = null) {
     window.clearTimeout(completionEffectTimer);
     completionEffectTimer = window.setTimeout(() => {
         completionEffect.value = null;
-    }, 3400);
+    }, 5600);
 }
 
 function refreshNotificationPermission() {
@@ -122,6 +122,16 @@ function openNotification(notification) {
     router.patch(route('notifications.read', notification.id), {}, {
         preserveScroll: true,
         onFinish: () => router.visit(notificationHref(notification)),
+    });
+}
+
+function markAllNotificationsReadFromMenu() {
+    router.patch(route('notifications.read-all'), {}, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => {
+            router.reload({ only: ['notifications'], preserveScroll: true, preserveState: true });
+        },
     });
 }
 
@@ -236,7 +246,17 @@ const groups = [
                         >
                             <div class="flex items-center justify-between border-b border-white/60 px-3 py-2">
                                 <span class="text-sm font-semibold text-gray-900">Notifiche</span>
-                                <Link :href="route('notifications.index')" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="notificationMenuOpen = false">Vedi tutte</Link>
+                                <div class="flex items-center gap-3">
+                                    <button
+                                        v-if="notificationBadgeCount"
+                                        type="button"
+                                        class="text-xs font-medium text-gray-500 transition hover:text-indigo-600"
+                                        @click="markAllNotificationsReadFromMenu"
+                                    >
+                                        Segna come lette
+                                    </button>
+                                    <Link :href="route('notifications.index')" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="notificationMenuOpen = false">Vedi tutte</Link>
+                                </div>
                             </div>
                             <div v-if="notificationPermission === 'default'" class="border-b border-white/60 px-3 py-2">
                                 <button type="button" class="text-xs font-semibold text-indigo-600 transition hover:text-indigo-500" @click="enableBrowserNotifications">

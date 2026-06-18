@@ -867,7 +867,7 @@ html.dark .calendar-cell {
     border-radius: 50% 50% 46% 46%;
     background: linear-gradient(145deg, hsl(var(--hue) 88% 68%), hsl(var(--hue) 82% 48%));
     box-shadow: inset -8px -10px 18px hsl(0 0% 0% / 0.14), inset 7px 8px 12px hsl(0 0% 100% / 0.32);
-    animation: completion-balloon-rise 3.2s cubic-bezier(0.18, 0.72, 0.2, 1) forwards;
+    animation: completion-balloon-rise 5.2s cubic-bezier(0.18, 0.72, 0.2, 1) forwards;
     animation-delay: calc(var(--i) * 32ms);
 }
 
@@ -916,8 +916,8 @@ html.dark .calendar-cell {
         -30px 30px currentColor,
         -42px 0 currentColor,
         -30px -30px currentColor;
-    animation: completion-firework-pop 1.45s ease-out forwards;
-    animation-delay: calc(var(--i) * 120ms);
+    animation: completion-firework-pop 2.55s ease-out forwards;
+    animation-delay: calc(var(--i) * 180ms);
     opacity: 0;
 }
 
@@ -944,7 +944,7 @@ html.dark .calendar-cell {
     border-radius: 999px;
     background: hsl(206 100% 94% / 0.96);
     box-shadow: 0 0 14px hsl(206 100% 92% / 0.68);
-    animation: completion-snow-fall 3.35s linear forwards;
+    animation: completion-snow-fall 5.35s linear forwards;
     animation-delay: calc(var(--i) * 28ms);
 }
 
@@ -971,7 +971,7 @@ html.dark .calendar-cell {
         repeating-linear-gradient(0deg, hsl(0 0% 100% / 0.06) 0 1px, transparent 1px 4px),
         repeating-linear-gradient(90deg, hsl(185 100% 60% / 0.08) 0 2px, hsl(330 100% 58% / 0.08) 2px 4px, transparent 4px 8px),
         hsl(222 38% 6% / 0.34);
-    animation: completion-tv-glitch 1.9s steps(2, end) forwards;
+    animation: completion-tv-glitch 3.9s steps(2, end) forwards;
 }
 
 .completion-glitch-panel::before,
