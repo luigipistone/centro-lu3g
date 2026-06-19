@@ -1070,6 +1070,8 @@ function runBackup() {
 }
 
 function openRestoreBackup(run) {
+    if (!run?.restorable) return;
+
     restoreTarget.value = run;
     restoreConfirmText.value = '';
 }
@@ -4488,7 +4490,7 @@ function visibleCalendarTasks(cell) {
                         v-for="tab in settingsTabs"
                         :key="tab[0]"
                         type="button"
-                        :class="['inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-[var(--radius-sm)] px-4 py-2 text-sm font-semibold transition sm:flex-none', settingsTab === tab[0] ? 'bg-gray-900 text-white shadow-sm dark:bg-white dark:text-gray-950' : 'text-gray-600 hover:bg-white/80 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white']"
+                        :class="['settings-tab', settingsTab === tab[0] ? 'settings-tab-active' : '']"
                         @click="settingsTab = tab[0]"
                     >
                         <component :is="tab[2]" class="h-4 w-4" :stroke-width="1.7" />
@@ -4713,7 +4715,7 @@ function visibleCalendarTasks(cell) {
                                         <td class="px-3 py-3 text-right">
                                             <button
                                                 type="button"
-                                                class="icon-btn ml-auto"
+                                                :class="['icon-btn ml-auto', run.restorable ? 'restore-backup-button' : '']"
                                                 :disabled="!run.restorable"
                                                 :title="run.restorable ? 'Ripristina backup' : 'File backup non disponibile'"
                                                 @click="openRestoreBackup(run)"

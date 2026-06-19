@@ -473,6 +473,45 @@
         box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.72);
     }
 
+    .settings-tab {
+        @apply inline-flex min-h-10 flex-1 items-center justify-center gap-2 px-4 py-2 text-sm font-semibold transition sm:flex-none;
+        border: 1px solid transparent;
+        border-radius: var(--radius-sm);
+        color: hsl(var(--muted-foreground));
+        cursor: pointer;
+    }
+
+    .settings-tab:hover {
+        border-color: hsl(var(--primary-app) / 0.14);
+        background: linear-gradient(180deg, hsl(0 0% 100% / 0.88), hsl(221 100% 98% / 0.68));
+        color: hsl(var(--foreground));
+        box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.68);
+    }
+
+    .settings-tab-active,
+    .settings-tab-active:hover {
+        border-color: hsl(var(--primary-app) / 0.24);
+        background: linear-gradient(180deg, hsl(221 100% 96% / 0.96), hsl(221 92% 92% / 0.72));
+        color: hsl(var(--primary-app));
+        box-shadow: 0 10px 24px hsl(var(--primary-app) / 0.13), inset 0 1px 0 hsl(0 0% 100% / 0.76);
+    }
+
+    .restore-backup-button {
+        cursor: pointer;
+        color: hsl(var(--primary-app));
+    }
+
+    .restore-backup-button:hover {
+        background: hsl(var(--primary-app) / 0.1);
+        box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.72), 0 8px 18px hsl(var(--primary-app) / 0.12);
+    }
+
+    .restore-backup-button:disabled {
+        cursor: not-allowed;
+        color: hsl(var(--muted-foreground) / 0.42);
+        opacity: 0.6;
+    }
+
     .rounded-md.bg-white.shadow-sm,
     .rounded-md.bg-white.shadow-xl,
     .rounded-md.bg-white.p-5,
@@ -729,6 +768,27 @@ html.dark .btn-ghost:hover,
 html.dark .icon-btn:hover {
     background: hsl(221 45% 24% / 0.48);
     color: hsl(216 28% 96%);
+}
+
+html.dark .settings-tab {
+    color: hsl(216 18% 72%);
+}
+
+html.dark .settings-tab:hover {
+    border-color: hsl(221 82% 66% / 0.28);
+    background: hsl(221 45% 24% / 0.48);
+    color: hsl(216 28% 96%);
+}
+
+html.dark .settings-tab-active,
+html.dark .settings-tab-active:hover {
+    border-color: hsl(221 82% 66% / 0.34);
+    background: linear-gradient(180deg, hsl(221 45% 22% / 0.78), hsl(222 28% 15% / 0.72));
+    color: hsl(216 28% 96%);
+}
+
+html.dark .restore-backup-button:hover {
+    background: hsl(221 45% 24% / 0.48);
 }
 
 html.dark .form-control,
