@@ -18,6 +18,7 @@ import {
     Bold,
     CalendarDays,
     Check,
+    ChevronDown,
     ChevronLeft,
     Copy,
     Download,
@@ -440,6 +441,7 @@ let userAutosaveSequence = 0;
 const userAvatarInput = ref(null);
 const userAvatarPreview = ref(null);
 const userAvatarForm = useForm({ avatar: null });
+const clientFiscalOpen = ref(false);
 const absenceForm = useForm({
     type: props.record.type || 'vacation',
     start_date: props.record.start_date || '',
@@ -2687,8 +2689,16 @@ onUnmounted(() => {
                             </div>
 
                             <div>
-                                <h4 class="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Dati fiscali e bancari</h4>
-                                <div class="grid gap-4 md:grid-cols-2">
+                                <button
+                                    type="button"
+                                    class="mb-3 flex w-full items-center justify-between rounded-[var(--radius-sm)] px-1 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 transition hover:bg-gray-50 hover:text-gray-700"
+                                    :aria-expanded="clientFiscalOpen"
+                                    @click="clientFiscalOpen = !clientFiscalOpen"
+                                >
+                                    <span>Dati fiscali e bancari</span>
+                                    <ChevronDown :class="['h-4 w-4 transition-transform', clientFiscalOpen ? 'rotate-180' : '']" :stroke-width="1.8" />
+                                </button>
+                                <div v-show="clientFiscalOpen" class="grid gap-4 md:grid-cols-2">
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">PEC</label>
                                         <input v-model="clientForm.pec" type="email" class="form-control" />
@@ -2727,20 +2737,87 @@ onUnmounted(() => {
                         </div>
                     </section>
 
-                    <div class="grid gap-4 md:grid-cols-3">
-                        <div class="rounded-md bg-white p-5 shadow-sm">
-                            <div class="text-xs font-medium uppercase tracking-wide text-gray-500">Progetti</div>
-                            <div class="mt-2 text-3xl font-semibold text-gray-900">{{ related.projects?.length || 0 }}</div>
+                    <section class="surface rounded-md p-5">
+                        <div class="mb-5 flex items-center justify-between">
+                            <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Referenti</h3>
+                            <span class="text-xs text-gray-500">{{ related.contacts?.length || 0 }} contatti</span>
                         </div>
-                        <div class="rounded-md bg-white p-5 shadow-sm">
-                            <div class="text-xs font-medium uppercase tracking-wide text-gray-500">Task aperti</div>
-                            <div class="mt-2 text-3xl font-semibold text-gray-900">{{ parentTaskRows(related.tasks).length }}</div>
+
+                        <form class="mb-5 grid gap-3 md:grid-cols-6" @submit.prevent="addContact">
+                            <input v-model="contactForm.first_name" class="form-control mt-0" placeholder="Nome" required />
+                            <input v-model="contactForm.last_name" class="form-control mt-0" placeholder="Cognome" required />
+                            <input v-model="contactForm.email" class="form-control mt-0" type="email" placeholder="Email" />
+                            <input v-model="contactForm.phone" class="form-control mt-0" placeholder="Telefono" />
+                            <input v-model="contactForm.role" class="form-control mt-0" placeholder="Ruolo" />
+                            <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
+                        </form>
+
+                        <div v-if="related.contacts?.length" class="grid gap-3 md:grid-cols-2">
+                            <article v-for="contact in related.contacts" :key="contact.id" class="rounded-md border border-gray-100 bg-gray-50 p-4 transition hover:border-indigo-100 hover:bg-white">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="min-w-0 flex-1 space-y-3">
+                                        <div class="grid gap-2 sm:grid-cols-2">
+                                            <input
+                                                v-if="contactDrafts[contact.id]"
+                                                v-model="contactDrafts[contact.id].first_name"
+                                                class="form-control mt-0"
+                                                placeholder="Nome"
+                                                @input="saveContactInline(contact)"
+                                            />
+                                            <input
+                                                v-if="contactDrafts[contact.id]"
+                                                v-model="contactDrafts[contact.id].last_name"
+                                                class="form-control mt-0"
+                                                placeholder="Cognome"
+                                                @input="saveContactInline(contact)"
+                                            />
+                                        </div>
+                                        <div class="grid gap-2 sm:grid-cols-2">
+                                            <input
+                                                v-if="contactDrafts[contact.id]"
+                                                v-model="contactDrafts[contact.id].role"
+                                                class="form-control mt-0"
+                                                placeholder="Ruolo"
+                                                @input="saveContactInline(contact)"
+                                            />
+                                            <input
+                                                v-if="contactDrafts[contact.id]"
+                                                v-model="contactDrafts[contact.id].phone"
+                                                class="form-control mt-0"
+                                                placeholder="Telefono"
+                                                @input="saveContactInline(contact)"
+                                            />
+                                        </div>
+                                        <input
+                                            v-if="contactDrafts[contact.id]"
+                                            v-model="contactDrafts[contact.id].email"
+                                            class="form-control mt-0"
+                                            type="email"
+                                            placeholder="Email"
+                                            @input="saveContactInline(contact)"
+                                        />
+                                        <textarea
+                                            v-if="contactDrafts[contact.id]"
+                                            v-model="contactDrafts[contact.id].notes"
+                                            rows="2"
+                                            class="form-control mt-0"
+                                            placeholder="Note"
+                                            @input="saveContactInline(contact)"
+                                        ></textarea>
+                                        <div v-if="contactAutosaveStates[contact.id] && contactAutosaveStates[contact.id] !== 'idle'" :class="['text-[11px] font-medium', contactAutosaveStates[contact.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
+                                            {{ autosaveLabel(contactAutosaveStates[contact.id], contactAutosaveErrors[contact.id]) }}
+                                        </div>
+                                    </div>
+                                    <button type="button" class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-red-600 transition hover:bg-red-50 hover:text-red-700" aria-label="Elimina referente" @click="removeContact(contact)">
+                                        <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                    </button>
+                                </div>
+                            </article>
                         </div>
-                        <div class="rounded-md bg-white p-5 shadow-sm">
-                            <div class="text-xs font-medium uppercase tracking-wide text-gray-500">Documenti</div>
-                            <div class="mt-2 text-3xl font-semibold text-gray-900">{{ related.documents?.length || 0 }}</div>
-                        </div>
-                    </div>
+                        <p v-else class="rounded-md border border-dashed border-gray-300 bg-white px-4 py-8 text-center text-sm text-gray-500">
+                            Nessun referente inserito.
+                        </p>
+                    </section>
 
                     <section class="surface rounded-md p-5">
                         <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -3394,7 +3471,7 @@ onUnmounted(() => {
                                 <h3 class="text-sm font-semibold text-gray-900">Servizi collegati</h3>
                                 <p class="mt-1 text-xs text-gray-500">Clicca un servizio per attivarlo o disattivarlo.</p>
                             </div>
-                            <span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500">{{ clientServiceIds.length }} attivi</span>
+                            <span class="whitespace-nowrap rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500">{{ clientServiceIds.length }} attivi</span>
                         </div>
                         <div class="mt-4 flex flex-wrap gap-2">
                             <button
@@ -3568,86 +3645,6 @@ onUnmounted(() => {
                         </div>
                     </section>
                 </aside>
-
-                <section v-if="section === 'clients'" class="surface rounded-md p-5 lg:col-span-2">
-                    <div class="mb-5 flex items-center justify-between">
-                        <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Referenti</h3>
-                        <span class="text-xs text-gray-500">{{ related.contacts?.length || 0 }} contatti</span>
-                    </div>
-
-                    <form class="mb-5 grid gap-3 md:grid-cols-6" @submit.prevent="addContact">
-                        <input v-model="contactForm.first_name" class="form-control mt-0" placeholder="Nome" required />
-                        <input v-model="contactForm.last_name" class="form-control mt-0" placeholder="Cognome" required />
-                        <input v-model="contactForm.email" class="form-control mt-0" type="email" placeholder="Email" />
-                        <input v-model="contactForm.phone" class="form-control mt-0" placeholder="Telefono" />
-                        <input v-model="contactForm.role" class="form-control mt-0" placeholder="Ruolo" />
-                        <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
-                    </form>
-
-                    <div v-if="related.contacts?.length" class="grid gap-3 md:grid-cols-2">
-                        <article v-for="contact in related.contacts" :key="contact.id" class="rounded-md border border-gray-100 bg-gray-50 p-4 transition hover:border-indigo-100 hover:bg-white">
-                            <div class="flex items-start justify-between gap-3">
-                                <div class="min-w-0 flex-1 space-y-3">
-                                    <div class="grid gap-2 sm:grid-cols-2">
-                                        <input
-                                            v-if="contactDrafts[contact.id]"
-                                            v-model="contactDrafts[contact.id].first_name"
-                                            class="form-control mt-0"
-                                            placeholder="Nome"
-                                            @input="saveContactInline(contact)"
-                                        />
-                                        <input
-                                            v-if="contactDrafts[contact.id]"
-                                            v-model="contactDrafts[contact.id].last_name"
-                                            class="form-control mt-0"
-                                            placeholder="Cognome"
-                                            @input="saveContactInline(contact)"
-                                        />
-                                    </div>
-                                    <div class="grid gap-2 sm:grid-cols-2">
-                                        <input
-                                            v-if="contactDrafts[contact.id]"
-                                            v-model="contactDrafts[contact.id].role"
-                                            class="form-control mt-0"
-                                            placeholder="Ruolo"
-                                            @input="saveContactInline(contact)"
-                                        />
-                                        <input
-                                            v-if="contactDrafts[contact.id]"
-                                            v-model="contactDrafts[contact.id].phone"
-                                            class="form-control mt-0"
-                                            placeholder="Telefono"
-                                            @input="saveContactInline(contact)"
-                                        />
-                                    </div>
-                                    <input
-                                        v-if="contactDrafts[contact.id]"
-                                        v-model="contactDrafts[contact.id].email"
-                                        class="form-control mt-0"
-                                        type="email"
-                                        placeholder="Email"
-                                        @input="saveContactInline(contact)"
-                                    />
-                                    <textarea
-                                        v-if="contactDrafts[contact.id]"
-                                        v-model="contactDrafts[contact.id].notes"
-                                        rows="2"
-                                        class="form-control mt-0"
-                                        placeholder="Note"
-                                        @input="saveContactInline(contact)"
-                                    ></textarea>
-                                    <div v-if="contactAutosaveStates[contact.id] && contactAutosaveStates[contact.id] !== 'idle'" :class="['text-[11px] font-medium', contactAutosaveStates[contact.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
-                                        {{ autosaveLabel(contactAutosaveStates[contact.id], contactAutosaveErrors[contact.id]) }}
-                                    </div>
-                                </div>
-                                <button type="button" class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-red-600 transition hover:bg-red-50 hover:text-red-700" aria-label="Elimina referente" @click="removeContact(contact)">
-                                    <Trash2 class="h-4 w-4" :stroke-width="1.7" />
-                                </button>
-                            </div>
-                        </article>
-                    </div>
-                    <p v-else class="text-sm text-gray-500">Nessun referente inserito.</p>
-                </section>
 
                 <section v-if="section === 'tasks' && !related.parentTask" class="surface rounded-md p-5 lg:col-span-2">
                     <div class="mb-4 flex items-center justify-between">

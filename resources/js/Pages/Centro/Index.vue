@@ -99,6 +99,9 @@ const absenceDrafts = ref({});
 const absenceAutosaveTimers = {};
 const currentCalendarDate = ref(new Date());
 const calendarType = ref('all');
+const calendarUserIds = ref([]);
+const calendarPeopleMenu = ref(null);
+const calendarPeopleMenuOpen = ref(false);
 const compactWeekend = ref(true);
 const calendarCreateDate = ref(null);
 const calendarDraggedTask = ref(null);
@@ -1321,6 +1324,36 @@ function projectUsers(project) {
     return (props.users || []).filter((user) => selected.includes(user.id));
 }
 
+const selectedCalendarFilterUsers = computed(() => (props.users || []).filter((user) => calendarUserIds.value.includes(user.id)));
+
+const calendarPeopleFilterLabel = computed(() => {
+    if (!calendarUserIds.value.length) return 'Tutte le persone';
+    if (calendarUserIds.value.length === 1) {
+        const user = selectedCalendarFilterUsers.value[0];
+        return user?.name || user?.email || '1 persona';
+    }
+
+    return `${calendarUserIds.value.length} persone`;
+});
+
+function toggleCalendarUserFilter(userId) {
+    const current = [...calendarUserIds.value];
+    const index = current.indexOf(userId);
+    if (index >= 0) {
+        current.splice(index, 1);
+    } else {
+        current.push(userId);
+    }
+    calendarUserIds.value = current;
+}
+
+function closeCalendarPeopleMenuOnOutside(event) {
+    if (!calendarPeopleMenuOpen.value) return;
+    if (calendarPeopleMenu.value?.contains(event.target)) return;
+
+    calendarPeopleMenuOpen.value = false;
+}
+
 const selectedProjectFilterUsers = computed(() => (props.users || []).filter((user) => projectUserIds.value.includes(user.id)));
 
 const projectPeopleFilterLabel = computed(() => {
@@ -2444,6 +2477,7 @@ watch(
 onMounted(() => {
     document.addEventListener('pointerdown', closeCalendarCreateMenuOnOutside, true);
     document.addEventListener('pointerdown', closeCalendarSubtaskAssigneeMenuOnOutside, true);
+    document.addEventListener('pointerdown', closeCalendarPeopleMenuOnOutside, true);
     document.addEventListener('pointerdown', closeProjectPeopleMenuOnOutside, true);
     document.addEventListener('pointerdown', closeTaskPeopleMenuOnOutside, true);
     document.addEventListener('pointerdown', closeTaskSearchSelectOnOutside, true);
@@ -2479,6 +2513,7 @@ onUnmounted(() => {
     }
     document.removeEventListener('pointerdown', closeCalendarCreateMenuOnOutside, true);
     document.removeEventListener('pointerdown', closeCalendarSubtaskAssigneeMenuOnOutside, true);
+    document.removeEventListener('pointerdown', closeCalendarPeopleMenuOnOutside, true);
     document.removeEventListener('pointerdown', closeProjectPeopleMenuOnOutside, true);
     document.removeEventListener('pointerdown', closeTaskPeopleMenuOnOutside, true);
     document.removeEventListener('pointerdown', closeTaskSearchSelectOnOutside, true);
@@ -2583,6 +2618,12 @@ function tasksForDay(date) {
             if (calendarType.value === 'task') return ['task', 'project'].includes(row.task_type || 'task');
 
             return (row.task_type || 'task') === calendarType.value;
+        })
+        .filter((row) => {
+            if (!calendarUserIds.value.length) return true;
+            const people = [...(row.assignee_ids || []), ...(row.follower_ids || [])];
+
+            return calendarUserIds.value.some((userId) => people.includes(userId));
         })
         .map((row) => ({ ...row, spanRole: taskSpanRole(row, date) }))
         .sort((a, b) => `${a.due_time || '99:99'}${a.title}`.localeCompare(`${b.due_time || '99:99'}${b.title}`));
@@ -2917,6 +2958,40 @@ function visibleCalendarTasks(cell) {
                     <div class="flex shrink-0 items-center gap-2">
                         <div class="w-80 shrink-0">
                             <AppSelect v-model="calendarType" :options="calendarTypeOptions" />
+                        </div>
+                        <div ref="calendarPeopleMenu" class="relative z-30 w-64 shrink-0">
+                            <button
+                                type="button"
+                                :class="[
+                                    'form-control mt-0 flex h-[38px] items-center justify-between gap-3 text-left',
+                                    calendarPeopleMenuOpen ? 'border-indigo-300 ring-4 ring-indigo-500/10' : '',
+                                ]"
+                                :aria-expanded="calendarPeopleMenuOpen"
+                                @click.stop="calendarPeopleMenuOpen = !calendarPeopleMenuOpen"
+                            >
+                                <span class="truncate">{{ calendarPeopleFilterLabel }}</span>
+                                <ChevronDown :class="['h-4 w-4 shrink-0 text-gray-400 transition', calendarPeopleMenuOpen ? 'rotate-180' : '']" :stroke-width="1.7" />
+                            </button>
+                            <div
+                                v-if="calendarPeopleMenuOpen"
+                                class="app-popover field-dropdown-menu absolute left-0 top-full z-[5300] mt-2 w-80 max-w-[calc(100vw-2rem)] p-3"
+                                @click.stop
+                            >
+                                <div class="people-avatar-picker max-h-64">
+                                    <button
+                                        v-for="user in users"
+                                        :key="`calendar-filter-user-${user.id}`"
+                                        type="button"
+                                        :class="personAvatarClass(calendarUserIds.includes(user.id))"
+                                        :aria-pressed="calendarUserIds.includes(user.id)"
+                                        :aria-label="`${calendarUserIds.includes(user.id) ? 'Rimuovi filtro' : 'Filtra per'} ${user.name || user.email}`"
+                                        :title="user.name || user.email"
+                                        @click="toggleCalendarUserFilter(user.id)"
+                                    >
+                                        <UserAvatar :user="user" size="md" />
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                         <label class="inline-flex h-[38px] shrink-0 items-center gap-2 rounded-[var(--radius-sm)] border border-white/70 bg-white/58 px-3 text-sm font-medium text-gray-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.62)] backdrop-blur-xl">
                             <input v-model="compactWeekend" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
