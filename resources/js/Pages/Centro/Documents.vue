@@ -395,18 +395,18 @@ function showMoreCurrentYearDocuments() {
                                     <p class="truncate text-xs text-gray-500">{{ user.email }}</p>
                                 </div>
                             </div>
-                            <div class="mt-4 grid grid-cols-3 gap-2 text-center">
-                                <div class="rounded-[var(--radius-sm)] bg-gray-50 px-2 py-2">
+                            <div class="mt-4 grid grid-cols-3 gap-1.5 text-center">
+                                <div class="rounded-[var(--radius-sm)] bg-gray-50 px-1.5 py-1.5">
                                     <p class="text-sm font-semibold text-gray-900">{{ user.documents_count }}</p>
-                                    <p class="text-[10px] font-semibold uppercase tracking-[0.08em] text-gray-400">Totali</p>
+                                    <p class="whitespace-nowrap text-[9px] font-semibold uppercase tracking-normal text-gray-400">Totali</p>
                                 </div>
-                                <div class="rounded-[var(--radius-sm)] bg-emerald-50 px-2 py-2">
+                                <div class="rounded-[var(--radius-sm)] bg-emerald-50 px-1.5 py-1.5">
                                     <p class="text-sm font-semibold text-emerald-700">{{ user.read_count }}</p>
-                                    <p class="text-[10px] font-semibold uppercase tracking-[0.08em] text-emerald-500">Letti</p>
+                                    <p class="whitespace-nowrap text-[9px] font-semibold uppercase tracking-normal text-emerald-500">Letti</p>
                                 </div>
-                                <div class="rounded-[var(--radius-sm)] bg-amber-50 px-2 py-2">
+                                <div class="rounded-[var(--radius-sm)] bg-amber-50 px-1.5 py-1.5">
                                     <p class="text-sm font-semibold text-amber-700">{{ user.unread_count }}</p>
-                                    <p class="text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-500">Da leggere</p>
+                                    <p class="whitespace-nowrap text-[9px] font-semibold uppercase tracking-normal text-amber-500">Da leggere</p>
                                 </div>
                             </div>
                         </Link>
