@@ -82,7 +82,7 @@ const props = defineProps({
     serviceName: String,
 });
 
-const AUTOSAVE_IDLE_DELAY = 1400;
+const AUTOSAVE_IDLE_DELAY = 2500;
 
 function autosaveDelay(delay = AUTOSAVE_IDLE_DELAY) {
     return Number(delay) > 0 ? Number(delay) : AUTOSAVE_IDLE_DELAY;
