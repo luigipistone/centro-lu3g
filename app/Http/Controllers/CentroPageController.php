@@ -1479,6 +1479,8 @@ class CentroPageController extends Controller
 
         $user->name = $payload['name'];
         $user->email = $payload['email'];
+        $previousSmartworkingDay = DB::table('profiles')->where('user_id', $user->id)->value('smartworking_day');
+        $nextSmartworkingDay = ($payload['smartworking_day'] ?? null) === 'none' ? null : ($payload['smartworking_day'] ?? null);
         if (! empty($payload['password'])) {
             $user->password = Hash::make($payload['password']);
         }
@@ -1494,11 +1496,20 @@ class CentroPageController extends Controller
                 'phone' => $payload['phone'] ?? null,
                 'bio' => $payload['bio'] ?? null,
                 'completion_effect' => $payload['completion_effect'] ?? 'balloons',
-                'smartworking_day' => ($payload['smartworking_day'] ?? null) === 'none' ? null : ($payload['smartworking_day'] ?? null),
+                'smartworking_day' => $nextSmartworkingDay,
                 'updated_at' => now(),
                 'created_at' => now(),
             ],
         );
+
+        if ($previousSmartworkingDay !== $nextSmartworkingDay && $request->user()->id !== $user->id) {
+            $this->notifyUsers(
+                [$user->id],
+                $request->user()->id,
+                'profile_smartworking_updated',
+                $request->user()->name.' ha aggiornato il tuo giorno di smart working: '.$this->smartworkingDayLabel($nextSmartworkingDay).'.',
+            );
+        }
 
         return back()->with('status', 'Utente aggiornato.');
     }
@@ -3226,6 +3237,17 @@ class CentroPageController extends Controller
                 'updated_at' => now(),
             ]);
         }
+    }
+
+    private function smartworkingDayLabel(?string $day): string
+    {
+        return [
+            'monday' => 'Lunedì',
+            'tuesday' => 'Martedì',
+            'wednesday' => 'Mercoledì',
+            'thursday' => 'Giovedì',
+            'friday' => 'Venerdì',
+        ][$day] ?? 'non impostato';
     }
 
     private function storeServiceUpdate(Request $request, string $section): RedirectResponse
