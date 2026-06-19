@@ -32,7 +32,7 @@ export async function registerCentroServiceWorker() {
     }
 
     try {
-        return await withTimeout(navigator.serviceWorker.register('/sw.js'), 1800, null);
+        return await withTimeout(navigator.serviceWorker.register('/sw.js'), 10000, null);
     } catch (error) {
         console.warn('Service worker non registrato', error);
         return null;
@@ -52,21 +52,23 @@ async function subscribeCentroPush(vapidPublicKey) {
         return false;
     }
 
+    await registerCentroServiceWorker();
+
     const registration = await Promise.race([
         navigator.serviceWorker.ready,
-        new Promise((resolve) => window.setTimeout(() => resolve(null), 1800)),
+        new Promise((resolve) => window.setTimeout(() => resolve(null), 10000)),
     ]);
     if (!registration) return false;
 
-    const existingSubscription = await withTimeout(registration.pushManager.getSubscription(), 1800, null);
+    const existingSubscription = await withTimeout(registration.pushManager.getSubscription(), 8000, null);
     const subscription = existingSubscription || await withTimeout(registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-    }), 3500, null);
+    }), 15000, null);
 
     if (!subscription) return false;
 
-    const response = await withTimeout(window.axios.post('/push-subscriptions', subscription.toJSON()), 3500, null);
+    const response = await withTimeout(window.axios.post('/push-subscriptions', subscription.toJSON()), 10000, null);
     if (!response) return false;
 
     return true;
@@ -163,7 +165,7 @@ export async function enableCentroBrowserNotifications(vapidPublicKey = null, op
 
         let pushSubscribed = false;
         try {
-            pushSubscribed = await withTimeout(subscribeCentroPush(vapidPublicKey), 6000, false);
+            pushSubscribed = await withTimeout(subscribeCentroPush(vapidPublicKey), 30000, false);
         } catch (error) {
             console.warn('Sottoscrizione push non completata', error);
         }

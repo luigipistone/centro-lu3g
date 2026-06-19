@@ -11,6 +11,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -3388,6 +3389,8 @@ class CentroPageController extends Controller
                         'updated_at' => $now,
                     ]);
 
+                $this->sendBrowserPushNotification((string) $userId, (string) $existingNotification->id, $message, $taskId);
+
                 continue;
             }
 
@@ -3460,7 +3463,18 @@ class CentroPageController extends Controller
         }
 
         foreach ($webPush->flush() as $report) {
-            if (! $report->isSuccess() && $report->isSubscriptionExpired()) {
+            if ($report->isSuccess()) {
+                continue;
+            }
+
+            Log::warning('Invio notifica push browser non riuscito.', [
+                'user_id' => $userId,
+                'notification_id' => $notificationId,
+                'endpoint' => $report->getEndpoint(),
+                'reason' => $report->getReason(),
+            ]);
+
+            if ($report->isSubscriptionExpired()) {
                 DB::table('push_subscriptions')
                     ->where('endpoint', $report->getEndpoint())
                     ->delete();
