@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
+import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
@@ -143,7 +144,7 @@ function maybeShowBrowserNotification(notification) {
     if (lastId === notification.id) return;
 
     window.localStorage.setItem(notificationStorageKey.value, notification.id);
-    const browserNotification = new window.Notification('Centro LU3G', {
+    const browserNotification = new window.Notification('Il Centro', {
         body: notification.message,
         tag: notification.id,
         renotify: false,
@@ -244,13 +245,15 @@ const groups = computed(() => [
         <aside class="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-white/60 bg-white/62 shadow-[20px_0_55px_rgba(28,42,73,0.08)] backdrop-blur-2xl lg:flex">
             <div class="flex h-16 items-center justify-between border-b border-white/60 px-4">
                 <Link :href="route('dashboard')" class="flex items-center gap-2 font-semibold tracking-tight text-gray-950">
-                    <span class="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-white/80 text-sm font-extrabold text-indigo-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_12px_24px_rgba(79,70,229,0.14)]">L</span>
-                    <span>Agency Hub</span>
+                    <span class="brand-mark">
+                        <ApplicationLogo class="h-7 w-7" />
+                    </span>
+                    <span>Il Centro</span>
                 </Link>
                 <div class="flex items-center gap-1">
                     <button
                         type="button"
-                        class="inline-flex h-9 w-9 items-center justify-center rounded-2xl text-gray-500 transition hover:bg-white/70 hover:text-indigo-600 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]"
+                        class="inline-flex h-9 w-9 items-center justify-center rounded-2xl text-gray-500 transition hover:bg-white/70 hover:text-[hsl(var(--primary-app))] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]"
                         :aria-label="darkMode ? 'Disattiva modalità dark' : 'Attiva modalità dark'"
                         :title="darkMode ? 'Modalità chiara' : 'Modalità dark'"
                         @click="toggleDarkMode"
@@ -261,7 +264,7 @@ const groups = computed(() => [
                     <div class="relative">
                         <button
                             type="button"
-                            class="relative inline-flex h-9 w-9 items-center justify-center rounded-2xl text-gray-500 transition hover:bg-white/70 hover:text-indigo-600 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]"
+                            class="relative inline-flex h-9 w-9 items-center justify-center rounded-2xl text-gray-500 transition hover:bg-white/70 hover:text-[hsl(var(--primary-app))] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]"
                             :aria-expanded="notificationMenuOpen"
                             aria-label="Apri notifiche"
                             @click="notificationMenuOpen = !notificationMenuOpen"
@@ -295,16 +298,16 @@ const groups = computed(() => [
                                     <button
                                         v-if="notificationBadgeCount"
                                         type="button"
-                                        class="text-xs font-medium text-gray-500 transition hover:text-indigo-600"
+                                        class="text-xs font-medium text-gray-500 transition hover:text-[hsl(var(--primary-app))]"
                                         @click="markAllNotificationsReadFromMenu"
                                     >
                                         Segna come lette
                                     </button>
-                                    <Link :href="route('notifications.index')" class="text-xs font-medium text-indigo-600 hover:text-indigo-500" @click="notificationMenuOpen = false">Vedi tutte</Link>
+                                    <Link :href="route('notifications.index')" class="text-xs font-medium text-[hsl(var(--primary-app))] hover:text-[hsl(var(--primary-app-dark))]" @click="notificationMenuOpen = false">Vedi tutte</Link>
                                 </div>
                             </div>
                             <div v-if="notificationPermission === 'default'" class="border-b border-white/60 px-3 py-2">
-                                <button type="button" class="text-xs font-semibold text-indigo-600 transition hover:text-indigo-500" @click="enableBrowserNotifications">
+                                <button type="button" class="text-xs font-semibold text-[hsl(var(--primary-app))] transition hover:text-[hsl(var(--primary-app-dark))]" @click="enableBrowserNotifications">
                                     Attiva notifiche browser
                                 </button>
                             </div>
@@ -379,15 +382,17 @@ const groups = computed(() => [
                     <div class="flex h-16 justify-between">
                         <div class="flex items-center">
                             <Link :href="route('dashboard')" class="flex items-center gap-2 font-semibold text-gray-950">
-                                <span class="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-white/80 text-sm font-extrabold text-indigo-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_12px_24px_rgba(79,70,229,0.14)]">L</span>
-                                Agency Hub
+                                <span class="brand-mark">
+                                    <ApplicationLogo class="h-7 w-7" />
+                                </span>
+                                Il Centro
                             </Link>
                         </div>
 
                         <div class="flex items-center gap-2">
                             <button
                                 type="button"
-                                class="inline-flex h-10 w-10 items-center justify-center rounded-2xl text-gray-500 transition hover:bg-white/70 hover:text-indigo-600"
+                                class="inline-flex h-10 w-10 items-center justify-center rounded-2xl text-gray-500 transition hover:bg-white/70 hover:text-[hsl(var(--primary-app))]"
                                 :aria-label="darkMode ? 'Disattiva modalità dark' : 'Attiva modalità dark'"
                                 :title="darkMode ? 'Modalità chiara' : 'Modalità dark'"
                                 @click="toggleDarkMode"
@@ -397,7 +402,7 @@ const groups = computed(() => [
                             </button>
                             <Link
                                 :href="route('notifications.index')"
-                                class="relative inline-flex h-10 w-10 items-center justify-center rounded-2xl text-gray-500 transition hover:bg-white/70 hover:text-indigo-600"
+                                class="relative inline-flex h-10 w-10 items-center justify-center rounded-2xl text-gray-500 transition hover:bg-white/70 hover:text-[hsl(var(--primary-app))]"
                             >
                                 <Bell class="h-[18px] w-[18px]" :stroke-width="1.6" />
                                 <span

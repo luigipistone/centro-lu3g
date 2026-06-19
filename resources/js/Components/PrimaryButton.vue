@@ -1,6 +1,6 @@
 <template>
     <button
-        class="inline-flex items-center justify-center rounded-2xl border border-transparent bg-indigo-600 px-4 py-2 text-xs font-semibold uppercase tracking-normal text-white shadow-[0_14px_28px_rgba(79,70,229,0.22),inset_0_1px_0_rgba(255,255,255,0.24)] transition duration-150 ease-in-out hover:bg-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/15 active:bg-indigo-700"
+        class="btn btn-primary inline-flex items-center justify-center px-4 py-2 text-xs uppercase tracking-normal focus:outline-none focus:ring-4 focus:ring-[hsl(var(--primary-app)/0.15)]"
     >
         <slot />
     </button>

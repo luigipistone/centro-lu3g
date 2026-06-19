@@ -7,7 +7,7 @@ import { createApp, h } from 'vue';
 import { route } from '../../vendor/tightenco/ziggy';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+const appName = import.meta.env.VITE_APP_NAME || 'Il Centro';
 
 window.route = route;
 
@@ -40,6 +40,6 @@ createInertiaApp({
             .mount(el);
     },
     progress: {
-        color: '#4B5563',
+        color: '#0B6EF3',
     },
 });

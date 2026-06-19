@@ -1,0 +1,44 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Logo gestionale webapp</title>
+  <desc id="desc">Logo astratto minimal composto da tre righe organizzate con blocchi stondati e cerchi centrali in sfumature di blu.</desc>
+
+  <defs>
+    <linearGradient id="row1" x1="180" y1="260" x2="844" y2="260" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#9FC7FF"/>
+      <stop offset="1" stop-color="#86B6FA"/>
+    </linearGradient>
+    <linearGradient id="row2" x1="180" y1="430" x2="844" y2="430" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5FA2FF"/>
+      <stop offset="1" stop-color="#4D91F4"/>
+    </linearGradient>
+    <linearGradient id="row3" x1="180" y1="600" x2="844" y2="600" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1677FF"/>
+      <stop offset="1" stop-color="#0B6EF3"/>
+    </linearGradient>
+
+    <filter id="softShadow" x="-8%" y="-8%" width="116%" height="116%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#1D4ED8" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <!-- Row 1 -->
+  <g filter="url(#softShadow)">
+    <path d="M180 208 H420 C394 244 394 276 420 312 H180 C153.49 312 132 290.51 132 264 V256 C132 229.49 153.49 208 180 208 Z" fill="url(#row1)"/>
+    <circle cx="512" cy="260" r="62" fill="url(#row1)"/>
+    <path d="M604 208 H844 C870.51 208 892 229.49 892 256 V264 C892 290.51 870.51 312 844 312 H604 C630 276 630 244 604 208 Z" fill="url(#row1)"/>
+  </g>
+
+  <!-- Row 2 -->
+  <g filter="url(#softShadow)">
+    <path d="M180 378 H420 C394 414 394 446 420 482 H180 C153.49 482 132 460.51 132 434 V426 C132 399.49 153.49 378 180 378 Z" fill="url(#row2)"/>
+    <circle cx="512" cy="430" r="62" fill="url(#row2)"/>
+    <path d="M604 378 H844 C870.51 378 892 399.49 892 426 V434 C892 460.51 870.51 482 844 482 H604 C630 446 630 414 604 378 Z" fill="url(#row2)"/>
+  </g>
+
+  <!-- Row 3 -->
+  <g filter="url(#softShadow)">
+    <path d="M180 548 H420 C394 584 394 616 420 652 H180 C153.49 652 132 630.51 132 604 V596 C132 569.49 153.49 548 180 548 Z" fill="url(#row3)"/>
+    <circle cx="512" cy="600" r="62" fill="url(#row3)"/>
+    <path d="M604 548 H844 C870.51 548 892 569.49 892 596 V604 C892 630.51 870.51 652 844 652 H604 C630 616 630 584 604 548 Z" fill="url(#row3)"/>
+  </g>
+</svg>

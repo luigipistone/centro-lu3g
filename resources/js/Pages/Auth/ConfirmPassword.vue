@@ -19,11 +19,10 @@ const submit = () => {
 
 <template>
     <GuestLayout>
-        <Head title="Confirm Password" />
+        <Head title="Conferma password" />
 
         <div class="mb-4 text-sm text-gray-600">
-            This is a secure area of the application. Please confirm your
-            password before continuing.
+            Questa area è protetta. Conferma la password per continuare.
         </div>
 
         <form @submit.prevent="submit">
@@ -47,7 +46,7 @@ const submit = () => {
                     :class="{ 'opacity-25': form.processing }"
                     :disabled="form.processing"
                 >
-                    Confirm
+                    Conferma
                 </PrimaryButton>
             </div>
         </form>
