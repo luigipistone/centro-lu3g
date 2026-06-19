@@ -1521,7 +1521,7 @@ function absenceExtraInfo(row) {
 }
 
 function smartworkingUserLabel(user) {
-    return user.job_title || user.email || 'Smart working';
+    return user.job_title || user.email || '';
 }
 
 function absenceStatusClass(status) {
@@ -4010,13 +4010,8 @@ function visibleCalendarTasks(cell) {
                                 <UserAvatar :user="user" size="md" />
                                 <div class="min-w-0 flex-1">
                                     <div class="truncate text-sm font-semibold text-gray-900">{{ user.name || 'Utente' }}</div>
-                                    <div class="mt-1 flex flex-wrap items-center gap-2">
-                                        <span class="rounded-full bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700 ring-1 ring-sky-100">
-                                            Smart working
-                                        </span>
-                                        <span class="truncate text-xs font-semibold text-gray-500">
-                                            {{ smartworkingUserLabel(user) }}
-                                        </span>
+                                    <div v-if="smartworkingUserLabel(user)" class="mt-1 truncate text-xs font-semibold text-gray-500">
+                                        {{ smartworkingUserLabel(user) }}
                                     </div>
                                 </div>
                             </div>
