@@ -161,7 +161,7 @@ export async function enableCentroBrowserNotifications(vapidPublicKey = null, op
     let permission = support;
     if (permission !== 'granted') {
         try {
-            permission = await withTimeout(requestBrowserPermission(), 12000, browserNotificationSupport());
+            permission = await requestBrowserPermission();
         } catch (error) {
             return { permission, message: 'Il browser non ha completato la richiesta di autorizzazione.' };
         }

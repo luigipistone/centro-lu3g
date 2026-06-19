@@ -53,7 +53,7 @@ function confirmArchiveAllNotifications() {
 }
 
 async function enableBrowserNotifications() {
-    browserNotificationMessage.value = 'Attivazione notifiche in corso...';
+    browserNotificationMessage.value = '';
     try {
         const result = await enableCentroBrowserNotifications(page.props.push?.vapidPublicKey);
         browserPermission.value = result.permission;
