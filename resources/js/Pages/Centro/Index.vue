@@ -102,6 +102,7 @@ const calendarType = ref('all');
 const calendarUserIds = ref([]);
 const calendarPeopleMenu = ref(null);
 const calendarPeopleMenuOpen = ref(false);
+const calendarPeopleMenuStyle = ref({});
 const compactWeekend = ref(true);
 const calendarCreateDate = ref(null);
 const calendarDraggedTask = ref(null);
@@ -1347,9 +1348,15 @@ function toggleCalendarUserFilter(userId) {
     calendarUserIds.value = current;
 }
 
+function toggleCalendarPeopleMenu(event = null) {
+    calendarPeopleMenuStyle.value = dropdownMenuStyleFromEvent(event, 320);
+    calendarPeopleMenuOpen.value = !calendarPeopleMenuOpen.value;
+}
+
 function closeCalendarPeopleMenuOnOutside(event) {
     if (!calendarPeopleMenuOpen.value) return;
     if (calendarPeopleMenu.value?.contains(event.target)) return;
+    if (event.target instanceof Element && event.target.closest('[data-calendar-people-menu]')) return;
 
     calendarPeopleMenuOpen.value = false;
 }
@@ -2967,31 +2974,35 @@ function visibleCalendarTasks(cell) {
                                     calendarPeopleMenuOpen ? 'border-indigo-300 ring-4 ring-indigo-500/10' : '',
                                 ]"
                                 :aria-expanded="calendarPeopleMenuOpen"
-                                @click.stop="calendarPeopleMenuOpen = !calendarPeopleMenuOpen"
+                                @click.stop="toggleCalendarPeopleMenu($event)"
                             >
                                 <span class="truncate">{{ calendarPeopleFilterLabel }}</span>
                                 <ChevronDown :class="['h-4 w-4 shrink-0 text-gray-400 transition', calendarPeopleMenuOpen ? 'rotate-180' : '']" :stroke-width="1.7" />
                             </button>
-                            <div
-                                v-if="calendarPeopleMenuOpen"
-                                class="app-popover field-dropdown-menu absolute left-0 top-full z-[5300] mt-2 w-80 max-w-[calc(100vw-2rem)] p-3"
-                                @click.stop
-                            >
-                                <div class="people-avatar-picker max-h-64">
-                                    <button
-                                        v-for="user in users"
-                                        :key="`calendar-filter-user-${user.id}`"
-                                        type="button"
-                                        :class="personAvatarClass(calendarUserIds.includes(user.id))"
-                                        :aria-pressed="calendarUserIds.includes(user.id)"
-                                        :aria-label="`${calendarUserIds.includes(user.id) ? 'Rimuovi filtro' : 'Filtra per'} ${user.name || user.email}`"
-                                        :title="user.name || user.email"
-                                        @click="toggleCalendarUserFilter(user.id)"
+                            <Teleport to="body">
+                                <div v-if="calendarPeopleMenuOpen" class="fixed inset-0 z-[7600] bg-transparent" data-calendar-people-menu @click.self="calendarPeopleMenuOpen = false">
+                                    <div
+                                        class="app-popover field-dropdown-menu fixed w-80 max-w-[calc(100vw-2rem)] p-3"
+                                        :style="calendarPeopleMenuStyle"
+                                        @click.stop
                                     >
-                                        <UserAvatar :user="user" size="md" />
-                                    </button>
+                                        <div class="people-avatar-picker max-h-64">
+                                            <button
+                                                v-for="user in users"
+                                                :key="`calendar-filter-user-${user.id}`"
+                                                type="button"
+                                                :class="personAvatarClass(calendarUserIds.includes(user.id))"
+                                                :aria-pressed="calendarUserIds.includes(user.id)"
+                                                :aria-label="`${calendarUserIds.includes(user.id) ? 'Rimuovi filtro' : 'Filtra per'} ${user.name || user.email}`"
+                                                :title="user.name || user.email"
+                                                @click="toggleCalendarUserFilter(user.id)"
+                                            >
+                                                <UserAvatar :user="user" size="md" />
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
+                            </Teleport>
                         </div>
                         <label class="inline-flex h-[38px] shrink-0 items-center gap-2 rounded-[var(--radius-sm)] border border-white/70 bg-white/58 px-3 text-sm font-medium text-gray-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.62)] backdrop-blur-xl">
                             <input v-model="compactWeekend" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
