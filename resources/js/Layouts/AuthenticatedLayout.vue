@@ -48,7 +48,6 @@ const latestNotifications = computed(() => page.props.notifications?.latest || [
 const latestUnreadNotification = computed(() => latestNotifications.value.find((notification) => !notification.read));
 const notificationBadgeCount = computed(() => page.props.notifications?.unread || 0);
 const notificationStorageKey = computed(() => `centro:last-browser-notification:${page.props.auth?.user?.id || 'guest'}`);
-const notificationPromptStorageKey = computed(() => `centro:auto-browser-notification-prompt:${page.props.auth?.user?.id || 'guest'}`);
 const themeStorageKey = 'centro:theme';
 const canManageAbsences = computed(() => ['admin', 'superadmin'].includes(page.props.auth?.user?.role));
 
@@ -147,26 +146,6 @@ async function enableBrowserNotifications() {
     rememberLatestNotification();
 }
 
-async function maybePromptBrowserNotifications() {
-    if (browserNotificationSupport() !== 'default') return;
-
-    const lastPrompt = Number(window.localStorage.getItem(notificationPromptStorageKey.value) || 0);
-    const twelveHours = 12 * 60 * 60 * 1000;
-    if (lastPrompt && Date.now() - lastPrompt < twelveHours) return;
-
-    window.localStorage.setItem(notificationPromptStorageKey.value, String(Date.now()));
-
-    try {
-        const result = await enableCentroBrowserNotifications(page.props.push?.vapidPublicKey, {
-            showTestNotification: false,
-        });
-        notificationPermission.value = result.permission;
-    } catch (error) {
-        console.warn('Richiesta automatica notifiche non riuscita', error);
-        refreshNotificationPermission();
-    }
-}
-
 async function maybeShowBrowserNotification(notification) {
     if (typeof window === 'undefined' || !notification || notificationPermission.value !== 'granted') return;
 
@@ -217,7 +196,6 @@ watch(latestUnreadNotification, (notification) => {
 onMounted(() => {
     initializeTheme();
     refreshNotificationPermission();
-    maybePromptBrowserNotifications();
     ensureCentroPushSubscription(page.props.push?.vapidPublicKey);
     rememberLatestNotification();
     window.addEventListener('centro:task-completed', playCompletionEffect);

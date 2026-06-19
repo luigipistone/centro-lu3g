@@ -14,12 +14,26 @@ function withTimeout(promise, milliseconds, fallback = null) {
 }
 
 function requestBrowserPermission() {
+    if (typeof window !== 'undefined' && !window.isSecureContext) {
+        return Promise.resolve('denied');
+    }
+
+    try {
+        const result = window.Notification.requestPermission();
+        if (result?.then) {
+            return result;
+        }
+
+        if (typeof result === 'string') {
+            return Promise.resolve(result);
+        }
+    } catch (error) {
+        console.warn('Richiesta permesso notifiche moderna non disponibile', error);
+    }
+
     return new Promise((resolve, reject) => {
         try {
-            const result = window.Notification.requestPermission(resolve);
-            if (result?.then) {
-                result.then(resolve).catch(reject);
-            }
+            window.Notification.requestPermission(resolve);
         } catch (error) {
             reject(error);
         }
@@ -140,6 +154,10 @@ export async function enableCentroBrowserNotifications(vapidPublicKey = null, op
         return { permission: 'unsupported', message: 'Questo browser non supporta le notifiche.' };
     }
 
+    if (typeof window !== 'undefined' && !window.isSecureContext) {
+        return { permission: 'denied', message: 'Le notifiche browser richiedono una connessione HTTPS sicura.' };
+    }
+
     let permission = support;
     if (permission !== 'granted') {
         try {
@@ -152,7 +170,7 @@ export async function enableCentroBrowserNotifications(vapidPublicKey = null, op
     if (permission === 'default') {
         return {
             permission,
-            message: 'Il browser non ha risposto alla richiesta. Controlla i permessi notifiche del sito e riprova.',
+            message: 'Il browser ha chiuso o bloccato la richiesta. Clicca di nuovo su Attiva browser e scegli Consenti nella finestra del browser.',
         };
     }
 
