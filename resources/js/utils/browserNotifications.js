@@ -13,6 +13,19 @@ function withTimeout(promise, milliseconds, fallback = null) {
     ]);
 }
 
+function requestBrowserPermission() {
+    return new Promise((resolve, reject) => {
+        try {
+            const result = window.Notification.requestPermission(resolve);
+            if (result?.then) {
+                result.then(resolve).catch(reject);
+            }
+        } catch (error) {
+            reject(error);
+        }
+    });
+}
+
 export async function registerCentroServiceWorker() {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
         return null;
@@ -124,17 +137,13 @@ export async function enableCentroBrowserNotifications(vapidPublicKey = null) {
         return { permission: 'unsupported', message: 'Questo browser non supporta le notifiche.' };
     }
 
-    try {
-        await registerCentroServiceWorker();
-    } catch (error) {
-        console.warn('Service worker non registrato', error);
-    }
-
     let permission = support;
-    try {
-        permission = await withTimeout(window.Notification.requestPermission(), 5000, browserNotificationSupport());
-    } catch (error) {
-        return { permission, message: 'Il browser non ha completato la richiesta di autorizzazione.' };
+    if (permission !== 'granted') {
+        try {
+            permission = await withTimeout(requestBrowserPermission(), 12000, browserNotificationSupport());
+        } catch (error) {
+            return { permission, message: 'Il browser non ha completato la richiesta di autorizzazione.' };
+        }
     }
 
     if (permission === 'default') {
@@ -145,6 +154,12 @@ export async function enableCentroBrowserNotifications(vapidPublicKey = null) {
     }
 
     if (permission === 'granted') {
+        try {
+            await registerCentroServiceWorker();
+        } catch (error) {
+            console.warn('Service worker non registrato', error);
+        }
+
         let pushSubscribed = false;
         try {
             pushSubscribed = await withTimeout(subscribeCentroPush(vapidPublicKey), 6000, false);
