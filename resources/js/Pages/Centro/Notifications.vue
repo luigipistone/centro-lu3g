@@ -18,6 +18,7 @@ const confirmArchiveAll = ref(false);
 const confirmText = ref('');
 const browserPermission = ref(browserNotificationSupport());
 const browserNotificationMessage = ref('');
+const browserNotificationBusy = ref(false);
 
 const emptyLabel = computed(() => props.archived ? 'Nessuna notifica archiviata.' : 'Nessuna notifica attiva.');
 
@@ -68,6 +69,9 @@ function confirmArchiveAllNotifications() {
 }
 
 async function enableBrowserNotifications() {
+    if (browserNotificationBusy.value) return;
+
+    browserNotificationBusy.value = true;
     browserNotificationMessage.value = '';
     try {
         const result = await enableCentroBrowserNotifications(page.props.push?.vapidPublicKey);
@@ -77,6 +81,8 @@ async function enableBrowserNotifications() {
         console.warn('Attivazione notifiche non riuscita', error);
         browserPermission.value = browserNotificationSupport();
         browserNotificationMessage.value = 'Attivazione non riuscita. Controlla i permessi notifiche del browser per questo sito.';
+    } finally {
+        browserNotificationBusy.value = false;
     }
 }
 
@@ -138,10 +144,16 @@ function formatDate(value) {
                     </div>
 
                     <div class="flex flex-wrap items-center gap-2">
-                        <a v-if="browserPermission === 'default'" :href="route('push.enable')" class="btn btn-outline">
+                        <button
+                            v-if="browserPermission === 'default'"
+                            type="button"
+                            class="btn btn-outline"
+                            :disabled="browserNotificationBusy"
+                            @click="enableBrowserNotifications"
+                        >
                             <Bell class="h-4 w-4" :stroke-width="1.7" />
-                            Attiva browser
-                        </a>
+                            {{ browserNotificationBusy ? 'Attivazione...' : 'Attiva browser' }}
+                        </button>
                         <span v-else-if="browserPermission === 'granted'" class="inline-flex min-h-10 items-center rounded-[var(--radius-sm)] border border-green-100 bg-green-50 px-3 text-sm font-semibold text-green-700">
                             Browser attivo
                         </span>

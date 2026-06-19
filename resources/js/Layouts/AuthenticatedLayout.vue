@@ -41,6 +41,7 @@ const completionEffect = ref(null);
 const page = usePage();
 const notificationPermission = ref('unsupported');
 const notificationStatusMessage = ref('');
+const notificationPermissionBusy = ref(false);
 let notificationPoller = null;
 let completionEffectTimer = null;
 
@@ -140,6 +141,9 @@ function rememberLatestNotification() {
 }
 
 async function enableBrowserNotifications() {
+    if (notificationPermissionBusy.value) return;
+
+    notificationPermissionBusy.value = true;
     notificationStatusMessage.value = '';
     try {
         const result = await enableCentroBrowserNotifications(page.props.push?.vapidPublicKey);
@@ -149,6 +153,8 @@ async function enableBrowserNotifications() {
         console.warn('Attivazione notifiche non riuscita', error);
         notificationPermission.value = browserNotificationSupport();
         notificationStatusMessage.value = 'Attivazione non riuscita. Controlla i permessi notifiche del browser per questo sito.';
+    } finally {
+        notificationPermissionBusy.value = false;
     }
     rememberLatestNotification();
 }
@@ -321,9 +327,14 @@ const groups = computed(() => [
                                 </div>
                             </div>
                             <div v-if="notificationPermission === 'default'" class="border-b border-white/60 px-3 py-2">
-                                <a :href="route('push.enable')" class="text-xs font-semibold text-[hsl(var(--primary-app))] transition hover:text-[hsl(var(--primary-app-dark))]" @click="notificationMenuOpen = false">
-                                    Attiva notifiche browser
-                                </a>
+                                <button
+                                    type="button"
+                                    class="text-xs font-semibold text-[hsl(var(--primary-app))] transition hover:text-[hsl(var(--primary-app-dark))] disabled:cursor-wait disabled:opacity-60"
+                                    :disabled="notificationPermissionBusy"
+                                    @click="enableBrowserNotifications"
+                                >
+                                    {{ notificationPermissionBusy ? 'Attivazione...' : 'Attiva notifiche browser' }}
+                                </button>
                             </div>
                             <div v-else-if="notificationStatusMessage" class="border-b border-white/60 px-3 py-2 text-xs text-gray-500">
                                 {{ notificationStatusMessage }}
