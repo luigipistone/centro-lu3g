@@ -6,6 +6,7 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createApp, h } from 'vue';
 import { route } from '../../vendor/tightenco/ziggy';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
+import { registerCentroServiceWorker } from './utils/browserNotifications';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Il Centro';
 
@@ -25,6 +26,7 @@ function openNativeDatePicker(event) {
 
 document.addEventListener('click', openNativeDatePicker, true);
 document.addEventListener('focusin', openNativeDatePicker, true);
+registerCentroServiceWorker();
 
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,

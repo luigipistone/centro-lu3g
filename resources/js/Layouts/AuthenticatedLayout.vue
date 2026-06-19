@@ -5,6 +5,7 @@ import DropdownLink from '@/Components/DropdownLink.vue';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
+import { browserNotificationSupport, enableCentroBrowserNotifications, showCentroBrowserNotification } from '@/utils/browserNotifications';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import {
     Bell,
@@ -39,6 +40,7 @@ const darkMode = ref(false);
 const completionEffect = ref(null);
 const page = usePage();
 const notificationPermission = ref('unsupported');
+const notificationStatusMessage = ref('');
 let notificationPoller = null;
 let completionEffectTimer = null;
 
@@ -120,7 +122,7 @@ function playCompletionEffect(event = null) {
 }
 
 function refreshNotificationPermission() {
-    notificationPermission.value = typeof window !== 'undefined' && 'Notification' in window ? window.Notification.permission : 'unsupported';
+    notificationPermission.value = browserNotificationSupport();
 }
 
 function rememberLatestNotification() {
@@ -131,30 +133,25 @@ function rememberLatestNotification() {
 }
 
 async function enableBrowserNotifications() {
-    if (typeof window === 'undefined' || !('Notification' in window)) return;
-    const permission = await window.Notification.requestPermission();
-    notificationPermission.value = permission;
+    const result = await enableCentroBrowserNotifications();
+    notificationPermission.value = result.permission;
+    notificationStatusMessage.value = result.message;
     rememberLatestNotification();
 }
 
-function maybeShowBrowserNotification(notification) {
+async function maybeShowBrowserNotification(notification) {
     if (typeof window === 'undefined' || !notification || notificationPermission.value !== 'granted') return;
 
     const lastId = window.localStorage.getItem(notificationStorageKey.value);
     if (lastId === notification.id) return;
 
     window.localStorage.setItem(notificationStorageKey.value, notification.id);
-    const browserNotification = new window.Notification('Il Centro', {
+    await showCentroBrowserNotification('Il Centro', {
         body: notification.message,
         tag: notification.id,
         renotify: false,
+        data: { url: notificationHref(notification) },
     });
-
-    browserNotification.onclick = () => {
-        window.focus();
-        router.visit(notificationHref(notification));
-        browserNotification.close();
-    };
 }
 
 function notificationHref(notification) {
@@ -196,7 +193,7 @@ onMounted(() => {
     window.addEventListener('centro:task-completed', playCompletionEffect);
     notificationPoller = window.setInterval(() => {
         router.reload({ only: ['notifications'], preserveScroll: true, preserveState: true });
-    }, 45000);
+    }, 15000);
 });
 
 onUnmounted(() => {
@@ -310,6 +307,9 @@ const groups = computed(() => [
                                 <button type="button" class="text-xs font-semibold text-[hsl(var(--primary-app))] transition hover:text-[hsl(var(--primary-app-dark))]" @click="enableBrowserNotifications">
                                     Attiva notifiche browser
                                 </button>
+                            </div>
+                            <div v-else-if="notificationStatusMessage" class="border-b border-white/60 px-3 py-2 text-xs text-gray-500">
+                                {{ notificationStatusMessage }}
                             </div>
                             <div v-if="$page.props.notifications?.latest?.length" class="max-h-80 overflow-y-auto py-1">
                                 <button

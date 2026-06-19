@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import { browserNotificationSupport, enableCentroBrowserNotifications } from '@/utils/browserNotifications';
 import { APP_TIME_ZONE } from '@/utils/formatters';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { Archive, Bell, Check, RotateCcw } from '@lucide/vue';
@@ -15,7 +16,8 @@ const props = defineProps({
 const page = usePage();
 const confirmArchiveAll = ref(false);
 const confirmText = ref('');
-const browserPermission = ref(typeof window !== 'undefined' && 'Notification' in window ? window.Notification.permission : 'unsupported');
+const browserPermission = ref(browserNotificationSupport());
+const browserNotificationMessage = ref('');
 
 const emptyLabel = computed(() => props.archived ? 'Nessuna notifica archiviata.' : 'Nessuna notifica attiva.');
 
@@ -51,8 +53,9 @@ function confirmArchiveAllNotifications() {
 }
 
 async function enableBrowserNotifications() {
-    if (typeof window === 'undefined' || !('Notification' in window)) return;
-    browserPermission.value = await window.Notification.requestPermission();
+    const result = await enableCentroBrowserNotifications();
+    browserPermission.value = result.permission;
+    browserNotificationMessage.value = result.message;
 }
 
 function formatDate(value) {
@@ -100,13 +103,13 @@ function formatDate(value) {
                     <div class="flex flex-wrap items-center gap-2">
                         <Link
                             :href="route('notifications.index')"
-                            :class="['rounded-[var(--radius-sm)] px-3 py-2 text-sm font-semibold transition', !archived ? 'bg-gray-950 text-white shadow-sm' : 'text-gray-500 hover:bg-white/70 hover:text-gray-900']"
+                            :class="['settings-tab', !archived ? 'settings-tab-active' : '']"
                         >
                             Attive {{ activeCount || 0 }}
                         </Link>
                         <Link
                             :href="route('notifications.index', { archived: 1 })"
-                            :class="['rounded-[var(--radius-sm)] px-3 py-2 text-sm font-semibold transition', archived ? 'bg-gray-950 text-white shadow-sm' : 'text-gray-500 hover:bg-white/70 hover:text-gray-900']"
+                            :class="['settings-tab', archived ? 'settings-tab-active' : '']"
                         >
                             Archivio {{ archivedCount || 0 }}
                         </Link>
@@ -117,6 +120,12 @@ function formatDate(value) {
                             <Bell class="h-4 w-4" :stroke-width="1.7" />
                             Attiva browser
                         </button>
+                        <span v-else-if="browserPermission === 'granted'" class="inline-flex min-h-10 items-center rounded-[var(--radius-sm)] border border-green-100 bg-green-50 px-3 text-sm font-semibold text-green-700">
+                            Browser attivo
+                        </span>
+                        <span v-else-if="browserPermission === 'denied'" class="inline-flex min-h-10 items-center rounded-[var(--radius-sm)] border border-amber-100 bg-amber-50 px-3 text-sm font-semibold text-amber-700">
+                            Browser bloccato
+                        </span>
                         <button v-if="!archived" type="button" class="btn btn-outline" @click="markAllRead">
                             <Check class="h-4 w-4" :stroke-width="1.7" />
                             Segna lette
@@ -130,6 +139,9 @@ function formatDate(value) {
 
                 <div v-if="page.props.flash?.status" class="rounded-[var(--radius-sm)] border border-green-100 bg-green-50 px-3 py-2 text-sm text-green-700">
                     {{ page.props.flash.status }}
+                </div>
+                <div v-if="browserNotificationMessage" class="rounded-[var(--radius-sm)] border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+                    {{ browserNotificationMessage }}
                 </div>
 
                 <section class="surface overflow-hidden">
