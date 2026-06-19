@@ -115,7 +115,7 @@ const compactWeekend = ref(true);
 const calendarCreateDate = ref(null);
 const calendarDraggedTask = ref(null);
 const calendarDropDate = ref(null);
-const calendarExpanded = ref(false);
+const expandedCalendarDays = ref([]);
 const calendarTaskPanelOpen = ref(false);
 const calendarTaskPanel = ref(null);
 const calendarTaskParentStack = ref([]);
@@ -1855,6 +1855,9 @@ function buildCalendarGrid(year, month) {
             tasks: tasksForDay(date),
         });
     }
+    cells.forEach((cell, index) => {
+        cell.weekIndex = Math.floor(index / 7);
+    });
     return cells;
 }
 
@@ -1869,6 +1872,7 @@ function isCalendarToday(year, month, day) {
 
 function changeMonth(delta) {
     calendarCreateDate.value = null;
+    expandedCalendarDays.value = [];
     currentCalendarDate.value = new Date(calendarYear.value, calendarMonth.value + delta, 1);
     centerCalendarScroll();
 }
@@ -2746,9 +2750,45 @@ function tasksForDay(date) {
         .sort((a, b) => `${a.due_time || '99:99'}${a.title}`.localeCompare(`${b.due_time || '99:99'}${b.title}`));
 }
 
+function isCalendarDayExpanded(date) {
+    return expandedCalendarDays.value.includes(date);
+}
+
+function expandCalendarDay(date) {
+    if (!date || isCalendarDayExpanded(date)) return;
+    expandedCalendarDays.value = [...expandedCalendarDays.value, date];
+}
+
+function hiddenCalendarTaskCount(cell) {
+    return Math.max(0, (cell?.tasks?.length || 0) - 2);
+}
+
 function visibleCalendarTasks(cell) {
-    if (calendarExpanded.value) return cell.tasks;
-    return cell.tasks.slice(0, 4);
+    if (isCalendarDayExpanded(cell.date)) return cell.tasks;
+    return cell.tasks.slice(0, 2);
+}
+
+function calendarWeekVisibleTaskCount(sectionMonth, cell) {
+    if (!sectionMonth || !cell || cell.empty) return 2;
+
+    return Math.max(
+        2,
+        ...sectionMonth.cells
+            .filter((item) => !item.empty && item.weekIndex === cell.weekIndex)
+            .filter((item) => !(compactWeekend.value && item.weekend))
+            .map((item) => visibleCalendarTasks(item).length),
+    );
+}
+
+function calendarDayStyle(sectionMonth, cell) {
+    if (!cell || cell.empty || (compactWeekend.value && cell.weekend)) {
+        return {};
+    }
+
+    const visibleCount = calendarWeekVisibleTaskCount(sectionMonth, cell);
+    return {
+        minHeight: `${170 + Math.max(0, visibleCount - 2) * 54}px`,
+    };
 }
 </script>
 
@@ -3146,10 +3186,10 @@ function visibleCalendarTasks(cell) {
                             Weekend
                         </label>
                         <button
-                            v-if="calendarExpanded"
+                            v-if="expandedCalendarDays.length"
                             type="button"
                             class="btn btn-outline"
-                            @click="calendarExpanded = false"
+                            @click="expandedCalendarDays = []"
                         >
                             Compatta
                         </button>
@@ -3176,13 +3216,14 @@ function visibleCalendarTasks(cell) {
                                 v-for="cell in sectionMonth.cells"
                                 :key="`${sectionMonth.key}-${cell.key}`"
                                 :class="[
-                                    'group min-h-[170px] bg-white p-2 transition',
+                                    'group flex min-h-[170px] flex-col bg-white p-2 transition',
                                     cell.empty ? 'bg-white/70' : '',
                                     cell.today ? 'ring-2 ring-inset ring-indigo-500/70' : '',
                                     calendarDropDate === cell.date ? 'bg-indigo-50/80' : '',
                                     calendarDraggedTask && !cell.empty ? 'outline outline-1 outline-transparent transition hover:outline-indigo-200' : '',
                                     compactWeekend && cell.weekend ? 'min-h-[170px] px-1' : '',
                                 ]"
+                                :style="calendarDayStyle(sectionMonth, cell)"
                                 @dragover.prevent="!cell.empty && (calendarDropDate = cell.date)"
                                 @dragleave="calendarDropDate === cell.date && (calendarDropDate = null)"
                                 @drop.prevent="!cell.empty && moveCalendarTask(cell.date)"
@@ -3242,7 +3283,7 @@ function visibleCalendarTasks(cell) {
                                         />
                                     </div>
 
-                                    <div v-else class="space-y-1.5">
+                                    <div v-else class="flex flex-1 flex-col space-y-1.5">
                                         <div
                                             v-for="task in visibleCalendarTasks(cell)"
                                             :key="task.id"
@@ -3291,12 +3332,12 @@ function visibleCalendarTasks(cell) {
                                             </div>
                                         </div>
                                         <button
-                                            v-if="!calendarExpanded && cell.tasks.length > 4"
+                                            v-if="hiddenCalendarTaskCount(cell) && !isCalendarDayExpanded(cell.date)"
                                             type="button"
-                                            class="w-full rounded px-2 py-1 text-left text-[11px] font-medium text-gray-500 hover:bg-gray-50 hover:text-indigo-600"
-                                            @click="calendarExpanded = true"
+                                            class="mt-auto self-start rounded-lg px-2 py-1 text-left text-[11px] font-semibold text-gray-500 transition hover:bg-indigo-50 hover:text-indigo-600"
+                                            @click.stop="expandCalendarDay(cell.date)"
                                         >
-                                            altre {{ cell.tasks.length - 4 }}
+                                            altri {{ hiddenCalendarTaskCount(cell) }}
                                         </button>
                                     </div>
                                 </template>
