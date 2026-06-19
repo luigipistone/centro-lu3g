@@ -297,8 +297,6 @@
                 enableButton.disabled = true;
 
                 try {
-                    await renderDiagnostics();
-
                     if (!window.isSecureContext) {
                         throw new Error('Le notifiche push richiedono HTTPS.');
                     }
@@ -312,6 +310,8 @@
                         setStatus('Sto chiedendo il permesso al browser. Se compare una finestra, scegli Consenti...', '');
                         permission = await withTimeout(Notification.requestPermission(), 12000, 'timeout');
                     }
+
+                    await renderDiagnostics();
 
                     if (permission === 'timeout') {
                         throw new Error('Il browser non ha aperto o completato la finestra di consenso. Controlla nelle impostazioni del sito che le notifiche non siano bloccate e che il browser permetta ai siti di chiedere notifiche.');
