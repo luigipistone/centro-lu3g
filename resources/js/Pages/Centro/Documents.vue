@@ -4,8 +4,8 @@ import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { dateIt } from '@/utils/formatters';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { Check, FileText, Plus, Trash2, Upload, Users } from '@lucide/vue';
-import { computed, ref } from 'vue';
+import { Bold, Check, FileText, Heading3, Italic, Link2, List, ListOrdered, Plus, Quote, Trash2, Underline, Upload, Users } from '@lucide/vue';
+import { computed, nextTick, ref } from 'vue';
 
 const props = defineProps({
     canManage: Boolean,
@@ -19,6 +19,7 @@ const page = usePage();
 const confirmDelete = ref(null);
 const confirmDeleteText = ref('');
 const currentYearVisibleCount = ref(5);
+const documentDescriptionEditor = ref(null);
 
 const documentForm = useForm({
     title: '',
@@ -70,14 +71,37 @@ function documentYear(document) {
 function resetDocumentForm() {
     documentForm.reset();
     documentForm.clearErrors();
+    nextTick(() => {
+        if (documentDescriptionEditor.value) {
+            documentDescriptionEditor.value.innerHTML = '';
+        }
+    });
 }
 
 function submitDocument() {
+    updateDocumentDescriptionFromEditor();
     documentForm.post(route('documents.store'), {
         preserveScroll: true,
         forceFormData: true,
         onSuccess: resetDocumentForm,
     });
+}
+
+function updateDocumentDescriptionFromEditor() {
+    documentForm.description = documentDescriptionEditor.value?.innerHTML || '';
+}
+
+function runDocumentEditorCommand(command, value = null) {
+    documentDescriptionEditor.value?.focus();
+    document.execCommand(command, false, value);
+    updateDocumentDescriptionFromEditor();
+}
+
+function addDocumentEditorLink() {
+    const url = window.prompt('URL del link');
+    if (!url) return;
+
+    runDocumentEditorCommand('createLink', url);
 }
 
 function submitGroup() {
@@ -213,7 +237,47 @@ function showMoreCurrentYearDocuments() {
                             </div>
                             <div class="md:col-span-2">
                                 <label class="block text-sm font-medium text-gray-700">Descrizione</label>
-                                <textarea v-model="documentForm.description" rows="3" class="form-control" placeholder="Nota interna opzionale"></textarea>
+                                <div class="mt-1 overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white/90 shadow-inner">
+                                    <div class="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50/80 px-2 py-1.5">
+                                        <button type="button" class="icon-btn h-8 w-8" title="Titolo" @mousedown.prevent @click="runDocumentEditorCommand('formatBlock', 'h3')">
+                                            <Heading3 class="h-4 w-4" :stroke-width="1.8" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8 text-xs font-bold" title="Testo normale" @mousedown.prevent @click="runDocumentEditorCommand('formatBlock', 'p')">
+                                            P
+                                        </button>
+                                        <span class="mx-1 h-5 w-px bg-gray-200"></span>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Grassetto" @mousedown.prevent @click="runDocumentEditorCommand('bold')">
+                                            <Bold class="h-4 w-4" :stroke-width="1.8" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Corsivo" @mousedown.prevent @click="runDocumentEditorCommand('italic')">
+                                            <Italic class="h-4 w-4" :stroke-width="1.8" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Sottolineato" @mousedown.prevent @click="runDocumentEditorCommand('underline')">
+                                            <Underline class="h-4 w-4" :stroke-width="1.8" />
+                                        </button>
+                                        <span class="mx-1 h-5 w-px bg-gray-200"></span>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Elenco puntato" @mousedown.prevent @click="runDocumentEditorCommand('insertUnorderedList')">
+                                            <List class="h-4 w-4" :stroke-width="1.8" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Elenco numerato" @mousedown.prevent @click="runDocumentEditorCommand('insertOrderedList')">
+                                            <ListOrdered class="h-4 w-4" :stroke-width="1.8" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Citazione" @mousedown.prevent @click="runDocumentEditorCommand('formatBlock', 'blockquote')">
+                                            <Quote class="h-4 w-4" :stroke-width="1.8" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Link" @mousedown.prevent @click="addDocumentEditorLink">
+                                            <Link2 class="h-4 w-4" :stroke-width="1.8" />
+                                        </button>
+                                    </div>
+                                    <div
+                                        ref="documentDescriptionEditor"
+                                        class="min-h-[120px] px-4 py-3 text-sm leading-6 text-gray-800 outline-none empty:before:text-gray-400 empty:before:content-[attr(data-placeholder)]"
+                                        contenteditable="true"
+                                        data-placeholder="Nota interna opzionale..."
+                                        @input="updateDocumentDescriptionFromEditor"
+                                        @blur="updateDocumentDescriptionFromEditor"
+                                    ></div>
+                                </div>
                             </div>
                             <div class="md:col-span-2">
                                 <label class="block text-sm font-medium text-gray-700">PDF</label>
@@ -390,7 +454,7 @@ function showMoreCurrentYearDocuments() {
                                         </button>
                                     </div>
 
-                                    <p v-if="document.description" class="mt-3 line-clamp-2 text-sm text-gray-500">{{ document.description }}</p>
+                                    <div v-if="document.description" class="mt-3 line-clamp-2 text-sm text-gray-500" v-html="document.description"></div>
 
                                     <div class="mt-4 flex items-center justify-between gap-3 text-xs text-gray-500">
                                         <span>{{ dateIt(document.created_at) }}</span>
@@ -449,7 +513,7 @@ function showMoreCurrentYearDocuments() {
                                             </button>
                                         </div>
 
-                                        <p v-if="document.description" class="mt-3 line-clamp-2 text-sm text-gray-500">{{ document.description }}</p>
+                                        <div v-if="document.description" class="mt-3 line-clamp-2 text-sm text-gray-500" v-html="document.description"></div>
 
                                         <div class="mt-4 flex items-center justify-between gap-3 text-xs text-gray-500">
                                             <span>{{ dateIt(document.created_at) }}</span>

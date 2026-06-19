@@ -70,7 +70,7 @@ function markRead() {
                     <aside class="space-y-6">
                         <section class="surface p-5">
                             <h3 class="text-base font-semibold text-gray-900">Lettura</h3>
-                            <p v-if="document.description" class="mt-2 text-sm text-gray-500">{{ document.description }}</p>
+                            <div v-if="document.description" class="mt-2 text-sm leading-6 text-gray-500" v-html="document.description"></div>
                             <div class="mt-4 rounded-[var(--radius)] bg-gray-50/80 p-3">
                                 <p class="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">Stato personale</p>
                                 <p :class="['mt-2 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold', document.user_read_at ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700']">
