@@ -153,6 +153,7 @@ export function activityText(activity, labels = {}) {
     if (activity.action === 'subtask_created') return `${actor} ha creato la sottoattività "${plainText(activity.new_value) || 'senza titolo'}"`;
     if (activity.action === 'task_created') return `${actor} ha creato questa attività`;
     if (activity.action === 'people_updated') return `${actor} ha aggiornato ${field}`;
+    if (activity.action === 'dependencies_updated') return `${actor} ha aggiornato le dipendenze`;
 
     if (activity.old_value !== activity.new_value) {
         return `${actor} ha modificato ${field} da "${activityValue(activity.old_value, activity.field)}" a "${activityValue(activity.new_value, activity.field)}"`;

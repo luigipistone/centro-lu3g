@@ -540,4 +540,73 @@ class TaskWorkflowTest extends TestCase
             'due_date' => '2026-06-22',
         ]);
     }
+
+    public function test_task_dependencies_block_completion_until_dependency_is_done(): void
+    {
+        $user = User::factory()->create();
+        $blockedTaskId = (string) Str::uuid();
+        $dependencyTaskId = (string) Str::uuid();
+
+        DB::table('tasks')->insert([
+            [
+                'id' => $blockedTaskId,
+                'title' => 'Pubblicare campagna',
+                'priority' => 'medium',
+                'status' => 'todo',
+                'task_type' => 'project',
+                'created_by' => $user->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'id' => $dependencyTaskId,
+                'title' => 'Approvare visual',
+                'priority' => 'medium',
+                'status' => 'todo',
+                'task_type' => 'project',
+                'created_by' => $user->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->put("/tasks/{$blockedTaskId}/dependencies", [
+                'dependency_ids' => [$dependencyTaskId],
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('task_dependencies', [
+            'task_id' => $blockedTaskId,
+            'depends_on_task_id' => $dependencyTaskId,
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->patch("/tasks/{$blockedTaskId}/status", ['status' => 'done'])
+            ->assertSessionHasErrors(['status']);
+
+        $this->assertDatabaseHas('tasks', [
+            'id' => $blockedTaskId,
+            'status' => 'todo',
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->patch("/tasks/{$dependencyTaskId}/status", ['status' => 'done'])
+            ->assertRedirect();
+
+        $this
+            ->actingAs($user)
+            ->patch("/tasks/{$blockedTaskId}/status", ['status' => 'done'])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('tasks', [
+            'id' => $blockedTaskId,
+            'status' => 'done',
+        ]);
+    }
 }

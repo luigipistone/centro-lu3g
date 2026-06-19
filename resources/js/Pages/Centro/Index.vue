@@ -73,6 +73,7 @@ const props = defineProps({
     projects: Array,
     services: Array,
     users: Array,
+    taskDependencyOptions: Array,
     billingStats: Object,
     clientStats: Object,
     documentSettings: Object,
@@ -332,7 +333,9 @@ const calendarTaskForm = useForm({
     recurring_month_day: 1,
     assignee_ids: [],
     follower_ids: [],
+    dependency_ids: [],
 });
+const calendarDependencyToAdd = ref('');
 const calendarSubtaskForm = useForm({
     title: '',
     priority: 'medium',
@@ -523,6 +526,66 @@ function namedOptions(source, emptyOption = null) {
     const options = source.map((item) => ({ value: item.id, label: item.name || item.email || item.title || item.id }));
 
     return emptyOption ? [emptyOption, ...options] : options;
+}
+
+function taskDependencyLabel(task) {
+    return [task.title, task.client_name, task.due_date ? dateIt(task.due_date) : null]
+        .filter(Boolean)
+        .join(' · ');
+}
+
+function taskDependencySelectOptions(currentTaskId = null) {
+    const selected = calendarTaskForm.dependency_ids || [];
+    return (props.taskDependencyOptions || [])
+        .filter((task) => task.id !== currentTaskId && !selected.includes(task.id))
+        .map((task) => ({
+            value: task.id,
+            label: taskDependencyLabel(task),
+            disabled: task.status === 'done',
+        }));
+}
+
+function selectedCalendarDependencies() {
+    const selected = calendarTaskForm.dependency_ids || [];
+    const byId = new Map([...(props.taskDependencyOptions || []), ...(calendarTaskPanel.value?.dependencies || [])].map((task) => [task.id, task]));
+
+    return selected.map((id) => byId.get(id)).filter(Boolean);
+}
+
+function syncCalendarTaskDependencies() {
+    if (!calendarTaskForm.id) return;
+
+    router.put(route('tasks.dependencies.sync', calendarTaskForm.id), {
+        dependency_ids: calendarTaskForm.dependency_ids || [],
+    }, {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['rows', 'errors', 'flash'],
+        onSuccess: () => {
+            calendarTaskPanel.value = {
+                ...(calendarTaskPanel.value || {}),
+                dependencies: selectedCalendarDependencies(),
+                blocked_dependencies_count: selectedCalendarDependencies().filter((dependency) => dependency.status !== 'done').length,
+            };
+        },
+    });
+}
+
+function addCalendarTaskDependency(dependencyId) {
+    if (!dependencyId || (calendarTaskForm.dependency_ids || []).includes(dependencyId)) return;
+
+    calendarTaskForm.dependency_ids = [...(calendarTaskForm.dependency_ids || []), dependencyId];
+    calendarDependencyToAdd.value = '';
+    syncCalendarTaskDependencies();
+}
+
+function removeCalendarTaskDependency(dependencyId) {
+    calendarTaskForm.dependency_ids = (calendarTaskForm.dependency_ids || []).filter((id) => id !== dependencyId);
+    syncCalendarTaskDependencies();
+}
+
+function blockedDependencyCount(task) {
+    return Number(task?.blocked_dependencies_count || (task?.dependencies || []).filter((dependency) => dependency.status !== 'done').length || 0);
 }
 
 function isTaskSearchSelect(field) {
@@ -1969,6 +2032,7 @@ function openCalendarTask(task, options = {}) {
         recurring_month_day: task.recurring_month_day || 1,
         assignee_ids: [...(task.assignee_ids || [])],
         follower_ids: [...(task.follower_ids || [])],
+        dependency_ids: (task.dependencies || []).map((dependency) => dependency.id),
     });
     calendarTaskForm.reset();
     calendarTaskForm.clearErrors();
@@ -2007,6 +2071,10 @@ function openCalendarTaskCreate(type, date) {
         recurring_month_day: 1,
         assignee_ids: [],
         follower_ids: [],
+        dependency_ids: [],
+        dependencies: [],
+        dependents: [],
+        blocked_dependencies_count: 0,
         subtasks: [],
         comments: [],
         activity: [],
@@ -2036,6 +2104,7 @@ function closeCalendarTaskPanel() {
     calendarShowAllComments.value = false;
     calendarShowAllActivity.value = false;
     calendarTaskActionMenuOpen.value = false;
+    calendarDependencyToAdd.value = '';
     calendarTaskAutosaveState.value = 'idle';
     calendarTaskAutosaveError.value = '';
     window.clearTimeout(calendarTaskAutosaveTimer);
@@ -2054,6 +2123,7 @@ function openCalendarSubtask(subtask) {
         activity: subtask.activity || [],
         assignee_ids: subtask.assignee_ids || [],
         follower_ids: subtask.follower_ids || [],
+        dependency_ids: (subtask.dependencies || []).map((dependency) => dependency.id),
         parent_task_id: parent.id,
         parent_title: parent.title,
     }, { preserveStack: true });
@@ -2540,21 +2610,38 @@ function setCalendarTaskType(type) {
 function toggleCalendarTaskComplete() {
     if (!calendarTaskForm.id) return;
     const willComplete = calendarTaskForm.status !== 'done';
+    const nextStatus = willComplete ? 'done' : 'todo';
     calendarTaskStatusPulse.value = true;
     window.setTimeout(() => {
         calendarTaskStatusPulse.value = false;
     }, 360);
-    calendarTaskForm.status = calendarTaskForm.status === 'done' ? 'todo' : 'done';
-    if (willComplete) {
-        window.dispatchEvent(new CustomEvent('centro:task-completed'));
-    }
-    saveCalendarTaskInline(0);
+    calendarTaskForm.status = nextStatus;
+    router.patch(route('tasks.status.update', calendarTaskForm.id), { status: nextStatus }, {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['rows', 'errors', 'flash'],
+        onSuccess: () => {
+            calendarTaskAutosaveError.value = '';
+            if (willComplete) {
+                window.dispatchEvent(new CustomEvent('centro:task-completed'));
+            }
+        },
+        onError: (errors) => {
+            calendarTaskForm.status = willComplete ? 'todo' : 'done';
+            calendarTaskAutosaveState.value = 'error';
+            calendarTaskAutosaveError.value = errors.status || 'Task bloccata dalle dipendenze.';
+        },
+    });
 }
 
 function setCalendarTaskStatusFromSelect(value) {
-    if (value === 'done') {
-        window.dispatchEvent(new CustomEvent('centro:task-completed'));
+    if (value === 'done' && blockedDependencyCount(calendarTaskPanel.value) > 0) {
+        calendarTaskForm.status = calendarTaskPanel.value?.status || 'todo';
+        calendarTaskAutosaveState.value = 'error';
+        calendarTaskAutosaveError.value = 'Task bloccata dalle dipendenze.';
+        return;
     }
+    calendarTaskAutosaveError.value = '';
     saveCalendarTaskInline(0);
 }
 
@@ -3315,6 +3402,10 @@ function calendarDayStyle(sectionMonth, cell) {
                                                         <span class="h-2 w-2 shrink-0 rounded-full" :style="{ backgroundColor: priorityColor(task.priority) }"></span>
                                                         <span v-if="(task.task_type || 'task') === 'meeting' && task.due_time" class="shrink-0 text-[10px] text-gray-500">{{ String(task.due_time).slice(0, 5) }}</span>
                                                         <span :class="['truncate font-medium', task.status === 'done' ? 'line-through opacity-60' : '']">{{ task.title }}</span>
+                                                        <span v-if="blockedDependencyCount(task)" class="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                                                            <AlertTriangle class="h-3 w-3" :stroke-width="1.8" />
+                                                            {{ blockedDependencyCount(task) }}
+                                                        </span>
                                                     </div>
                                                     <div class="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-gray-500">
                                                         <span class="truncate">{{ task.client_name || task.project_name || task.service_name || taskTypeLabel(task.task_type) }}</span>
@@ -3567,6 +3658,53 @@ function calendarDayStyle(sectionMonth, cell) {
                                     <p class="mt-2 text-xs text-gray-400">{{ calendarTaskPeopleLabel('follower_ids') }}</p>
                                 </div>
                             </div>
+
+                            <section v-if="calendarTaskForm.id" class="content-card rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
+                                <div class="mb-3 flex items-center justify-between gap-3">
+                                    <div>
+                                        <h4 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Dipendenze</h4>
+                                        <p class="mt-1 text-xs text-gray-500">Questa task resta bloccata finché le dipendenze non sono completate.</p>
+                                    </div>
+                                    <span
+                                        v-if="blockedDependencyCount(calendarTaskPanel)"
+                                        class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700"
+                                    >
+                                        <AlertTriangle class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                        Bloccata
+                                    </span>
+                                </div>
+                                <AppSelect
+                                    v-model="calendarDependencyToAdd"
+                                    :options="taskDependencySelectOptions(calendarTaskForm.id)"
+                                    placeholder="Aggiungi task bloccante"
+                                    searchable
+                                    @change="addCalendarTaskDependency"
+                                />
+                                <div class="mt-3 flex flex-wrap gap-2">
+                                    <span
+                                        v-for="dependency in selectedCalendarDependencies()"
+                                        :key="`calendar-dependency-${dependency.id}`"
+                                        :class="['inline-flex max-w-full items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold', dependency.status === 'done' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700']"
+                                    >
+                                        <span class="truncate">{{ dependency.title }}</span>
+                                        <button type="button" class="text-current opacity-60 transition hover:opacity-100" title="Rimuovi dipendenza" @click="removeCalendarTaskDependency(dependency.id)">
+                                            <X class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                        </button>
+                                    </span>
+                                    <span v-if="!selectedCalendarDependencies().length" class="text-xs text-gray-500">Nessuna dipendenza.</span>
+                                </div>
+                                <div v-if="calendarTaskPanel?.dependents?.length" class="mt-3 border-t border-gray-100 pt-3">
+                                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Blocca</p>
+                                    <div class="mt-2 flex flex-wrap gap-2">
+                                        <span v-for="dependent in calendarTaskPanel.dependents" :key="`calendar-dependent-${dependent.id}`" class="rounded-full bg-white px-3 py-1 text-xs font-semibold text-gray-600">
+                                            {{ dependent.title }}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div v-if="calendarTaskForm.errors.dependencies || calendarTaskForm.errors.status" class="mt-2 text-sm text-red-600">
+                                    {{ calendarTaskForm.errors.dependencies || calendarTaskForm.errors.status }}
+                                </div>
+                            </section>
 
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Descrizione</label>
@@ -4541,6 +4679,10 @@ function calendarDayStyle(sectionMonth, cell) {
                                             </div>
                                         </div>
                                         <div class="mt-3 flex flex-wrap items-center gap-1.5">
+                                            <span v-if="blockedDependencyCount(task)" class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                                                <AlertTriangle class="h-3 w-3" :stroke-width="1.8" />
+                                                Bloccata
+                                            </span>
                                             <span
                                                 class="rounded-full px-2 py-0.5 text-[10px] font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.28)]"
                                                 :style="{ backgroundColor: priorityColor(task.priority), color: priorityTextColor(task.priority) }"

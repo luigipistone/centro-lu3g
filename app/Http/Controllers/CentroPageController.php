@@ -335,13 +335,18 @@ class CentroPageController extends Controller
                 ->get(['task_id', 'user_id'])
                 ->groupBy('task_id');
 
-            $rows = $rows->map(function ($row) use ($subtaskCounts, $subtasksByTask, $commentsByTask, $activityByTask, $assigneesByTask, $followersByTask, $assigneesBySubtask) {
+            $dependencyRows = $this->taskDependencyRows($activityTaskIds);
+
+            $rows = $rows->map(function ($row) use ($subtaskCounts, $subtasksByTask, $commentsByTask, $activityByTask, $assigneesByTask, $followersByTask, $assigneesBySubtask, $dependencyRows) {
                 $row->subtask_count = (int) ($subtaskCounts[$row->id] ?? 0);
                 $row->subtasks = ($subtasksByTask[$row->id] ?? collect())
-                    ->map(function ($subtask) use ($assigneesBySubtask, $commentsByTask, $activityByTask) {
+                    ->map(function ($subtask) use ($assigneesBySubtask, $commentsByTask, $activityByTask, $dependencyRows) {
                         $subtask->assignee_ids = ($assigneesBySubtask[$subtask->id] ?? collect())->pluck('user_id')->values();
                         $subtask->comments = ($commentsByTask[$subtask->id] ?? collect())->values();
                         $subtask->activity = ($activityByTask[$subtask->id] ?? collect())->values();
+                        $subtask->dependencies = ($dependencyRows[$subtask->id]['dependencies'] ?? collect())->values();
+                        $subtask->dependents = ($dependencyRows[$subtask->id]['dependents'] ?? collect())->values();
+                        $subtask->blocked_dependencies_count = ($subtask->dependencies ?? collect())->where('status', '!=', 'done')->count();
 
                         return $subtask;
                     })
@@ -350,6 +355,9 @@ class CentroPageController extends Controller
                 $row->activity = ($activityByTask[$row->id] ?? collect())->values();
                 $row->assignee_ids = ($assigneesByTask[$row->id] ?? collect())->pluck('user_id')->values();
                 $row->follower_ids = ($followersByTask[$row->id] ?? collect())->pluck('user_id')->values();
+                $row->dependencies = ($dependencyRows[$row->id]['dependencies'] ?? collect())->values();
+                $row->dependents = ($dependencyRows[$row->id]['dependents'] ?? collect())->values();
+                $row->blocked_dependencies_count = ($row->dependencies ?? collect())->where('status', '!=', 'done')->count();
 
                 return $row;
             });
@@ -370,11 +378,15 @@ class CentroPageController extends Controller
                 ->whereIn('task_id', $taskIds)
                 ->get(['task_id', 'user_id'])
                 ->groupBy('task_id');
+            $dependencyRows = $this->taskDependencyRows($taskIds);
 
-            $rows = $rows->map(function ($row) use ($subtaskCounts, $assigneesByTask, $followersByTask) {
+            $rows = $rows->map(function ($row) use ($subtaskCounts, $assigneesByTask, $followersByTask, $dependencyRows) {
                 $row->subtask_count = (int) ($subtaskCounts[$row->id] ?? 0);
                 $row->assignee_ids = ($assigneesByTask[$row->id] ?? collect())->pluck('user_id')->values();
                 $row->follower_ids = ($followersByTask[$row->id] ?? collect())->pluck('user_id')->values();
+                $row->dependencies = ($dependencyRows[$row->id]['dependencies'] ?? collect())->values();
+                $row->dependents = ($dependencyRows[$row->id]['dependents'] ?? collect())->values();
+                $row->blocked_dependencies_count = ($row->dependencies ?? collect())->where('status', '!=', 'done')->count();
 
                 return $row;
             });
@@ -423,6 +435,7 @@ class CentroPageController extends Controller
             'projects' => DB::table('projects')->orderBy('name')->get(['id', 'name']),
             'services' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name']),
             'users' => $this->userOptions(),
+            'taskDependencyOptions' => in_array($section, ['tasks', 'calendar'], true) ? $this->taskDependencyOptions() : [],
         ]);
     }
 
@@ -942,6 +955,9 @@ class CentroPageController extends Controller
                 'parentTask' => $record->parent_task_id ? DB::table('tasks')->where('id', $record->parent_task_id)->first(['id', 'title']) : null,
                 'project' => $record->project_id ? DB::table('projects')->where('id', $record->project_id)->first() : null,
                 'client' => $record->client_id ? DB::table('clients')->where('id', $record->client_id)->first() : null,
+                'dependencies' => ($this->taskDependencyRows(collect([$id]))[$id]['dependencies'] ?? collect())->values(),
+                'dependents' => ($this->taskDependencyRows(collect([$id]))[$id]['dependents'] ?? collect())->values(),
+                'taskDependencyOptions' => $this->taskDependencyOptions($id),
             ],
             'billing' => [
                 'client' => DB::table('clients')->where('id', $record->client_id)->first(),
@@ -1038,6 +1054,11 @@ class CentroPageController extends Controller
         $oldProjectFollowers = $section === 'projects' && $projectFollowers !== null
             ? DB::table('project_followers')->where('project_id', $id)->pluck('user_id')->sort()->values()->all()
             : null;
+
+        if ($section === 'tasks' && ($payload['status'] ?? null) === 'done' && $this->taskOpenDependencyCount($id) > 0) {
+            return back()->withErrors(['status' => 'Questa task è bloccata: completa prima le dipendenze.']);
+        }
+
         $payload['updated_at'] = now();
 
         DB::table($this->config($section)['table'])->where('id', $id)->update($payload);
@@ -2202,12 +2223,116 @@ class CentroPageController extends Controller
             ->whereIn('task_id', $subtasks->pluck('id'))
             ->get(['task_id', 'user_id'])
             ->groupBy('task_id');
+        $dependencyRows = $this->taskDependencyRows($subtasks->pluck('id'));
 
-        return $subtasks->map(function ($subtask) use ($assigneesBySubtask) {
+        return $subtasks->map(function ($subtask) use ($assigneesBySubtask, $dependencyRows) {
             $subtask->assignee_ids = ($assigneesBySubtask[$subtask->id] ?? collect())->pluck('user_id')->values();
+            $subtask->dependencies = ($dependencyRows[$subtask->id]['dependencies'] ?? collect())->values();
+            $subtask->dependents = ($dependencyRows[$subtask->id]['dependents'] ?? collect())->values();
+            $subtask->blocked_dependencies_count = ($subtask->dependencies ?? collect())->where('status', '!=', 'done')->count();
 
             return $subtask;
         });
+    }
+
+    private function taskDependencyRows($taskIds): \Illuminate\Support\Collection
+    {
+        $ids = collect($taskIds)->filter()->unique()->values();
+        if ($ids->isEmpty()) {
+            return collect();
+        }
+
+        $dependencies = DB::table('task_dependencies')
+            ->join('tasks', 'tasks.id', '=', 'task_dependencies.depends_on_task_id')
+            ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
+            ->whereIn('task_dependencies.task_id', $ids)
+            ->orderBy('tasks.due_date')
+            ->orderBy('tasks.title')
+            ->get([
+                'task_dependencies.task_id',
+                'tasks.id',
+                'tasks.title',
+                'tasks.status',
+                'tasks.due_date',
+                'tasks.parent_task_id',
+                'clients.name as client_name',
+            ])
+            ->groupBy('task_id');
+
+        $dependents = DB::table('task_dependencies')
+            ->join('tasks', 'tasks.id', '=', 'task_dependencies.task_id')
+            ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
+            ->whereIn('task_dependencies.depends_on_task_id', $ids)
+            ->orderBy('tasks.due_date')
+            ->orderBy('tasks.title')
+            ->get([
+                'task_dependencies.depends_on_task_id as task_id',
+                'tasks.id',
+                'tasks.title',
+                'tasks.status',
+                'tasks.due_date',
+                'tasks.parent_task_id',
+                'clients.name as client_name',
+            ])
+            ->groupBy('task_id');
+
+        return $ids->mapWithKeys(fn ($id) => [
+            $id => [
+                'dependencies' => $dependencies[$id] ?? collect(),
+                'dependents' => $dependents[$id] ?? collect(),
+            ],
+        ]);
+    }
+
+    private function taskDependencyOptions(?string $currentTaskId = null): \Illuminate\Support\Collection
+    {
+        return DB::table('tasks')
+            ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
+            ->when($currentTaskId, fn ($query) => $query->where('tasks.id', '!=', $currentTaskId))
+            ->orderByRaw('tasks.status = ? asc', ['done'])
+            ->orderBy('tasks.due_date')
+            ->orderBy('tasks.title')
+            ->limit(300)
+            ->get([
+                'tasks.id',
+                'tasks.title',
+                'tasks.status',
+                'tasks.due_date',
+                'tasks.parent_task_id',
+                'clients.name as client_name',
+            ]);
+    }
+
+    private function taskDependsOn(string $taskId, string $targetTaskId, array $visited = []): bool
+    {
+        if ($taskId === $targetTaskId) {
+            return true;
+        }
+
+        if (in_array($taskId, $visited, true)) {
+            return false;
+        }
+
+        $dependencies = DB::table('task_dependencies')
+            ->where('task_id', $taskId)
+            ->pluck('depends_on_task_id');
+
+        foreach ($dependencies as $dependencyId) {
+            if ($dependencyId === $targetTaskId || $this->taskDependsOn($dependencyId, $targetTaskId, [...$visited, $taskId])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function taskOpenDependencyCount(string $taskId): int
+    {
+        return DB::table('task_dependencies')
+            ->join('tasks', 'tasks.id', '=', 'task_dependencies.depends_on_task_id')
+            ->where('task_dependencies.task_id', $taskId)
+            ->where('tasks.status', '!=', 'done')
+            ->count();
     }
 
     private function storeDocument(Request $request): RedirectResponse
@@ -2879,6 +3004,69 @@ class CentroPageController extends Controller
         return back()->with('status', $type === 'assignees' ? 'Assegnatari aggiornati.' : 'Follower aggiornati.');
     }
 
+    public function syncTaskDependencies(Request $request, string $id): RedirectResponse
+    {
+        $task = DB::table('tasks')->where('id', $id)->first(['id', 'title']);
+        abort_if(! $task, 404);
+
+        $payload = $request->validate([
+            'dependency_ids' => ['array'],
+            'dependency_ids.*' => ['uuid', 'exists:tasks,id'],
+        ]);
+
+        $dependencyIds = collect($payload['dependency_ids'] ?? [])
+            ->filter(fn ($dependencyId) => $dependencyId !== $id)
+            ->unique()
+            ->values();
+
+        $cyclicDependency = $dependencyIds->first(fn ($dependencyId) => $this->taskDependsOn($dependencyId, $id));
+        if ($cyclicDependency) {
+            return back()->withErrors(['dependencies' => 'Questa dipendenza creerebbe un ciclo tra task.']);
+        }
+
+        $oldDependencyIds = DB::table('task_dependencies')
+            ->where('task_id', $id)
+            ->pluck('depends_on_task_id')
+            ->sort()
+            ->values()
+            ->all();
+
+        DB::transaction(function () use ($id, $dependencyIds) {
+            DB::table('task_dependencies')->where('task_id', $id)->delete();
+
+            foreach ($dependencyIds as $dependencyId) {
+                DB::table('task_dependencies')->insert([
+                    'id' => (string) str()->uuid(),
+                    'task_id' => $id,
+                    'depends_on_task_id' => $dependencyId,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        });
+
+        $newDependencyIds = $dependencyIds->sort()->values()->all();
+        if ($oldDependencyIds !== $newDependencyIds) {
+            $this->recordTaskActivity(
+                $id,
+                $request->user()->id,
+                'dependencies_updated',
+                'dependencies',
+                implode(',', $oldDependencyIds),
+                implode(',', $newDependencyIds),
+            );
+
+            $this->notifyTaskPeople(
+                $id,
+                $request->user()->id,
+                'task_dependencies',
+                $request->user()->name.' ha aggiornato le dipendenze di "'.$task->title.'".',
+            );
+        }
+
+        return back()->with('status', 'Dipendenze aggiornate.');
+    }
+
     public function storeClientContact(Request $request, string $id): RedirectResponse
     {
         DB::table('clients')->where('id', $id)->exists() || abort(404);
@@ -2953,6 +3141,12 @@ class CentroPageController extends Controller
         $payload = $request->validate([
             'status' => ['required', Rule::in(['todo', 'in_progress', 'in_review', 'done'])],
         ]);
+
+        if ($payload['status'] === 'done') {
+            if ($this->taskOpenDependencyCount($id) > 0) {
+                return back()->withErrors(['status' => 'Questa task è bloccata: completa prima le dipendenze.']);
+            }
+        }
 
         DB::transaction(function () use ($id, $task, $payload, $request) {
             DB::table('tasks')->where('id', $id)->update([
@@ -3664,7 +3858,7 @@ class CentroPageController extends Controller
                 'users.name as user_name',
             ])
             ->filter(fn ($activity) => $this->normalizeActivityValue($activity->old_value, $activity->field) !== $this->normalizeActivityValue($activity->new_value, $activity->field)
-                || in_array($activity->action, ['comment_created', 'comment_updated', 'comment_deleted', 'subtask_created', 'task_created', 'people_updated'], true))
+                || in_array($activity->action, ['comment_created', 'comment_updated', 'comment_deleted', 'subtask_created', 'task_created', 'people_updated', 'dependencies_updated'], true))
             ->groupBy('task_id')
             ->map(fn ($activities) => $activities->take(60)->values());
     }
@@ -3728,6 +3922,7 @@ class CentroPageController extends Controller
             'due_time' => 'ora',
             'location' => 'luogo/link',
             'recurring_enabled' => 'ricorrenza',
+            'dependencies' => 'dipendenze',
         ][$field] ?? str_replace('_', ' ', $field);
     }
 

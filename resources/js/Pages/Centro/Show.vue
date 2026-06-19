@@ -15,6 +15,7 @@ import {
 } from '@/utils/formatters';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import {
+    AlertTriangle,
     Bold,
     CalendarDays,
     Check,
@@ -196,6 +197,59 @@ function namedOptions(source, emptyOption = null) {
     const options = (source || []).map((item) => ({ value: item.id, label: item.name || item.email || item.title || item.id }));
 
     return emptyOption ? [emptyOption, ...options] : options;
+}
+
+function taskDependencyLabel(task) {
+    return [task.title, task.client_name, task.due_date ? dateIt(task.due_date) : null]
+        .filter(Boolean)
+        .join(' · ');
+}
+
+function taskDependencySelectOptions() {
+    const selected = taskForm.dependency_ids || [];
+    return (props.related.taskDependencyOptions || [])
+        .filter((task) => task.id !== props.record.id && !selected.includes(task.id))
+        .map((task) => ({
+            value: task.id,
+            label: taskDependencyLabel(task),
+            disabled: task.status === 'done',
+        }));
+}
+
+function selectedTaskDependencies() {
+    const selected = taskForm.dependency_ids || [];
+    const byId = new Map([...(props.related.taskDependencyOptions || []), ...(props.related.dependencies || [])].map((task) => [task.id, task]));
+
+    return selected.map((id) => byId.get(id)).filter(Boolean);
+}
+
+function blockedDependencyCount(task = null) {
+    const dependencies = task?.dependencies || selectedTaskDependencies();
+
+    return dependencies.filter((dependency) => dependency.status !== 'done').length;
+}
+
+function syncTaskDependencies() {
+    router.put(route('tasks.dependencies.sync', props.record.id), {
+        dependency_ids: taskForm.dependency_ids || [],
+    }, {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['related', 'errors', 'flash'],
+    });
+}
+
+function addTaskDependency(dependencyId) {
+    if (!dependencyId || (taskForm.dependency_ids || []).includes(dependencyId)) return;
+
+    taskForm.dependency_ids = [...(taskForm.dependency_ids || []), dependencyId];
+    taskDependencyToAdd.value = '';
+    syncTaskDependencies();
+}
+
+function removeTaskDependency(dependencyId) {
+    taskForm.dependency_ids = (taskForm.dependency_ids || []).filter((id) => id !== dependencyId);
+    syncTaskDependencies();
 }
 
 function primitiveOptions(source) {
@@ -388,7 +442,9 @@ const taskForm = useForm({
     recurring_month_day: props.record.recurring_month_day || 1,
     assignee_ids: [...(props.related.assignees || [])],
     follower_ids: [...(props.related.followers || [])],
+    dependency_ids: (props.related.dependencies || []).map((dependency) => dependency.id),
 });
+const taskDependencyToAdd = ref('');
 const subtaskForm = useForm({
     title: '',
     priority: 'medium',
@@ -3186,6 +3242,55 @@ onUnmounted(() => {
                                 <input v-model="taskForm.location" class="form-control" placeholder="Sala riunioni o link meeting" />
                             </div>
                         </div>
+
+                        <section class="rounded-md border border-gray-100 bg-gray-50 p-4">
+                            <div class="mb-3 flex items-center justify-between gap-3">
+                                <div>
+                                    <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Dipendenze</h3>
+                                    <p class="mt-1 text-xs text-gray-500">La task resta bloccata finché le task selezionate non sono completate.</p>
+                                </div>
+                                <span v-if="blockedDependencyCount()" class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">
+                                    <AlertTriangle class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                    Bloccata
+                                </span>
+                            </div>
+                            <AppSelect
+                                v-model="taskDependencyToAdd"
+                                :options="taskDependencySelectOptions()"
+                                placeholder="Aggiungi task bloccante"
+                                searchable
+                                @change="addTaskDependency"
+                            />
+                            <div class="mt-3 flex flex-wrap gap-2">
+                                <span
+                                    v-for="dependency in selectedTaskDependencies()"
+                                    :key="`dependency-${dependency.id}`"
+                                    :class="['inline-flex max-w-full items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold', dependency.status === 'done' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700']"
+                                >
+                                    <span class="truncate">{{ dependency.title }}</span>
+                                    <button type="button" class="text-current opacity-60 transition hover:opacity-100" title="Rimuovi dipendenza" @click="removeTaskDependency(dependency.id)">
+                                        <X class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                    </button>
+                                </span>
+                                <span v-if="!selectedTaskDependencies().length" class="text-xs text-gray-500">Nessuna dipendenza.</span>
+                            </div>
+                            <div v-if="related.dependents?.length" class="mt-3 border-t border-gray-100 pt-3">
+                                <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Questa task blocca</p>
+                                <div class="mt-2 flex flex-wrap gap-2">
+                                    <Link
+                                        v-for="dependent in related.dependents"
+                                        :key="`dependent-${dependent.id}`"
+                                        :href="route('tasks.show', dependent.id)"
+                                        class="rounded-full bg-white px-3 py-1 text-xs font-semibold text-gray-600 transition hover:text-indigo-600"
+                                    >
+                                        {{ dependent.title }}
+                                    </Link>
+                                </div>
+                            </div>
+                            <div v-if="taskForm.errors.dependencies || taskForm.errors.status" class="mt-2 text-sm text-red-600">
+                                {{ taskForm.errors.dependencies || taskForm.errors.status }}
+                            </div>
+                        </section>
 
                         <div v-if="taskForm.task_type !== 'meeting'" class="rounded-md border border-gray-100 bg-gray-50 p-4">
                             <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
