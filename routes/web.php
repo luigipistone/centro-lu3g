@@ -60,6 +60,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/absences/{id}', [CentroPageController::class, 'destroyAbsence'])->name('absences.destroy');
     Route::get('/notifications', [CentroPageController::class, 'notifications'])->name('notifications.index');
     Route::get('/push/enable', [CentroPageController::class, 'enablePush'])->name('push.enable');
+    Route::post('/push/test', [CentroPageController::class, 'testPush'])->name('push.test');
     Route::post('/push-subscriptions', [CentroPageController::class, 'storePushSubscription'])->name('push-subscriptions.store');
     Route::patch('/notifications/read-all', [CentroPageController::class, 'markAllNotificationsRead'])->name('notifications.read-all');
     Route::patch('/notifications/{id}/read', [CentroPageController::class, 'markNotificationRead'])->name('notifications.read');

@@ -605,6 +605,24 @@ class CentroPageController extends Controller
         ]);
     }
 
+    public function testPush(Request $request): JsonResponse
+    {
+        $notificationId = (string) str()->uuid();
+
+        $this->sendBrowserPushNotification(
+            (string) $request->user()->id,
+            $notificationId,
+            'Notifica push di prova da Il Centro.',
+        );
+
+        return response()->json([
+            'status' => 'queued',
+            'subscriptions' => DB::table('push_subscriptions')
+                ->where('user_id', $request->user()->id)
+                ->count(),
+        ]);
+    }
+
     public function show(Request $request, string $id): Response
     {
         $section = $request->route('section');

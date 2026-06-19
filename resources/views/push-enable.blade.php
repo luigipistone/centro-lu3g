@@ -151,6 +151,18 @@
                 margin-top: 16px;
                 font-size: 13px;
             }
+
+            .diagnostics {
+                margin-top: 16px;
+                border-radius: 16px;
+                background: rgba(255, 255, 255, 0.58);
+                border: 1px solid rgba(255, 255, 255, 0.76);
+                padding: 12px 14px;
+                color: var(--muted);
+                font-size: 12px;
+                line-height: 1.6;
+                word-break: break-word;
+            }
         </style>
     </head>
     <body>
@@ -167,12 +179,15 @@
 
             <div class="actions">
                 <button id="enablePush" type="button">Attiva notifiche</button>
+                <button id="testPush" type="button">Invia test push</button>
                 <a href="{{ route('notifications.index') }}">Torna alle notifiche</a>
             </div>
 
             <div id="status" class="status">
                 Stato attuale: {{ $subscriptionCount > 0 ? 'dispositivo gia registrato' : 'dispositivo non ancora registrato' }}.
             </div>
+
+            <div id="diagnostics" class="diagnostics">Controllo supporto browser...</div>
 
             <p class="hint">Se il browser mostra una finestra di conferma, scegli Consenti. Dopo l'attivazione questa pagina invia una notifica di prova.</p>
         </main>
@@ -181,11 +196,55 @@
             const vapidPublicKey = @json($vapidPublicKey);
             const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
             const enableButton = document.getElementById('enablePush');
+            const testButton = document.getElementById('testPush');
             const statusBox = document.getElementById('status');
+            const diagnosticsBox = document.getElementById('diagnostics');
 
             function setStatus(message, type = '') {
                 statusBox.textContent = message;
                 statusBox.className = `status ${type}`.trim();
+            }
+
+            function withTimeout(promise, milliseconds, fallback) {
+                return Promise.race([
+                    promise,
+                    new Promise((resolve) => window.setTimeout(() => resolve(fallback), milliseconds)),
+                ]);
+            }
+
+            async function readDiagnostics() {
+                let permissionsState = 'non disponibile';
+                try {
+                    if (navigator.permissions?.query) {
+                        permissionsState = (await navigator.permissions.query({ name: 'notifications' })).state;
+                    }
+                } catch (error) {
+                    permissionsState = 'non leggibile';
+                }
+
+                return {
+                    https: window.isSecureContext ? 'ok' : 'no',
+                    notification: 'Notification' in window ? Notification.permission : 'non supportato',
+                    permissionsApi: permissionsState,
+                    serviceWorker: 'serviceWorker' in navigator ? 'ok' : 'non supportato',
+                    pushManager: 'PushManager' in window ? 'ok' : 'non supportato',
+                    standalone: window.matchMedia?.('(display-mode: standalone)').matches ? 'si' : 'no',
+                    browser: navigator.userAgent,
+                };
+            }
+
+            async function renderDiagnostics() {
+                const diagnostics = await readDiagnostics();
+                diagnosticsBox.innerHTML = [
+                    `<strong>Diagnosi browser</strong>`,
+                    `HTTPS: ${diagnostics.https}`,
+                    `Permesso notifiche: ${diagnostics.notification}`,
+                    `Permissions API: ${diagnostics.permissionsApi}`,
+                    `Service worker: ${diagnostics.serviceWorker}`,
+                    `Push manager: ${diagnostics.pushManager}`,
+                    `Modalita app installata: ${diagnostics.standalone}`,
+                    `Browser: ${diagnostics.browser}`,
+                ].join('<br>');
             }
 
             function urlBase64ToUint8Array(base64String) {
@@ -238,6 +297,8 @@
                 enableButton.disabled = true;
 
                 try {
+                    await renderDiagnostics();
+
                     if (!window.isSecureContext) {
                         throw new Error('Le notifiche push richiedono HTTPS.');
                     }
@@ -248,21 +309,59 @@
 
                     let permission = Notification.permission;
                     if (permission !== 'granted') {
-                        permission = await Notification.requestPermission();
+                        setStatus('Sto chiedendo il permesso al browser. Se compare una finestra, scegli Consenti...', '');
+                        permission = await withTimeout(Notification.requestPermission(), 12000, 'timeout');
+                    }
+
+                    if (permission === 'timeout') {
+                        throw new Error('Il browser non ha aperto o completato la finestra di consenso. Controlla nelle impostazioni del sito che le notifiche non siano bloccate e che il browser permetta ai siti di chiedere notifiche.');
                     }
 
                     if (permission !== 'granted') {
                         throw new Error('Permesso notifiche non concesso dal browser.');
                     }
 
+                    await renderDiagnostics();
                     setStatus('Permesso concesso. Registro questo dispositivo...', '');
                     await registerPushSubscription();
+                    await renderDiagnostics();
                     setStatus('Notifiche push attivate. Questo dispositivo e registrato.', 'ok');
+                    enableButton.disabled = false;
                 } catch (error) {
+                    await renderDiagnostics();
                     setStatus(error.message || 'Attivazione notifiche non riuscita.', 'error');
                     enableButton.disabled = false;
                 }
             });
+
+            testButton.addEventListener('click', async () => {
+                testButton.disabled = true;
+
+                try {
+                    const response = await fetch('/push/test', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Invio test push non riuscito.');
+                    }
+
+                    const payload = await response.json();
+                    setStatus(`Test push inviato. Dispositivi registrati: ${payload.subscriptions}.`, payload.subscriptions > 0 ? 'ok' : 'error');
+                } catch (error) {
+                    setStatus(error.message || 'Invio test push non riuscito.', 'error');
+                } finally {
+                    testButton.disabled = false;
+                }
+            });
+
+            renderDiagnostics();
         </script>
     </body>
 </html>
