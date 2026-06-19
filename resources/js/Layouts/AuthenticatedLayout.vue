@@ -125,6 +125,13 @@ function refreshNotificationPermission() {
     notificationPermission.value = browserNotificationSupport();
 }
 
+function handleBrowserPermissionEvent(event) {
+    notificationPermission.value = event.detail?.permission || browserNotificationSupport();
+    notificationStatusMessage.value = notificationPermission.value === 'granted'
+        ? 'Notifiche browser attivate.'
+        : 'Il browser non ha concesso il permesso notifiche.';
+}
+
 function rememberLatestNotification() {
     const latest = latestNotifications.value[0];
     if (latest?.id) {
@@ -199,6 +206,7 @@ onMounted(() => {
     ensureCentroPushSubscription(page.props.push?.vapidPublicKey);
     rememberLatestNotification();
     window.addEventListener('centro:task-completed', playCompletionEffect);
+    window.addEventListener('centro:browser-notification-permission', handleBrowserPermissionEvent);
     notificationPoller = window.setInterval(() => {
         router.reload({ only: ['notifications'], preserveScroll: true, preserveState: true });
     }, 15000);
@@ -208,6 +216,7 @@ onUnmounted(() => {
     window.clearInterval(notificationPoller);
     window.clearTimeout(completionEffectTimer);
     window.removeEventListener('centro:task-completed', playCompletionEffect);
+    window.removeEventListener('centro:browser-notification-permission', handleBrowserPermissionEvent);
 });
 
 const groups = computed(() => [
@@ -312,7 +321,7 @@ const groups = computed(() => [
                                 </div>
                             </div>
                             <div v-if="notificationPermission === 'default'" class="border-b border-white/60 px-3 py-2">
-                                <button type="button" class="text-xs font-semibold text-[hsl(var(--primary-app))] transition hover:text-[hsl(var(--primary-app-dark))]" @click="enableBrowserNotifications">
+                                <button type="button" class="text-xs font-semibold text-[hsl(var(--primary-app))] transition hover:text-[hsl(var(--primary-app-dark))]" data-enable-browser-notifications @click="enableBrowserNotifications">
                                     Attiva notifiche browser
                                 </button>
                             </div>

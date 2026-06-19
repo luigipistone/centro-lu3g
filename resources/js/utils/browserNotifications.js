@@ -13,7 +13,7 @@ function withTimeout(promise, milliseconds, fallback = null) {
     ]);
 }
 
-function requestBrowserPermission() {
+export function requestCentroBrowserPermission() {
     if (typeof window !== 'undefined' && !window.isSecureContext) {
         return Promise.resolve('denied');
     }
@@ -161,7 +161,7 @@ export async function enableCentroBrowserNotifications(vapidPublicKey = null, op
     let permission = support;
     if (permission !== 'granted') {
         try {
-            permission = await requestBrowserPermission();
+            permission = await requestCentroBrowserPermission();
         } catch (error) {
             return { permission, message: 'Il browser non ha completato la richiesta di autorizzazione.' };
         }

@@ -4,7 +4,7 @@ import { browserNotificationSupport, enableCentroBrowserNotifications } from '@/
 import { APP_TIME_ZONE } from '@/utils/formatters';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { Archive, Bell, Check, RotateCcw } from '@lucide/vue';
-import { computed, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 
 const props = defineProps({
     notifications: Array,
@@ -20,6 +20,21 @@ const browserPermission = ref(browserNotificationSupport());
 const browserNotificationMessage = ref('');
 
 const emptyLabel = computed(() => props.archived ? 'Nessuna notifica archiviata.' : 'Nessuna notifica attiva.');
+
+function handleBrowserPermissionEvent(event) {
+    browserPermission.value = event.detail?.permission || browserNotificationSupport();
+    browserNotificationMessage.value = browserPermission.value === 'granted'
+        ? 'Notifiche browser attivate.'
+        : 'Il browser non ha concesso il permesso notifiche.';
+}
+
+onMounted(() => {
+    window.addEventListener('centro:browser-notification-permission', handleBrowserPermissionEvent);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('centro:browser-notification-permission', handleBrowserPermissionEvent);
+});
 
 function markRead(notification) {
     router.patch(route('notifications.read', notification.id), {}, { preserveScroll: true });
@@ -123,7 +138,7 @@ function formatDate(value) {
                     </div>
 
                     <div class="flex flex-wrap items-center gap-2">
-                        <button v-if="browserPermission === 'default'" type="button" class="btn btn-outline" @click="enableBrowserNotifications">
+                        <button v-if="browserPermission === 'default'" type="button" class="btn btn-outline" data-enable-browser-notifications @click="enableBrowserNotifications">
                             <Bell class="h-4 w-4" :stroke-width="1.7" />
                             Attiva browser
                         </button>

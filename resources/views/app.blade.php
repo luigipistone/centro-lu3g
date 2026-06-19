@@ -15,6 +15,11 @@
 
         <!-- Scripts -->
         @routes
+        <script>
+            window.CentroPush = {
+                vapidPublicKey: @json(config('services.webpush.public_key')),
+            };
+        </script>
         @vite(['resources/js/app.js', "resources/js/Pages/{$page['component']}.vue"])
         @inertiaHead
     </head>
