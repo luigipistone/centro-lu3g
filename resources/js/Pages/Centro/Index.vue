@@ -1090,6 +1090,15 @@ function confirmRestoreBackup() {
     });
 }
 
+function removeBackup(run) {
+    remove(run, () => {
+        router.delete(route('settings.backup.destroy', run.id), {
+            preserveScroll: true,
+            onFinish: cancelDelete,
+        });
+    });
+}
+
 function backupFrequencyLabel(frequency) {
     return {
         manual: 'Manuale',
@@ -1131,7 +1140,7 @@ function remove(row, action = null) {
 }
 
 function deleteTargetName() {
-    return deleteTarget.value?.name || deleteTarget.value?.title || deleteTarget.value?.number || deleteTarget.value?.email || deleteTarget.value?.client_name || deleteTarget.value?.user_name || 'elemento';
+    return deleteTarget.value?.name || deleteTarget.value?.title || deleteTarget.value?.number || deleteTarget.value?.email || deleteTarget.value?.client_name || deleteTarget.value?.user_name || deleteTarget.value?.storage_path || 'elemento';
 }
 
 function cancelDelete() {
@@ -4712,16 +4721,28 @@ function visibleCalendarTasks(cell) {
                                         </td>
                                         <td class="px-3 py-3">{{ run.tables_count || '-' }}</td>
                                         <td class="px-3 py-3">{{ fileSize(run.size_bytes) }}</td>
-                                        <td class="px-3 py-3 text-right">
+                                        <td class="px-3 py-3">
+                                            <div class="flex justify-end gap-1">
                                             <button
                                                 type="button"
-                                                :class="['icon-btn ml-auto', run.restorable ? 'restore-backup-button' : '']"
+                                                :class="['icon-btn', run.restorable ? 'restore-backup-button' : '']"
                                                 :disabled="!run.restorable"
                                                 :title="run.restorable ? 'Ripristina backup' : 'File backup non disponibile'"
+                                                :aria-label="run.restorable ? 'Ripristina backup' : 'File backup non disponibile'"
                                                 @click="openRestoreBackup(run)"
                                             >
                                                 <RotateCcw class="h-4 w-4" :stroke-width="1.7" />
                                             </button>
+                                            <button
+                                                type="button"
+                                                class="icon-btn text-red-600 hover:bg-red-50 hover:text-red-500"
+                                                title="Elimina backup"
+                                                aria-label="Elimina backup"
+                                                @click="removeBackup(run)"
+                                            >
+                                                <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                            </button>
+                                            </div>
                                         </td>
                                     </tr>
                                     <tr v-if="!(backupRuns || []).length">
@@ -4783,9 +4804,15 @@ function visibleCalendarTasks(cell) {
                                             {{ row.color || '-' }}
                                         </span>
                                     </td>
-                                    <td class="px-4 py-3 text-right">
-                                        <button type="button" class="action-link" @click="editRow(row)"><Pencil class="h-4 w-4" :stroke-width="1.7" />Modifica</button>
-                                        <button type="button" class="danger-link ml-4" @click="remove(row)"><Trash2 class="h-4 w-4" :stroke-width="1.7" />Elimina</button>
+                                    <td class="px-4 py-3">
+                                        <div class="flex justify-end gap-1">
+                                            <button type="button" class="icon-btn" title="Modifica servizio" :aria-label="`Modifica ${row.name}`" @click="editRow(row)">
+                                                <Pencil class="h-4 w-4" :stroke-width="1.7" />
+                                            </button>
+                                            <button type="button" class="icon-btn text-red-600 hover:bg-red-50 hover:text-red-500" title="Elimina servizio" :aria-label="`Elimina ${row.name}`" @click="remove(row)">
+                                                <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             </tbody>

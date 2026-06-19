@@ -113,6 +113,7 @@ Route::middleware('auth')->group(function () {
     Route::put('/settings/numbering/{id}', [CentroPageController::class, 'updateNumbering'])->name('settings.numbering.update');
     Route::post('/settings/backup', [CentroPageController::class, 'runBackup'])->name('settings.backup.run');
     Route::post('/settings/backup/{id}/restore', [CentroPageController::class, 'restoreBackup'])->name('settings.backup.restore');
+    Route::delete('/settings/backup/{id}', [CentroPageController::class, 'destroyBackup'])->name('settings.backup.destroy');
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::post('/profile/avatar', [ProfileController::class, 'updateAvatar'])->name('profile.avatar.update');

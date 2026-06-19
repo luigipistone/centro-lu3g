@@ -70,6 +70,21 @@ class CentroBackupService
         $this->restoreDatabase(Storage::disk('local')->get($backup->storage_path));
     }
 
+    public function delete(string $backupId): void
+    {
+        $backup = DB::table('backup_runs')->where('id', $backupId)->first();
+
+        if (! $backup) {
+            throw new RuntimeException('Backup non trovato.');
+        }
+
+        if ($backup->storage_path) {
+            Storage::disk('local')->delete($backup->storage_path);
+        }
+
+        DB::table('backup_runs')->where('id', $backupId)->delete();
+    }
+
     private function dumpDatabase(): string
     {
         $connection = config('database.connections.mysql');

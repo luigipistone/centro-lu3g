@@ -948,6 +948,19 @@ class CentroPageController extends Controller
         return back()->with('status', 'Backup ripristinato correttamente.');
     }
 
+    public function destroyBackup(Request $request, CentroBackupService $backupService, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+
+        try {
+            $backupService->delete($id);
+        } catch (\Throwable $exception) {
+            return back()->with('status', 'Backup non eliminato: '.$exception->getMessage());
+        }
+
+        return back()->with('status', 'Backup eliminato.');
+    }
+
     private function nullifyEmptyStrings(array $payload): array
     {
         foreach ($payload as $key => $value) {
