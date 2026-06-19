@@ -43,6 +43,20 @@ async function subscribeCentroPush(vapidPublicKey) {
     return true;
 }
 
+export async function ensureCentroPushSubscription(vapidPublicKey = null) {
+    if (browserNotificationSupport() !== 'granted') {
+        return false;
+    }
+
+    try {
+        await registerCentroServiceWorker();
+        return await subscribeCentroPush(vapidPublicKey);
+    } catch (error) {
+        console.warn('Sottoscrizione push non completata', error);
+        return false;
+    }
+}
+
 export async function showCentroBrowserNotification(title, options = {}) {
     if (browserNotificationSupport() !== 'granted') {
         return false;

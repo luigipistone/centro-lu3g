@@ -5,7 +5,7 @@ import DropdownLink from '@/Components/DropdownLink.vue';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
-import { browserNotificationSupport, enableCentroBrowserNotifications, showCentroBrowserNotification } from '@/utils/browserNotifications';
+import { browserNotificationSupport, enableCentroBrowserNotifications, ensureCentroPushSubscription, showCentroBrowserNotification } from '@/utils/browserNotifications';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import {
     Bell,
@@ -189,6 +189,7 @@ watch(latestUnreadNotification, (notification) => {
 onMounted(() => {
     initializeTheme();
     refreshNotificationPermission();
+    ensureCentroPushSubscription(page.props.push?.vapidPublicKey);
     rememberLatestNotification();
     window.addEventListener('centro:task-completed', playCompletionEffect);
     notificationPoller = window.setInterval(() => {
