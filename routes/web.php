@@ -58,6 +58,15 @@ Route::middleware('auth')->group(function () {
     Route::post('/absences/{id}/medical-document', [CentroPageController::class, 'updateAbsenceMedicalDocument'])->name('absences.medical-document.update');
     Route::patch('/absences/{id}/status', [CentroPageController::class, 'updateAbsenceStatus'])->name('absences.status.update');
     Route::delete('/absences/{id}', [CentroPageController::class, 'destroyAbsence'])->name('absences.destroy');
+    Route::get('/documents', [CentroPageController::class, 'companyDocuments'])->name('documents.index');
+    Route::post('/documents', [CentroPageController::class, 'storeCompanyDocument'])->name('documents.store');
+    Route::get('/documents/{id}', [CentroPageController::class, 'showCompanyDocument'])->name('documents.show');
+    Route::get('/documents/{id}/file', [CentroPageController::class, 'viewCompanyDocumentFile'])->name('documents.file');
+    Route::post('/documents/{id}/read', [CentroPageController::class, 'markCompanyDocumentRead'])->name('documents.read');
+    Route::delete('/documents/{id}', [CentroPageController::class, 'destroyCompanyDocument'])->name('documents.destroy');
+    Route::post('/document-groups', [CentroPageController::class, 'storeDocumentGroup'])->name('document-groups.store');
+    Route::put('/document-groups/{id}', [CentroPageController::class, 'updateDocumentGroup'])->name('document-groups.update');
+    Route::delete('/document-groups/{id}', [CentroPageController::class, 'destroyDocumentGroup'])->name('document-groups.destroy');
     Route::get('/notifications', [CentroPageController::class, 'notifications'])->name('notifications.index');
     Route::get('/push/enable', [CentroPageController::class, 'enablePush'])->name('push.enable');
     Route::post('/push/test', [CentroPageController::class, 'testPush'])->name('push.test');

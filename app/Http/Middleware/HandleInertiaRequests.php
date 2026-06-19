@@ -67,7 +67,7 @@ class HandleInertiaRequests extends Middleware
                     ->where('read', false)
                     ->latest()
                     ->limit(8)
-                    ->get(['id', 'task_id', 'type', 'message', 'read', 'created_at']),
+                    ->get(['id', 'task_id', 'company_document_id', 'type', 'message', 'read', 'created_at']),
             ] : ['active' => 0, 'unread' => 0, 'latest' => []],
             'push' => [
                 'vapidPublicKey' => config('services.webpush.public_key'),

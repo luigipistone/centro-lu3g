@@ -14,6 +14,7 @@ import {
     CalendarX,
     CheckSquare,
     ChevronDown,
+    FileText,
     Menu,
     LayoutDashboard,
     LogOut,
@@ -175,7 +176,10 @@ async function maybeShowBrowserNotification(notification) {
 }
 
 function notificationHref(notification) {
-    return notification.task_id ? route('tasks.show', notification.task_id) : route('notifications.index');
+    if (notification.task_id) return route('tasks.show', notification.task_id);
+    if (notification.company_document_id) return route('documents.show', notification.company_document_id);
+
+    return route('notifications.index');
 }
 
 function openNotification(notification) {
@@ -234,6 +238,7 @@ const groups = computed(() => [
             ['projects.index', 'Progetti', Briefcase],
             ['tasks.index', 'Task', CheckSquare],
             ['calendar.index', 'Calendario', Calendar],
+            ['documents.index', 'Documenti', FileText],
             ...(canManageAbsences.value ? [['absences.index', 'Assenze', CalendarX]] : []),
             ['settings.index', 'Impostazioni', Settings],
         ],

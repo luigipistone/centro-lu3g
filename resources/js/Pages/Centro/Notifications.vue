@@ -41,6 +41,13 @@ function markRead(notification) {
     router.patch(route('notifications.read', notification.id), {}, { preserveScroll: true });
 }
 
+function notificationHref(notification) {
+    if (notification.task_id) return route('tasks.show', notification.task_id);
+    if (notification.company_document_id) return route('documents.show', notification.company_document_id);
+
+    return null;
+}
+
 function markAllRead() {
     router.patch(route('notifications.read-all'), {}, { preserveScroll: true });
 }
@@ -188,8 +195,8 @@ function formatDate(value) {
                             <span :class="['mt-2 h-2.5 w-2.5 shrink-0 rounded-full', notification.read || archived ? 'bg-gray-300' : 'bg-indigo-600']" />
                             <div class="min-w-0 flex-1">
                                 <Link
-                                    v-if="notification.task_id"
-                                    :href="route('tasks.show', notification.task_id)"
+                                    v-if="notificationHref(notification)"
+                                    :href="notificationHref(notification)"
                                     class="block text-sm font-semibold text-gray-900 transition hover:text-indigo-600"
                                     @click="!archived && markRead(notification)"
                                 >

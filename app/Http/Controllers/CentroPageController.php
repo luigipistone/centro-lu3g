@@ -559,6 +559,235 @@ class CentroPageController extends Controller
         return back()->with('status', 'Richiesta eliminata.');
     }
 
+    public function companyDocuments(Request $request): Response
+    {
+        $canManage = $this->canManageDocuments($request);
+        $userId = (string) $request->user()->id;
+
+        return Inertia::render('Centro/Documents', [
+            'canManage' => $canManage,
+            'documents' => $this->companyDocumentRows($canManage ? null : $userId, $canManage),
+            'groups' => $canManage ? $this->documentGroupRows() : [],
+            'users' => $canManage ? $this->userOptions() : [],
+            'selectedUserId' => $request->query('user'),
+            'selectedUserDocuments' => $canManage && $request->query('user')
+                ? $this->companyDocumentRows((string) $request->query('user'), false)
+                : [],
+        ]);
+    }
+
+    public function storeCompanyDocument(Request $request): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+
+        $payload = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:5000'],
+            'audience' => ['required', Rule::in(['all', 'users', 'groups'])],
+            'file' => ['required', 'file', 'mimes:pdf', 'max:20480'],
+            'user_ids' => ['nullable', 'array'],
+            'user_ids.*' => ['uuid', 'exists:users,id'],
+            'group_ids' => ['nullable', 'array'],
+            'group_ids.*' => ['uuid', 'exists:document_groups,id'],
+        ]);
+
+        if ($payload['audience'] === 'users' && empty($payload['user_ids'])) {
+            return back()->withErrors(['user_ids' => 'Seleziona almeno un utente.'])->withInput();
+        }
+
+        if ($payload['audience'] === 'groups' && empty($payload['group_ids'])) {
+            return back()->withErrors(['group_ids' => 'Seleziona almeno un gruppo.'])->withInput();
+        }
+
+        $documentId = (string) str()->uuid();
+        $file = $payload['file'];
+        $path = $file->store('company-documents', 'local');
+        $now = now();
+
+        DB::transaction(function () use ($payload, $documentId, $file, $path, $request, $now) {
+            DB::table('company_documents')->insert([
+                'id' => $documentId,
+                'title' => $payload['title'],
+                'description' => $payload['description'] ?? null,
+                'audience' => $payload['audience'],
+                'file_path' => $path,
+                'file_name' => $file->getClientOriginalName(),
+                'file_mime' => $file->getMimeType() ?: 'application/pdf',
+                'file_size' => $file->getSize() ?: 0,
+                'created_by' => $request->user()->id,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+            foreach (collect($payload['user_ids'] ?? [])->unique()->values() as $userId) {
+                DB::table('company_document_user')->insert([
+                    'id' => (string) str()->uuid(),
+                    'company_document_id' => $documentId,
+                    'user_id' => $userId,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+            }
+
+            foreach (collect($payload['group_ids'] ?? [])->unique()->values() as $groupId) {
+                DB::table('company_document_group')->insert([
+                    'id' => (string) str()->uuid(),
+                    'company_document_id' => $documentId,
+                    'document_group_id' => $groupId,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+            }
+        });
+
+        $recipientIds = $this->companyDocumentRecipientIds($documentId);
+        $this->ensureCompanyDocumentReadRows($documentId, $recipientIds);
+        $this->notifyUsers(
+            $recipientIds,
+            $request->user()->id,
+            'company_document_created',
+            $request->user()->name.' ha pubblicato il documento "'.$payload['title'].'".',
+            null,
+            $documentId,
+        );
+
+        return redirect()->route('documents.index')->with('status', 'Documento pubblicato.');
+    }
+
+    public function showCompanyDocument(Request $request, string $id): Response
+    {
+        $document = DB::table('company_documents')->where('id', $id)->first();
+        abort_if(! $document, 404);
+        abort_unless($this->canAccessCompanyDocument($request, $document), 403);
+
+        $this->markCompanyDocumentOpened($id, (string) $request->user()->id);
+
+        return Inertia::render('Centro/DocumentShow', [
+            'canManage' => $this->canManageDocuments($request),
+            'document' => $this->companyDocumentRow($document, (string) $request->user()->id),
+            'readers' => $this->canManageDocuments($request) ? $this->companyDocumentReaderRows($id) : [],
+        ]);
+    }
+
+    public function viewCompanyDocumentFile(Request $request, string $id)
+    {
+        $document = DB::table('company_documents')->where('id', $id)->first();
+        abort_if(! $document, 404);
+        abort_unless($this->canAccessCompanyDocument($request, $document), 403);
+        abort_unless(Storage::disk('local')->exists($document->file_path), 404);
+
+        $this->markCompanyDocumentOpened($id, (string) $request->user()->id);
+
+        return response()->file(Storage::disk('local')->path($document->file_path), [
+            'Content-Type' => $document->file_mime ?: 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$document->file_name.'"',
+        ]);
+    }
+
+    public function markCompanyDocumentRead(Request $request, string $id): RedirectResponse
+    {
+        $document = DB::table('company_documents')->where('id', $id)->first();
+        abort_if(! $document, 404);
+        abort_unless($this->canAccessCompanyDocument($request, $document), 403);
+
+        $row = DB::table('company_document_reads')
+            ->where('company_document_id', $id)
+            ->where('user_id', $request->user()->id)
+            ->first(['id']);
+
+        if ($row) {
+            DB::table('company_document_reads')->where('id', $row->id)->update([
+                'opened_at' => now(),
+                'read_at' => now(),
+                'updated_at' => now(),
+            ]);
+        } else {
+            DB::table('company_document_reads')->insert([
+                'id' => (string) str()->uuid(),
+                'company_document_id' => $id,
+                'user_id' => $request->user()->id,
+                'opened_at' => now(),
+                'read_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        return back()->with('status', 'Documento segnato come letto.');
+    }
+
+    public function destroyCompanyDocument(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        $document = DB::table('company_documents')->where('id', $id)->first();
+        abort_if(! $document, 404);
+
+        Storage::disk('local')->delete($document->file_path);
+        DB::table('company_documents')->where('id', $id)->delete();
+
+        return back()->with('status', 'Documento eliminato.');
+    }
+
+    public function storeDocumentGroup(Request $request): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        $payload = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:3000'],
+            'user_ids' => ['nullable', 'array'],
+            'user_ids.*' => ['uuid', 'exists:users,id'],
+        ]);
+
+        $groupId = (string) str()->uuid();
+        DB::transaction(function () use ($payload, $groupId, $request) {
+            DB::table('document_groups')->insert([
+                'id' => $groupId,
+                'name' => $payload['name'],
+                'description' => $payload['description'] ?? null,
+                'created_by' => $request->user()->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $this->syncDocumentGroupUsers($groupId, $payload['user_ids'] ?? []);
+        });
+
+        return back()->with('status', 'Gruppo creato.');
+    }
+
+    public function updateDocumentGroup(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        abort_unless(DB::table('document_groups')->where('id', $id)->exists(), 404);
+
+        $payload = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:3000'],
+            'user_ids' => ['nullable', 'array'],
+            'user_ids.*' => ['uuid', 'exists:users,id'],
+        ]);
+
+        DB::transaction(function () use ($payload, $id) {
+            DB::table('document_groups')->where('id', $id)->update([
+                'name' => $payload['name'],
+                'description' => $payload['description'] ?? null,
+                'updated_at' => now(),
+            ]);
+
+            $this->syncDocumentGroupUsers($id, $payload['user_ids'] ?? []);
+        });
+
+        return back()->with('status', 'Gruppo aggiornato.');
+    }
+
+    public function destroyDocumentGroup(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        DB::table('document_groups')->where('id', $id)->delete();
+
+        return back()->with('status', 'Gruppo eliminato.');
+    }
+
     public function notifications(Request $request): Response
     {
         $this->archiveExpiredNotifications($request->user()->id);
@@ -576,6 +805,7 @@ class CentroPageController extends Controller
                 ->get([
                     'notifications.id',
                     'notifications.task_id',
+                    'notifications.company_document_id',
                     'notifications.type',
                     'notifications.message',
                     'notifications.read',
@@ -1664,10 +1894,208 @@ class CentroPageController extends Controller
         abort_unless(in_array($this->currentUserRole($request), ['superadmin', 'admin'], true), 403);
     }
 
+    private function canManageDocuments(Request $request): bool
+    {
+        return in_array($this->currentUserRole($request), ['superadmin', 'admin'], true);
+    }
+
     private function canAccessAbsence(Request $request, object $absence): bool
     {
         return $absence->user_id === $request->user()?->id
             || in_array($this->currentUserRole($request), ['superadmin', 'admin'], true);
+    }
+
+    private function canAccessCompanyDocument(Request $request, object $document): bool
+    {
+        if ($this->canManageDocuments($request)) {
+            return true;
+        }
+
+        return $this->companyDocumentRecipientIds($document->id)->contains($request->user()?->id);
+    }
+
+    private function companyDocumentRows(?string $userId = null, bool $adminView = false)
+    {
+        $query = DB::table('company_documents')
+            ->leftJoin('users', 'users.id', '=', 'company_documents.created_by')
+            ->select('company_documents.*', 'users.name as creator_name')
+            ->latest('company_documents.created_at');
+
+        if ($userId) {
+            $documentIds = $this->visibleCompanyDocumentIdsForUser($userId);
+            $query->whereIn('company_documents.id', $documentIds);
+        }
+
+        $documents = $query->limit($adminView ? 300 : 150)->get();
+
+        return $documents->map(fn ($document) => $this->companyDocumentRow($document, $userId));
+    }
+
+    private function companyDocumentRow(object $document, ?string $userId = null): object
+    {
+        $recipientIds = $this->companyDocumentRecipientIds($document->id);
+        $readRows = DB::table('company_document_reads')
+            ->where('company_document_id', $document->id)
+            ->get(['user_id', 'opened_at', 'read_at'])
+            ->keyBy('user_id');
+
+        $document->recipient_count = $recipientIds->count();
+        $document->read_count = $readRows->filter(fn ($row) => filled($row->read_at))->count();
+        $document->opened_count = $readRows->filter(fn ($row) => filled($row->opened_at))->count();
+        $document->user_read_at = $userId ? ($readRows[$userId]->read_at ?? null) : null;
+        $document->user_opened_at = $userId ? ($readRows[$userId]->opened_at ?? null) : null;
+        $document->user_ids = DB::table('company_document_user')->where('company_document_id', $document->id)->pluck('user_id');
+        $document->group_ids = DB::table('company_document_group')->where('company_document_id', $document->id)->pluck('document_group_id');
+
+        return $document;
+    }
+
+    private function documentGroupRows()
+    {
+        $groups = DB::table('document_groups')->orderBy('name')->get();
+        $members = DB::table('document_group_user')
+            ->whereIn('document_group_id', $groups->pluck('id'))
+            ->get(['document_group_id', 'user_id'])
+            ->groupBy('document_group_id');
+
+        return $groups->map(function ($group) use ($members) {
+            $group->user_ids = ($members[$group->id] ?? collect())->pluck('user_id')->values();
+            $group->members_count = $group->user_ids->count();
+
+            return $group;
+        });
+    }
+
+    private function companyDocumentReaderRows(string $documentId)
+    {
+        $recipientIds = $this->companyDocumentRecipientIds($documentId);
+
+        return DB::table('users')
+            ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
+            ->leftJoin('company_document_reads', function ($join) use ($documentId) {
+                $join->on('company_document_reads.user_id', '=', 'users.id')
+                    ->where('company_document_reads.company_document_id', '=', $documentId);
+            })
+            ->whereIn('users.id', $recipientIds)
+            ->orderBy('users.name')
+            ->get([
+                'users.id',
+                'users.name',
+                'users.email',
+                'profiles.avatar_url',
+                'company_document_reads.opened_at',
+                'company_document_reads.read_at',
+            ]);
+    }
+
+    private function visibleCompanyDocumentIdsForUser(string $userId): \Illuminate\Support\Collection
+    {
+        $groupIds = DB::table('document_group_user')->where('user_id', $userId)->pluck('document_group_id');
+
+        return DB::table('company_documents')
+            ->where('audience', 'all')
+            ->pluck('id')
+            ->merge(DB::table('company_document_user')->where('user_id', $userId)->pluck('company_document_id'))
+            ->merge(DB::table('company_document_group')->whereIn('document_group_id', $groupIds)->pluck('company_document_id'))
+            ->filter()
+            ->unique()
+            ->values();
+    }
+
+    private function companyDocumentRecipientIds(string $documentId): \Illuminate\Support\Collection
+    {
+        $document = DB::table('company_documents')->where('id', $documentId)->first(['audience']);
+        if (! $document) {
+            return collect();
+        }
+
+        if ($document->audience === 'all') {
+            return DB::table('users')->pluck('id');
+        }
+
+        $userIds = DB::table('company_document_user')
+            ->where('company_document_id', $documentId)
+            ->pluck('user_id');
+
+        $groupIds = DB::table('company_document_group')
+            ->where('company_document_id', $documentId)
+            ->pluck('document_group_id');
+
+        return $userIds
+            ->merge(DB::table('document_group_user')->whereIn('document_group_id', $groupIds)->pluck('user_id'))
+            ->filter()
+            ->unique()
+            ->values();
+    }
+
+    private function ensureCompanyDocumentReadRows(string $documentId, iterable $userIds): void
+    {
+        foreach (collect($userIds)->filter()->unique()->values() as $userId) {
+            $exists = DB::table('company_document_reads')
+                ->where('company_document_id', $documentId)
+                ->where('user_id', $userId)
+                ->exists();
+
+            if ($exists) {
+                DB::table('company_document_reads')
+                    ->where('company_document_id', $documentId)
+                    ->where('user_id', $userId)
+                    ->update(['updated_at' => now()]);
+
+                continue;
+            }
+
+            DB::table('company_document_reads')->insert([
+                'id' => (string) str()->uuid(),
+                'company_document_id' => $documentId,
+                'user_id' => $userId,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+    }
+
+    private function markCompanyDocumentOpened(string $documentId, string $userId): void
+    {
+        $row = DB::table('company_document_reads')
+            ->where('company_document_id', $documentId)
+            ->where('user_id', $userId)
+            ->first(['id', 'opened_at']);
+
+        if ($row) {
+            DB::table('company_document_reads')->where('id', $row->id)->update([
+                'opened_at' => $row->opened_at ?: now(),
+                'updated_at' => now(),
+            ]);
+
+            return;
+        }
+
+        DB::table('company_document_reads')->insert([
+            'id' => (string) str()->uuid(),
+            'company_document_id' => $documentId,
+            'user_id' => $userId,
+            'opened_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function syncDocumentGroupUsers(string $groupId, array $userIds): void
+    {
+        DB::table('document_group_user')->where('document_group_id', $groupId)->delete();
+
+        $rows = collect($userIds)->filter()->unique()->values()->map(fn ($userId) => [
+            'id' => (string) str()->uuid(),
+            'document_group_id' => $groupId,
+            'user_id' => $userId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ])->all();
+
+        if ($rows) {
+            DB::table('document_group_user')->insert($rows);
+        }
     }
 
     private function validatedAbsencePayload(Request $request): array
@@ -3391,7 +3819,7 @@ class CentroPageController extends Controller
         $this->notifyUsers($userIds, $actorId, $type, $message);
     }
 
-    private function notifyUsers(iterable $userIds, ?string $actorId, string $type, string $message, ?string $taskId = null): void
+    private function notifyUsers(iterable $userIds, ?string $actorId, string $type, string $message, ?string $taskId = null, ?string $companyDocumentId = null): void
     {
         $now = now();
 
@@ -3404,6 +3832,7 @@ class CentroPageController extends Controller
                 ->where('created_at', '>=', $now->copy()->subMinutes(2))
                 ->when($actorId, fn ($query) => $query->where('actor_id', $actorId), fn ($query) => $query->whereNull('actor_id'))
                 ->when($taskId, fn ($query) => $query->where('task_id', $taskId), fn ($query) => $query->whereNull('task_id'))
+                ->when($companyDocumentId, fn ($query) => $query->where('company_document_id', $companyDocumentId), fn ($query) => $query->whereNull('company_document_id'))
                 ->when(! $this->shouldCoalesceNotification($type, $taskId), fn ($query) => $query->where('message', $message))
                 ->latest('created_at')
                 ->first(['id']);
@@ -3417,7 +3846,7 @@ class CentroPageController extends Controller
                         'updated_at' => $now,
                     ]);
 
-                $this->sendBrowserPushNotification((string) $userId, (string) $existingNotification->id, $message, $taskId);
+                $this->sendBrowserPushNotification((string) $userId, (string) $existingNotification->id, $message, $taskId, $companyDocumentId);
 
                 continue;
             }
@@ -3429,6 +3858,7 @@ class CentroPageController extends Controller
                 'user_id' => $userId,
                 'actor_id' => $actorId,
                 'task_id' => $taskId,
+                'company_document_id' => $companyDocumentId,
                 'type' => $type,
                 'message' => $message,
                 'read' => false,
@@ -3436,7 +3866,7 @@ class CentroPageController extends Controller
                 'updated_at' => $now,
             ]);
 
-            $this->sendBrowserPushNotification((string) $userId, $notificationId, $message, $taskId);
+            $this->sendBrowserPushNotification((string) $userId, $notificationId, $message, $taskId, $companyDocumentId);
         }
     }
 
@@ -3445,7 +3875,7 @@ class CentroPageController extends Controller
         return $taskId !== null && in_array($type, ['task_updated'], true);
     }
 
-    private function sendBrowserPushNotification(string $userId, string $notificationId, string $message, ?string $taskId = null): void
+    private function sendBrowserPushNotification(string $userId, string $notificationId, string $message, ?string $taskId = null, ?string $companyDocumentId = null): void
     {
         $publicKey = config('services.webpush.public_key');
         $privateKey = config('services.webpush.private_key');
@@ -3475,7 +3905,7 @@ class CentroPageController extends Controller
             'title' => 'Il Centro',
             'body' => $message,
             'tag' => $notificationId,
-            'url' => $taskId ? route('tasks.show', $taskId) : route('notifications.index'),
+            'url' => $taskId ? route('tasks.show', $taskId) : ($companyDocumentId ? route('documents.show', $companyDocumentId) : route('notifications.index')),
         ], JSON_THROW_ON_ERROR);
 
         foreach ($subscriptions as $subscription) {
