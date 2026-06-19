@@ -187,4 +187,57 @@ class ProjectWorkflowTest extends TestCase
             'user_id' => $member->id,
         ]);
     }
+
+    public function test_project_update_notifies_involved_members_once_for_repeated_autosaves(): void
+    {
+        $user = User::factory()->create();
+        $member = User::factory()->create();
+        $projectId = (string) Str::uuid();
+
+        DB::table('projects')->insert([
+            'id' => $projectId,
+            'name' => 'Progetto notifiche',
+            'status' => 'active',
+            'color' => '#2563eb',
+            'created_by' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('project_followers')->insert([
+            'id' => (string) Str::uuid(),
+            'project_id' => $projectId,
+            'user_id' => $member->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->put("/projects/{$projectId}", [
+                'name' => 'Progetto notifiche',
+                'client_id' => null,
+                'status' => 'on_hold',
+                'color' => '#2563eb',
+                'description' => null,
+            ])
+            ->assertRedirect();
+
+        $this
+            ->actingAs($user)
+            ->put("/projects/{$projectId}", [
+                'name' => 'Progetto notifiche',
+                'client_id' => null,
+                'status' => 'on_hold',
+                'color' => '#16a34a',
+                'description' => null,
+            ])
+            ->assertRedirect();
+
+        $this->assertSame(1, DB::table('notifications')
+            ->where('user_id', $member->id)
+            ->where('type', 'project_updated')
+            ->where('message', $user->name.' ha modificato il progetto "Progetto notifiche".')
+            ->count());
+    }
 }

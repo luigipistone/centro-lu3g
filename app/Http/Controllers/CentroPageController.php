@@ -748,10 +748,14 @@ class CentroPageController extends Controller
         $taskPeople = $section === 'tasks' ? $this->extractTaskPeoplePayload($payload) : null;
         $projectFollowers = $section === 'projects' ? $this->extractProjectFollowersPayload($payload) : null;
         $oldTask = $section === 'tasks' ? DB::table('tasks')->where('id', $id)->first() : null;
+        $oldProject = $section === 'projects' ? DB::table('projects')->where('id', $id)->first() : null;
         $oldTaskPeople = $section === 'tasks' && $taskPeople !== null ? [
             'assignees' => DB::table('task_assignees')->where('task_id', $id)->pluck('user_id')->sort()->values()->all(),
             'followers' => DB::table('task_followers')->where('task_id', $id)->pluck('user_id')->sort()->values()->all(),
         ] : null;
+        $oldProjectFollowers = $section === 'projects' && $projectFollowers !== null
+            ? DB::table('project_followers')->where('project_id', $id)->pluck('user_id')->sort()->values()->all()
+            : null;
         $payload['updated_at'] = now();
 
         DB::table($this->config($section)['table'])->where('id', $id)->update($payload);
@@ -781,6 +785,23 @@ class CentroPageController extends Controller
 
         if ($section === 'projects' && $projectFollowers !== null) {
             $this->syncProjectFollowersList($id, $projectFollowers);
+        }
+
+        if ($section === 'projects' && $oldProject) {
+            $changedFields = $this->changedProjectFields($oldProject, $payload);
+            $projectPeopleChanged = $projectFollowers !== null
+                && $oldProjectFollowers !== null
+                && $oldProjectFollowers !== collect($projectFollowers)->sort()->values()->all();
+
+            if ($changedFields || $projectPeopleChanged) {
+                $this->notifyProjectPeople(
+                    $id,
+                    $request->user()->id,
+                    'project_updated',
+                    $request->user()->name.' ha modificato il progetto "'.($payload['name'] ?? $oldProject->name).'".',
+                    $oldProjectFollowers,
+                );
+            }
         }
 
         return back()->with('status', 'Aggiornato.');
@@ -1450,14 +1471,28 @@ class CentroPageController extends Controller
 
     public function syncProjectFollowers(Request $request, string $id): RedirectResponse
     {
-        abort_unless(DB::table('projects')->where('id', $id)->exists(), 404);
+        $project = DB::table('projects')->where('id', $id)->first();
+        abort_unless($project, 404);
 
         $payload = $request->validate([
             'user_ids' => ['nullable', 'array'],
             'user_ids.*' => ['uuid', 'exists:users,id'],
         ]);
 
-        $this->syncProjectFollowersList($id, array_values(array_unique($payload['user_ids'] ?? [])));
+        $oldFollowers = DB::table('project_followers')->where('project_id', $id)->pluck('user_id')->sort()->values()->all();
+        $newFollowers = collect($payload['user_ids'] ?? [])->unique()->sort()->values()->all();
+
+        $this->syncProjectFollowersList($id, $newFollowers);
+
+        if ($oldFollowers !== $newFollowers) {
+            $this->notifyProjectPeople(
+                $id,
+                $request->user()->id,
+                'project_updated',
+                $request->user()->name.' ha aggiornato le persone coinvolte nel progetto "'.$project->name.'".',
+                $oldFollowers,
+            );
+        }
 
         return back()->with('status', 'Membri progetto aggiornati.');
     }
@@ -3140,6 +3175,23 @@ class CentroPageController extends Controller
         return $fields;
     }
 
+    private function changedProjectFields(object $oldProject, array $newValues): array
+    {
+        $fields = [];
+
+        foreach ($newValues as $field => $newValue) {
+            if (in_array($field, ['updated_at'], true) || ! property_exists($oldProject, $field)) {
+                continue;
+            }
+
+            if ((string) ($oldProject->{$field} ?? '') !== (string) ($newValue ?? '')) {
+                $fields[] = $field;
+            }
+        }
+
+        return $fields;
+    }
+
     private function taskFieldLabel(string $field): string
     {
         return [
@@ -3224,6 +3276,25 @@ class CentroPageController extends Controller
     private function notifyTaskPeople(string $taskId, string $actorId, string $type, string $message): void
     {
         $this->notifyUsers($this->taskNotificationUserIds($taskId), $actorId, $type, $message, $taskId);
+    }
+
+    private function notifyProjectPeople(string $projectId, string $actorId, string $type, string $message, ?array $extraUserIds = null): void
+    {
+        $this->notifyUsers($this->projectNotificationUserIds($projectId, $extraUserIds), $actorId, $type, $message);
+    }
+
+    private function projectNotificationUserIds(string $projectId, ?array $extraUserIds = null): \Illuminate\Support\Collection
+    {
+        $project = DB::table('projects')->where('id', $projectId)->first(['created_by']);
+
+        return DB::table('project_followers')
+            ->where('project_id', $projectId)
+            ->pluck('user_id')
+            ->merge($extraUserIds ?? [])
+            ->push($project?->created_by)
+            ->filter()
+            ->unique()
+            ->values();
     }
 
     private function taskNotificationUserIds(string $taskId): \Illuminate\Support\Collection
