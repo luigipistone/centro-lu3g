@@ -45,12 +45,10 @@ const verificationLinkSent = computed(
                     Reinvia email di verifica
                 </PrimaryButton>
 
-                <Link
-                    :href="route('logout')"
-                    method="post"
-                    as="button"
+                <a
+                    href="/esci-app"
                     class="rounded-md text-sm text-gray-600 underline hover:text-[hsl(var(--primary-app-dark))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary-app)/0.35)] focus:ring-offset-2"
-                    >Esci</Link
+                    >Esci</a
                 >
             </div>
         </form>

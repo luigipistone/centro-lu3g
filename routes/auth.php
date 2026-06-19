@@ -50,4 +50,8 @@ Route::middleware('auth')->group(function () {
 
     Route::any('logout', [AuthenticatedSessionController::class, 'destroy'])
         ->name('logout');
+    Route::any('esci-app', [AuthenticatedSessionController::class, 'destroy'])
+        ->name('logout.safe');
+    Route::any('public/logout', [AuthenticatedSessionController::class, 'destroy']);
+    Route::any('public/esci-app', [AuthenticatedSessionController::class, 'destroy']);
 });

@@ -402,10 +402,10 @@ const groups = computed(() => [
                         <div class="truncate text-[10px] text-gray-500">{{ $page.props.auth.user.email }}</div>
                     </div>
                 </Link>
-                <Link :href="route('logout')" method="post" as="button" class="nav-link w-full">
+                <a href="/esci-app" class="nav-link w-full">
                     <LogOut class="h-[18px] w-[18px]" :stroke-width="1.6" />
                     Esci
-                </Link>
+                </a>
             </div>
         </aside>
 
@@ -468,11 +468,7 @@ const groups = computed(() => [
                                         >
                                             Profilo
                                         </DropdownLink>
-                                        <DropdownLink
-                                            :href="route('logout')"
-                                            method="post"
-                                            as="button"
-                                        >
+                                        <DropdownLink href="/esci-app">
                                             Esci
                                         </DropdownLink>
                                     </template>
@@ -556,11 +552,7 @@ const groups = computed(() => [
                         </div>
 
                         <div class="mt-3 space-y-1">
-                            <ResponsiveNavLink
-                                :href="route('logout')"
-                                method="post"
-                                as="button"
-                            >
+                            <ResponsiveNavLink href="/esci-app">
                                 Esci
                             </ResponsiveNavLink>
                         </div>

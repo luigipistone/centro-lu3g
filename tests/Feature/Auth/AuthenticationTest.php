@@ -61,4 +61,24 @@ class AuthenticationTest extends TestCase
         $this->assertGuest();
         $response->assertRedirect('/');
     }
+
+    public function test_logout_safe_url_accepts_get(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->get('/esci-app');
+
+        $this->assertGuest();
+        $response->assertRedirect('/');
+    }
+
+    public function test_plesk_public_logout_fallback_accepts_get(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->get('/public/logout');
+
+        $this->assertGuest();
+        $response->assertRedirect('/');
+    }
 }
