@@ -2759,6 +2759,11 @@ function expandCalendarDay(date) {
     expandedCalendarDays.value = [...expandedCalendarDays.value, date];
 }
 
+function collapseCalendarDay(date) {
+    if (!date) return;
+    expandedCalendarDays.value = expandedCalendarDays.value.filter((expandedDate) => expandedDate !== date);
+}
+
 function hiddenCalendarTaskCount(cell) {
     return Math.max(0, (cell?.tasks?.length || 0) - 2);
 }
@@ -3185,14 +3190,6 @@ function calendarDayStyle(sectionMonth, cell) {
                             <input v-model="compactWeekend" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
                             Weekend
                         </label>
-                        <button
-                            v-if="expandedCalendarDays.length"
-                            type="button"
-                            class="btn btn-outline"
-                            @click="expandedCalendarDays = []"
-                        >
-                            Compatta
-                        </button>
                     </div>
                 </div>
 
@@ -3338,6 +3335,14 @@ function calendarDayStyle(sectionMonth, cell) {
                                             @click.stop="expandCalendarDay(cell.date)"
                                         >
                                             altri {{ hiddenCalendarTaskCount(cell) }}
+                                        </button>
+                                        <button
+                                            v-else-if="hiddenCalendarTaskCount(cell) && isCalendarDayExpanded(cell.date)"
+                                            type="button"
+                                            class="mt-auto self-start rounded-lg px-2 py-1 text-left text-[11px] font-semibold text-gray-500 transition hover:bg-indigo-50 hover:text-indigo-600"
+                                            @click.stop="collapseCalendarDay(cell.date)"
+                                        >
+                                            mostra di meno
                                         </button>
                                     </div>
                                 </template>

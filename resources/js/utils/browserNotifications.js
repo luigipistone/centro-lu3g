@@ -6,13 +6,20 @@ export function browserNotificationSupport() {
     return window.Notification.permission;
 }
 
+function withTimeout(promise, milliseconds, fallback = null) {
+    return Promise.race([
+        promise,
+        new Promise((resolve) => window.setTimeout(() => resolve(fallback), milliseconds)),
+    ]);
+}
+
 export async function registerCentroServiceWorker() {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
         return null;
     }
 
     try {
-        return await navigator.serviceWorker.register('/sw.js');
+        return await withTimeout(navigator.serviceWorker.register('/sw.js'), 1800, null);
     } catch (error) {
         console.warn('Service worker non registrato', error);
         return null;
@@ -38,13 +45,17 @@ async function subscribeCentroPush(vapidPublicKey) {
     ]);
     if (!registration) return false;
 
-    const existingSubscription = await registration.pushManager.getSubscription();
-    const subscription = existingSubscription || await registration.pushManager.subscribe({
+    const existingSubscription = await withTimeout(registration.pushManager.getSubscription(), 1800, null);
+    const subscription = existingSubscription || await withTimeout(registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-    });
+    }), 3500, null);
 
-    await window.axios.post('/push-subscriptions', subscription.toJSON());
+    if (!subscription) return false;
+
+    const response = await withTimeout(window.axios.post('/push-subscriptions', subscription.toJSON()), 3500, null);
+    if (!response) return false;
+
     return true;
 }
 
@@ -74,16 +85,21 @@ export async function showCentroBrowserNotification(title, options = {}) {
     };
 
     const showNativeNotification = () => {
-        const notification = new window.Notification(title, payload);
-        if (payload.data?.url) {
-            notification.onclick = () => {
-                window.focus();
-                window.location.href = payload.data.url;
-                notification.close();
-            };
-        }
+        try {
+            const notification = new window.Notification(title, payload);
+            if (payload.data?.url) {
+                notification.onclick = () => {
+                    window.focus();
+                    window.location.href = payload.data.url;
+                    notification.close();
+                };
+            }
 
-        return true;
+            return true;
+        } catch (error) {
+            console.warn('Notifica browser non mostrata', error);
+            return false;
+        }
     };
 
     if ('serviceWorker' in navigator) {
@@ -95,8 +111,8 @@ export async function showCentroBrowserNotification(title, options = {}) {
             return showNativeNotification();
         }
 
-        await registration.showNotification(title, payload);
-        return true;
+        const shown = await withTimeout(registration.showNotification(title, payload).then(() => true), 1600, false);
+        return shown || showNativeNotification();
     }
 
     return showNativeNotification();
@@ -116,26 +132,33 @@ export async function enableCentroBrowserNotifications(vapidPublicKey = null) {
 
     let permission = support;
     try {
-        permission = await window.Notification.requestPermission();
+        permission = await withTimeout(window.Notification.requestPermission(), 5000, browserNotificationSupport());
     } catch (error) {
         return { permission, message: 'Il browser non ha completato la richiesta di autorizzazione.' };
+    }
+
+    if (permission === 'default') {
+        return {
+            permission,
+            message: 'Il browser non ha risposto alla richiesta. Controlla i permessi notifiche del sito e riprova.',
+        };
     }
 
     if (permission === 'granted') {
         let pushSubscribed = false;
         try {
-            pushSubscribed = await subscribeCentroPush(vapidPublicKey);
+            pushSubscribed = await withTimeout(subscribeCentroPush(vapidPublicKey), 6000, false);
         } catch (error) {
             console.warn('Sottoscrizione push non completata', error);
         }
 
         try {
-            await showCentroBrowserNotification('Il Centro', {
+            await withTimeout(showCentroBrowserNotification('Il Centro', {
                 body: 'Notifiche browser attivate.',
                 tag: 'centro-notifications-enabled',
                 renotify: false,
                 data: { url: '/notifications' },
-            });
+            }), 2500, false);
         } catch (error) {
             console.warn('Notifica di test non mostrata', error);
         }
