@@ -454,6 +454,7 @@ const absenceAutosaveState = ref('idle');
 const absenceAutosaveError = ref('');
 let absenceAutosaveTimer = null;
 let absenceAutosaveSequence = 0;
+const absenceNotesEditor = ref(null);
 
 function normalizeHexColor(value, fallback = '#2563eb') {
     const color = String(value || '').trim();
@@ -499,6 +500,32 @@ function absencePayload() {
         status: absenceForm.status,
         notes: absenceForm.notes || null,
     };
+}
+
+function updateAbsenceNotesFromEditor() {
+    absenceForm.notes = absenceNotesEditor.value?.innerHTML || '';
+}
+
+function refreshAbsenceNotesEditor() {
+    nextTick(() => {
+        if (absenceNotesEditor.value && absenceNotesEditor.value.innerHTML !== (absenceForm.notes || '')) {
+            absenceNotesEditor.value.innerHTML = absenceForm.notes || '';
+        }
+    });
+}
+
+function runAbsenceNotesCommand(command, value = null) {
+    absenceNotesEditor.value?.focus();
+    document.execCommand(command, false, value);
+    updateAbsenceNotesFromEditor();
+    saveAbsenceInline();
+}
+
+function addAbsenceNotesLink() {
+    const url = window.prompt('URL del link');
+    if (!url) return;
+
+    runAbsenceNotesCommand('createLink', url);
 }
 
 function saveAbsenceInline(delay = 650) {
@@ -3279,7 +3306,48 @@ onUnmounted(() => {
                             </div>
                             <div class="md:col-span-3 2xl:col-span-4">
                                 <label class="block text-sm font-medium text-gray-700">Note</label>
-                                <textarea v-model="absenceForm.notes" rows="6" class="form-control" @input="saveAbsenceInline()"></textarea>
+                                <div class="mt-2 overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white/90 shadow-inner">
+                                    <div class="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50/80 p-2">
+                                        <button type="button" class="icon-btn h-8 w-8" title="Titolo" @mousedown.prevent @click="runAbsenceNotesCommand('formatBlock', 'h3')">
+                                            <Heading3 class="h-4 w-4" :stroke-width="1.7" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8 text-xs font-bold" title="Testo normale" @mousedown.prevent @click="runAbsenceNotesCommand('formatBlock', 'p')">
+                                            P
+                                        </button>
+                                        <span class="mx-1 h-5 w-px bg-gray-200"></span>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Grassetto" @mousedown.prevent @click="runAbsenceNotesCommand('bold')">
+                                            <Bold class="h-4 w-4" :stroke-width="1.7" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Corsivo" @mousedown.prevent @click="runAbsenceNotesCommand('italic')">
+                                            <Italic class="h-4 w-4" :stroke-width="1.7" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Sottolineato" @mousedown.prevent @click="runAbsenceNotesCommand('underline')">
+                                            <Underline class="h-4 w-4" :stroke-width="1.7" />
+                                        </button>
+                                        <span class="mx-1 h-5 w-px bg-gray-200"></span>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Elenco puntato" @mousedown.prevent @click="runAbsenceNotesCommand('insertUnorderedList')">
+                                            <List class="h-4 w-4" :stroke-width="1.7" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Elenco numerato" @mousedown.prevent @click="runAbsenceNotesCommand('insertOrderedList')">
+                                            <ListOrdered class="h-4 w-4" :stroke-width="1.7" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Citazione" @mousedown.prevent @click="runAbsenceNotesCommand('formatBlock', 'blockquote')">
+                                            <Quote class="h-4 w-4" :stroke-width="1.7" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Link" @mousedown.prevent @click="addAbsenceNotesLink">
+                                            <Link2 class="h-4 w-4" :stroke-width="1.7" />
+                                        </button>
+                                    </div>
+                                    <div
+                                        ref="absenceNotesEditor"
+                                        class="min-h-[150px] px-4 py-3 text-sm leading-6 text-gray-800 outline-none empty:before:text-gray-400 empty:before:content-[attr(data-placeholder)]"
+                                        contenteditable="true"
+                                        data-placeholder="Aggiungi note..."
+                                        v-html="absenceForm.notes"
+                                        @input="updateAbsenceNotesFromEditor(); saveAbsenceInline()"
+                                        @blur="updateAbsenceNotesFromEditor(); saveAbsenceInline(0)"
+                                    ></div>
+                                </div>
                             </div>
                         </div>
                     </section>
@@ -3288,8 +3356,8 @@ onUnmounted(() => {
                         <section class="surface rounded-md p-5">
                             <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Azioni</h3>
                             <div class="mt-4 grid gap-2">
-                                <button v-if="absenceForm.status !== 'approved'" type="button" class="btn btn-primary justify-center" @click="setAbsenceStatus('approved')">Approva</button>
-                                <button v-if="absenceForm.status !== 'rejected'" type="button" class="btn btn-outline justify-center" @click="setAbsenceStatus('rejected')">Rifiuta</button>
+                                <button v-if="absenceForm.status === 'pending'" type="button" class="btn btn-primary justify-center" @click="setAbsenceStatus('approved')">Approva</button>
+                                <button v-if="absenceForm.status === 'pending'" type="button" class="btn btn-outline justify-center" @click="setAbsenceStatus('rejected')">Rifiuta</button>
                                 <button type="button" class="btn border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 justify-center" @click="deleteAbsenceFromDetail">
                                     <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                     Elimina

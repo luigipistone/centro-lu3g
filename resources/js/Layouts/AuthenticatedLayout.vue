@@ -17,7 +17,6 @@ import {
     Mail,
     Megaphone,
     Receipt,
-    RefreshCcw,
     Search,
     Settings,
     Moon,
@@ -219,7 +218,6 @@ const groups = computed(() => [
     },
     {
         label: 'Aggiornamenti',
-        icon: RefreshCcw,
         collapsible: true,
         links: [
             ['updates.social', 'Social', Megaphone],
