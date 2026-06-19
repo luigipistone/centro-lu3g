@@ -595,6 +595,16 @@ class CentroPageController extends Controller
         ]);
     }
 
+    public function enablePush(Request $request): \Illuminate\Contracts\View\View
+    {
+        return view('push-enable', [
+            'vapidPublicKey' => config('services.webpush.public_key'),
+            'subscriptionCount' => DB::table('push_subscriptions')
+                ->where('user_id', $request->user()->id)
+                ->count(),
+        ]);
+    }
+
     public function show(Request $request, string $id): Response
     {
         $section = $request->route('section');

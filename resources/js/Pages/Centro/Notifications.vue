@@ -138,10 +138,10 @@ function formatDate(value) {
                     </div>
 
                     <div class="flex flex-wrap items-center gap-2">
-                        <button v-if="browserPermission === 'default'" type="button" class="btn btn-outline" data-enable-browser-notifications @click="enableBrowserNotifications">
+                        <a v-if="browserPermission === 'default'" :href="route('push.enable')" class="btn btn-outline">
                             <Bell class="h-4 w-4" :stroke-width="1.7" />
                             Attiva browser
-                        </button>
+                        </a>
                         <span v-else-if="browserPermission === 'granted'" class="inline-flex min-h-10 items-center rounded-[var(--radius-sm)] border border-green-100 bg-green-50 px-3 text-sm font-semibold text-green-700">
                             Browser attivo
                         </span>

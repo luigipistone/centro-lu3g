@@ -321,9 +321,9 @@ const groups = computed(() => [
                                 </div>
                             </div>
                             <div v-if="notificationPermission === 'default'" class="border-b border-white/60 px-3 py-2">
-                                <button type="button" class="text-xs font-semibold text-[hsl(var(--primary-app))] transition hover:text-[hsl(var(--primary-app-dark))]" data-enable-browser-notifications @click="enableBrowserNotifications">
+                                <a :href="route('push.enable')" class="text-xs font-semibold text-[hsl(var(--primary-app))] transition hover:text-[hsl(var(--primary-app-dark))]" @click="notificationMenuOpen = false">
                                     Attiva notifiche browser
-                                </button>
+                                </a>
                             </div>
                             <div v-else-if="notificationStatusMessage" class="border-b border-white/60 px-3 py-2 text-xs text-gray-500">
                                 {{ notificationStatusMessage }}
