@@ -18,6 +18,7 @@ const props = defineProps({
 const page = usePage();
 const confirmDelete = ref(null);
 const confirmDeleteText = ref('');
+const currentYearVisibleCount = ref(5);
 
 const documentForm = useForm({
     title: '',
@@ -42,6 +43,29 @@ const audienceOptions = [
 
 const visibleDocuments = computed(() => props.documents || []);
 const documentUsers = computed(() => props.documentUsers || []);
+const currentYear = new Date().getFullYear();
+const currentYearDocuments = computed(() => visibleDocuments.value.filter((document) => documentYear(document) === currentYear));
+const visibleCurrentYearDocuments = computed(() => currentYearDocuments.value.slice(0, currentYearVisibleCount.value));
+const previousYearGroups = computed(() => {
+    const groups = visibleDocuments.value
+        .filter((document) => documentYear(document) !== currentYear)
+        .reduce((carry, document) => {
+            const year = documentYear(document);
+            carry[year] = carry[year] || [];
+            carry[year].push(document);
+
+            return carry;
+        }, {});
+
+    return Object.entries(groups)
+        .sort(([yearA], [yearB]) => Number(yearB) - Number(yearA))
+        .map(([year, documents]) => ({ year, documents }));
+});
+
+function documentYear(document) {
+    const year = new Date(document.created_at).getFullYear();
+    return Number.isFinite(year) ? year : currentYear;
+}
 
 function resetDocumentForm() {
     documentForm.reset();
@@ -123,6 +147,10 @@ function fileSize(bytes) {
     const value = Number(bytes || 0);
     if (value < 1024 * 1024) return `${Math.max(1, Math.round(value / 1024))} KB`;
     return `${(value / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function showMoreCurrentYearDocuments() {
+    currentYearVisibleCount.value += 5;
 }
 </script>
 
@@ -326,44 +354,115 @@ function fileSize(bytes) {
                     <div class="flex items-center justify-between gap-4">
                         <div>
                             <h3 class="text-base font-semibold text-gray-900">{{ canManage ? 'Tutti i documenti' : 'I miei documenti' }}</h3>
-                            <p class="mt-1 text-sm text-gray-500">{{ canManage ? 'Archivio documenti pubblicati.' : 'Apri i documenti e conferma la lettura.' }}</p>
+                            <p class="mt-1 text-sm text-gray-500">Documenti {{ currentYear }} in evidenza e archivio diviso per anno.</p>
                         </div>
                     </div>
 
-                    <div v-if="visibleDocuments.length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        <article
-                            v-for="document in visibleDocuments"
-                            :key="document.id"
-                            :class="['surface group p-4 transition', !canManage && !document.user_read_at ? 'ring-1 ring-amber-100' : '']"
-                        >
-                            <div class="flex items-start justify-between gap-3">
-                                <div class="flex min-w-0 items-center gap-3">
-                                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]">
-                                        <FileText class="h-5 w-5" :stroke-width="1.7" />
-                                    </span>
-                                    <div class="min-w-0">
-                                        <Link :href="route('documents.show', document.id)" class="line-clamp-2 text-sm font-semibold text-gray-900 transition hover:text-[hsl(var(--primary-app))]">
-                                            {{ document.title }}
-                                        </Link>
-                                        <p class="mt-1 text-xs text-gray-500">{{ audienceLabel(document) }} · {{ fileSize(document.file_size) }}</p>
-                                    </div>
+                    <div v-if="visibleDocuments.length" class="space-y-6">
+                        <section class="space-y-3">
+                            <div class="flex items-end justify-between gap-3">
+                                <div>
+                                    <h4 class="text-sm font-semibold text-gray-900">Anno corrente</h4>
+                                    <p class="text-xs text-gray-500">{{ currentYearDocuments.length }} documenti del {{ currentYear }}</p>
                                 </div>
-                                <button v-if="canManage" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina documento" @click="removeDocument(document)">
-                                    <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                            </div>
+
+                            <div v-if="currentYearDocuments.length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                <article
+                                    v-for="document in visibleCurrentYearDocuments"
+                                    :key="document.id"
+                                    :class="['surface group p-4 transition', !canManage && !document.user_read_at ? 'ring-1 ring-amber-100' : '']"
+                                >
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div class="flex min-w-0 items-center gap-3">
+                                            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]">
+                                                <FileText class="h-5 w-5" :stroke-width="1.7" />
+                                            </span>
+                                            <div class="min-w-0">
+                                                <Link :href="route('documents.show', document.id)" class="line-clamp-2 text-sm font-semibold text-gray-900 transition hover:text-[hsl(var(--primary-app))]">
+                                                    {{ document.title }}
+                                                </Link>
+                                                <p class="mt-1 text-xs text-gray-500">{{ audienceLabel(document) }} · {{ fileSize(document.file_size) }}</p>
+                                            </div>
+                                        </div>
+                                        <button v-if="canManage" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina documento" @click="removeDocument(document)">
+                                            <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                        </button>
+                                    </div>
+
+                                    <p v-if="document.description" class="mt-3 line-clamp-2 text-sm text-gray-500">{{ document.description }}</p>
+
+                                    <div class="mt-4 flex items-center justify-between gap-3 text-xs text-gray-500">
+                                        <span>{{ dateIt(document.created_at) }}</span>
+                                        <span v-if="canManage" class="font-semibold text-gray-700">{{ document.read_count }}/{{ document.recipient_count }} letti</span>
+                                        <span v-else :class="['inline-flex items-center gap-1 rounded-full px-2 py-1 font-semibold', document.user_read_at ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700']">
+                                            <Check v-if="document.user_read_at" class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                            {{ document.user_read_at ? 'Letto' : 'Da leggere' }}
+                                        </span>
+                                    </div>
+                                </article>
+                            </div>
+                            <div v-else class="surface px-5 py-8 text-center text-sm text-gray-500">
+                                Nessun documento per il {{ currentYear }}.
+                            </div>
+
+                            <div v-if="currentYearDocuments.length > visibleCurrentYearDocuments.length" class="flex justify-center">
+                                <button type="button" class="btn btn-outline" @click="showMoreCurrentYearDocuments">
+                                    Carica altri
                                 </button>
                             </div>
+                        </section>
 
-                            <p v-if="document.description" class="mt-3 line-clamp-2 text-sm text-gray-500">{{ document.description }}</p>
-
-                            <div class="mt-4 flex items-center justify-between gap-3 text-xs text-gray-500">
-                                <span>{{ dateIt(document.created_at) }}</span>
-                                <span v-if="canManage" class="font-semibold text-gray-700">{{ document.read_count }}/{{ document.recipient_count }} letti</span>
-                                <span v-else :class="['inline-flex items-center gap-1 rounded-full px-2 py-1 font-semibold', document.user_read_at ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700']">
-                                    <Check v-if="document.user_read_at" class="h-3.5 w-3.5" :stroke-width="1.8" />
-                                    {{ document.user_read_at ? 'Letto' : 'Da leggere' }}
-                                </span>
+                        <section v-if="previousYearGroups.length" class="space-y-4">
+                            <div>
+                                <h4 class="text-sm font-semibold text-gray-900">Anni precedenti</h4>
+                                <p class="text-xs text-gray-500">Archivio documenti diviso per anno.</p>
                             </div>
-                        </article>
+
+                            <div v-for="group in previousYearGroups" :key="group.year" class="space-y-3">
+                                <div class="flex items-center gap-3">
+                                    <span class="text-sm font-semibold text-gray-900">{{ group.year }}</span>
+                                    <span class="h-px flex-1 bg-gray-100"></span>
+                                    <span class="text-xs font-semibold text-gray-400">{{ group.documents.length }} documenti</span>
+                                </div>
+
+                                <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                    <article
+                                        v-for="document in group.documents"
+                                        :key="document.id"
+                                        :class="['surface group p-4 transition', !canManage && !document.user_read_at ? 'ring-1 ring-amber-100' : '']"
+                                    >
+                                        <div class="flex items-start justify-between gap-3">
+                                            <div class="flex min-w-0 items-center gap-3">
+                                                <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]">
+                                                    <FileText class="h-5 w-5" :stroke-width="1.7" />
+                                                </span>
+                                                <div class="min-w-0">
+                                                    <Link :href="route('documents.show', document.id)" class="line-clamp-2 text-sm font-semibold text-gray-900 transition hover:text-[hsl(var(--primary-app))]">
+                                                        {{ document.title }}
+                                                    </Link>
+                                                    <p class="mt-1 text-xs text-gray-500">{{ audienceLabel(document) }} · {{ fileSize(document.file_size) }}</p>
+                                                </div>
+                                            </div>
+                                            <button v-if="canManage" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina documento" @click="removeDocument(document)">
+                                                <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                            </button>
+                                        </div>
+
+                                        <p v-if="document.description" class="mt-3 line-clamp-2 text-sm text-gray-500">{{ document.description }}</p>
+
+                                        <div class="mt-4 flex items-center justify-between gap-3 text-xs text-gray-500">
+                                            <span>{{ dateIt(document.created_at) }}</span>
+                                            <span v-if="canManage" class="font-semibold text-gray-700">{{ document.read_count }}/{{ document.recipient_count }} letti</span>
+                                            <span v-else :class="['inline-flex items-center gap-1 rounded-full px-2 py-1 font-semibold', document.user_read_at ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700']">
+                                                <Check v-if="document.user_read_at" class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                                {{ document.user_read_at ? 'Letto' : 'Da leggere' }}
+                                            </span>
+                                        </div>
+                                    </article>
+                                </div>
+                            </div>
+                        </section>
                     </div>
                     <div v-else class="surface px-5 py-12 text-center text-sm text-gray-500">
                         Nessun documento disponibile.
