@@ -31,6 +31,7 @@ import {
     ListOrdered,
     Mail,
     MoreHorizontal,
+    Paperclip,
     Plus,
     Printer,
     Quote,
@@ -457,6 +458,8 @@ const absenceAutosaveError = ref('');
 let absenceAutosaveTimer = null;
 let absenceAutosaveSequence = 0;
 const absenceNotesEditor = ref(null);
+const absenceMedicalDocumentInput = ref(null);
+const absenceMedicalDocumentForm = useForm({ medical_document: null });
 
 function normalizeHexColor(value, fallback = '#2563eb') {
     const color = String(value || '').trim();
@@ -528,6 +531,24 @@ function addAbsenceNotesLink() {
     if (!url) return;
 
     runAbsenceNotesCommand('createLink', url);
+}
+
+function chooseAbsenceMedicalDocument() {
+    absenceMedicalDocumentInput.value?.click();
+}
+
+function uploadAbsenceMedicalDocument(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    absenceMedicalDocumentForm.medical_document = file;
+    absenceMedicalDocumentForm.post(route('absences.medical-document.update', props.record.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            absenceMedicalDocumentForm.reset();
+            if (absenceMedicalDocumentInput.value) absenceMedicalDocumentInput.value.value = '';
+        },
+    });
 }
 
 function saveAbsenceInline(delay = 650) {
@@ -3376,6 +3397,29 @@ onUnmounted(() => {
                                 <label class="block text-sm font-medium text-gray-700">Codice INPS</label>
                                 <input v-model="absenceForm.inps_code" class="form-control" placeholder="Codice INPS" @input="saveAbsenceInline()" />
                                 <div v-if="absenceForm.errors.inps_code" class="mt-1 text-sm text-red-600">{{ absenceForm.errors.inps_code }}</div>
+                            </div>
+                            <div v-if="absenceForm.type === 'sickness'" class="md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700">Documento medico</label>
+                                <input ref="absenceMedicalDocumentInput" type="file" accept=".pdf,image/jpeg,image/png,image/webp" class="hidden" @change="uploadAbsenceMedicalDocument" />
+                                <div class="mt-1 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                                    <a
+                                        v-if="record.medical_document_path"
+                                        :href="route('absences.medical-document.download', record.id)"
+                                        class="group flex min-h-[38px] min-w-0 items-center gap-2 rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50 px-3 text-sm font-semibold text-gray-700 transition hover:border-indigo-100 hover:bg-white hover:text-indigo-600"
+                                    >
+                                        <FileText class="h-4 w-4 shrink-0 text-indigo-500" :stroke-width="1.7" />
+                                        <span class="truncate">{{ record.medical_document_name || 'Documento medico' }}</span>
+                                    </a>
+                                    <div v-else class="flex min-h-[38px] items-center gap-2 rounded-[var(--radius-sm)] border border-dashed border-gray-200 bg-gray-50 px-3 text-sm text-gray-500">
+                                        <FileText class="h-4 w-4 shrink-0 text-gray-400" :stroke-width="1.7" />
+                                        Nessun documento caricato
+                                    </div>
+                                    <button type="button" class="btn btn-outline" :disabled="absenceMedicalDocumentForm.processing" @click="chooseAbsenceMedicalDocument">
+                                        <Paperclip class="h-4 w-4" :stroke-width="1.7" />
+                                        {{ record.medical_document_path ? 'Sostituisci' : 'Allega' }}
+                                    </button>
+                                </div>
+                                <div v-if="absenceMedicalDocumentForm.errors.medical_document" class="mt-1 text-sm text-red-600">{{ absenceMedicalDocumentForm.errors.medical_document }}</div>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Stato</label>

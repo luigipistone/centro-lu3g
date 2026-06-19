@@ -6,7 +6,7 @@ import DeleteUserForm from './Partials/DeleteUserForm.vue';
 import UpdatePasswordForm from './Partials/UpdatePasswordForm.vue';
 import UpdateProfileInformationForm from './Partials/UpdateProfileInformationForm.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { Bold, Heading3, Italic, Link2, List, ListOrdered, Quote, Underline } from '@lucide/vue';
+import { Bold, FileText, Heading3, Italic, Link2, List, ListOrdered, Paperclip, Quote, Underline } from '@lucide/vue';
 import { computed, nextTick, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -53,9 +53,11 @@ const absenceForm = useForm({
     start_time: '',
     end_time: '',
     inps_code: '',
+    medical_document: null,
     notes: '',
 });
 const absenceNotesEditor = ref(null);
+const absenceMedicalDocumentInput = ref(null);
 const smartworkingLabel = computed(() => smartworkingLabels[props.profile?.smartworking_day] || 'Non impostato');
 const absenceRows = computed(() => props.absences || []);
 const absenceNeedsEndDate = computed(() => ['vacation', 'sickness', 'other'].includes(absenceForm.type));
@@ -85,16 +87,26 @@ function submitAbsence() {
     }
     if (absenceForm.type !== 'sickness') {
         absenceForm.inps_code = '';
+        absenceForm.medical_document = null;
     }
     absenceForm.post(route('profile.absences.store'), {
         preserveScroll: true,
         onSuccess: () => {
-            absenceForm.reset('notes', 'start_time', 'end_time', 'inps_code');
+            absenceForm.reset('notes', 'start_time', 'end_time', 'inps_code', 'medical_document');
             absenceForm.start_date = today;
             absenceForm.end_date = today;
+            if (absenceMedicalDocumentInput.value) absenceMedicalDocumentInput.value.value = '';
             refreshAbsenceNotesEditor();
         },
     });
+}
+
+function chooseAbsenceMedicalDocument() {
+    absenceMedicalDocumentInput.value?.click();
+}
+
+function uploadAbsenceMedicalDocument(event) {
+    absenceForm.medical_document = event.target.files?.[0] || null;
 }
 
 function cancelAbsence(absence) {
@@ -135,6 +147,8 @@ watch(() => absenceForm.type, () => {
     }
     if (absenceForm.type !== 'sickness') {
         absenceForm.inps_code = '';
+        absenceForm.medical_document = null;
+        if (absenceMedicalDocumentInput.value) absenceMedicalDocumentInput.value.value = '';
     }
 });
 </script>
@@ -206,6 +220,22 @@ watch(() => absenceForm.type, () => {
                             <input v-model="absenceForm.inps_code" class="form-control" placeholder="Inserisci Codice INPS" required />
                             <div v-if="absenceForm.errors.inps_code" class="mt-1 text-sm text-red-600">{{ absenceForm.errors.inps_code }}</div>
                         </div>
+                        <div v-if="absenceForm.type === 'sickness'" class="md:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700">Documento medico</label>
+                            <input ref="absenceMedicalDocumentInput" type="file" accept=".pdf,image/jpeg,image/png,image/webp" class="hidden" @change="uploadAbsenceMedicalDocument" />
+                            <button
+                                type="button"
+                                class="mt-1 flex min-h-[38px] w-full items-center justify-between gap-3 rounded-[var(--radius-sm)] border border-white/70 bg-white/58 px-3 text-left text-sm font-medium text-gray-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.62)] transition hover:border-indigo-100 hover:bg-white"
+                                @click="chooseAbsenceMedicalDocument"
+                            >
+                                <span class="flex min-w-0 items-center gap-2">
+                                    <Paperclip class="h-4 w-4 shrink-0 text-indigo-500" :stroke-width="1.7" />
+                                    <span class="truncate">{{ absenceForm.medical_document?.name || 'Allega documento del medico' }}</span>
+                                </span>
+                                <span class="shrink-0 text-xs text-gray-400">PDF/JPG/PNG</span>
+                            </button>
+                            <div v-if="absenceForm.errors.medical_document" class="mt-1 text-sm text-red-600">{{ absenceForm.errors.medical_document }}</div>
+                        </div>
                         <div class="md:col-span-3">
                             <label class="block text-sm font-medium text-gray-700">Note</label>
                             <div class="mt-1 overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white/90 shadow-inner">
@@ -266,6 +296,14 @@ watch(() => absenceForm.type, () => {
                                         <span v-if="absence.start_time || absence.end_time"> · {{ absence.start_time || '--:--' }} - {{ absence.end_time || '--:--' }}</span>
                                     </div>
                                     <div v-if="absence.inps_code" class="mt-1 text-xs font-semibold text-gray-500">Codice INPS: {{ absence.inps_code }}</div>
+                                    <a
+                                        v-if="absence.medical_document_path"
+                                        :href="route('absences.medical-document.download', absence.id)"
+                                        class="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 transition hover:text-indigo-500"
+                                    >
+                                        <FileText class="h-3.5 w-3.5" :stroke-width="1.7" />
+                                        {{ absence.medical_document_name || 'Documento medico' }}
+                                    </a>
                                     <div v-if="absence.notes" class="mt-1 text-sm text-gray-600" v-html="absence.notes"></div>
                                 </div>
                                 <div class="flex items-center gap-2">

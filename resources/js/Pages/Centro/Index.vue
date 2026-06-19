@@ -3934,6 +3934,7 @@ function visibleCalendarTasks(cell) {
                                     <th class="px-3 py-3 text-left font-semibold text-gray-600">Periodo</th>
                                     <th class="px-3 py-3 text-left font-semibold text-gray-600">Orario</th>
                                     <th class="px-3 py-3 text-left font-semibold text-gray-600">Codice INPS</th>
+                                    <th class="px-3 py-3 text-left font-semibold text-gray-600">Allegato</th>
                                     <th class="px-3 py-3 text-left font-semibold text-gray-600">Note</th>
                                     <th class="px-3 py-3 text-left font-semibold text-gray-600">Stato</th>
                                     <th class="px-3 py-3 text-right font-semibold text-gray-600">Azioni</th>
@@ -3966,6 +3967,17 @@ function visibleCalendarTasks(cell) {
                                     <td class="px-3 py-3 text-gray-600">
                                         {{ row.inps_code || '-' }}
                                     </td>
+                                    <td class="px-3 py-3 text-gray-600">
+                                        <a
+                                            v-if="row.medical_document_path"
+                                            :href="route('absences.medical-document.download', row.id)"
+                                            class="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 transition hover:text-indigo-500"
+                                        >
+                                            <FileText class="h-3.5 w-3.5" :stroke-width="1.7" />
+                                            Apri
+                                        </a>
+                                        <span v-else>-</span>
+                                    </td>
                                     <td class="max-w-xs px-3 py-3 text-gray-600">
                                         <div v-if="row.notes" class="line-clamp-2" v-html="row.notes"></div>
                                         <span v-else>-</span>
@@ -3995,7 +4007,7 @@ function visibleCalendarTasks(cell) {
                                     </td>
                                 </tr>
                                 <tr v-if="!absenceRows.length">
-                                    <td colspan="8" class="px-4 py-8 text-center text-gray-500">Nessuna richiesta trovata.</td>
+                                    <td colspan="9" class="px-4 py-8 text-center text-gray-500">Nessuna richiesta trovata.</td>
                                 </tr>
                             </tbody>
                         </table>

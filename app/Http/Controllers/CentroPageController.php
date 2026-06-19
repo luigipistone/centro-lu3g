@@ -456,6 +456,14 @@ class CentroPageController extends Controller
         abort_if(! $absence, 404);
 
         $payload = $this->validatedAbsencePayload($request);
+        if ($payload['type'] !== 'sickness') {
+            if ($absence->medical_document_path) {
+                Storage::disk('local')->delete($absence->medical_document_path);
+            }
+            $payload['medical_document_path'] = null;
+            $payload['medical_document_name'] = null;
+            $payload['medical_document_mime'] = null;
+        }
 
         DB::table('absence_requests')
             ->where('id', $id)
@@ -474,11 +482,66 @@ class CentroPageController extends Controller
         return back()->with('status', 'Richiesta aggiornata.');
     }
 
+    public function updateAbsenceMedicalDocument(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        $absence = DB::table('absence_requests')->where('id', $id)->first();
+        abort_if(! $absence, 404);
+
+        $payload = $request->validate([
+            'medical_document' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:8192'],
+        ]);
+
+        $file = $payload['medical_document'];
+        $path = $file->store('absence-medical-documents', 'local');
+
+        if ($absence->medical_document_path) {
+            Storage::disk('local')->delete($absence->medical_document_path);
+        }
+
+        DB::table('absence_requests')
+            ->where('id', $id)
+            ->update([
+                'medical_document_path' => $path,
+                'medical_document_name' => $file->getClientOriginalName(),
+                'medical_document_mime' => $file->getMimeType(),
+                'updated_at' => now(),
+            ]);
+
+        $this->notifyAbsencePeople(
+            $absence->user_id,
+            $request->user()->id,
+            'absence_updated',
+            $request->user()->name.' ha aggiornato il documento medico di una richiesta assenza.',
+        );
+
+        return back()->with('status', 'Documento medico aggiornato.');
+    }
+
+    public function downloadAbsenceMedicalDocument(Request $request, string $id)
+    {
+        $absence = DB::table('absence_requests')->where('id', $id)->first();
+        abort_if(! $absence || ! $absence->medical_document_path, 404);
+        abort_unless($this->canAccessAbsence($request, $absence), 403);
+
+        abort_unless(Storage::disk('local')->exists($absence->medical_document_path), 404);
+
+        return Storage::disk('local')->download(
+            $absence->medical_document_path,
+            $absence->medical_document_name ?: 'documento-medico',
+            ['Content-Type' => $absence->medical_document_mime ?: 'application/octet-stream'],
+        );
+    }
+
     public function destroyAbsence(Request $request, string $id): RedirectResponse
     {
         $this->ensureAdmin($request);
         $absence = DB::table('absence_requests')->where('id', $id)->first();
         abort_if(! $absence, 404);
+
+        if ($absence->medical_document_path) {
+            Storage::disk('local')->delete($absence->medical_document_path);
+        }
 
         DB::table('absence_requests')->where('id', $id)->delete();
 
@@ -1483,6 +1546,12 @@ class CentroPageController extends Controller
     private function ensureAdmin(Request $request): void
     {
         abort_unless(in_array($this->currentUserRole($request), ['superadmin', 'admin'], true), 403);
+    }
+
+    private function canAccessAbsence(Request $request, object $absence): bool
+    {
+        return $absence->user_id === $request->user()?->id
+            || in_array($this->currentUserRole($request), ['superadmin', 'admin'], true);
     }
 
     private function validatedAbsencePayload(Request $request): array

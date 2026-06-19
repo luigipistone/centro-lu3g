@@ -54,6 +54,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/absences', [CentroPageController::class, 'index'])->defaults('section', 'absences')->name('absences.index');
     Route::get('/absences/{id}', [CentroPageController::class, 'show'])->defaults('section', 'absences')->name('absences.show');
     Route::put('/absences/{id}', [CentroPageController::class, 'updateAbsence'])->name('absences.update');
+    Route::get('/absences/{id}/medical-document', [CentroPageController::class, 'downloadAbsenceMedicalDocument'])->name('absences.medical-document.download');
+    Route::post('/absences/{id}/medical-document', [CentroPageController::class, 'updateAbsenceMedicalDocument'])->name('absences.medical-document.update');
     Route::patch('/absences/{id}/status', [CentroPageController::class, 'updateAbsenceStatus'])->name('absences.status.update');
     Route::delete('/absences/{id}', [CentroPageController::class, 'destroyAbsence'])->name('absences.destroy');
     Route::get('/notifications', [CentroPageController::class, 'notifications'])->name('notifications.index');

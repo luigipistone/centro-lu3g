@@ -101,6 +101,7 @@ class ProfileController extends Controller
             'start_time' => ['nullable', 'regex:/^([01][0-9]|2[0-3]):00$/'],
             'end_time' => ['nullable', 'regex:/^([01][0-9]|2[0-3]):00$/'],
             'inps_code' => ['nullable', 'required_if:type,sickness', 'string', 'max:255'],
+            'medical_document' => ['nullable', 'required_if:type,sickness', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:8192'],
             'notes' => ['nullable', 'string', 'max:6000'],
         ]);
         if (in_array($payload['type'], ['vacation', 'sickness'], true)) {
@@ -112,6 +113,15 @@ class ProfileController extends Controller
         }
         if ($payload['type'] !== 'sickness') {
             $payload['inps_code'] = null;
+        }
+        $medicalDocumentPath = null;
+        $medicalDocumentName = null;
+        $medicalDocumentMime = null;
+        if ($payload['type'] === 'sickness' && $request->hasFile('medical_document')) {
+            $file = $request->file('medical_document');
+            $medicalDocumentPath = $file->store('absence-medical-documents', 'local');
+            $medicalDocumentName = $file->getClientOriginalName();
+            $medicalDocumentMime = $file->getMimeType();
         }
 
         $absenceId = (string) str()->uuid();
@@ -125,6 +135,9 @@ class ProfileController extends Controller
             'start_time' => ($payload['start_time'] ?? null) ?: null,
             'end_time' => ($payload['end_time'] ?? null) ?: null,
             'inps_code' => ($payload['inps_code'] ?? null) ?: null,
+            'medical_document_path' => $medicalDocumentPath,
+            'medical_document_name' => $medicalDocumentName,
+            'medical_document_mime' => $medicalDocumentMime,
             'status' => 'pending',
             'notes' => ($payload['notes'] ?? null) ?: null,
             'created_at' => now(),
@@ -156,6 +169,10 @@ class ProfileController extends Controller
             ->delete();
 
         if ($absence) {
+            if ($absence->medical_document_path) {
+                Storage::disk('local')->delete($absence->medical_document_path);
+            }
+
             $this->notifyAbsencePeople(
                 $request->user()->id,
                 $request->user()->id,
