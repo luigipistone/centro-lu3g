@@ -163,6 +163,41 @@
                 line-height: 1.6;
                 word-break: break-word;
             }
+
+            .manual-help {
+                display: none;
+                margin-top: 16px;
+                border-radius: 18px;
+                border: 1px solid rgba(245, 158, 11, 0.22);
+                background: rgba(245, 158, 11, 0.1);
+                padding: 14px;
+                color: #92400e;
+                font-size: 13px;
+                line-height: 1.55;
+            }
+
+            .manual-help.is-visible {
+                display: block;
+            }
+
+            .manual-help strong {
+                display: block;
+                margin-bottom: 6px;
+                color: #78350f;
+            }
+
+            .manual-help ol {
+                margin: 8px 0 0 18px;
+                padding: 0;
+            }
+
+            .manual-help code {
+                border-radius: 8px;
+                background: rgba(255, 255, 255, 0.58);
+                padding: 2px 6px;
+                color: #78350f;
+                font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+            }
         </style>
     </head>
     <body>
@@ -189,6 +224,18 @@
 
             <div id="diagnostics" class="diagnostics">Controllo supporto browser...</div>
 
+            <div id="manualHelp" class="manual-help">
+                <strong>Opera sta bloccando la finestra automatica.</strong>
+                <div>Abilita il permesso manualmente, poi torna su questa pagina: la registrazione push partirà da sola.</div>
+                <ol>
+                    <li>Clicca sull'icona a sinistra dell'indirizzo del sito.</li>
+                    <li>Apri le impostazioni del sito per <code>centro.lu3g.com</code>.</li>
+                    <li>Imposta <strong>Notifiche</strong> su <strong>Consenti</strong>.</li>
+                    <li>Torna qui o ricarica la pagina.</li>
+                </ol>
+                <div style="margin-top: 8px;">In alternativa apri <code>opera://settings/content/notifications</code> e abilita le notifiche per questo dominio.</div>
+            </div>
+
             <p class="hint">Se il browser mostra una finestra di conferma, scegli Consenti. Dopo l'attivazione questa pagina invia una notifica di prova.</p>
         </main>
 
@@ -199,10 +246,20 @@
             const testButton = document.getElementById('testPush');
             const statusBox = document.getElementById('status');
             const diagnosticsBox = document.getElementById('diagnostics');
+            const manualHelp = document.getElementById('manualHelp');
+            let autoRegistering = false;
 
             function setStatus(message, type = '') {
                 statusBox.textContent = message;
                 statusBox.className = `status ${type}`.trim();
+            }
+
+            function showManualHelp() {
+                manualHelp.classList.add('is-visible');
+            }
+
+            function hideManualHelp() {
+                manualHelp.classList.remove('is-visible');
             }
 
             function withTimeout(promise, milliseconds, fallback) {
@@ -293,6 +350,29 @@
                 });
             }
 
+            async function registerIfPermissionAlreadyGranted(source = 'manuale') {
+                if (autoRegistering || !('Notification' in window) || Notification.permission !== 'granted') {
+                    return false;
+                }
+
+                autoRegistering = true;
+                hideManualHelp();
+                setStatus(`Permesso notifiche rilevato (${source}). Registro questo dispositivo...`, '');
+
+                try {
+                    await registerPushSubscription();
+                    await renderDiagnostics();
+                    setStatus('Notifiche push attivate. Questo dispositivo e registrato.', 'ok');
+                    return true;
+                } catch (error) {
+                    await renderDiagnostics();
+                    setStatus(error.message || 'Registrazione push non riuscita.', 'error');
+                    return false;
+                } finally {
+                    autoRegistering = false;
+                }
+            }
+
             enableButton.addEventListener('click', async () => {
                 enableButton.disabled = true;
 
@@ -314,13 +394,16 @@
                     await renderDiagnostics();
 
                     if (permission === 'timeout') {
+                        showManualHelp();
                         throw new Error('Il browser non ha aperto o completato la finestra di consenso. Controlla nelle impostazioni del sito che le notifiche non siano bloccate e che il browser permetta ai siti di chiedere notifiche.');
                     }
 
                     if (permission !== 'granted') {
+                        showManualHelp();
                         throw new Error('Permesso notifiche non concesso dal browser.');
                     }
 
+                    hideManualHelp();
                     await renderDiagnostics();
                     setStatus('Permesso concesso. Registro questo dispositivo...', '');
                     await registerPushSubscription();
@@ -361,7 +444,25 @@
                 }
             });
 
-            renderDiagnostics();
+            window.addEventListener('focus', () => registerIfPermissionAlreadyGranted('focus'));
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) {
+                    registerIfPermissionAlreadyGranted('ritorno pagina');
+                }
+            });
+
+            if (navigator.permissions?.query) {
+                navigator.permissions.query({ name: 'notifications' })
+                    .then((permissionStatus) => {
+                        permissionStatus.onchange = () => {
+                            renderDiagnostics();
+                            registerIfPermissionAlreadyGranted('permesso browser');
+                        };
+                    })
+                    .catch(() => {});
+            }
+
+            renderDiagnostics().then(() => registerIfPermissionAlreadyGranted('pagina aperta'));
         </script>
     </body>
 </html>
