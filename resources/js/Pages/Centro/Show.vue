@@ -3829,7 +3829,7 @@ onUnmounted(() => {
                         <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Sottoattività</h3>
                         <span class="text-xs text-gray-500">{{ related.subtasks?.length || 0 }} elementi</span>
                     </div>
-                    <form class="mb-4 grid items-center gap-1.5 md:grid-cols-[minmax(0,1fr)_48px_48px_auto]" @submit.prevent="addSubtask">
+                    <form class="mb-4 grid items-center gap-x-1.5 gap-y-2 md:grid-cols-[minmax(0,1fr)_48px_48px_auto]" @submit.prevent="addSubtask">
                         <input v-model="subtaskForm.title" class="subtask-line-control font-medium" placeholder="Nuova sottoattività..." required />
                         <div class="relative" data-subtask-create-assignees>
                             <button type="button" class="subtask-line-people justify-end" @click.stop="toggleCreateSubtaskAssigneeMenu($event)">
@@ -3862,7 +3862,7 @@ onUnmounted(() => {
                                 </div>
                             </Teleport>
                         </div>
-                        <div class="relative mr-2 flex items-center justify-end">
+                        <div class="relative mr-4 flex items-center justify-end">
                             <AppDateInput
                                 v-model="subtaskForm.due_date"
                                 variant="token"

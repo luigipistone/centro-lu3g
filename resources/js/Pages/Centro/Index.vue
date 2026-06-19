@@ -3765,7 +3765,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                     <h4 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Sottoattività</h4>
                                     <span class="text-xs text-gray-400">{{ calendarPanelSubtasks().length }} elementi</span>
                                 </div>
-                                <form class="mb-4 grid items-center gap-1.5 md:grid-cols-[minmax(0,1fr)_48px_48px_auto]" @submit.prevent="addCalendarSubtask">
+                                <form class="mb-4 grid items-center gap-x-1.5 gap-y-2 md:grid-cols-[minmax(0,1fr)_48px_48px_auto]" @submit.prevent="addCalendarSubtask">
                                     <input v-model="calendarSubtaskForm.title" class="subtask-line-control font-medium" placeholder="Nuova sottoattività..." required />
                                     <div class="relative" data-calendar-subtask-create-assignees>
                                         <button type="button" class="subtask-line-people justify-end" @click.stop="toggleCalendarCreateSubtaskAssigneeMenu($event)">
@@ -3798,7 +3798,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                             </div>
                                         </Teleport>
                                     </div>
-                                    <div class="relative mr-2 flex items-center justify-end">
+                                    <div class="relative mr-4 flex items-center justify-end">
                                         <AppDateInput
                                             v-model="calendarSubtaskForm.due_date"
                                             variant="token"
