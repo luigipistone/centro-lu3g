@@ -120,6 +120,7 @@ const calendarTaskPanelOpen = ref(false);
 const calendarTaskPanel = ref(null);
 const calendarTaskParentStack = ref([]);
 const calendarTaskPanelMode = ref('edit');
+const calendarTaskPanelClosedByUser = ref(false);
 const calendarTaskDrawerBody = ref(null);
 const calendarScrollArea = ref(null);
 let calendarScrollResetting = false;
@@ -1937,6 +1938,7 @@ function openCalendarTask(task, options = {}) {
     calendarTaskActionMenuOpen.value = false;
     calendarTaskPanel.value = task;
     calendarTaskPanelMode.value = 'edit';
+    calendarTaskPanelClosedByUser.value = false;
     calendarTaskPanelOpen.value = true;
     calendarTaskAutosaveState.value = 'idle';
     calendarTaskAutosaveError.value = '';
@@ -1978,6 +1980,7 @@ function openCalendarTaskCreate(type, date) {
     calendarShowAllActivity.value = false;
     calendarTaskActionMenuOpen.value = false;
     calendarTaskPanelMode.value = 'create';
+    calendarTaskPanelClosedByUser.value = false;
     calendarTaskPanel.value = {
         id: '',
         title: '',
@@ -2019,6 +2022,7 @@ function openCalendarTaskCreate(type, date) {
 }
 
 function closeCalendarTaskPanel() {
+    calendarTaskPanelClosedByUser.value = true;
     calendarTaskPanelOpen.value = false;
     calendarTaskPanel.value = null;
     calendarTaskParentStack.value = [];
@@ -2448,7 +2452,21 @@ function saveCalendarTaskInline(delay = AUTOSAVE_IDLE_DELAY) {
                 const createdId = page.props.flash?.created_id;
                 if (!calendarTaskForm.id && createdId) {
                     calendarTaskForm.id = createdId;
+                    if (!calendarTaskPanelClosedByUser.value) {
+                        calendarTaskPanelOpen.value = true;
+                    }
                     calendarTaskPanelMode.value = 'edit';
+                    calendarTaskPanel.value = {
+                        ...(calendarTaskPanel.value || {}),
+                        id: createdId,
+                        title: calendarTaskForm.title,
+                        task_type: calendarTaskForm.task_type,
+                        status: calendarTaskForm.status,
+                        priority: calendarTaskForm.priority,
+                        start_date: calendarTaskForm.start_date,
+                        due_date: calendarTaskForm.due_date,
+                        due_time: calendarTaskForm.due_time,
+                    };
                     calendarTaskForm.defaults({
                         id: createdId,
                         title: calendarTaskForm.title,
@@ -2486,6 +2504,9 @@ function saveCalendarTaskInline(delay = AUTOSAVE_IDLE_DELAY) {
                 calendarTaskAutosaveError.value = calendarTaskForm.id ? 'Non salvato' : 'Non creata';
             },
             onFinish: () => {
+                if (calendarTaskForm.id && !calendarTaskPanelClosedByUser.value) {
+                    calendarTaskPanelOpen.value = true;
+                }
                 calendarTaskForm.transform((data) => data);
             },
         };
@@ -3184,24 +3205,24 @@ function visibleCalendarTasks(cell) {
                                             >
                                                 <button
                                                     type="button"
-                                                    class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-indigo-50/80"
-                                                    @click="openCalendarTaskCreate('project', cell.date)"
+                                                    class="flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-sm font-medium text-gray-700 hover:bg-indigo-50/80"
+                                                    @click.stop="openCalendarTaskCreate('project', cell.date)"
                                                 >
                                                     <span class="h-2 w-2 rounded-full bg-blue-500"></span>
                                                     Task
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-amber-50/80"
-                                                    @click="openCalendarTaskCreate('ongoing', cell.date)"
+                                                    class="flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-sm font-medium text-gray-700 hover:bg-amber-50/80"
+                                                    @click.stop="openCalendarTaskCreate('ongoing', cell.date)"
                                                 >
                                                     <span class="h-2 w-2 rounded-full bg-amber-500"></span>
                                                     Continuativa
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-violet-50/80"
-                                                    @click="openCalendarTaskCreate('meeting', cell.date)"
+                                                    class="flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-sm font-medium text-gray-700 hover:bg-violet-50/80"
+                                                    @click.stop="openCalendarTaskCreate('meeting', cell.date)"
                                                 >
                                                     <span class="h-2 w-2 rounded-full bg-violet-500"></span>
                                                     Meeting

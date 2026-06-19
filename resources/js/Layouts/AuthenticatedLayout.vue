@@ -133,9 +133,16 @@ function rememberLatestNotification() {
 }
 
 async function enableBrowserNotifications() {
-    const result = await enableCentroBrowserNotifications(page.props.push?.vapidPublicKey);
-    notificationPermission.value = result.permission;
-    notificationStatusMessage.value = result.message;
+    notificationStatusMessage.value = 'Attivazione notifiche in corso...';
+    try {
+        const result = await enableCentroBrowserNotifications(page.props.push?.vapidPublicKey);
+        notificationPermission.value = result.permission;
+        notificationStatusMessage.value = result.message;
+    } catch (error) {
+        console.warn('Attivazione notifiche non riuscita', error);
+        notificationPermission.value = browserNotificationSupport();
+        notificationStatusMessage.value = 'Attivazione non riuscita. Controlla i permessi notifiche del browser per questo sito.';
+    }
     rememberLatestNotification();
 }
 

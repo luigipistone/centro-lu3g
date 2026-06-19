@@ -32,7 +32,12 @@ async function subscribeCentroPush(vapidPublicKey) {
         return false;
     }
 
-    const registration = await navigator.serviceWorker.ready;
+    const registration = await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise((resolve) => window.setTimeout(() => resolve(null), 1800)),
+    ]);
+    if (!registration) return false;
+
     const existingSubscription = await registration.pushManager.getSubscription();
     const subscription = existingSubscription || await registration.pushManager.subscribe({
         userVisibleOnly: true,
@@ -98,12 +103,23 @@ export async function showCentroBrowserNotification(title, options = {}) {
 }
 
 export async function enableCentroBrowserNotifications(vapidPublicKey = null) {
-    if (browserNotificationSupport() === 'unsupported') {
+    const support = browserNotificationSupport();
+    if (support === 'unsupported') {
         return { permission: 'unsupported', message: 'Questo browser non supporta le notifiche.' };
     }
 
-    await registerCentroServiceWorker();
-    const permission = await window.Notification.requestPermission();
+    try {
+        await registerCentroServiceWorker();
+    } catch (error) {
+        console.warn('Service worker non registrato', error);
+    }
+
+    let permission = support;
+    try {
+        permission = await window.Notification.requestPermission();
+    } catch (error) {
+        return { permission, message: 'Il browser non ha completato la richiesta di autorizzazione.' };
+    }
 
     if (permission === 'granted') {
         let pushSubscribed = false;
@@ -113,12 +129,16 @@ export async function enableCentroBrowserNotifications(vapidPublicKey = null) {
             console.warn('Sottoscrizione push non completata', error);
         }
 
-        await showCentroBrowserNotification('Il Centro', {
-            body: 'Notifiche browser attivate.',
-            tag: 'centro-notifications-enabled',
-            renotify: false,
-            data: { url: '/notifications' },
-        });
+        try {
+            await showCentroBrowserNotification('Il Centro', {
+                body: 'Notifiche browser attivate.',
+                tag: 'centro-notifications-enabled',
+                renotify: false,
+                data: { url: '/notifications' },
+            });
+        } catch (error) {
+            console.warn('Notifica di test non mostrata', error);
+        }
 
         return {
             permission,

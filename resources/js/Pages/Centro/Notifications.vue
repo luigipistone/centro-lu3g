@@ -53,9 +53,16 @@ function confirmArchiveAllNotifications() {
 }
 
 async function enableBrowserNotifications() {
-    const result = await enableCentroBrowserNotifications(page.props.push?.vapidPublicKey);
-    browserPermission.value = result.permission;
-    browserNotificationMessage.value = result.message;
+    browserNotificationMessage.value = 'Attivazione notifiche in corso...';
+    try {
+        const result = await enableCentroBrowserNotifications(page.props.push?.vapidPublicKey);
+        browserPermission.value = result.permission;
+        browserNotificationMessage.value = result.message;
+    } catch (error) {
+        console.warn('Attivazione notifiche non riuscita', error);
+        browserPermission.value = browserNotificationSupport();
+        browserNotificationMessage.value = 'Attivazione non riuscita. Controlla i permessi notifiche del browser per questo sito.';
+    }
 }
 
 function formatDate(value) {
