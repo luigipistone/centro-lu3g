@@ -91,10 +91,19 @@ function updateMenuPosition() {
     nextTick(() => {
         const rect = root.value?.getBoundingClientRect();
         if (!rect) return;
+        const viewportPadding = 12;
+        const width = Math.min(Math.max(rect.width, 304), window.innerWidth - (viewportPadding * 2));
+        const menuHeight = menu.value?.offsetHeight || 372;
+        const left = Math.min(Math.max(viewportPadding, rect.right - width), window.innerWidth - width - viewportPadding);
+        const hasSpaceBelow = rect.bottom + 8 + menuHeight <= window.innerHeight - viewportPadding;
+        const top = hasSpaceBelow
+            ? rect.bottom + 8
+            : Math.max(viewportPadding, rect.top - menuHeight - 8);
+
         menuStyle.value = {
-            left: `${rect.left}px`,
-            top: `${rect.bottom + 8}px`,
-            width: `${Math.max(rect.width, 304)}px`,
+            left: `${left}px`,
+            top: `${top}px`,
+            width: `${width}px`,
         };
     });
 }
