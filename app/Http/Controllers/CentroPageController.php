@@ -569,10 +569,23 @@ class CentroPageController extends Controller
             'documents' => $this->companyDocumentRows($canManage ? null : $userId, $canManage),
             'groups' => $canManage ? $this->documentGroupRows() : [],
             'users' => $canManage ? $this->userOptions() : [],
-            'selectedUserId' => $request->query('user'),
-            'selectedUserDocuments' => $canManage && $request->query('user')
-                ? $this->companyDocumentRows((string) $request->query('user'), false)
-                : [],
+            'documentUsers' => $canManage ? $this->companyDocumentUserRows() : [],
+        ]);
+    }
+
+    public function showCompanyDocumentsUser(Request $request, string $userId): Response
+    {
+        $this->ensureAdmin($request);
+
+        $user = DB::table('users')
+            ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
+            ->where('users.id', $userId)
+            ->first(['users.id', 'users.name', 'users.email', 'profiles.avatar_url']);
+        abort_if(! $user, 404);
+
+        return Inertia::render('Centro/DocumentUserShow', [
+            'user' => $user,
+            'documents' => $this->companyDocumentRows($userId, false),
         ]);
     }
 
@@ -738,6 +751,10 @@ class CentroPageController extends Controller
             'user_ids.*' => ['uuid', 'exists:users,id'],
         ]);
 
+        if (empty($payload['user_ids'])) {
+            return back()->withErrors(['user_ids' => 'Seleziona almeno un utente.'])->withInput();
+        }
+
         $groupId = (string) str()->uuid();
         DB::transaction(function () use ($payload, $groupId, $request) {
             DB::table('document_groups')->insert([
@@ -766,6 +783,10 @@ class CentroPageController extends Controller
             'user_ids' => ['nullable', 'array'],
             'user_ids.*' => ['uuid', 'exists:users,id'],
         ]);
+
+        if (empty($payload['user_ids'])) {
+            return back()->withErrors(['user_ids' => 'Seleziona almeno un utente.'])->withInput();
+        }
 
         DB::transaction(function () use ($payload, $id) {
             DB::table('document_groups')->where('id', $id)->update([
@@ -1963,6 +1984,18 @@ class CentroPageController extends Controller
             $group->members_count = $group->user_ids->count();
 
             return $group;
+        });
+    }
+
+    private function companyDocumentUserRows()
+    {
+        return $this->userOptions()->map(function ($user) {
+            $documents = $this->companyDocumentRows($user->id, false);
+            $user->documents_count = $documents->count();
+            $user->read_count = $documents->filter(fn ($document) => filled($document->user_read_at))->count();
+            $user->unread_count = max(0, $user->documents_count - $user->read_count);
+
+            return $user;
         });
     }
 

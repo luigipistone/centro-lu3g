@@ -60,6 +60,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/absences/{id}', [CentroPageController::class, 'destroyAbsence'])->name('absences.destroy');
     Route::get('/documents', [CentroPageController::class, 'companyDocuments'])->name('documents.index');
     Route::post('/documents', [CentroPageController::class, 'storeCompanyDocument'])->name('documents.store');
+    Route::get('/documents/users/{userId}', [CentroPageController::class, 'showCompanyDocumentsUser'])->name('documents.users.show');
     Route::get('/documents/{id}', [CentroPageController::class, 'showCompanyDocument'])->name('documents.show');
     Route::get('/documents/{id}/file', [CentroPageController::class, 'viewCompanyDocumentFile'])->name('documents.file');
     Route::post('/documents/{id}/read', [CentroPageController::class, 'markCompanyDocumentRead'])->name('documents.read');

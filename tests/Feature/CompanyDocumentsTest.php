@@ -69,6 +69,33 @@ class CompanyDocumentsTest extends TestCase
             ->where('company_document_id', $documentId)
             ->where('user_id', $user->id)
             ->value('read_at'));
+
+        $this
+            ->actingAs($admin)
+            ->get(route('documents.users.show', $user->id))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Centro/DocumentUserShow')
+                ->where('user.id', $user->id)
+                ->has('documents', 1)
+            );
+    }
+
+    public function test_admin_cannot_create_empty_document_group(): void
+    {
+        $admin = User::factory()->create();
+        $this->role($admin, 'admin');
+
+        $this
+            ->actingAs($admin)
+            ->post(route('document-groups.store'), [
+                'name' => 'Team vuoto',
+                'description' => '',
+                'user_ids' => [],
+            ])
+            ->assertSessionHasErrors(['user_ids']);
+
+        $this->assertDatabaseCount('document_groups', 0);
     }
 
     private function role(User $user, string $role): void

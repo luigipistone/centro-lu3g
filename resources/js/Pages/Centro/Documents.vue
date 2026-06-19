@@ -5,19 +5,19 @@ import UserAvatar from '@/Components/UserAvatar.vue';
 import { dateIt } from '@/utils/formatters';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { Check, FileText, Plus, Trash2, Upload, Users } from '@lucide/vue';
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
     canManage: Boolean,
     documents: Array,
     groups: Array,
     users: Array,
-    selectedUserId: String,
-    selectedUserDocuments: Array,
+    documentUsers: Array,
 });
 
 const page = usePage();
-const selectedUser = ref(props.selectedUserId || '');
+const confirmDelete = ref(null);
+const confirmDeleteText = ref('');
 
 const documentForm = useForm({
     title: '',
@@ -40,18 +40,8 @@ const audienceOptions = [
     { value: 'groups', label: 'Gruppi' },
 ];
 
-const selectedUserObject = computed(() => props.users.find((user) => user.id === selectedUser.value));
 const visibleDocuments = computed(() => props.documents || []);
-const userDocuments = computed(() => props.selectedUserDocuments || []);
-
-watch(selectedUser, (value) => {
-    if (!props.canManage) return;
-    router.get(route('documents.index'), value ? { user: value } : {}, {
-        preserveScroll: true,
-        preserveState: true,
-        replace: true,
-    });
-});
+const documentUsers = computed(() => props.documentUsers || []);
 
 function resetDocumentForm() {
     documentForm.reset();
@@ -92,13 +82,35 @@ function toggleGroupUser(userId) {
 }
 
 function removeDocument(document) {
-    if (!window.confirm(`Eliminare il documento "${document.title}"?`)) return;
-    router.delete(route('documents.destroy', document.id), { preserveScroll: true });
+    confirmDelete.value = {
+        type: 'document',
+        title: document.title,
+        route: route('documents.destroy', document.id),
+    };
+    confirmDeleteText.value = '';
 }
 
 function removeGroup(group) {
-    if (!window.confirm(`Eliminare il gruppo "${group.name}"?`)) return;
-    router.delete(route('document-groups.destroy', group.id), { preserveScroll: true });
+    confirmDelete.value = {
+        type: 'group',
+        title: group.name,
+        route: route('document-groups.destroy', group.id),
+    };
+    confirmDeleteText.value = '';
+}
+
+function closeDeleteConfirm() {
+    confirmDelete.value = null;
+    confirmDeleteText.value = '';
+}
+
+function confirmDeleteAction() {
+    if (!confirmDelete.value || confirmDeleteText.value !== 'ELIMINA') return;
+
+    router.delete(confirmDelete.value.route, {
+        preserveScroll: true,
+        onFinish: closeDeleteConfirm,
+    });
 }
 
 function audienceLabel(document) {
@@ -127,6 +139,25 @@ function fileSize(bytes) {
 
         <div class="py-8">
             <div class="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
+                <div v-if="confirmDelete" class="fixed inset-0 z-[5100] flex items-center justify-center bg-transparent px-4 py-6" @click.self="closeDeleteConfirm">
+                    <div class="w-full max-w-md rounded-[var(--radius)] bg-white p-5 shadow-xl">
+                        <h3 class="text-base font-semibold text-gray-900">
+                            Eliminare {{ confirmDelete.type === 'group' ? 'il gruppo' : 'il documento' }}?
+                        </h3>
+                        <p class="mt-2 text-sm text-gray-600">
+                            Questa azione elimina <span class="font-semibold text-gray-900">{{ confirmDelete.title }}</span>. Digita
+                            <span class="font-mono font-semibold text-gray-900">ELIMINA</span> per confermare.
+                        </p>
+                        <input v-model="confirmDeleteText" class="form-control font-mono" placeholder="ELIMINA" autocomplete="off" />
+                        <div class="mt-5 flex justify-end gap-2">
+                            <button type="button" class="btn btn-outline" @click="closeDeleteConfirm">Annulla</button>
+                            <button type="button" class="btn btn-danger" :disabled="confirmDeleteText !== 'ELIMINA'" @click="confirmDeleteAction">
+                                Elimina
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <div v-if="page.props.flash?.status" class="rounded-[var(--radius-sm)] border border-green-100 bg-green-50 px-3 py-2 text-sm text-green-700">
                     {{ page.props.flash.status }}
                 </div>
@@ -230,6 +261,7 @@ function fileSize(bytes) {
                                 {{ user.name }}
                             </button>
                         </div>
+                        <div v-if="groupForm.errors.user_ids" class="text-sm text-red-600">{{ groupForm.errors.user_ids }}</div>
                         <button type="submit" class="btn btn-outline" :disabled="groupForm.processing">
                             <Plus class="h-4 w-4" :stroke-width="1.7" />
                             Crea gruppo
@@ -250,44 +282,44 @@ function fileSize(bytes) {
                 </section>
 
                 <section v-if="canManage" class="surface p-5">
-                    <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="mb-4">
                         <div>
                             <h3 class="text-base font-semibold text-gray-900">Documenti per utente</h3>
-                            <p class="mt-1 text-sm text-gray-500">Controlla cosa vede ogni persona e lo stato di lettura.</p>
-                        </div>
-                        <select v-model="selectedUser" class="form-control mt-0 max-w-xs">
-                            <option value="">Seleziona utente</option>
-                            <option v-for="user in users" :key="user.id" :value="user.id">{{ user.name }}</option>
-                        </select>
-                    </div>
-
-                    <div v-if="selectedUserObject" class="mb-4 flex items-center gap-3 rounded-[var(--radius)] bg-gray-50/80 p-3">
-                        <UserAvatar :user="selectedUserObject" size="md" />
-                        <div>
-                            <p class="text-sm font-semibold text-gray-900">{{ selectedUserObject.name }}</p>
-                            <p class="text-xs text-gray-500">{{ userDocuments.filter((document) => document.user_read_at).length }} letti su {{ userDocuments.length }}</p>
+                            <p class="mt-1 text-sm text-gray-500">Apri il box di un utente per vedere tutti i suoi documenti e lo stato di lettura.</p>
                         </div>
                     </div>
 
-                    <div v-if="selectedUserObject && userDocuments.length" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    <div v-if="documentUsers.length" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                         <Link
-                            v-for="document in userDocuments"
-                            :key="document.id"
-                            :href="route('documents.show', document.id)"
+                            v-for="user in documentUsers"
+                            :key="user.id"
+                            :href="route('documents.users.show', user.id)"
                             class="rounded-[var(--radius)] border border-white bg-white/72 p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]"
                         >
-                            <div class="flex items-start justify-between gap-3">
-                                <FileText class="h-5 w-5 text-[hsl(var(--primary-app))]" :stroke-width="1.7" />
-                                <span :class="['rounded-full px-2 py-1 text-xs font-semibold', document.user_read_at ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700']">
-                                    {{ document.user_read_at ? 'Letto' : 'Da leggere' }}
-                                </span>
+                            <div class="flex items-center gap-3">
+                                <UserAvatar :user="user" size="md" />
+                                <div class="min-w-0">
+                                    <p class="truncate text-sm font-semibold text-gray-900">{{ user.name }}</p>
+                                    <p class="truncate text-xs text-gray-500">{{ user.email }}</p>
+                                </div>
                             </div>
-                            <p class="mt-3 line-clamp-2 text-sm font-semibold text-gray-900">{{ document.title }}</p>
-                            <p class="mt-2 text-xs text-gray-500">{{ dateIt(document.created_at) }}</p>
+                            <div class="mt-4 grid grid-cols-3 gap-2 text-center">
+                                <div class="rounded-[var(--radius-sm)] bg-gray-50 px-2 py-2">
+                                    <p class="text-sm font-semibold text-gray-900">{{ user.documents_count }}</p>
+                                    <p class="text-[10px] font-semibold uppercase tracking-[0.08em] text-gray-400">Totali</p>
+                                </div>
+                                <div class="rounded-[var(--radius-sm)] bg-emerald-50 px-2 py-2">
+                                    <p class="text-sm font-semibold text-emerald-700">{{ user.read_count }}</p>
+                                    <p class="text-[10px] font-semibold uppercase tracking-[0.08em] text-emerald-500">Letti</p>
+                                </div>
+                                <div class="rounded-[var(--radius-sm)] bg-amber-50 px-2 py-2">
+                                    <p class="text-sm font-semibold text-amber-700">{{ user.unread_count }}</p>
+                                    <p class="text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-500">Da leggere</p>
+                                </div>
+                            </div>
                         </Link>
                     </div>
-                    <p v-else-if="selectedUserObject" class="py-6 text-center text-sm text-gray-500">Nessun documento assegnato a questo utente.</p>
-                    <p v-else class="py-6 text-center text-sm text-gray-500">Scegli un utente per vedere i suoi documenti.</p>
+                    <p v-else class="py-6 text-center text-sm text-gray-500">Nessun utente disponibile.</p>
                 </section>
 
                 <section class="space-y-4">
