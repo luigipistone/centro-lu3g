@@ -131,7 +131,8 @@ export async function showCentroBrowserNotification(title, options = {}) {
     return showNativeNotification();
 }
 
-export async function enableCentroBrowserNotifications(vapidPublicKey = null) {
+export async function enableCentroBrowserNotifications(vapidPublicKey = null, options = {}) {
+    const { showTestNotification = true } = options;
     const support = browserNotificationSupport();
     if (support === 'unsupported') {
         return { permission: 'unsupported', message: 'Questo browser non supporta le notifiche.' };
@@ -167,15 +168,17 @@ export async function enableCentroBrowserNotifications(vapidPublicKey = null) {
             console.warn('Sottoscrizione push non completata', error);
         }
 
-        try {
-            await withTimeout(showCentroBrowserNotification('Il Centro', {
-                body: 'Notifiche browser attivate.',
-                tag: 'centro-notifications-enabled',
-                renotify: false,
-                data: { url: '/notifications' },
-            }), 2500, false);
-        } catch (error) {
-            console.warn('Notifica di test non mostrata', error);
+        if (showTestNotification) {
+            try {
+                await withTimeout(showCentroBrowserNotification('Il Centro', {
+                    body: 'Notifiche browser attivate.',
+                    tag: 'centro-notifications-enabled',
+                    renotify: false,
+                    data: { url: '/notifications' },
+                }), 2500, false);
+            } catch (error) {
+                console.warn('Notifica di test non mostrata', error);
+            }
         }
 
         return {
