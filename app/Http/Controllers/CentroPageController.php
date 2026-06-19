@@ -865,7 +865,7 @@ class CentroPageController extends Controller
             [...$payload, 'updated_at' => now(), 'created_at' => $existing->created_at ?? now()],
         );
 
-        return back()->with('status', 'Impostazioni fatturazione aggiornate.');
+        return back()->with('status', 'Impostazioni aggiornate.');
     }
 
     public function updateEmailSettings(Request $request): RedirectResponse

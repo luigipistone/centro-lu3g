@@ -221,7 +221,7 @@ const updateCadenceOptions = [
 ];
 
 const docSettingDefaults = {
-    company_name: 'Centro LU3G',
+    company_name: 'Il Centro',
     legal_form: '',
     vat_number: '',
     tax_code: '',
@@ -1049,7 +1049,24 @@ function submit() {
 }
 
 function saveDocumentSettings() {
-    documentSettingsForm.put(route('settings.document.update'), { preserveScroll: true });
+    const payload = Object.keys(docSettingDefaults).reduce((values, key) => {
+        values[key] = documentSettingsForm[key] ?? docSettingDefaults[key];
+        return values;
+    }, {});
+
+    router.put(route('settings.document.update'), payload, {
+        preserveScroll: true,
+        onSuccess: () => {
+            Object.entries(payload).forEach(([key, value]) => {
+                documentSettingsForm[key] = value;
+            });
+            documentSettingsForm.defaults(payload);
+            documentSettingsForm.clearErrors();
+        },
+        onError: (errors) => {
+            documentSettingsForm.setError(errors);
+        },
+    });
 }
 
 function saveEmailSettings() {
@@ -4509,7 +4526,7 @@ function visibleCalendarTasks(cell) {
 
                 <section v-if="settingsTab === 'personalizzazione'" class="grid gap-6 lg:grid-cols-[1fr_320px]">
                     <form class="app-card" @submit.prevent="saveDocumentSettings">
-                        <h3 class="section-title"><span class="section-icon"><Building2 class="h-4 w-4" :stroke-width="1.7" /></span>Identita aziendale</h3>
+                        <h3 class="section-title"><span class="section-icon"><Building2 class="h-4 w-4" :stroke-width="1.7" /></span>Identità aziendale</h3>
                         <p class="mt-1 text-sm text-gray-500">Questi dati alimentano intestazioni, PDF, XML e firme documentali.</p>
                         <div class="mt-5 grid gap-4 md:grid-cols-2">
                             <div>
@@ -4543,7 +4560,7 @@ function visibleCalendarTasks(cell) {
                         </div>
                         <button type="submit" class="btn btn-primary mt-5" :disabled="documentSettingsForm.processing">
                             <Save class="h-4 w-4" :stroke-width="1.7" />
-                            Salva identita
+                            Salva identità
                         </button>
                     </form>
 
@@ -4556,7 +4573,7 @@ function visibleCalendarTasks(cell) {
                                 <input v-model="documentSettingsForm.postal_code" class="form-control mt-0" placeholder="CAP" />
                                 <input v-model="documentSettingsForm.province" class="form-control mt-0" placeholder="Prov." />
                             </div>
-                            <input v-model="documentSettingsForm.city" class="form-control mt-0" placeholder="Citta" />
+                            <input v-model="documentSettingsForm.city" class="form-control mt-0" placeholder="Città" />
                             <input v-model="documentSettingsForm.country" class="form-control mt-0" placeholder="Paese" />
                             <input v-model="documentSettingsForm.iban" class="form-control mt-0" placeholder="IBAN" />
                             <input v-model="documentSettingsForm.bic_swift" class="form-control mt-0" placeholder="BIC/SWIFT" />

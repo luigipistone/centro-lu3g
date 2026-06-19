@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('document_settings', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->string('company_name')->default('Centro LU3G');
+            $table->string('company_name')->default('Il Centro');
             $table->string('legal_form')->nullable();
             $table->string('vat_number')->nullable();
             $table->string('tax_code')->nullable();
