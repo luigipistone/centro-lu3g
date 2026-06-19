@@ -4700,17 +4700,20 @@ function calendarDayStyle(sectionMonth, cell) {
                                             </span>
                                             <span v-if="task.client_name" class="min-w-0 max-w-full truncate rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">{{ task.client_name }}</span>
                                         </div>
-                                        <div class="mt-4 flex items-center justify-between gap-3 text-xs text-gray-500">
-                                            <span v-if="task.subtask_count" class="inline-flex items-center gap-1 font-semibold text-gray-500">
-                                                <span>{{ task.subtask_count }}</span>
-                                                <svg class="h-3.5 w-3.5 fill-current" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                                                    <path :d="subtaskIconPath" />
-                                                </svg>
-                                            </span>
-                                            <span class="ml-auto shrink-0 text-right">{{ task.due_date ? dateIt(task.due_date) : 'Senza scadenza' }}</span>
-                                        </div>
-                                        <div v-if="(task.task_type || 'task') === 'meeting' && task.due_time" class="mt-4 border-t border-gray-100 pt-2.5 text-xs font-bold text-gray-700">
-                                            {{ String(task.due_time).slice(0, 5) }}
+                                        <div class="mt-4 flex items-center justify-between gap-3 text-[11px] leading-none text-gray-500">
+                                            <div class="inline-flex min-w-0 items-center gap-2.5">
+                                                <span v-if="task.subtask_count" class="inline-flex items-center gap-1 font-semibold text-gray-500">
+                                                    <span>{{ task.subtask_count }}</span>
+                                                    <svg class="h-3.5 w-3.5 fill-current" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                                        <path :d="subtaskIconPath" />
+                                                    </svg>
+                                                </span>
+                                                <span v-if="task.due_time" class="inline-flex items-center gap-1 font-semibold text-gray-500">
+                                                    <Clock class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                                    <span>{{ String(task.due_time).slice(0, 5) }}</span>
+                                                </span>
+                                            </div>
+                                            <span class="ml-auto shrink-0 text-right font-medium">{{ task.due_date ? dateIt(task.due_date) : 'Senza scadenza' }}</span>
                                         </div>
                                     </Link>
                                 </article>
