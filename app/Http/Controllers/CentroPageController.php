@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\CentroBackupService;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Illuminate\Http\JsonResponse;
@@ -414,7 +415,7 @@ class CentroPageController extends Controller
             'documentSettings' => $section === 'settings' ? DB::table('document_settings')->first() : null,
             'emailSettings' => $section === 'settings' ? DB::table('email_settings')->first() : null,
             'numberings' => $section === 'settings' ? DB::table('document_numbering')->orderBy('doc_type')->orderByDesc('year')->get() : [],
-            'backupRuns' => $section === 'settings' ? DB::table('backup_runs')->latest('started_at')->limit(8)->get() : [],
+            'backupRuns' => $section === 'settings' ? $this->backupRuns() : [],
             'clients' => DB::table('clients')->orderBy('name')->get(['id', 'name']),
             'projects' => DB::table('projects')->orderBy('name')->get(['id', 'name']),
             'services' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name']),
@@ -921,21 +922,30 @@ class CentroPageController extends Controller
         return back()->with('status', 'Numerazione aggiornata.');
     }
 
-    public function runBackup(): RedirectResponse
+    public function runBackup(Request $request, CentroBackupService $backupService): RedirectResponse
     {
-        $tables = DB::select('SHOW TABLES');
+        $this->ensureAdmin($request);
 
-        DB::table('backup_runs')->insert([
-            'id' => (string) str()->uuid(),
-            'frequency' => 'manual',
-            'status' => 'completed',
-            'started_at' => now(),
-            'finished_at' => now(),
-            'tables_count' => count($tables),
-            'storage_path' => 'Plesk/manual-db-backup',
-        ]);
+        try {
+            $backupService->create('manual');
+        } catch (\Throwable $exception) {
+            return back()->with('status', 'Backup non completato: '.$exception->getMessage());
+        }
 
-        return back()->with('status', 'Backup manuale registrato. Per il dump fisico usa anche il backup Plesk del dominio.');
+        return back()->with('status', 'Backup manuale creato correttamente.');
+    }
+
+    public function restoreBackup(Request $request, CentroBackupService $backupService, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+
+        try {
+            $backupService->restore($id);
+        } catch (\Throwable $exception) {
+            return back()->with('status', 'Ripristino non completato: '.$exception->getMessage());
+        }
+
+        return back()->with('status', 'Backup ripristinato correttamente.');
     }
 
     private function nullifyEmptyStrings(array $payload): array
@@ -947,6 +957,22 @@ class CentroPageController extends Controller
         }
 
         return $payload;
+    }
+
+    private function backupRuns()
+    {
+        return DB::table('backup_runs')
+            ->latest('started_at')
+            ->limit(12)
+            ->get()
+            ->map(function ($run) {
+                $run->restorable = $run->status === 'completed'
+                    && filled($run->storage_path)
+                    && Str::endsWith((string) $run->storage_path, '.sql')
+                    && Storage::disk('local')->exists($run->storage_path);
+
+                return $run;
+            });
     }
 
     private function config(string $section): array

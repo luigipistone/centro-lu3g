@@ -87,6 +87,8 @@ const formOpen = ref(false);
 const deleteTarget = ref(null);
 const deleteTargetAction = ref(null);
 const deleteConfirmText = ref('');
+const restoreTarget = ref(null);
+const restoreConfirmText = ref('');
 const updateDrafts = ref({});
 const savingUpdateKeys = ref([]);
 const page = usePage();
@@ -1065,6 +1067,59 @@ function saveNumbering(row) {
 
 function runBackup() {
     router.post(route('settings.backup.run'), {}, { preserveScroll: true });
+}
+
+function openRestoreBackup(run) {
+    restoreTarget.value = run;
+    restoreConfirmText.value = '';
+}
+
+function cancelRestoreBackup() {
+    restoreTarget.value = null;
+    restoreConfirmText.value = '';
+}
+
+function confirmRestoreBackup() {
+    if (!restoreTarget.value || restoreConfirmText.value !== 'RIPRISTINA') return;
+
+    router.post(route('settings.backup.restore', restoreTarget.value.id), {}, {
+        preserveScroll: true,
+        onFinish: cancelRestoreBackup,
+    });
+}
+
+function backupFrequencyLabel(frequency) {
+    return {
+        manual: 'Manuale',
+        weekly: 'Settimanale',
+        monthly: 'Mensile',
+    }[frequency] || displayValue(frequency);
+}
+
+function backupStatusClass(status) {
+    return {
+        completed: 'bg-emerald-100 text-emerald-700',
+        running: 'bg-sky-100 text-sky-700',
+        failed: 'bg-red-100 text-red-700',
+    }[status] || 'bg-gray-100 text-gray-700';
+}
+
+function backupStatusLabel(status) {
+    return {
+        completed: 'Completato',
+        running: 'In corso',
+        failed: 'Errore',
+    }[status] || displayValue(status);
+}
+
+function fileSize(value) {
+    const bytes = Number(value || 0);
+    if (!bytes) return '-';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    const amount = bytes / (1024 ** index);
+
+    return `${new Intl.NumberFormat('it-IT', { maximumFractionDigits: index ? 1 : 0 }).format(amount)} ${units[index]}`;
 }
 
 function remove(row, action = null) {
@@ -2945,6 +3000,33 @@ function visibleCalendarTasks(cell) {
             </div>
         </div>
 
+        <div v-if="restoreTarget" class="fixed inset-0 z-[7000] flex items-center justify-center bg-transparent px-4 py-6" @click.self="cancelRestoreBackup">
+            <div class="w-full max-w-md rounded-md bg-white p-5 shadow-xl dark:bg-gray-950">
+                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Conferma ripristino</h3>
+                <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                    Questa azione sostituirà i contenuti attuali con il backup del
+                    <span class="font-medium text-gray-900 dark:text-white">{{ dateIt(restoreTarget.started_at) }}</span>.
+                    Digita <span class="font-mono font-semibold text-gray-900 dark:text-white">RIPRISTINA</span> per confermare.
+                </p>
+                <input v-model="restoreConfirmText" class="form-control font-mono" placeholder="RIPRISTINA" autocomplete="off" />
+                <div class="mt-5 flex justify-end gap-2">
+                    <button type="button" class="btn btn-outline" @click="cancelRestoreBackup">
+                        <X class="h-4 w-4" :stroke-width="1.7" />
+                        Annulla
+                    </button>
+                    <button
+                        type="button"
+                        class="btn btn-primary"
+                        :disabled="restoreConfirmText !== 'RIPRISTINA'"
+                        @click="confirmRestoreBackup"
+                    >
+                        <RotateCcw class="h-4 w-4" :stroke-width="1.7" />
+                        Ripristina
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <div v-if="section === 'calendar'" class="py-8">
             <div class="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
                 <div class="mb-4 flex items-center justify-between gap-3 overflow-x-auto pb-1">
@@ -4401,12 +4483,12 @@ function visibleCalendarTasks(cell) {
                     {{ page.props.flash.status }}
                 </div>
 
-                <div class="surface grid gap-2 p-1 sm:grid-cols-4">
+                <div class="surface flex flex-wrap gap-2 p-2">
                     <button
                         v-for="tab in settingsTabs"
                         :key="tab[0]"
                         type="button"
-                        :class="['inline-flex items-center justify-center gap-2 rounded px-3 py-2 text-sm font-medium transition', settingsTab === tab[0] ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900']"
+                        :class="['inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-[var(--radius-sm)] px-4 py-2 text-sm font-semibold transition sm:flex-none', settingsTab === tab[0] ? 'bg-gray-900 text-white shadow-sm dark:bg-white dark:text-gray-950' : 'text-gray-600 hover:bg-white/80 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white']"
                         @click="settingsTab = tab[0]"
                     >
                         <component :is="tab[2]" class="h-4 w-4" :stroke-width="1.7" />
@@ -4585,14 +4667,22 @@ function visibleCalendarTasks(cell) {
                     </form>
                 </section>
 
-                <section v-else-if="settingsTab === 'backup'" class="grid gap-6 lg:grid-cols-[340px_1fr]">
+                <section v-else-if="settingsTab === 'backup'" class="grid gap-6 lg:grid-cols-[360px_1fr]">
                     <div class="app-card">
                         <h3 class="section-title"><span class="section-icon"><DatabaseBackup class="h-4 w-4" :stroke-width="1.7" /></span>Backup manuale</h3>
-                        <p class="mt-2 text-sm text-gray-500">Registra un controllo backup nel portale. Il dump fisico resta gestito dal backup Plesk del dominio.</p>
+                        <p class="mt-2 text-sm text-gray-500">Crea subito un dump SQL ripristinabile del database attuale.</p>
                         <button type="button" class="btn btn-primary mt-5" @click="runBackup">
                             <DatabaseBackup class="h-4 w-4" :stroke-width="1.7" />
-                            Avvia controllo backup
+                            Crea backup ora
                         </button>
+                        <div class="mt-6 rounded-[var(--radius-sm)] border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600 dark:border-white/10 dark:bg-white/5 dark:text-gray-300">
+                            <div class="font-semibold text-gray-900 dark:text-white">Automatici attivi</div>
+                            <div class="mt-2 space-y-1">
+                                <p>Settimanale: lunedì alle 03:00.</p>
+                                <p>Mensile: giorno 1 alle 03:30.</p>
+                                <p>Retention: massimo 2 settimanali e 2 mensili.</p>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="app-card">
@@ -4605,17 +4695,35 @@ function visibleCalendarTasks(cell) {
                                         <th class="px-3 py-3 text-left font-semibold text-gray-600">Tipo</th>
                                         <th class="px-3 py-3 text-left font-semibold text-gray-600">Stato</th>
                                         <th class="px-3 py-3 text-left font-semibold text-gray-600">Tabelle</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-gray-600">Dimensione</th>
+                                        <th class="px-3 py-3 text-right font-semibold text-gray-600">Azioni</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-gray-100">
                                     <tr v-for="run in backupRuns || []" :key="run.id">
                                         <td class="px-3 py-3">{{ dateIt(run.started_at) }}</td>
-                                        <td class="px-3 py-3">{{ run.frequency }}</td>
-                                    <td class="px-3 py-3">{{ displayValue(run.status) }}</td>
+                                        <td class="px-3 py-3">{{ backupFrequencyLabel(run.frequency) }}</td>
+                                        <td class="px-3 py-3">
+                                            <span :class="['rounded-full px-2 py-1 text-xs font-semibold', backupStatusClass(run.status)]">
+                                                {{ backupStatusLabel(run.status) }}
+                                            </span>
+                                        </td>
                                         <td class="px-3 py-3">{{ run.tables_count || '-' }}</td>
+                                        <td class="px-3 py-3">{{ fileSize(run.size_bytes) }}</td>
+                                        <td class="px-3 py-3 text-right">
+                                            <button
+                                                type="button"
+                                                class="icon-btn ml-auto"
+                                                :disabled="!run.restorable"
+                                                :title="run.restorable ? 'Ripristina backup' : 'File backup non disponibile'"
+                                                @click="openRestoreBackup(run)"
+                                            >
+                                                <RotateCcw class="h-4 w-4" :stroke-width="1.7" />
+                                            </button>
+                                        </td>
                                     </tr>
                                     <tr v-if="!(backupRuns || []).length">
-                                        <td colspan="4" class="px-3 py-8 text-center text-gray-500">Nessun backup registrato.</td>
+                                        <td colspan="6" class="px-3 py-8 text-center text-gray-500">Nessun backup registrato.</td>
                                     </tr>
                                 </tbody>
                             </table>
