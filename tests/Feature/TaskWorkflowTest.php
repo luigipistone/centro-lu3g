@@ -184,6 +184,66 @@ class TaskWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_repeated_task_autosaves_coalesce_update_notifications(): void
+    {
+        $user = User::factory()->create();
+        $assignee = User::factory()->create();
+        $taskId = (string) Str::uuid();
+
+        DB::table('tasks')->insert([
+            'id' => $taskId,
+            'title' => 'Task notifiche',
+            'priority' => 'medium',
+            'status' => 'todo',
+            'task_type' => 'project',
+            'created_by' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('task_assignees')->insert([
+            'id' => (string) Str::uuid(),
+            'task_id' => $taskId,
+            'user_id' => $assignee->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->put("/tasks/{$taskId}", [
+                'title' => 'Task notifiche aggiornata',
+                'task_type' => 'project',
+                'status' => 'todo',
+                'priority' => 'medium',
+                'recurring_enabled' => false,
+            ])
+            ->assertRedirect();
+
+        $this
+            ->actingAs($user)
+            ->put("/tasks/{$taskId}", [
+                'title' => 'Task notifiche aggiornata',
+                'task_type' => 'project',
+                'status' => 'todo',
+                'priority' => 'high',
+                'recurring_enabled' => false,
+            ])
+            ->assertRedirect();
+
+        $this->assertSame(1, DB::table('notifications')
+            ->where('user_id', $assignee->id)
+            ->where('task_id', $taskId)
+            ->where('type', 'task_updated')
+            ->count());
+
+        $this->assertStringContainsString('priorità', DB::table('notifications')
+            ->where('user_id', $assignee->id)
+            ->where('task_id', $taskId)
+            ->where('type', 'task_updated')
+            ->value('message'));
+    }
+
     public function test_task_autosave_update_without_people_payload_keeps_people(): void
     {
         $user = User::factory()->create();

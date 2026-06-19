@@ -1,0 +1,1 @@
+import{O as e,y as t}from"./app-C_UBmNbx.js";import{t as n}from"./_plugin-vue_export-helper-BDNMzG2s.js";var r={},i={src:`/brand/logo-gestionale-webapp.svg`,alt:`Il Centro`,class:`brand-logo-image block object-contain`};function a(n,r){return e(),t(`img`,i)}var o=n(r,[[`render`,a]]);export{o as t};

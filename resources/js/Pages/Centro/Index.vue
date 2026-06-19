@@ -82,6 +82,12 @@ const props = defineProps({
     serviceName: String,
 });
 
+const AUTOSAVE_IDLE_DELAY = 1400;
+
+function autosaveDelay(delay = AUTOSAVE_IDLE_DELAY) {
+    return Number(delay) > 0 ? Number(delay) : AUTOSAVE_IDLE_DELAY;
+}
+
 const editing = ref(null);
 const formOpen = ref(false);
 const deleteTarget = ref(null);
@@ -1576,7 +1582,7 @@ function absencePayload(row) {
     };
 }
 
-function saveAbsenceInline(row, delay = 650) {
+function saveAbsenceInline(row, delay = AUTOSAVE_IDLE_DELAY) {
     window.clearTimeout(absenceAutosaveTimers[row.id]);
     absenceAutosaveTimers[row.id] = window.setTimeout(() => {
         router.put(route('absences.update', row.id), absencePayload(row), {
@@ -1584,7 +1590,7 @@ function saveAbsenceInline(row, delay = 650) {
             preserveState: true,
             only: ['rows', 'errors', 'flash'],
         });
-    }, delay);
+    }, autosaveDelay(delay));
 }
 
 function updateAbsenceStatus(row, status) {
@@ -2156,7 +2162,7 @@ function calendarSubtaskPayload(subtaskId) {
     };
 }
 
-function saveCalendarSubtaskInline(subtask, delay = 650) {
+function saveCalendarSubtaskInline(subtask, delay = AUTOSAVE_IDLE_DELAY) {
     const payload = calendarSubtaskPayload(subtask.id);
     if (!String(payload.title).trim()) {
         setInlineState(calendarSubtaskAutosaveStates, subtask.id, 'idle');
@@ -2191,7 +2197,7 @@ function saveCalendarSubtaskInline(subtask, delay = 650) {
                 setInlineState(calendarSubtaskAutosaveErrors, subtask.id, 'Non salvato');
             },
         });
-    }, delay);
+    }, autosaveDelay(delay));
 }
 
 function setCalendarSubtaskStatus(subtask, done) {
@@ -2312,7 +2318,7 @@ function calendarCommentPayload(commentId) {
     };
 }
 
-function saveCalendarCommentInline(comment, delay = 650) {
+function saveCalendarCommentInline(comment, delay = AUTOSAVE_IDLE_DELAY) {
     updateCalendarCommentFromEditor(comment.id);
     const payload = calendarCommentPayload(comment.id);
     if (!String(payload.content).trim()) {
@@ -2348,7 +2354,7 @@ function saveCalendarCommentInline(comment, delay = 650) {
                 setInlineState(calendarCommentAutosaveErrors, comment.id, 'Non salvato');
             },
         });
-    }, delay);
+    }, autosaveDelay(delay));
 }
 
 function addCalendarComment() {
@@ -2422,7 +2428,7 @@ function calendarTaskPayload() {
     };
 }
 
-function saveCalendarTaskInline(delay = 650) {
+function saveCalendarTaskInline(delay = AUTOSAVE_IDLE_DELAY) {
     if (!String(calendarTaskForm.title || '').trim()) return;
 
     window.clearTimeout(calendarTaskAutosaveTimer);
@@ -2490,7 +2496,7 @@ function saveCalendarTaskInline(delay = 650) {
         } else {
             calendarTaskForm.post(route('tasks.store'), requestOptions);
         }
-    }, delay);
+    }, autosaveDelay(delay));
 }
 
 function setCalendarTaskType(type) {

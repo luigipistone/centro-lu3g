@@ -51,6 +51,12 @@ const props = defineProps({
     related: Object,
 });
 
+const AUTOSAVE_IDLE_DELAY = 1400;
+
+function autosaveDelay(delay = AUTOSAVE_IDLE_DELAY) {
+    return Number(delay) > 0 ? Number(delay) : AUTOSAVE_IDLE_DELAY;
+}
+
 const labels = {
     name: 'Nome',
     legal_name: 'Ragione sociale',
@@ -551,7 +557,7 @@ function uploadAbsenceMedicalDocument(event) {
     });
 }
 
-function saveAbsenceInline(delay = 650) {
+function saveAbsenceInline(delay = AUTOSAVE_IDLE_DELAY) {
     if (props.section !== 'absences') return;
     if (!absenceForm.start_date) return;
 
@@ -579,7 +585,7 @@ function saveAbsenceInline(delay = 650) {
             },
             onFinish: () => absenceForm.transform((data) => data),
         });
-    }, delay);
+    }, autosaveDelay(delay));
 }
 
 function setAbsenceStatus(status) {
@@ -692,7 +698,7 @@ function commentDraftPayload(commentId) {
     };
 }
 
-function saveCommentInline(comment, delay = 650) {
+function saveCommentInline(comment, delay = AUTOSAVE_IDLE_DELAY) {
     if (props.section !== 'tasks') return;
 
     updateCommentFromEditor(comment.id);
@@ -728,7 +734,7 @@ function saveCommentInline(comment, delay = 650) {
                 setInlineState(commentAutosaveErrors, comment.id, 'Non salvato');
             },
         });
-    }, delay);
+    }, autosaveDelay(delay));
 }
 
 function removeComment(comment) {
@@ -810,7 +816,7 @@ function taskPayload() {
     };
 }
 
-function saveTaskInline(delay = 650) {
+function saveTaskInline(delay = AUTOSAVE_IDLE_DELAY) {
     if (props.section !== 'tasks') return;
 
     window.clearTimeout(taskAutosaveTimer);
@@ -841,7 +847,7 @@ function saveTaskInline(delay = 650) {
                 taskForm.transform((data) => data);
             },
         });
-    }, delay);
+    }, autosaveDelay(delay));
 }
 
 function saveTaskDetails() {
@@ -1027,7 +1033,7 @@ function subtaskDraftPayload(subtaskId) {
     };
 }
 
-function saveSubtaskInline(subtask, delay = 650) {
+function saveSubtaskInline(subtask, delay = AUTOSAVE_IDLE_DELAY) {
     if (props.section !== 'tasks') return;
 
     const payload = subtaskDraftPayload(subtask.id);
@@ -1062,7 +1068,7 @@ function saveSubtaskInline(subtask, delay = 650) {
                 setInlineState(subtaskAutosaveErrors, subtask.id, 'Non salvato');
             },
         });
-    }, delay);
+    }, autosaveDelay(delay));
 }
 
 function addLine() {
@@ -1126,7 +1132,7 @@ function setInlineState(bucket, id, value) {
     bucket.value = { ...bucket.value, [id]: value };
 }
 
-function saveLineInline(line, delay = 650) {
+function saveLineInline(line, delay = AUTOSAVE_IDLE_DELAY) {
     if (props.section !== 'billing') return;
 
     const payload = lineDraftPayload(line.id);
@@ -1161,10 +1167,10 @@ function saveLineInline(line, delay = 650) {
                 setInlineState(lineAutosaveErrors, line.id, 'Non salvato');
             },
         });
-    }, delay);
+    }, autosaveDelay(delay));
 }
 
-function savePaymentInline(payment, delay = 650) {
+function savePaymentInline(payment, delay = AUTOSAVE_IDLE_DELAY) {
     if (props.section !== 'billing') return;
 
     const payload = paymentDraftPayload(payment.id);
@@ -1199,7 +1205,7 @@ function savePaymentInline(payment, delay = 650) {
                 setInlineState(paymentAutosaveErrors, payment.id, 'Non salvato');
             },
         });
-    }, delay);
+    }, autosaveDelay(delay));
 }
 
 function autosaveLabel(state, error = '') {
@@ -1226,7 +1232,7 @@ function documentPayload() {
     };
 }
 
-function saveDocumentInline(delay = 650) {
+function saveDocumentInline(delay = AUTOSAVE_IDLE_DELAY) {
     if (props.section !== 'billing') return;
 
     window.clearTimeout(documentAutosaveTimer);
@@ -1257,7 +1263,7 @@ function saveDocumentInline(delay = 650) {
                 documentForm.transform((data) => data);
             },
         });
-    }, delay);
+    }, autosaveDelay(delay));
 }
 
 function issueDocument() {
@@ -1306,7 +1312,7 @@ function contactDraftPayload(contactId) {
     };
 }
 
-function saveContactInline(contact, delay = 650) {
+function saveContactInline(contact, delay = AUTOSAVE_IDLE_DELAY) {
     if (props.section !== 'clients') return;
 
     const payload = contactDraftPayload(contact.id);
@@ -1341,7 +1347,7 @@ function saveContactInline(contact, delay = 650) {
                 setInlineState(contactAutosaveErrors, contact.id, 'Non salvato');
             },
         });
-    }, delay);
+    }, autosaveDelay(delay));
 }
 
 function clientPayload() {
@@ -1373,7 +1379,7 @@ function clientPayload() {
     };
 }
 
-function saveClientInline(delay = 650) {
+function saveClientInline(delay = AUTOSAVE_IDLE_DELAY) {
     if (props.section !== 'clients') return;
 
     window.clearTimeout(clientAutosaveTimer);
@@ -1404,7 +1410,7 @@ function saveClientInline(delay = 650) {
                 clientForm.transform((data) => data);
             },
         });
-    }, delay);
+    }, autosaveDelay(delay));
 }
 
 function removeContact(contact) {
@@ -1428,7 +1434,7 @@ function projectPayload() {
     };
 }
 
-function saveProjectInline(delay = 650) {
+function saveProjectInline(delay = AUTOSAVE_IDLE_DELAY) {
     if (props.section !== 'projects') return;
 
     window.clearTimeout(projectAutosaveTimer);
@@ -1460,7 +1466,7 @@ function saveProjectInline(delay = 650) {
                 projectForm.transform((data) => data);
             },
         });
-    }, delay);
+    }, autosaveDelay(delay));
 }
 
 function userPayload() {
@@ -1477,7 +1483,7 @@ function userPayload() {
     };
 }
 
-function saveUserInline(delay = 650) {
+function saveUserInline(delay = AUTOSAVE_IDLE_DELAY) {
     if (props.section !== 'users') return;
     if (!String(userForm.name).trim() || !String(userForm.email).trim()) return;
 
@@ -1510,7 +1516,7 @@ function saveUserInline(delay = 650) {
                 userForm.transform((data) => data);
             },
         });
-    }, delay);
+    }, autosaveDelay(delay));
 }
 
 function userPreview() {

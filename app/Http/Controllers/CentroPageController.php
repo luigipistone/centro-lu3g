@@ -3263,7 +3263,33 @@ class CentroPageController extends Controller
 
     private function notifyUsers(iterable $userIds, ?string $actorId, string $type, string $message, ?string $taskId = null): void
     {
+        $now = now();
+
         foreach (collect($userIds)->filter()->unique()->values() as $userId) {
+            $existingNotification = DB::table('notifications')
+                ->where('user_id', $userId)
+                ->where('type', $type)
+                ->where('read', false)
+                ->whereNull('archived_at')
+                ->where('created_at', '>=', $now->copy()->subMinutes(2))
+                ->when($actorId, fn ($query) => $query->where('actor_id', $actorId), fn ($query) => $query->whereNull('actor_id'))
+                ->when($taskId, fn ($query) => $query->where('task_id', $taskId), fn ($query) => $query->whereNull('task_id'))
+                ->when(! $this->shouldCoalesceNotification($type, $taskId), fn ($query) => $query->where('message', $message))
+                ->latest('created_at')
+                ->first(['id']);
+
+            if ($existingNotification) {
+                DB::table('notifications')
+                    ->where('id', $existingNotification->id)
+                    ->update([
+                        'message' => $message,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ]);
+
+                continue;
+            }
+
             DB::table('notifications')->insert([
                 'id' => (string) str()->uuid(),
                 'user_id' => $userId,
@@ -3272,10 +3298,15 @@ class CentroPageController extends Controller
                 'type' => $type,
                 'message' => $message,
                 'read' => false,
-                'created_at' => now(),
-                'updated_at' => now(),
+                'created_at' => $now,
+                'updated_at' => $now,
             ]);
         }
+    }
+
+    private function shouldCoalesceNotification(string $type, ?string $taskId): bool
+    {
+        return $taskId !== null && in_array($type, ['task_updated'], true);
     }
 
     private function smartworkingDayLabel(?string $day): string
