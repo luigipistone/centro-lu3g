@@ -469,6 +469,7 @@ const selectedAssignees = ref([...(props.related.assignees || [])]);
 const selectedFollowers = ref([...(props.related.followers || [])]);
 const taskAutosaveState = ref('idle');
 const taskAutosaveError = ref('');
+const lastOpenTaskStatus = ref(taskForm.status === 'done' ? 'todo' : taskForm.status);
 let taskAutosaveTimer = null;
 let taskAutosaveSequence = 0;
 const taskDescriptionEditor = ref(null);
@@ -824,6 +825,13 @@ function stopEditingComment(comment) {
 
 function setTaskStatus(status) {
     const wasDone = taskForm.status === 'done';
+    if (status === 'done' && !wasDone && blockedDependencyCount() > 0) {
+        taskForm.status = lastOpenTaskStatus.value || 'todo';
+        taskAutosaveState.value = 'error';
+        taskAutosaveError.value = 'Task bloccata dalle dipendenze.';
+        return;
+    }
+
     taskForm.status = status;
     taskAutosaveState.value = 'saving';
     taskAutosaveError.value = '';
@@ -833,6 +841,9 @@ function setTaskStatus(status) {
         preserveState: true,
         onSuccess: () => {
             taskAutosaveState.value = 'saved';
+            if (status !== 'done') {
+                lastOpenTaskStatus.value = status;
+            }
             if (!wasDone && status === 'done') {
                 window.dispatchEvent(new CustomEvent('centro:task-completed'));
             }
@@ -956,6 +967,12 @@ function toggleTaskPerson(type, userId) {
 }
 
 function toggleTaskComplete() {
+    if (taskForm.status !== 'done' && blockedDependencyCount() > 0) {
+        taskAutosaveState.value = 'error';
+        taskAutosaveError.value = 'Task bloccata dalle dipendenze.';
+        return;
+    }
+
     setTaskStatus(taskForm.status === 'done' ? 'todo' : 'done');
 }
 
@@ -2272,7 +2289,13 @@ onUnmounted(() => {
                     </div>
                 </div>
                 <div v-if="section === 'tasks'" class="flex flex-wrap justify-end gap-2">
-                    <button type="button" class="btn btn-outline status-action-button" @click="toggleTaskComplete">
+                    <button
+                        type="button"
+                        :class="['btn btn-outline status-action-button', taskForm.status !== 'done' && blockedDependencyCount() ? 'cursor-not-allowed opacity-60' : '']"
+                        :disabled="taskForm.status !== 'done' && blockedDependencyCount() > 0"
+                        :title="taskForm.status !== 'done' && blockedDependencyCount() ? 'Task bloccata da dipendenze' : ''"
+                        @click="toggleTaskComplete"
+                    >
                         <Check class="h-4 w-4" :stroke-width="1.7" />
                         {{ taskForm.status === 'done' ? 'Riapri' : 'Completa' }}
                     </button>

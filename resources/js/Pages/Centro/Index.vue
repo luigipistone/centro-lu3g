@@ -2610,6 +2610,11 @@ function setCalendarTaskType(type) {
 function toggleCalendarTaskComplete() {
     if (!calendarTaskForm.id) return;
     const willComplete = calendarTaskForm.status !== 'done';
+    if (willComplete && blockedDependencyCount(calendarTaskPanel.value) > 0) {
+        calendarTaskAutosaveState.value = 'error';
+        calendarTaskAutosaveError.value = 'Task bloccata dalle dipendenze.';
+        return;
+    }
     const nextStatus = willComplete ? 'done' : 'todo';
     calendarTaskStatusPulse.value = true;
     window.setTimeout(() => {
@@ -2731,6 +2736,8 @@ onUnmounted(() => {
 
 function toggleTaskDone(task) {
     const willComplete = task.status !== 'done';
+    if (willComplete && blockedDependencyCount(task) > 0) return;
+
     router.patch(route('tasks.status.update', task.id), {
         status: task.status === 'done' ? 'todo' : 'done',
     }, {
@@ -3390,8 +3397,9 @@ function calendarDayStyle(sectionMonth, cell) {
                                             <div class="flex items-start">
                                                 <button
                                                     type="button"
-                                                    :class="['status-action-button absolute left-2 top-2 h-3.5 w-3.5 shrink-0 -translate-x-5 rounded-md border opacity-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] transition duration-200 group-hover/task:translate-x-0 group-hover/task:opacity-100 group-focus/task:translate-x-0 group-focus/task:opacity-100', task.status === 'done' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300 bg-white/78 hover:border-indigo-400']"
-                                                    :title="task.status === 'done' ? 'Riapri task' : 'Completa task'"
+                                                    :class="['status-action-button absolute left-2 top-2 h-3.5 w-3.5 shrink-0 -translate-x-5 rounded-md border opacity-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] transition duration-200 group-hover/task:translate-x-0 group-hover/task:opacity-100 group-focus/task:translate-x-0 group-focus/task:opacity-100', task.status === 'done' ? 'border-emerald-500 bg-emerald-500' : blockedDependencyCount(task) ? 'cursor-not-allowed border-amber-200 bg-amber-50' : 'border-gray-300 bg-white/78 hover:border-indigo-400']"
+                                                    :title="task.status === 'done' ? 'Riapri task' : (blockedDependencyCount(task) ? 'Task bloccata da dipendenze' : 'Completa task')"
+                                                    :disabled="task.status !== 'done' && blockedDependencyCount(task) > 0"
                                                     @click.stop="toggleTaskDone(task)"
                                                 >
                                                     <Check v-if="task.status === 'done'" class="h-full w-full p-[2px] text-white" :stroke-width="2.2" />
@@ -3485,7 +3493,8 @@ function calendarDayStyle(sectionMonth, cell) {
                             <button
                                 v-if="calendarTaskForm.id"
                                 type="button"
-                                :class="['btn btn-outline status-action-button', calendarTaskStatusPulse ? 'status-action-pulse' : '']"
+                                :class="['btn btn-outline status-action-button', calendarTaskStatusPulse ? 'status-action-pulse' : '', calendarTaskForm.status !== 'done' && blockedDependencyCount(calendarTaskPanel) ? 'cursor-not-allowed opacity-60' : '']"
+                                :disabled="calendarTaskForm.status !== 'done' && blockedDependencyCount(calendarTaskPanel) > 0"
                                 @click="toggleCalendarTaskComplete"
                             >
                                 <Check class="h-4 w-4" :stroke-width="1.7" />
