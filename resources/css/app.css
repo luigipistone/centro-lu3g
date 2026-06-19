@@ -158,6 +158,11 @@
         box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.82), 0 12px 24px hsl(var(--primary-app) / 0.16);
     }
 
+    .brand-logo-image {
+        transform: translateY(8%) scale(1.08);
+        transform-origin: center;
+    }
+
     .danger-link {
         @apply inline-flex items-center gap-1.5 text-sm font-semibold text-red-600 transition hover:text-red-500;
     }
