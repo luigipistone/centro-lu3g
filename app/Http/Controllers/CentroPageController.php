@@ -1502,7 +1502,7 @@ class CentroPageController extends Controller
             ],
         );
 
-        if ($previousSmartworkingDay !== $nextSmartworkingDay && $request->user()->id !== $user->id) {
+        if ($previousSmartworkingDay !== $nextSmartworkingDay) {
             $this->notifyUsers(
                 [$user->id],
                 $request->user()->id,
