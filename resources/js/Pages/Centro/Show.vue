@@ -3862,7 +3862,7 @@ onUnmounted(() => {
                                 </div>
                             </Teleport>
                         </div>
-                        <div class="relative flex items-center justify-end">
+                        <div class="relative mr-2 flex items-center justify-end">
                             <AppDateInput
                                 v-model="subtaskForm.due_date"
                                 variant="token"
