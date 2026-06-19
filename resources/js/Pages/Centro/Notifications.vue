@@ -53,7 +53,7 @@ function confirmArchiveAllNotifications() {
 }
 
 async function enableBrowserNotifications() {
-    const result = await enableCentroBrowserNotifications();
+    const result = await enableCentroBrowserNotifications(page.props.push?.vapidPublicKey);
     browserPermission.value = result.permission;
     browserNotificationMessage.value = result.message;
 }

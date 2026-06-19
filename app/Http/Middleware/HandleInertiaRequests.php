@@ -69,6 +69,9 @@ class HandleInertiaRequests extends Middleware
                     ->limit(8)
                     ->get(['id', 'task_id', 'type', 'message', 'read', 'created_at']),
             ] : ['active' => 0, 'unread' => 0, 'latest' => []],
+            'push' => [
+                'vapidPublicKey' => config('services.webpush.public_key'),
+            ],
             'flash' => [
                 'status' => fn () => $request->session()->get('status'),
                 'created_id' => fn () => $request->session()->get('created_id'),

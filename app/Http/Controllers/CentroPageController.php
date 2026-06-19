@@ -17,6 +17,8 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Minishlink\WebPush\Subscription;
+use Minishlink\WebPush\WebPush;
 
 class CentroPageController extends Controller
 {
@@ -2770,6 +2772,34 @@ class CentroPageController extends Controller
         return back()->with('status', 'Notifica ripristinata.');
     }
 
+    public function storePushSubscription(Request $request): JsonResponse
+    {
+        $payload = $request->validate([
+            'endpoint' => ['required', 'string'],
+            'keys' => ['required', 'array'],
+            'keys.p256dh' => ['required', 'string'],
+            'keys.auth' => ['required', 'string'],
+            'contentEncoding' => ['nullable', 'string'],
+        ]);
+
+        $existingId = DB::table('push_subscriptions')->where('endpoint', $payload['endpoint'])->value('id');
+
+        DB::table('push_subscriptions')->updateOrInsert(
+            ['endpoint' => $payload['endpoint']],
+            [
+                'id' => $existingId ?: (string) str()->uuid(),
+                'user_id' => $request->user()->id,
+                'public_key' => $payload['keys']['p256dh'],
+                'auth_token' => $payload['keys']['auth'],
+                'content_encoding' => $payload['contentEncoding'] ?? 'aes128gcm',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        );
+
+        return response()->json(['status' => 'ok']);
+    }
+
     public function storeDocumentLine(Request $request, string $id): RedirectResponse
     {
         DB::table('documents')->where('id', $id)->exists() || abort(404);
@@ -3361,8 +3391,10 @@ class CentroPageController extends Controller
                 continue;
             }
 
+            $notificationId = (string) str()->uuid();
+
             DB::table('notifications')->insert([
-                'id' => (string) str()->uuid(),
+                'id' => $notificationId,
                 'user_id' => $userId,
                 'actor_id' => $actorId,
                 'task_id' => $taskId,
@@ -3372,12 +3404,68 @@ class CentroPageController extends Controller
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
+
+            $this->sendBrowserPushNotification((string) $userId, $notificationId, $message, $taskId);
         }
     }
 
     private function shouldCoalesceNotification(string $type, ?string $taskId): bool
     {
         return $taskId !== null && in_array($type, ['task_updated'], true);
+    }
+
+    private function sendBrowserPushNotification(string $userId, string $notificationId, string $message, ?string $taskId = null): void
+    {
+        $publicKey = config('services.webpush.public_key');
+        $privateKey = config('services.webpush.private_key');
+
+        if (! $publicKey || ! $privateKey) {
+            return;
+        }
+
+        $subscriptions = DB::table('push_subscriptions')
+            ->where('user_id', $userId)
+            ->get();
+
+        if ($subscriptions->isEmpty()) {
+            return;
+        }
+
+        $webPush = new WebPush([
+            'VAPID' => [
+                'subject' => config('services.webpush.subject') ?: config('app.url'),
+                'publicKey' => $publicKey,
+                'privateKey' => $privateKey,
+            ],
+        ]);
+
+        $payload = json_encode([
+            'id' => $notificationId,
+            'title' => 'Il Centro',
+            'body' => $message,
+            'tag' => $notificationId,
+            'url' => $taskId ? route('tasks.show', $taskId) : route('notifications.index'),
+        ], JSON_THROW_ON_ERROR);
+
+        foreach ($subscriptions as $subscription) {
+            $webPush->queueNotification(
+                Subscription::create([
+                    'endpoint' => $subscription->endpoint,
+                    'publicKey' => $subscription->public_key,
+                    'authToken' => $subscription->auth_token,
+                    'contentEncoding' => $subscription->content_encoding ?: 'aes128gcm',
+                ]),
+                $payload,
+            );
+        }
+
+        foreach ($webPush->flush() as $report) {
+            if (! $report->isSuccess() && $report->isSubscriptionExpired()) {
+                DB::table('push_subscriptions')
+                    ->where('endpoint', $report->getEndpoint())
+                    ->delete();
+            }
+        }
     }
 
     private function smartworkingDayLabel(?string $day): string

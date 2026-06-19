@@ -19,6 +19,30 @@ export async function registerCentroServiceWorker() {
     }
 }
 
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+
+    return Uint8Array.from([...rawData].map((character) => character.charCodeAt(0)));
+}
+
+async function subscribeCentroPush(vapidPublicKey) {
+    if (!vapidPublicKey || !('PushManager' in window) || !('serviceWorker' in navigator)) {
+        return false;
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+    const existingSubscription = await registration.pushManager.getSubscription();
+    const subscription = existingSubscription || await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+    });
+
+    await window.axios.post('/push-subscriptions', subscription.toJSON());
+    return true;
+}
+
 export async function showCentroBrowserNotification(title, options = {}) {
     if (browserNotificationSupport() !== 'granted') {
         return false;
@@ -30,25 +54,36 @@ export async function showCentroBrowserNotification(title, options = {}) {
         ...options,
     };
 
+    const showNativeNotification = () => {
+        const notification = new window.Notification(title, payload);
+        if (payload.data?.url) {
+            notification.onclick = () => {
+                window.focus();
+                window.location.href = payload.data.url;
+                notification.close();
+            };
+        }
+
+        return true;
+    };
+
     if ('serviceWorker' in navigator) {
-        const registration = await navigator.serviceWorker.ready;
+        const registration = await Promise.race([
+            navigator.serviceWorker.ready,
+            new Promise((resolve) => window.setTimeout(() => resolve(null), 1200)),
+        ]);
+        if (!registration) {
+            return showNativeNotification();
+        }
+
         await registration.showNotification(title, payload);
         return true;
     }
 
-    const notification = new window.Notification(title, payload);
-    if (payload.data?.url) {
-        notification.onclick = () => {
-            window.focus();
-            window.location.href = payload.data.url;
-            notification.close();
-        };
-    }
-
-    return true;
+    return showNativeNotification();
 }
 
-export async function enableCentroBrowserNotifications() {
+export async function enableCentroBrowserNotifications(vapidPublicKey = null) {
     if (browserNotificationSupport() === 'unsupported') {
         return { permission: 'unsupported', message: 'Questo browser non supporta le notifiche.' };
     }
@@ -57,6 +92,13 @@ export async function enableCentroBrowserNotifications() {
     const permission = await window.Notification.requestPermission();
 
     if (permission === 'granted') {
+        let pushSubscribed = false;
+        try {
+            pushSubscribed = await subscribeCentroPush(vapidPublicKey);
+        } catch (error) {
+            console.warn('Sottoscrizione push non completata', error);
+        }
+
         await showCentroBrowserNotification('Il Centro', {
             body: 'Notifiche browser attivate.',
             tag: 'centro-notifications-enabled',
@@ -64,7 +106,12 @@ export async function enableCentroBrowserNotifications() {
             data: { url: '/notifications' },
         });
 
-        return { permission, message: 'Notifiche browser attivate.' };
+        return {
+            permission,
+            message: pushSubscribed
+                ? 'Notifiche browser e push attivate.'
+                : 'Notifiche browser attivate. Push non disponibile su questo dispositivo.',
+        };
     }
 
     if (permission === 'denied') {

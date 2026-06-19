@@ -133,7 +133,7 @@ function rememberLatestNotification() {
 }
 
 async function enableBrowserNotifications() {
-    const result = await enableCentroBrowserNotifications();
+    const result = await enableCentroBrowserNotifications(page.props.push?.vapidPublicKey);
     notificationPermission.value = result.permission;
     notificationStatusMessage.value = result.message;
     rememberLatestNotification();
