@@ -557,6 +557,10 @@ const projectSectionDrafts = ref({});
 const projectSectionSaveTimers = {};
 const projectTaskDrafts = ref({});
 const projectNewSectionName = ref('');
+const projectNewSectionOpen = ref(false);
+const projectNewSectionInput = ref(null);
+const projectSectionActionMenuOpen = ref(null);
+const projectSectionActionMenuStyle = ref({});
 const projectTaskDrawerOpen = ref(false);
 const projectTaskDrawerTask = ref(null);
 const projectTaskParentStack = ref([]);
@@ -2161,6 +2165,11 @@ function toggleProjectSection(sectionId) {
     };
 }
 
+function showProjectSectionInput() {
+    projectNewSectionOpen.value = true;
+    nextTick(() => projectNewSectionInput.value?.focus());
+}
+
 function projectSectionName(section) {
     return projectSectionDrafts.value[section.id] ?? section.name;
 }
@@ -2185,6 +2194,52 @@ function saveProjectSectionName(section) {
         preserveScroll: true,
         preserveState: true,
         only: ['related', 'errors', 'flash'],
+    });
+}
+
+function toggleProjectSectionActionMenu(section, event = null) {
+    if (section.virtual) return;
+    projectSectionActionMenuStyle.value = dropdownMenuStyleFromEvent(event, 220);
+    projectSectionActionMenuOpen.value = projectSectionActionMenuOpen.value === section.id ? null : section.id;
+}
+
+function closeProjectSectionActionMenu() {
+    projectSectionActionMenuOpen.value = null;
+}
+
+function duplicateProjectSection(section) {
+    if (section.virtual) return;
+    closeProjectSectionActionMenu();
+    router.post(route('projects.sections.duplicate', [props.record.id, section.id]), {}, {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['related', 'errors', 'flash'],
+    });
+}
+
+function collapseProjectSectionFromMenu(section) {
+    closeProjectSectionActionMenu();
+    projectSectionCollapsed.value = {
+        ...projectSectionCollapsed.value,
+        [section.id]: !projectSectionCollapsed.value[section.id],
+    };
+}
+
+function removeProjectSection(section) {
+    if (section.virtual) return;
+    closeProjectSectionActionMenu();
+    openConfirm({
+        title: 'Eliminare questa sezione?',
+        description: 'Le task non verranno eliminate: passeranno in "Senza fase".',
+        keyword: 'ELIMINA',
+        button: 'Elimina sezione',
+        danger: true,
+        action: () => router.delete(route('projects.sections.destroy', [props.record.id, section.id]), {
+            preserveScroll: true,
+            preserveState: true,
+            only: ['related', 'errors', 'flash'],
+            onFinish: closeConfirm,
+        }),
     });
 }
 
@@ -2586,6 +2641,7 @@ function addProjectSection() {
         preserveState: true,
         onSuccess: () => {
             projectNewSectionName.value = '';
+            projectNewSectionOpen.value = false;
         },
     });
 }
@@ -2650,6 +2706,9 @@ function toggleSubtaskAssigneeMenu(subtaskId, event = null) {
 
 function closeSubtaskAssigneeMenuOnOutside(event) {
     closeTaskActionMenuOnOutside(event);
+    if (projectSectionActionMenuOpen.value && !(event.target instanceof Element && event.target.closest('[data-project-section-menu]'))) {
+        projectSectionActionMenuOpen.value = null;
+    }
     if (subtaskCreateAssigneeMenuOpen.value && !(event.target instanceof Element && event.target.closest('[data-subtask-create-assignees]'))) {
         subtaskCreateAssigneeMenuOpen.value = false;
     }
@@ -3962,7 +4021,7 @@ onUnmounted(() => {
                                 <span>Priorità</span>
                             </div>
                             <div v-for="sectionRow in projectTaskSections()" :key="sectionRow.id" class="border-b border-gray-100 last:border-b-0">
-                                <div class="flex w-full items-center gap-2 px-3 py-3 text-left text-sm font-semibold text-gray-800">
+                                <div class="group/project-section flex w-full items-center gap-2 px-3 py-3 text-left text-sm font-semibold text-gray-800">
                                     <button type="button" class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 transition hover:bg-gray-50 hover:text-gray-700" :aria-expanded="!projectSectionCollapsed[sectionRow.id]" @click="toggleProjectSection(sectionRow.id)">
                                         <ChevronDown :class="['h-4 w-4 transition-transform', projectSectionCollapsed[sectionRow.id] ? '-rotate-90' : '']" :stroke-width="1.8" />
                                     </button>
@@ -3975,6 +4034,32 @@ onUnmounted(() => {
                                         @keydown.enter.prevent="$event.target.blur()"
                                     />
                                     <span class="text-xs font-medium text-gray-400">{{ projectTasksForSection(sectionRow).length }}</span>
+                                    <button
+                                        v-if="!sectionRow.virtual"
+                                        type="button"
+                                        class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-400 opacity-0 transition hover:bg-gray-50 hover:text-gray-800 group-hover/project-section:opacity-100 focus:opacity-100"
+                                        aria-label="Azioni sezione"
+                                        data-project-section-menu
+                                        @click.stop="toggleProjectSectionActionMenu(sectionRow, $event)"
+                                    >
+                                        <MoreHorizontal class="h-4 w-4" :stroke-width="1.8" />
+                                    </button>
+                                    <div v-if="projectSectionActionMenuOpen === sectionRow.id" class="fixed inset-0 z-[7600] bg-transparent" data-project-section-menu @click.self="closeProjectSectionActionMenu">
+                                        <div class="app-popover field-dropdown-menu fixed w-56 p-2" :style="projectSectionActionMenuStyle" @click.stop>
+                                            <button type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50" @click="duplicateProjectSection(sectionRow)">
+                                                <Copy class="h-4 w-4" :stroke-width="1.7" />
+                                                Duplica sezione
+                                            </button>
+                                            <button type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50" @click="collapseProjectSectionFromMenu(sectionRow)">
+                                                <ChevronDown :class="['h-4 w-4 transition-transform', projectSectionCollapsed[sectionRow.id] ? '-rotate-90' : '']" :stroke-width="1.7" />
+                                                {{ projectSectionCollapsed[sectionRow.id] ? 'Espandi' : 'Comprimi' }}
+                                            </button>
+                                            <button type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50" @click="removeProjectSection(sectionRow)">
+                                                <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                                Elimina sezione
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div v-show="!projectSectionCollapsed[sectionRow.id]">
                                     <div
@@ -4019,11 +4104,27 @@ onUnmounted(() => {
                                     </form>
                                 </div>
                             </div>
-                            <form class="flex flex-wrap items-center gap-2 px-3 py-3" @submit.prevent="addProjectSection">
-                                <Plus class="h-4 w-4 text-gray-400" :stroke-width="1.7" />
-                                <input v-model="projectNewSectionName" class="subtask-line-control max-w-sm font-medium" placeholder="Aggiungi sezione" />
-                                <button type="submit" class="btn btn-outline justify-center px-3 py-1.5 text-xs">Crea sezione</button>
-                            </form>
+                            <div class="group/add-section px-3 py-3">
+                                <form v-if="projectNewSectionOpen" class="mb-2 flex max-w-lg items-center gap-2 rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 px-3 py-2" @submit.prevent="addProjectSection">
+                                    <Plus class="h-4 w-4 shrink-0 text-gray-400" :stroke-width="1.7" />
+                                    <input
+                                        ref="projectNewSectionInput"
+                                        v-model="projectNewSectionName"
+                                        class="subtask-line-control font-medium"
+                                        placeholder="Nome sezione"
+                                        @keydown.enter.prevent="addProjectSection"
+                                        @blur="addProjectSection"
+                                    />
+                                </form>
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-semibold text-gray-400 opacity-80 transition hover:bg-gray-50 hover:text-indigo-600 group-hover/add-section:opacity-100"
+                                    @click="showProjectSectionInput"
+                                >
+                                    <Plus class="h-4 w-4" :stroke-width="1.7" />
+                                    Aggiungi sezione
+                                </button>
+                            </div>
                         </div>
 
                         <div v-else-if="projectWorkspaceTab === 'messages'" class="mt-8 space-y-4">

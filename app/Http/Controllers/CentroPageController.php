@@ -1907,6 +1907,141 @@ class CentroPageController extends Controller
         return back()->with('status', 'Sezione aggiornata.');
     }
 
+    public function duplicateProjectSection(Request $request, string $projectId, string $sectionId): RedirectResponse
+    {
+        $section = DB::table('project_sections')->where('project_id', $projectId)->where('id', $sectionId)->first();
+        abort_unless($section, 404);
+
+        DB::transaction(function () use ($request, $projectId, $section) {
+            $newSectionId = (string) str()->uuid();
+            $now = now();
+
+            DB::table('project_sections')->insert([
+                'id' => $newSectionId,
+                'project_id' => $projectId,
+                'name' => $section->name.' (copia)',
+                'position' => DB::table('project_sections')->where('project_id', $projectId)->count(),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+            $tasks = DB::table('tasks')
+                ->where('project_id', $projectId)
+                ->where('project_section_id', $section->id)
+                ->where(fn ($query) => $query->whereNull('parent_task_id')->orWhereRaw("TRIM(parent_task_id) = ''"))
+                ->orderBy('position')
+                ->orderBy('created_at')
+                ->get();
+
+            foreach ($tasks as $position => $task) {
+                $newTaskId = (string) str()->uuid();
+
+                DB::table('tasks')->insert([
+                    'id' => $newTaskId,
+                    'title' => $task->title.' (copia)',
+                    'description' => $task->description,
+                    'project_id' => $projectId,
+                    'project_section_id' => $newSectionId,
+                    'client_id' => $task->client_id,
+                    'service_id' => $task->service_id,
+                    'parent_task_id' => null,
+                    'start_date' => $task->start_date,
+                    'due_date' => $task->due_date,
+                    'due_time' => $task->due_time,
+                    'location' => $task->location,
+                    'priority' => $task->priority,
+                    'status' => 'todo',
+                    'task_type' => $task->task_type,
+                    'recurring_enabled' => $task->recurring_enabled,
+                    'recurring_mode' => $task->recurring_mode,
+                    'recurring_interval_value' => $task->recurring_interval_value,
+                    'recurring_interval_unit' => $task->recurring_interval_unit,
+                    'recurring_weekday' => $task->recurring_weekday,
+                    'recurring_month_day' => $task->recurring_month_day,
+                    'position' => $position,
+                    'created_by' => $request->user()->id,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+
+                foreach (['task_assignees', 'task_followers'] as $table) {
+                    foreach (DB::table($table)->where('task_id', $task->id)->pluck('user_id') as $userId) {
+                        DB::table($table)->insert([
+                            'id' => (string) str()->uuid(),
+                            'task_id' => $newTaskId,
+                            'user_id' => $userId,
+                            'created_at' => $now,
+                            'updated_at' => $now,
+                        ]);
+                    }
+                }
+
+                foreach (DB::table('tasks')->where('parent_task_id', $task->id)->orderBy('position')->get() as $subtask) {
+                    $newSubtaskId = (string) str()->uuid();
+
+                    DB::table('tasks')->insert([
+                        'id' => $newSubtaskId,
+                        'title' => $subtask->title,
+                        'description' => $subtask->description,
+                        'project_id' => $projectId,
+                        'project_section_id' => $newSectionId,
+                        'client_id' => $subtask->client_id,
+                        'service_id' => $subtask->service_id,
+                        'parent_task_id' => $newTaskId,
+                        'start_date' => $subtask->start_date,
+                        'due_date' => $subtask->due_date,
+                        'due_time' => $subtask->due_time,
+                        'location' => $subtask->location,
+                        'priority' => $subtask->priority,
+                        'status' => 'todo',
+                        'task_type' => $subtask->task_type,
+                        'recurring_enabled' => false,
+                        'position' => $subtask->position,
+                        'created_by' => $request->user()->id,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ]);
+
+                    foreach (['task_assignees', 'task_followers'] as $table) {
+                        foreach (DB::table($table)->where('task_id', $subtask->id)->pluck('user_id') as $userId) {
+                            DB::table($table)->insert([
+                                'id' => (string) str()->uuid(),
+                                'task_id' => $newSubtaskId,
+                                'user_id' => $userId,
+                                'created_at' => $now,
+                                'updated_at' => $now,
+                            ]);
+                        }
+                    }
+                }
+            }
+        });
+
+        return back()->with('status', 'Sezione duplicata.');
+    }
+
+    public function destroyProjectSection(string $projectId, string $sectionId): RedirectResponse
+    {
+        abort_unless(DB::table('project_sections')->where('project_id', $projectId)->where('id', $sectionId)->exists(), 404);
+
+        DB::transaction(function () use ($projectId, $sectionId) {
+            DB::table('tasks')
+                ->where('project_id', $projectId)
+                ->where('project_section_id', $sectionId)
+                ->update([
+                    'project_section_id' => null,
+                    'updated_at' => now(),
+                ]);
+
+            DB::table('project_sections')
+                ->where('project_id', $projectId)
+                ->where('id', $sectionId)
+                ->delete();
+        });
+
+        return back()->with('status', 'Sezione eliminata.');
+    }
+
     public function reorderProjectTasks(Request $request, string $id): RedirectResponse
     {
         abort_unless(DB::table('projects')->where('id', $id)->exists(), 404);

@@ -36,6 +36,8 @@ Route::middleware('auth')->group(function () {
     Route::put('/projects/{id}', [CentroPageController::class, 'update'])->defaults('section', 'projects')->name('projects.update');
     Route::post('/projects/{id}/sections', [CentroPageController::class, 'storeProjectSection'])->name('projects.sections.store');
     Route::put('/projects/{projectId}/sections/{sectionId}', [CentroPageController::class, 'updateProjectSection'])->name('projects.sections.update');
+    Route::post('/projects/{projectId}/sections/{sectionId}/duplicate', [CentroPageController::class, 'duplicateProjectSection'])->name('projects.sections.duplicate');
+    Route::delete('/projects/{projectId}/sections/{sectionId}', [CentroPageController::class, 'destroyProjectSection'])->name('projects.sections.destroy');
     Route::put('/projects/{id}/tasks/reorder', [CentroPageController::class, 'reorderProjectTasks'])->name('projects.tasks.reorder');
     Route::post('/projects/{id}/messages', [CentroPageController::class, 'storeProjectMessage'])->name('projects.messages.store');
     Route::post('/projects/{id}/files', [CentroPageController::class, 'storeProjectFile'])->name('projects.files.store');
