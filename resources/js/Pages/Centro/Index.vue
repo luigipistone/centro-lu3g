@@ -4570,21 +4570,16 @@ function calendarDayStyle(sectionMonth, cell) {
         <div v-else-if="section === 'users'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <div class="flex flex-wrap items-center justify-between gap-3">
-                    <div class="inline-flex max-w-full flex-wrap gap-1 rounded-[var(--radius-sm)] border border-white/70 bg-white/78 p-1 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl">
+                    <div class="surface flex max-w-full flex-wrap gap-2 p-2">
                         <button
                             v-for="filter in userRoleFilters"
                             :key="filter.value"
                             type="button"
-                            :class="[
-                                'inline-flex items-center gap-2 rounded-[var(--radius-sm)] px-3 py-2 text-sm font-semibold transition',
-                                userRoleFilter === filter.value
-                                    ? 'bg-indigo-600 text-white shadow-[0_8px_18px_rgba(79,70,229,0.22)]'
-                                    : 'text-gray-500 hover:bg-white hover:text-gray-900',
-                            ]"
+                            :class="['settings-tab', userRoleFilter === filter.value ? 'settings-tab-active' : '']"
                             @click="userRoleFilter = filter.value"
                         >
                             <span>{{ filter.label }}</span>
-                            <span :class="['rounded-full px-2 py-0.5 text-[11px]', userRoleFilter === filter.value ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500']">{{ filter.count }}</span>
+                            <span class="rounded-full bg-white/60 px-2 py-0.5 text-[11px] text-current">{{ filter.count }}</span>
                         </button>
                     </div>
                     <button type="button" class="btn btn-primary" @click="openCreate()">
@@ -4604,20 +4599,20 @@ function calendarDayStyle(sectionMonth, cell) {
                             <article
                                 v-for="user in group.rows"
                                 :key="user.id"
-                                class="content-card group/user relative overflow-hidden rounded-[var(--radius-sm)] border border-white/70 bg-white/82 p-4 text-center shadow-[0_18px_45px_rgba(15,23,42,0.08)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-[0_22px_55px_rgba(79,70,229,0.14)]"
+                                class="content-card relative overflow-hidden rounded-[var(--radius-sm)] border border-white/70 bg-white/82 p-4 text-center shadow-[0_18px_45px_rgba(15,23,42,0.08)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-[0_22px_55px_rgba(79,70,229,0.14)]"
                             >
-                                <Link :href="route('users.show', user.id)" class="block rounded-[var(--radius-sm)] p-2 transition hover:bg-white/70">
+                                <button type="button" class="icon-btn absolute right-3 top-3 h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-500" title="Elimina utente" :aria-label="`Elimina ${user.name || user.email}`" @click="remove(user)">
+                                    <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                </button>
+                                <Link :href="route('users.show', user.id)" class="block p-2">
                                     <UserAvatar :user="user" size="lg" class="mx-auto" />
                                     <div class="mt-3 min-w-0">
                                         <h4 class="truncate text-sm font-semibold text-gray-900">{{ user.name || 'Senza nome' }}</h4>
                                         <p class="mt-1 truncate text-xs text-gray-500">{{ user.email }}</p>
                                     </div>
                                 </Link>
-                                <div class="mt-3 flex items-center justify-center gap-3">
+                                <div class="mt-3 flex items-center justify-center">
                                     <span :class="['rounded-full px-2.5 py-1 text-[11px] font-semibold', roleClass(user.role || 'guest')]">{{ roleLabels[user.role || 'guest'] || user.role || 'Ospite' }}</span>
-                                    <button type="button" class="icon-btn h-8 w-8 text-red-600 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover/user:opacity-100 focus:opacity-100" title="Elimina utente" :aria-label="`Elimina ${user.name || user.email}`" @click="remove(user)">
-                                        <Trash2 class="h-4 w-4" :stroke-width="1.7" />
-                                    </button>
                                 </div>
                             </article>
                         </div>
