@@ -4949,7 +4949,7 @@ function calendarDayStyle(sectionMonth, cell) {
         </div>
 
         <div v-else-if="section === 'settings'" class="py-8">
-            <div class="mx-auto max-w-6xl space-y-6 px-4 sm:px-6 lg:px-8">
+            <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <div v-if="page.props.flash?.status" class="rounded-md border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-700">
                     {{ page.props.flash.status }}
                 </div>
