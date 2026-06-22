@@ -2412,9 +2412,10 @@ class CentroPageController extends Controller
 
         $assignees = DB::table('task_assignees')
             ->join('users', 'users.id', '=', 'task_assignees.user_id')
+            ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
             ->whereIn('task_assignees.task_id', $rows->pluck('id'))
             ->orderBy('users.name')
-            ->get(['task_assignees.task_id', 'users.id', 'users.name', 'users.email', 'users.avatar_path'])
+            ->get(['task_assignees.task_id', 'users.id', 'users.name', 'users.email', 'profiles.avatar_url'])
             ->groupBy('task_id');
 
         return $rows->map(function ($row) use ($assignees) {
