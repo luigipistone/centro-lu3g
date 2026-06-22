@@ -2905,10 +2905,60 @@ function taskSpanRole(row, date) {
 }
 
 function taskSpanClass(task) {
-    if (task.spanRole === 'start') return 'z-10 -mr-[9px] rounded-l-xl rounded-r-none border-r-0 pr-4';
-    if (task.spanRole === 'middle') return 'z-10 -mx-[9px] rounded-none border-x-0 px-4 opacity-80';
-    if (task.spanRole === 'end') return 'z-10 -ml-[9px] rounded-l-none rounded-r-xl border-l-0 pl-4';
     return 'rounded-xl';
+}
+
+function taskDateRange(task) {
+    if (!task?.due_date) {
+        return { start: null, end: null };
+    }
+
+    const start = task.start_date && task.start_date <= task.due_date ? task.start_date : task.due_date;
+    return { start, end: task.due_date };
+}
+
+function isMultiDayTask(task) {
+    const { start, end } = taskDateRange(task);
+    return Boolean(start && end && start !== end);
+}
+
+function calendarMonthEndDate(sectionMonth) {
+    const lastDay = new Date(sectionMonth.year, sectionMonth.month + 1, 0).getDate();
+    return formatCalendarDate(sectionMonth.year, sectionMonth.month, lastDay);
+}
+
+function isCalendarTaskBarStart(cell, task) {
+    if (!cell?.date || !isMultiDayTask(task)) return true;
+
+    const { start } = taskDateRange(task);
+    return cell.date === start || cell.weekday === 0 || cell.day === 1;
+}
+
+function calendarTaskRenderClass(cell, task) {
+    if (isCalendarTaskBarStart(cell, task)) return '';
+    return 'invisible pointer-events-none';
+}
+
+function calendarTaskBarStyle(sectionMonth, cell, task) {
+    if (!sectionMonth || !cell || !isMultiDayTask(task) || !isCalendarTaskBarStart(cell, task)) {
+        return {};
+    }
+
+    const { end } = taskDateRange(task);
+    const weekEnd = addDays(cell.date, 6 - cell.weekday);
+    const monthEnd = calendarMonthEndDate(sectionMonth);
+    let visibleEnd = [end, weekEnd, monthEnd].sort()[0];
+
+    if (compactWeekend.value && cell.weekday < 5) {
+        visibleEnd = [visibleEnd, addDays(cell.date, 4 - cell.weekday)].sort()[0];
+    }
+
+    const spanDays = Math.max(1, daysBetween(cell.date, visibleEnd) + 1);
+
+    return {
+        width: `calc(${spanDays * 100}% + ${(spanDays - 1) * 17}px)`,
+        zIndex: 20,
+    };
 }
 
 function taskTypeClass(type) {
@@ -3534,9 +3584,11 @@ function calendarDayStyle(sectionMonth, cell) {
                                                 'group/task relative cursor-grab overflow-hidden border px-2 py-1.5 text-xs shadow-[inset_0_1px_0_rgba(255,255,255,0.68)] backdrop-blur-xl transition hover:border-indigo-300 hover:shadow-md active:cursor-grabbing',
                                                 taskTypeClass(task.task_type),
                                                 taskSpanClass(task),
+                                                calendarTaskRenderClass(cell, task),
                                                 task.status === 'done' ? 'opacity-55 hover:opacity-80' : '',
                                                 calendarDraggedTask?.id === task.id ? 'opacity-50' : '',
                                             ]"
+                                            :style="calendarTaskBarStyle(sectionMonth, cell, task)"
                                             role="link"
                                             tabindex="0"
                                             draggable="true"
