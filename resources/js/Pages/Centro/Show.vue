@@ -40,6 +40,7 @@ import {
     Send,
     Trash2,
     Underline,
+    UploadCloud,
     UserRound,
     X,
 } from '@lucide/vue';
@@ -516,6 +517,14 @@ const projectAutosaveState = ref('idle');
 const projectAutosaveError = ref('');
 let projectAutosaveTimer = null;
 let projectAutosaveSequence = 0;
+const projectWorkspaceTab = ref('overview');
+const projectDescriptionEditor = ref(null);
+const projectMessageEditor = ref(null);
+const projectResourceInput = ref(null);
+const projectFileInput = ref(null);
+const projectFileDragActive = ref(false);
+const projectMessageForm = useForm({ content: '' });
+const projectFileForm = useForm({ file: null, kind: 'file' });
 const projectSectionCollapsed = ref({});
 const projectTaskDrafts = ref({});
 const projectNewSectionName = ref('');
@@ -1575,6 +1584,116 @@ function saveProjectInline(delay = AUTOSAVE_IDLE_DELAY) {
     }, autosaveDelay(delay));
 }
 
+function updateProjectDescriptionFromEditor() {
+    projectForm.description = projectDescriptionEditor.value?.innerHTML || '';
+}
+
+function refreshProjectDescriptionEditor() {
+    nextTick(() => {
+        if (projectDescriptionEditor.value && projectDescriptionEditor.value.innerHTML !== (projectForm.description || '')) {
+            projectDescriptionEditor.value.innerHTML = projectForm.description || '';
+        }
+    });
+}
+
+function runProjectDescriptionCommand(command, value = null) {
+    projectDescriptionEditor.value?.focus();
+    document.execCommand(command, false, value);
+    updateProjectDescriptionFromEditor();
+}
+
+function addProjectDescriptionLink() {
+    const url = window.prompt('URL del link');
+    if (!url) return;
+
+    runProjectDescriptionCommand('createLink', url);
+}
+
+function updateProjectMessageFromEditor() {
+    projectMessageForm.content = projectMessageEditor.value?.innerHTML || '';
+}
+
+function runProjectMessageCommand(command, value = null) {
+    projectMessageEditor.value?.focus();
+    document.execCommand(command, false, value);
+    updateProjectMessageFromEditor();
+}
+
+function addProjectMessageLink() {
+    const url = window.prompt('URL del link');
+    if (!url) return;
+
+    runProjectMessageCommand('createLink', url);
+}
+
+function submitProjectMessage() {
+    updateProjectMessageFromEditor();
+    if (!plainText(projectMessageForm.content).trim()) return;
+
+    projectMessageForm.post(route('projects.messages.store', props.record.id), {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => {
+            projectMessageForm.reset();
+            if (projectMessageEditor.value) projectMessageEditor.value.innerHTML = '';
+        },
+    });
+}
+
+function chooseProjectFile(kind) {
+    if (kind === 'resource') {
+        projectResourceInput.value?.click();
+        return;
+    }
+
+    projectFileInput.value?.click();
+}
+
+function uploadProjectFile(file, kind = 'file') {
+    if (!file) return;
+
+    projectFileForm.file = file;
+    projectFileForm.kind = kind;
+    projectFileForm.post(route('projects.files.store', props.record.id), {
+        preserveScroll: true,
+        preserveState: true,
+        forceFormData: true,
+        onSuccess: () => {
+            projectFileForm.reset();
+            if (projectResourceInput.value) projectResourceInput.value.value = '';
+            if (projectFileInput.value) projectFileInput.value.value = '';
+        },
+    });
+}
+
+function uploadProjectFileFromInput(event, kind = 'file') {
+    uploadProjectFile(event.target.files?.[0], kind);
+}
+
+function dropProjectFile(event) {
+    projectFileDragActive.value = false;
+    uploadProjectFile(event.dataTransfer?.files?.[0], 'file');
+}
+
+function removeProjectFile(file) {
+    openConfirm({
+        title: 'Eliminare questo file?',
+        description: file.original_name || file.name || 'File progetto',
+        keyword: 'ELIMINA',
+        button: 'Elimina',
+        danger: true,
+        action: () => router.delete(route('projects.files.destroy', [props.record.id, file.id]), { preserveScroll: true, onFinish: closeConfirm }),
+    });
+}
+
+function fileSize(size) {
+    const bytes = Number(size || 0);
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function userPayload() {
     return {
         name: userForm.name,
@@ -2205,6 +2324,13 @@ watch(
 );
 
 watch(
+    () => projectWorkspaceTab.value,
+    (tab) => {
+        if (tab === 'overview') refreshProjectDescriptionEditor();
+    },
+);
+
+watch(
     () => [
         clientForm.name,
         clientForm.legal_name,
@@ -2375,6 +2501,7 @@ watch(
 
 onMounted(() => {
     document.addEventListener('pointerdown', closeSubtaskAssigneeMenuOnOutside, true);
+    refreshProjectDescriptionEditor();
 });
 
 onUnmounted(() => {
@@ -3227,19 +3354,79 @@ onUnmounted(() => {
                                     <input v-model="projectForm.color" type="text" class="form-control mt-0 w-28 font-mono text-xs" />
                                 </div>
                             </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Descrizione</label>
-                                <textarea v-model="projectForm.description" rows="5" class="form-control"></textarea>
-                            </div>
                         </div>
                     </section>
 
                     <section class="surface rounded-md p-5">
-                        <div class="mb-5 flex items-center justify-between">
-                            <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Task progetto</h3>
-                            <span class="text-xs text-gray-500">{{ parentTaskRows(related.tasks).length }} elementi</span>
+                        <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+                            <div class="inline-flex rounded-md bg-gray-100 p-1">
+                                <button
+                                    v-for="tab in [
+                                        { id: 'overview', label: 'Panoramica' },
+                                        { id: 'tasks', label: 'Task' },
+                                        { id: 'messages', label: 'Messaggi' },
+                                        { id: 'files', label: 'File' },
+                                    ]"
+                                    :key="tab.id"
+                                    type="button"
+                                    :class="['rounded-[var(--radius-sm)] px-3 py-1.5 text-sm font-semibold transition', projectWorkspaceTab === tab.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800']"
+                                    @click="projectWorkspaceTab = tab.id"
+                                >
+                                    {{ tab.label }}
+                                </button>
+                            </div>
+                            <span v-if="projectWorkspaceTab === 'tasks'" class="text-xs text-gray-500">{{ parentTaskRows(related.tasks).length }} elementi</span>
                         </div>
-                        <div class="overflow-hidden rounded-md border border-gray-100 bg-white">
+
+                        <div v-if="projectWorkspaceTab === 'overview'" class="grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,0.8fr)]">
+                            <div>
+                                <div class="toolbar mb-2">
+                                    <button type="button" class="toolbar-btn" @click="runProjectDescriptionCommand('bold')"><Bold class="h-4 w-4" /></button>
+                                    <button type="button" class="toolbar-btn" @click="runProjectDescriptionCommand('italic')"><Italic class="h-4 w-4" /></button>
+                                    <button type="button" class="toolbar-btn" @click="runProjectDescriptionCommand('underline')"><Underline class="h-4 w-4" /></button>
+                                    <button type="button" class="toolbar-btn" @click="runProjectDescriptionCommand('insertUnorderedList')"><List class="h-4 w-4" /></button>
+                                    <button type="button" class="toolbar-btn" @click="runProjectDescriptionCommand('insertOrderedList')"><ListOrdered class="h-4 w-4" /></button>
+                                    <button type="button" class="toolbar-btn" @click="addProjectDescriptionLink"><Link2 class="h-4 w-4" /></button>
+                                </div>
+                                <div
+                                    ref="projectDescriptionEditor"
+                                    contenteditable="true"
+                                    class="form-control min-h-48 wysiwyg-content"
+                                    data-placeholder="Descrizione del progetto..."
+                                    @input="updateProjectDescriptionFromEditor"
+                                    @blur="saveProjectInline(0)"
+                                ></div>
+                            </div>
+                            <aside class="rounded-md border border-gray-100 bg-gray-50/70 p-4">
+                                <div class="mb-3 flex items-center justify-between gap-3">
+                                    <div>
+                                        <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Risorse progetto</h3>
+                                        <p class="mt-1 text-xs text-gray-500">{{ related.resources?.length || 0 }} file collegati</p>
+                                    </div>
+                                    <button type="button" class="btn btn-outline px-3 py-1.5 text-xs" :disabled="projectFileForm.processing" @click="chooseProjectFile('resource')">
+                                        <Paperclip class="h-3.5 w-3.5" :stroke-width="1.7" />
+                                        Allega
+                                    </button>
+                                    <input ref="projectResourceInput" type="file" class="hidden" @change="uploadProjectFileFromInput($event, 'resource')" />
+                                </div>
+                                <div class="space-y-2">
+                                    <div v-for="file in related.resources || []" :key="file.id" class="group flex items-center gap-3 rounded-md bg-white px-3 py-2 text-sm shadow-sm ring-1 ring-gray-100 transition hover:ring-indigo-100">
+                                        <FileText class="h-4 w-4 shrink-0 text-gray-400" :stroke-width="1.7" />
+                                        <a :href="route('projects.files.download', [record.id, file.id])" class="min-w-0 flex-1 truncate font-medium text-gray-800 hover:text-indigo-700">
+                                            {{ file.original_name }}
+                                        </a>
+                                        <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-md text-red-500 opacity-0 transition hover:bg-red-50 group-hover:opacity-100" aria-label="Elimina file" @click="removeProjectFile(file)">
+                                            <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                        </button>
+                                    </div>
+                                    <p v-if="!(related.resources || []).length" class="rounded-md border border-dashed border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500">
+                                        Nessuna risorsa allegata.
+                                    </p>
+                                </div>
+                            </aside>
+                        </div>
+
+                        <div v-else-if="projectWorkspaceTab === 'tasks'" class="overflow-hidden rounded-md border border-gray-100 bg-white">
                             <div class="hidden grid-cols-[minmax(0,1.7fr)_minmax(140px,0.7fr)_140px_120px_120px] border-b border-gray-100 bg-gray-50/80 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400 md:grid">
                                 <span>Nome</span>
                                 <span>Incaricato</span>
@@ -3300,6 +3487,84 @@ onUnmounted(() => {
                                 <input v-model="projectNewSectionName" class="subtask-line-control max-w-sm font-medium" placeholder="Aggiungi sezione" />
                                 <button type="submit" class="btn btn-outline justify-center px-3 py-1.5 text-xs">Crea sezione</button>
                             </form>
+                        </div>
+
+                        <div v-else-if="projectWorkspaceTab === 'messages'" class="space-y-4">
+                            <form class="rounded-md border border-gray-100 bg-gray-50/70 p-4" @submit.prevent="submitProjectMessage">
+                                <div class="toolbar mb-2">
+                                    <button type="button" class="toolbar-btn" @click="runProjectMessageCommand('bold')"><Bold class="h-4 w-4" /></button>
+                                    <button type="button" class="toolbar-btn" @click="runProjectMessageCommand('italic')"><Italic class="h-4 w-4" /></button>
+                                    <button type="button" class="toolbar-btn" @click="runProjectMessageCommand('insertUnorderedList')"><List class="h-4 w-4" /></button>
+                                    <button type="button" class="toolbar-btn" @click="addProjectMessageLink"><Link2 class="h-4 w-4" /></button>
+                                </div>
+                                <div
+                                    ref="projectMessageEditor"
+                                    contenteditable="true"
+                                    class="form-control min-h-28 wysiwyg-content bg-white"
+                                    data-placeholder="Scrivi un messaggio per il progetto..."
+                                    @input="updateProjectMessageFromEditor"
+                                ></div>
+                                <div class="mt-3 flex justify-end">
+                                    <button type="submit" class="btn btn-primary px-4 py-2 text-sm" :disabled="projectMessageForm.processing">
+                                        <Send class="h-4 w-4" :stroke-width="1.7" />
+                                        Pubblica
+                                    </button>
+                                </div>
+                            </form>
+
+                            <article v-for="message in related.messages || []" :key="message.id" class="rounded-md border border-gray-100 bg-white p-4 shadow-sm">
+                                <div class="mb-3 flex items-center gap-3">
+                                    <UserAvatar :user="{ name: message.user_name, email: message.user_email, avatar_url: message.user_avatar_url }" size="sm" />
+                                    <div>
+                                        <p class="text-sm font-semibold text-gray-900">{{ message.user_name || message.user_email || 'Utente' }}</p>
+                                        <p class="text-xs text-gray-500">{{ dateTimeIt(message.created_at) }}</p>
+                                    </div>
+                                </div>
+                                <div class="wysiwyg-content text-sm text-gray-700" v-html="message.content"></div>
+                            </article>
+                            <p v-if="!(related.messages || []).length" class="rounded-md border border-dashed border-gray-200 bg-white px-4 py-8 text-center text-sm text-gray-500">
+                                Nessun messaggio nel progetto.
+                            </p>
+                        </div>
+
+                        <div v-else class="space-y-4">
+                            <div
+                                :class="['rounded-md border border-dashed p-8 text-center transition', projectFileDragActive ? 'border-indigo-300 bg-indigo-50/70' : 'border-gray-200 bg-gray-50/70 hover:border-indigo-200 hover:bg-indigo-50/40']"
+                                @dragover.prevent="projectFileDragActive = true"
+                                @dragleave.prevent="projectFileDragActive = false"
+                                @drop.prevent="dropProjectFile"
+                            >
+                                <UploadCloud class="mx-auto h-8 w-8 text-gray-400" :stroke-width="1.6" />
+                                <p class="mt-3 text-sm font-semibold text-gray-800">Trascina qui i file del progetto</p>
+                                <p class="mt-1 text-xs text-gray-500">Oppure selezionali dal tuo computer.</p>
+                                <button type="button" class="btn btn-outline mt-4 px-4 py-2 text-sm" :disabled="projectFileForm.processing" @click="chooseProjectFile('file')">
+                                    <Paperclip class="h-4 w-4" :stroke-width="1.7" />
+                                    Carica file
+                                </button>
+                                <input ref="projectFileInput" type="file" class="hidden" @change="uploadProjectFileFromInput($event, 'file')" />
+                            </div>
+
+                            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                                <article v-for="file in related.files || []" :key="file.id" class="group rounded-md border border-gray-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-100 hover:shadow-md">
+                                    <div class="flex items-start gap-3">
+                                        <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-gray-100 text-gray-500">
+                                            <FileText class="h-5 w-5" :stroke-width="1.7" />
+                                        </span>
+                                        <div class="min-w-0 flex-1">
+                                            <a :href="route('projects.files.download', [record.id, file.id])" class="block truncate text-sm font-semibold text-gray-900 hover:text-indigo-700">
+                                                {{ file.original_name }}
+                                            </a>
+                                            <p class="mt-1 text-xs text-gray-500">{{ fileSize(file.size) }} · {{ file.uploaded_by_name || 'Utente' }} · {{ dateIt(file.created_at) }}</p>
+                                        </div>
+                                        <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-md text-red-500 opacity-0 transition hover:bg-red-50 group-hover:opacity-100" aria-label="Elimina file" @click="removeProjectFile(file)">
+                                            <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                        </button>
+                                    </div>
+                                </article>
+                            </div>
+                            <p v-if="!(related.files || []).length" class="rounded-md border border-dashed border-gray-200 bg-white px-4 py-8 text-center text-sm text-gray-500">
+                                Nessun file caricato nel progetto.
+                            </p>
                         </div>
                     </section>
                 </section>

@@ -35,6 +35,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/projects/{id}', [CentroPageController::class, 'show'])->defaults('section', 'projects')->name('projects.show');
     Route::put('/projects/{id}', [CentroPageController::class, 'update'])->defaults('section', 'projects')->name('projects.update');
     Route::post('/projects/{id}/sections', [CentroPageController::class, 'storeProjectSection'])->name('projects.sections.store');
+    Route::post('/projects/{id}/messages', [CentroPageController::class, 'storeProjectMessage'])->name('projects.messages.store');
+    Route::post('/projects/{id}/files', [CentroPageController::class, 'storeProjectFile'])->name('projects.files.store');
+    Route::get('/projects/{projectId}/files/{fileId}', [CentroPageController::class, 'downloadProjectFile'])->name('projects.files.download');
+    Route::delete('/projects/{projectId}/files/{fileId}', [CentroPageController::class, 'destroyProjectFile'])->name('projects.files.destroy');
     Route::put('/projects/{id}/followers', [CentroPageController::class, 'syncProjectFollowers'])->name('projects.followers.sync');
     Route::delete('/projects/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'projects')->name('projects.destroy');
     Route::get('/tasks', [CentroPageController::class, 'index'])->defaults('section', 'tasks')->name('tasks.index');

@@ -933,6 +933,9 @@ class CentroPageController extends Controller
             'projects' => [
                 'sections' => $this->projectSections($id),
                 'tasks' => $this->projectTaskRows($id),
+                'messages' => $this->projectMessages($id),
+                'resources' => $this->projectFiles($id, 'resource'),
+                'files' => $this->projectFiles($id, 'file'),
                 'client' => $record->client_id ? DB::table('clients')->where('id', $record->client_id)->first() : null,
                 'projectClients' => DB::table('clients')->orderBy('name')->get(['id', 'name']),
                 'projectUsers' => $this->userOptions(),
@@ -1865,6 +1868,98 @@ class CentroPageController extends Controller
         return back()->with('status', 'Sezione aggiunta.');
     }
 
+    public function storeProjectMessage(Request $request, string $id): RedirectResponse
+    {
+        $project = DB::table('projects')->where('id', $id)->first();
+        abort_unless($project, 404);
+
+        $payload = $request->validate([
+            'content' => ['required', 'string'],
+        ]);
+
+        DB::table('project_messages')->insert([
+            'id' => (string) str()->uuid(),
+            'project_id' => $id,
+            'user_id' => $request->user()->id,
+            'content' => $payload['content'],
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->notifyProjectPeople(
+            $id,
+            $request->user()->id,
+            'project_message',
+            $request->user()->name.' ha pubblicato un messaggio nel progetto "'.$project->name.'".',
+        );
+
+        return back()->with('status', 'Messaggio pubblicato.');
+    }
+
+    public function storeProjectFile(Request $request, string $id): RedirectResponse
+    {
+        $project = DB::table('projects')->where('id', $id)->first();
+        abort_unless($project, 404);
+
+        $payload = $request->validate([
+            'file' => ['required', 'file', 'max:20480'],
+            'kind' => ['required', Rule::in(['resource', 'file'])],
+        ]);
+
+        $uploadedFile = $payload['file'];
+        $path = $uploadedFile->store('project-files/'.$id, 'public');
+
+        DB::table('project_files')->insert([
+            'id' => (string) str()->uuid(),
+            'project_id' => $id,
+            'uploaded_by' => $request->user()->id,
+            'kind' => $payload['kind'],
+            'name' => pathinfo($uploadedFile->getClientOriginalName(), PATHINFO_FILENAME),
+            'original_name' => $uploadedFile->getClientOriginalName(),
+            'path' => $path,
+            'mime_type' => $uploadedFile->getClientMimeType(),
+            'size' => $uploadedFile->getSize() ?: 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->notifyProjectPeople(
+            $id,
+            $request->user()->id,
+            'project_file',
+            $request->user()->name.' ha caricato un file nel progetto "'.$project->name.'".',
+        );
+
+        return back()->with('status', 'File caricato.');
+    }
+
+    public function downloadProjectFile(string $projectId, string $fileId)
+    {
+        $file = DB::table('project_files')
+            ->where('project_id', $projectId)
+            ->where('id', $fileId)
+            ->first();
+
+        abort_unless($file && Storage::disk('public')->exists($file->path), 404);
+
+        return Storage::disk('public')->download($file->path, $file->original_name);
+    }
+
+    public function destroyProjectFile(string $projectId, string $fileId): RedirectResponse
+    {
+        $file = DB::table('project_files')
+            ->where('project_id', $projectId)
+            ->where('id', $fileId)
+            ->first();
+
+        abort_unless($file, 404);
+
+        Storage::disk('public')->delete($file->path);
+        DB::table('project_files')->where('id', $fileId)->delete();
+
+        return back()->with('status', 'File eliminato.');
+    }
+
     private function syncProjectFollowersList(string $projectId, array $userIds): void
     {
         DB::table('project_followers')->where('project_id', $projectId)->delete();
@@ -2423,6 +2518,35 @@ class CentroPageController extends Controller
 
             return $row;
         });
+    }
+
+    private function projectMessages(string $projectId): \Illuminate\Support\Collection
+    {
+        return DB::table('project_messages')
+            ->leftJoin('users', 'users.id', '=', 'project_messages.user_id')
+            ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
+            ->where('project_messages.project_id', $projectId)
+            ->latest('project_messages.created_at')
+            ->limit(50)
+            ->get([
+                'project_messages.*',
+                'users.name as user_name',
+                'users.email as user_email',
+                'profiles.avatar_url as user_avatar_url',
+            ]);
+    }
+
+    private function projectFiles(string $projectId, string $kind): \Illuminate\Support\Collection
+    {
+        return DB::table('project_files')
+            ->leftJoin('users', 'users.id', '=', 'project_files.uploaded_by')
+            ->where('project_files.project_id', $projectId)
+            ->where('project_files.kind', $kind)
+            ->latest('project_files.created_at')
+            ->get([
+                'project_files.*',
+                'users.name as uploaded_by_name',
+            ]);
     }
 
     private function taskDependsOn(string $taskId, string $targetTaskId, array $visited = []): bool
