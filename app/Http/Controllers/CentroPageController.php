@@ -931,7 +931,8 @@ class CentroPageController extends Controller
                 'subscriptions' => DB::table('subscriptions')->where('client_id', $id)->latest()->get(),
             ],
             'projects' => [
-                'tasks' => DB::table('tasks')->where('project_id', $id)->latest()->limit(40)->get(),
+                'sections' => $this->projectSections($id),
+                'tasks' => $this->projectTaskRows($id),
                 'client' => $record->client_id ? DB::table('clients')->where('id', $record->client_id)->first() : null,
                 'projectClients' => DB::table('clients')->orderBy('name')->get(['id', 'name']),
                 'projectUsers' => $this->userOptions(),
@@ -1670,6 +1671,7 @@ class CentroPageController extends Controller
             'tasks' => [
                 'title' => ['required', 'string', 'max:255'],
                 'project_id' => ['nullable', 'uuid', 'exists:projects,id'],
+                'project_section_id' => ['nullable', 'uuid', 'exists:project_sections,id'],
                 'client_id' => ['nullable', 'uuid', 'exists:clients,id'],
                 'service_id' => ['nullable', 'uuid', 'exists:services,id'],
                 'task_type' => ['required', Rule::in(['task', 'project', 'ongoing', 'meeting'])],
@@ -1841,6 +1843,26 @@ class CentroPageController extends Controller
         }
 
         return back()->with('status', 'Membri progetto aggiornati.');
+    }
+
+    public function storeProjectSection(Request $request, string $id): RedirectResponse
+    {
+        abort_unless(DB::table('projects')->where('id', $id)->exists(), 404);
+
+        $payload = $request->validate([
+            'name' => ['required', 'string', 'max:120'],
+        ]);
+
+        DB::table('project_sections')->insert([
+            'id' => (string) str()->uuid(),
+            'project_id' => $id,
+            'name' => $payload['name'],
+            'position' => DB::table('project_sections')->where('project_id', $id)->count(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return back()->with('status', 'Sezione aggiunta.');
     }
 
     private function syncProjectFollowersList(string $projectId, array $userIds): void
@@ -2344,6 +2366,62 @@ class CentroPageController extends Controller
                 'tasks.parent_task_id',
                 'clients.name as client_name',
             ]);
+    }
+
+    private function projectSections(string $projectId): \Illuminate\Support\Collection
+    {
+        $existing = DB::table('project_sections')
+            ->where('project_id', $projectId)
+            ->orderBy('position')
+            ->orderBy('created_at')
+            ->get();
+
+        if ($existing->isNotEmpty()) {
+            return $existing;
+        }
+
+        foreach (['Fase Preliminare', 'Fase Realizzativa', 'Fase Conclusiva'] as $position => $name) {
+            DB::table('project_sections')->insert([
+                'id' => (string) str()->uuid(),
+                'project_id' => $projectId,
+                'name' => $name,
+                'position' => $position,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        return DB::table('project_sections')
+            ->where('project_id', $projectId)
+            ->orderBy('position')
+            ->orderBy('created_at')
+            ->get();
+    }
+
+    private function projectTaskRows(string $projectId): \Illuminate\Support\Collection
+    {
+        $rows = DB::table('tasks')
+            ->where('project_id', $projectId)
+            ->where(fn ($query) => $query->whereNull('parent_task_id')->orWhereRaw("TRIM(parent_task_id) = ''"))
+            ->orderByRaw('project_section_id is null')
+            ->orderBy('project_section_id')
+            ->orderBy('position')
+            ->orderBy('due_date')
+            ->orderBy('title')
+            ->get();
+
+        $assignees = DB::table('task_assignees')
+            ->join('users', 'users.id', '=', 'task_assignees.user_id')
+            ->whereIn('task_assignees.task_id', $rows->pluck('id'))
+            ->orderBy('users.name')
+            ->get(['task_assignees.task_id', 'users.id', 'users.name', 'users.email', 'users.avatar_path'])
+            ->groupBy('task_id');
+
+        return $rows->map(function ($row) use ($assignees) {
+            $row->assignees = ($assignees[$row->id] ?? collect())->values();
+
+            return $row;
+        });
     }
 
     private function taskDependsOn(string $taskId, string $targetTaskId, array $visited = []): bool

@@ -516,6 +516,9 @@ const projectAutosaveState = ref('idle');
 const projectAutosaveError = ref('');
 let projectAutosaveTimer = null;
 let projectAutosaveSequence = 0;
+const projectSectionCollapsed = ref({});
+const projectTaskDrafts = ref({});
+const projectNewSectionName = ref('');
 const projectColors = ['#2563eb', '#7c3aed', '#db2777', '#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#475569'];
 const userForm = useForm({
     name: props.record.name || '',
@@ -1944,6 +1947,88 @@ function parentTaskRows(tasks = []) {
     return (tasks || []).filter((task) => !String(task.parent_task_id || '').trim());
 }
 
+function projectTaskSections() {
+    const sections = [...(props.related.sections || [])];
+    const hasUnsectioned = parentTaskRows(props.related.tasks).some((task) => !task.project_section_id);
+
+    return hasUnsectioned
+        ? [...sections, { id: '__unsectioned', name: 'Senza fase', virtual: true }]
+        : sections;
+}
+
+function projectTasksForSection(section) {
+    return parentTaskRows(props.related.tasks).filter((task) => {
+        if (section.virtual) return !task.project_section_id;
+
+        return task.project_section_id === section.id;
+    });
+}
+
+function toggleProjectSection(sectionId) {
+    projectSectionCollapsed.value = {
+        ...projectSectionCollapsed.value,
+        [sectionId]: !projectSectionCollapsed.value[sectionId],
+    };
+}
+
+function setProjectTaskDraft(sectionId, value) {
+    projectTaskDrafts.value = {
+        ...projectTaskDrafts.value,
+        [sectionId]: value,
+    };
+}
+
+function addProjectTask(section) {
+    const title = String(projectTaskDrafts.value[section.id] || '').trim();
+    if (!title) return;
+
+    router.post(route('tasks.store'), {
+        title,
+        task_type: 'project',
+        status: 'todo',
+        priority: 'medium',
+        project_id: props.record.id,
+        project_section_id: section.virtual ? '' : section.id,
+        client_id: projectForm.client_id || '',
+        recurring_enabled: false,
+    }, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => setProjectTaskDraft(section.id, ''),
+    });
+}
+
+function addProjectSection() {
+    const name = projectNewSectionName.value.trim();
+    if (!name) return;
+
+    router.post(route('projects.sections.store', props.record.id), { name }, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => {
+            projectNewSectionName.value = '';
+        },
+    });
+}
+
+function projectTaskStatusClass(status) {
+    return {
+        todo: 'bg-gray-100 text-gray-700',
+        in_progress: 'bg-sky-100 text-sky-700',
+        in_review: 'bg-indigo-100 text-indigo-700',
+        done: 'bg-emerald-100 text-emerald-700',
+    }[status] || 'bg-gray-100 text-gray-700';
+}
+
+function projectTaskPriorityClass(priority) {
+    return {
+        low: 'bg-gray-100 text-gray-700',
+        medium: 'bg-amber-100 text-amber-700',
+        high: 'bg-rose-100 text-rose-700',
+        urgent: 'bg-red-100 text-red-700',
+    }[priority] || 'bg-gray-100 text-gray-700';
+}
+
 function personAvatarClass(selected) {
     return [
         'group/person relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300',
@@ -3154,22 +3239,67 @@ onUnmounted(() => {
                             <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Task progetto</h3>
                             <span class="text-xs text-gray-500">{{ parentTaskRows(related.tasks).length }} elementi</span>
                         </div>
-                        <div class="space-y-2">
-                            <Link
-                                v-for="task in parentTaskRows(related.tasks)"
-                                :key="task.id"
-                                :href="route('tasks.show', task.id)"
-                                class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-gray-100 bg-gray-50 px-3 py-2 text-sm hover:border-indigo-100 hover:bg-indigo-50"
-                            >
-                                <span class="font-medium text-indigo-700">{{ task.title }}</span>
-                                <span class="flex items-center gap-2 text-xs text-gray-500">
-                                    <span>{{ displayValue(task.status) }}</span>
-                                    <span v-if="task.due_date">{{ dateIt(task.due_date) }}</span>
-                                </span>
-                            </Link>
-                            <p v-if="!parentTaskRows(related.tasks).length" class="rounded-md border border-dashed border-gray-300 bg-white px-4 py-8 text-center text-sm text-gray-500">
-                                Nessuna task collegata a questo progetto.
-                            </p>
+                        <div class="overflow-hidden rounded-md border border-gray-100 bg-white">
+                            <div class="hidden grid-cols-[minmax(0,1.7fr)_minmax(140px,0.7fr)_140px_120px_120px] border-b border-gray-100 bg-gray-50/80 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400 md:grid">
+                                <span>Nome</span>
+                                <span>Incaricato</span>
+                                <span>Scadenza</span>
+                                <span>Stato</span>
+                                <span>Priorità</span>
+                            </div>
+                            <div v-for="sectionRow in projectTaskSections()" :key="sectionRow.id" class="border-b border-gray-100 last:border-b-0">
+                                <button
+                                    type="button"
+                                    class="flex w-full items-center gap-2 px-3 py-3 text-left text-sm font-semibold text-gray-800 transition hover:bg-gray-50/80"
+                                    :aria-expanded="!projectSectionCollapsed[sectionRow.id]"
+                                    @click="toggleProjectSection(sectionRow.id)"
+                                >
+                                    <ChevronDown :class="['h-4 w-4 text-gray-400 transition-transform', projectSectionCollapsed[sectionRow.id] ? '-rotate-90' : '']" :stroke-width="1.8" />
+                                    <span>{{ sectionRow.name }}</span>
+                                    <span class="ml-auto text-xs font-medium text-gray-400">{{ projectTasksForSection(sectionRow).length }}</span>
+                                </button>
+                                <div v-show="!projectSectionCollapsed[sectionRow.id]">
+                                    <div
+                                        v-for="task in projectTasksForSection(sectionRow)"
+                                        :key="task.id"
+                                        :class="['grid gap-3 border-t border-gray-100 px-3 py-2.5 text-sm transition hover:bg-indigo-50/40 md:grid-cols-[minmax(0,1.7fr)_minmax(140px,0.7fr)_140px_120px_120px] md:items-center', task.status === 'done' ? 'opacity-60' : '']"
+                                    >
+                                        <Link :href="route('tasks.show', task.id)" class="min-w-0 font-medium text-indigo-700 hover:text-indigo-900">
+                                            <span :class="['block truncate', task.status === 'done' ? 'line-through' : '']">{{ task.title }}</span>
+                                        </Link>
+                                        <div class="flex min-w-0 items-center gap-2 text-xs text-gray-600">
+                                            <span v-if="task.assignees?.length" class="flex -space-x-2">
+                                                <UserAvatar v-for="user in task.assignees.slice(0, 3)" :key="`project-task-user-${task.id}-${user.id}`" :user="user" size="xs" class="ring-2 ring-white" />
+                                            </span>
+                                            <span class="truncate">{{ task.assignees?.[0]?.name || task.assignees?.[0]?.email || 'Non assegnata' }}</span>
+                                        </div>
+                                        <span class="text-xs font-medium text-gray-500">{{ task.due_date ? dateIt(task.due_date) : '-' }}</span>
+                                        <span>
+                                            <span :class="['rounded-full px-2 py-1 text-xs font-semibold', projectTaskStatusClass(task.status)]">{{ displayValue(task.status) }}</span>
+                                        </span>
+                                        <span>
+                                            <span :class="['rounded-full px-2 py-1 text-xs font-semibold', projectTaskPriorityClass(task.priority)]">{{ displayValue(task.priority) }}</span>
+                                        </span>
+                                    </div>
+                                    <form class="grid gap-3 border-t border-gray-100 px-3 py-2.5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center" @submit.prevent="addProjectTask(sectionRow)">
+                                        <input
+                                            :value="projectTaskDrafts[sectionRow.id] || ''"
+                                            class="subtask-line-control font-medium"
+                                            placeholder="Aggiungi attività..."
+                                            @input="setProjectTaskDraft(sectionRow.id, $event.target.value)"
+                                        />
+                                        <button type="submit" class="btn btn-outline justify-center px-3 py-1.5 text-xs">
+                                            <Plus class="h-3.5 w-3.5" :stroke-width="1.7" />
+                                            Aggiungi
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                            <form class="flex flex-wrap items-center gap-2 px-3 py-3" @submit.prevent="addProjectSection">
+                                <Plus class="h-4 w-4 text-gray-400" :stroke-width="1.7" />
+                                <input v-model="projectNewSectionName" class="subtask-line-control max-w-sm font-medium" placeholder="Aggiungi sezione" />
+                                <button type="submit" class="btn btn-outline justify-center px-3 py-1.5 text-xs">Crea sezione</button>
+                            </form>
                         </div>
                     </section>
                 </section>
