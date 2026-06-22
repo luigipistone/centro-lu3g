@@ -939,6 +939,10 @@ class CentroPageController extends Controller
                 'client' => $record->client_id ? DB::table('clients')->where('id', $record->client_id)->first() : null,
                 'projectClients' => DB::table('clients')->orderBy('name')->get(['id', 'name']),
                 'projectUsers' => $this->userOptions(),
+                'users' => $this->userOptions(),
+                'taskClients' => DB::table('clients')->orderBy('name')->get(['id', 'name']),
+                'taskServices' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name', 'color']),
+                'taskDependencyOptions' => $this->taskDependencyOptions(),
                 'followers' => DB::table('project_followers')->where('project_id', $id)->pluck('user_id'),
             ],
             'tasks' => [
@@ -2561,9 +2565,34 @@ class CentroPageController extends Controller
             ->orderBy('users.name')
             ->get(['task_assignees.task_id', 'users.id', 'users.name', 'users.email', 'profiles.avatar_url'])
             ->groupBy('task_id');
+        $assigneeIds = DB::table('task_assignees')
+            ->whereIn('task_id', $rows->pluck('id'))
+            ->get(['task_id', 'user_id'])
+            ->groupBy('task_id');
+        $followerIds = DB::table('task_followers')
+            ->whereIn('task_id', $rows->pluck('id'))
+            ->get(['task_id', 'user_id'])
+            ->groupBy('task_id');
+        $comments = DB::table('task_comments')
+            ->leftJoin('users', 'users.id', '=', 'task_comments.user_id')
+            ->whereIn('task_comments.task_id', $rows->pluck('id'))
+            ->latest('task_comments.created_at')
+            ->get(['task_comments.*', 'users.name as user_name'])
+            ->groupBy('task_id')
+            ->map(fn ($items) => $items->take(30)->values());
+        $activity = $this->taskActivityRows($rows->pluck('id'));
+        $dependencies = $this->taskDependencyRows($rows->pluck('id'));
 
-        return $rows->map(function ($row) use ($assignees) {
+        return $rows->map(function ($row) use ($assignees, $assigneeIds, $followerIds, $comments, $activity, $dependencies) {
             $row->assignees = ($assignees[$row->id] ?? collect())->values();
+            $row->assignee_ids = ($assigneeIds[$row->id] ?? collect())->pluck('user_id')->values();
+            $row->follower_ids = ($followerIds[$row->id] ?? collect())->pluck('user_id')->values();
+            $row->subtasks = $this->taskSubtaskRows($row->id);
+            $row->comments = ($comments[$row->id] ?? collect())->values();
+            $row->activity = ($activity[$row->id] ?? collect())->values();
+            $row->dependencies = ($dependencies[$row->id]['dependencies'] ?? collect())->values();
+            $row->dependents = ($dependencies[$row->id]['dependents'] ?? collect())->values();
+            $row->blocked_dependencies_count = ($row->dependencies ?? collect())->where('status', '!=', 'done')->count();
 
             return $row;
         });

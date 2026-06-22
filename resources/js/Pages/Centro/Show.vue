@@ -23,6 +23,7 @@ import {
     ChevronLeft,
     Copy,
     Download,
+    ExternalLink,
     FileText,
     GripVertical,
     Heading3,
@@ -235,6 +236,27 @@ function selectedTaskDependents() {
     const byId = new Map([...(props.related.taskDependencyOptions || []), ...(props.related.dependents || [])].map((task) => [task.id, task]));
 
     return selected.map((id) => byId.get(id)).filter(Boolean);
+}
+
+function projectDrawerDependencyOptions(direction = 'blocked_by') {
+    const selected = direction === 'blocks' ? (projectTaskDrawerForm.dependent_ids || []) : (projectTaskDrawerForm.dependency_ids || []);
+    const opposite = direction === 'blocks' ? (projectTaskDrawerForm.dependency_ids || []) : (projectTaskDrawerForm.dependent_ids || []);
+
+    return (props.related.taskDependencyOptions || [])
+        .filter((task) => task.id !== projectTaskDrawerTask.value?.id && task.status !== 'done' && !selected.includes(task.id) && !opposite.includes(task.id))
+        .map((task) => ({ value: task.id, label: taskDependencyLabel(task) }));
+}
+
+function selectedProjectDrawerDependencies() {
+    const byId = new Map([...(props.related.taskDependencyOptions || []), ...(projectTaskDrawerTask.value?.dependencies || [])].map((task) => [task.id, task]));
+
+    return (projectTaskDrawerForm.dependency_ids || []).map((id) => byId.get(id)).filter(Boolean);
+}
+
+function selectedProjectDrawerDependents() {
+    const byId = new Map([...(props.related.taskDependencyOptions || []), ...(projectTaskDrawerTask.value?.dependents || [])].map((task) => [task.id, task]));
+
+    return (projectTaskDrawerForm.dependent_ids || []).map((id) => byId.get(id)).filter(Boolean);
 }
 
 function blockedDependencyCount(task = null) {
@@ -546,8 +568,27 @@ const projectTaskDrawerForm = useForm({
     due_time: '',
     location: '',
     recurring_enabled: false,
+    recurring_interval_value: 1,
+    recurring_interval_unit: 'week',
+    recurring_mode: 'fixed',
+    recurring_weekday: 1,
+    recurring_month_day: 1,
+    assignee_ids: [],
+    follower_ids: [],
+    dependency_ids: [],
+    dependent_ids: [],
 });
 const projectTaskDrawerDescriptionEditor = ref(null);
+const projectTaskDrawerFeedTab = ref('comments');
+const projectDrawerDependencyDirection = ref('blocked_by');
+const projectDrawerDependencyToAdd = ref('');
+const projectDrawerShowAllComments = ref(false);
+const projectDrawerShowAllActivity = ref(false);
+const projectDrawerSubtaskForm = useForm({ title: '', priority: 'medium', due_date: '', assignee_ids: [] });
+const projectDrawerCommentForm = useForm({ content: '' });
+const projectDrawerCommentEditor = ref(null);
+const projectTaskActionMenuOpen = ref(false);
+const projectTaskActionMenuStyle = ref({});
 const draggedProjectTaskId = ref(null);
 const projectTaskDropTarget = ref(null);
 const projectTaskDropPlacement = ref(null);
@@ -2156,6 +2197,15 @@ function projectTaskDrawerPayload() {
         due_time: projectTaskDrawerForm.due_time || '',
         location: projectTaskDrawerForm.location || '',
         recurring_enabled: Boolean(projectTaskDrawerForm.recurring_enabled),
+        recurring_interval_value: projectTaskDrawerForm.recurring_enabled ? (projectTaskDrawerForm.recurring_interval_value || 1) : '',
+        recurring_interval_unit: projectTaskDrawerForm.recurring_enabled ? (projectTaskDrawerForm.recurring_interval_unit || 'week') : '',
+        recurring_mode: projectTaskDrawerForm.recurring_enabled ? (projectTaskDrawerForm.recurring_mode || 'fixed') : '',
+        recurring_weekday: projectTaskDrawerForm.recurring_enabled ? projectTaskDrawerForm.recurring_weekday : '',
+        recurring_month_day: projectTaskDrawerForm.recurring_enabled ? projectTaskDrawerForm.recurring_month_day : '',
+        assignee_ids: [...(projectTaskDrawerForm.assignee_ids || [])],
+        follower_ids: [...(projectTaskDrawerForm.follower_ids || [])],
+        dependency_ids: [...(projectTaskDrawerForm.dependency_ids || [])],
+        dependent_ids: [...(projectTaskDrawerForm.dependent_ids || [])],
     };
 }
 
@@ -2175,11 +2225,30 @@ function openProjectTaskDrawer(task) {
         due_time: task.due_time ? String(task.due_time).slice(0, 5) : '',
         location: task.location || '',
         recurring_enabled: Boolean(task.recurring_enabled),
+        recurring_interval_value: task.recurring_interval_value || 1,
+        recurring_interval_unit: task.recurring_interval_unit || 'week',
+        recurring_mode: task.recurring_mode || 'fixed',
+        recurring_weekday: task.recurring_weekday || 1,
+        recurring_month_day: task.recurring_month_day || 1,
+        assignee_ids: [...(task.assignee_ids || [])],
+        follower_ids: [...(task.follower_ids || [])],
+        dependency_ids: (task.dependencies || []).map((dependency) => dependency.id),
+        dependent_ids: (task.dependents || []).map((dependent) => dependent.id),
     });
     projectTaskDrawerForm.reset();
+    projectTaskDrawerFeedTab.value = 'comments';
+    projectDrawerDependencyDirection.value = 'blocked_by';
+    projectDrawerDependencyToAdd.value = '';
+    projectDrawerShowAllComments.value = false;
+    projectDrawerShowAllActivity.value = false;
+    projectDrawerSubtaskForm.reset();
+    projectDrawerCommentForm.reset();
     nextTick(() => {
         if (projectTaskDrawerDescriptionEditor.value) {
             projectTaskDrawerDescriptionEditor.value.innerHTML = projectTaskDrawerForm.description || '';
+        }
+        if (projectDrawerCommentEditor.value) {
+            projectDrawerCommentEditor.value.innerHTML = '';
         }
     });
     projectTaskDrawerOpen.value = true;
@@ -2189,6 +2258,7 @@ function openProjectTaskDrawer(task) {
 function closeProjectTaskDrawer() {
     projectTaskDrawerOpen.value = false;
     projectTaskDrawerTask.value = null;
+    projectTaskActionMenuOpen.value = false;
     window.clearTimeout(projectTaskDrawerAutosaveTimer);
     document.body.classList.remove('overflow-hidden');
 }
@@ -2221,6 +2291,180 @@ function saveProjectTaskDrawer(delay = AUTOSAVE_IDLE_DELAY) {
             onFinish: () => projectTaskDrawerForm.transform((data) => data),
         });
     }, autosaveDelay(delay));
+}
+
+function projectDrawerComments() {
+    return projectTaskDrawerTask.value?.comments || [];
+}
+
+function projectDrawerActivity() {
+    return projectTaskDrawerTask.value?.activity || [];
+}
+
+function visibleProjectDrawerComments() {
+    return projectDrawerShowAllComments.value ? projectDrawerComments() : projectDrawerComments().slice(0, 3);
+}
+
+function visibleProjectDrawerActivity() {
+    return projectDrawerShowAllActivity.value ? projectDrawerActivity() : projectDrawerActivity().slice(0, 3);
+}
+
+function toggleProjectTaskType(type) {
+    projectTaskDrawerForm.task_type = type;
+    if (type === 'meeting') {
+        projectTaskDrawerForm.due_time = projectTaskDrawerForm.due_time || '09:00';
+        projectTaskDrawerForm.recurring_enabled = false;
+    } else {
+        projectTaskDrawerForm.location = '';
+    }
+    saveProjectTaskDrawer(0);
+}
+
+function toggleProjectDrawerTaskPerson(field, userId) {
+    const values = [...(projectTaskDrawerForm[field] || [])];
+    const index = values.indexOf(userId);
+    if (index >= 0) values.splice(index, 1);
+    else values.push(userId);
+    projectTaskDrawerForm[field] = values;
+
+    const type = field === 'assignee_ids' ? 'assignees' : 'followers';
+    router.put(route('tasks.people.sync', [projectTaskDrawerTask.value.id, type]), { user_ids: values }, {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['related', 'errors', 'flash'],
+        onSuccess: () => {
+            projectTaskDrawerTask.value = { ...projectTaskDrawerTask.value, [field]: values };
+        },
+    });
+}
+
+function addProjectDrawerDependency(taskId, direction = 'blocked_by') {
+    if (!taskId) return;
+    if ((projectTaskDrawerForm.dependency_ids || []).includes(taskId) || (projectTaskDrawerForm.dependent_ids || []).includes(taskId)) return;
+
+    if (direction === 'blocks') {
+        projectTaskDrawerForm.dependent_ids = [...new Set([...(projectTaskDrawerForm.dependent_ids || []), taskId])];
+    } else {
+        projectTaskDrawerForm.dependency_ids = [...new Set([...(projectTaskDrawerForm.dependency_ids || []), taskId])];
+    }
+    projectDrawerDependencyToAdd.value = '';
+    syncProjectDrawerDependencies();
+}
+
+function syncProjectDrawerDependencies() {
+    router.put(route('tasks.dependencies.sync', projectTaskDrawerTask.value.id), {
+        dependency_ids: projectTaskDrawerForm.dependency_ids,
+        dependent_ids: projectTaskDrawerForm.dependent_ids,
+    }, {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['related', 'errors', 'flash'],
+    });
+}
+
+function removeProjectDrawerDependency(taskId) {
+    projectTaskDrawerForm.dependency_ids = (projectTaskDrawerForm.dependency_ids || []).filter((id) => id !== taskId);
+    syncProjectDrawerDependencies();
+}
+
+function removeProjectDrawerDependent(taskId) {
+    projectTaskDrawerForm.dependent_ids = (projectTaskDrawerForm.dependent_ids || []).filter((id) => id !== taskId);
+    syncProjectDrawerDependencies();
+}
+
+function toggleProjectTaskComplete() {
+    if (!projectTaskDrawerTask.value?.id) return;
+    const nextStatus = projectTaskDrawerForm.status === 'done' ? 'todo' : 'done';
+    projectTaskDrawerForm.status = nextStatus;
+    router.patch(route('tasks.status.update', projectTaskDrawerTask.value.id), { status: nextStatus }, {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['related', 'errors', 'flash'],
+        onSuccess: () => {
+            projectTaskDrawerTask.value = { ...projectTaskDrawerTask.value, status: nextStatus };
+            if (nextStatus === 'done') window.dispatchEvent(new CustomEvent('centro:task-completed'));
+        },
+    });
+}
+
+function addProjectDrawerSubtask() {
+    if (!projectTaskDrawerTask.value?.id || !projectDrawerSubtaskForm.title) return;
+    projectDrawerSubtaskForm.post(route('tasks.subtasks.store', projectTaskDrawerTask.value.id), {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['related', 'errors', 'flash'],
+        onSuccess: () => projectDrawerSubtaskForm.reset(),
+    });
+}
+
+function updateProjectDrawerCommentFromEditor() {
+    projectDrawerCommentForm.content = projectDrawerCommentEditor.value?.innerHTML || '';
+}
+
+function addProjectDrawerComment() {
+    if (!projectTaskDrawerTask.value?.id) return;
+    updateProjectDrawerCommentFromEditor();
+    if (!String(projectDrawerCommentForm.content || '').trim()) return;
+    projectDrawerCommentForm.post(route('tasks.comments.store', projectTaskDrawerTask.value.id), {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['related', 'errors', 'flash'],
+        onSuccess: () => {
+            projectDrawerCommentForm.reset();
+            if (projectDrawerCommentEditor.value) projectDrawerCommentEditor.value.innerHTML = '';
+        },
+    });
+}
+
+function toggleProjectTaskActionMenu(event = null) {
+    projectTaskActionMenuStyle.value = dropdownMenuStyleFromEvent(event, 220);
+    projectTaskActionMenuOpen.value = !projectTaskActionMenuOpen.value;
+}
+
+async function copyProjectDrawerTaskLink() {
+    projectTaskActionMenuOpen.value = false;
+    if (!projectTaskDrawerTask.value?.id) return;
+
+    const href = route('tasks.show', projectTaskDrawerTask.value.id);
+    const absoluteHref = href.startsWith('http') ? href : `${window.location.origin}${href}`;
+
+    if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(absoluteHref);
+    }
+}
+
+function duplicateProjectDrawerTask() {
+    if (!projectTaskDrawerTask.value?.id) return;
+    projectTaskActionMenuOpen.value = false;
+    router.post(route('tasks.duplicate', projectTaskDrawerTask.value.id), {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['related', 'errors', 'flash'],
+    });
+}
+
+function printProjectDrawerTask() {
+    projectTaskActionMenuOpen.value = false;
+    window.print();
+}
+
+function removeProjectDrawerTask() {
+    if (!projectTaskDrawerTask.value?.id) return;
+    projectTaskActionMenuOpen.value = false;
+    openConfirm({
+        title: 'Eliminare questa task?',
+        description: projectTaskDrawerForm.title || 'Task',
+        keyword: 'ELIMINA',
+        button: 'Elimina',
+        danger: true,
+        action: () => router.delete(route('tasks.destroy', projectTaskDrawerTask.value.id), {
+            data: { stay: true },
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: closeProjectTaskDrawer,
+            onFinish: closeConfirm,
+        }),
+    });
 }
 
 function setProjectTaskDraft(sectionId, value) {
@@ -2528,10 +2772,19 @@ watch(
         projectTaskDrawerForm.title,
         projectTaskDrawerForm.status,
         projectTaskDrawerForm.priority,
+        projectTaskDrawerForm.task_type,
         projectTaskDrawerForm.start_date,
         projectTaskDrawerForm.due_date,
         projectTaskDrawerForm.due_time,
         projectTaskDrawerForm.location,
+        projectTaskDrawerForm.client_id,
+        projectTaskDrawerForm.service_id,
+        projectTaskDrawerForm.recurring_enabled,
+        projectTaskDrawerForm.recurring_interval_value,
+        projectTaskDrawerForm.recurring_interval_unit,
+        projectTaskDrawerForm.recurring_mode,
+        projectTaskDrawerForm.recurring_weekday,
+        projectTaskDrawerForm.recurring_month_day,
     ],
     () => {
         if (projectTaskDrawerOpen.value) saveProjectTaskDrawer();
@@ -4815,21 +5068,73 @@ onUnmounted(() => {
         </div>
         <Transition name="calendar-task-drawer">
             <div v-if="projectTaskDrawerOpen && projectTaskDrawerTask" class="fixed inset-0 z-[5200] bg-gray-950/20 backdrop-blur-[2px]" @click.self="closeProjectTaskDrawer">
-                <aside class="calendar-task-drawer-panel absolute right-0 top-0 flex h-full w-full max-w-2xl flex-col border-l border-white/80 bg-white shadow-2xl sm:w-[54vw]">
-                    <header class="flex items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
+                <aside class="calendar-task-drawer-panel absolute right-0 top-0 flex h-full w-full max-w-3xl flex-col border-l border-white/80 bg-white shadow-2xl sm:w-[62vw]">
+                    <header class="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
                         <div class="min-w-0">
-                            <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Task progetto</p>
-                            <h3 class="truncate text-lg font-bold text-gray-950">{{ projectTaskDrawerForm.title || projectTaskDrawerTask.title }}</h3>
+                            <div class="flex items-center gap-2">
+                                <span class="h-2.5 w-2.5 rounded-full" :class="projectTaskPriorityClass(projectTaskDrawerForm.priority).split(' ')[0]"></span>
+                                <h3 class="truncate text-lg font-bold text-gray-950">Modifica task</h3>
+                            </div>
+                            <p class="mt-1 text-sm text-gray-500">Le modifiche si salvano automaticamente.</p>
                         </div>
-                        <button type="button" class="icon-btn h-9 w-9" aria-label="Chiudi" @click="closeProjectTaskDrawer">
-                            <X class="h-4 w-4" :stroke-width="1.8" />
-                        </button>
+                        <div class="flex shrink-0 items-center gap-2">
+                            <button type="button" class="btn btn-outline status-action-button" :disabled="projectTaskDrawerForm.status !== 'done' && blockedDependencyCount(projectTaskDrawerTask) > 0" @click="toggleProjectTaskComplete">
+                                <Check class="h-4 w-4" :stroke-width="1.7" />
+                                {{ projectTaskDrawerForm.status === 'done' ? 'Riapri' : 'Completa' }}
+                            </button>
+                            <button type="button" class="icon-btn h-10 w-10" title="Azioni task" @click.stop="toggleProjectTaskActionMenu($event)">
+                                <MoreHorizontal class="h-5 w-5" :stroke-width="1.8" />
+                            </button>
+                            <Teleport to="body">
+                                <div v-if="projectTaskActionMenuOpen" class="fixed inset-0 z-[7600] bg-transparent" @click.self="projectTaskActionMenuOpen = false">
+                                    <div class="app-popover field-dropdown-menu fixed w-56 p-2" :style="projectTaskActionMenuStyle" @click.stop>
+                                        <button type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50" @click="copyProjectDrawerTaskLink">
+                                            <Copy class="h-4 w-4" :stroke-width="1.7" />
+                                            Copia link
+                                        </button>
+                                        <button type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50" @click="duplicateProjectDrawerTask">
+                                            <Copy class="h-4 w-4" :stroke-width="1.7" />
+                                            Duplica
+                                        </button>
+                                        <button type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50" @click="printProjectDrawerTask">
+                                            <Printer class="h-4 w-4" :stroke-width="1.7" />
+                                            Stampa
+                                        </button>
+                                        <button type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50" @click="removeProjectDrawerTask">
+                                            <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                            Elimina
+                                        </button>
+                                    </div>
+                                </div>
+                            </Teleport>
+                            <button type="button" class="icon-btn" @click="closeProjectTaskDrawer">
+                                <X class="h-4 w-4" :stroke-width="1.8" />
+                            </button>
+                        </div>
                     </header>
                     <div class="flex-1 overflow-y-auto px-5 py-5">
                         <div class="space-y-5">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Titolo</label>
                                 <input v-model="projectTaskDrawerForm.title" class="form-control" required />
+                            </div>
+                            <div class="grid gap-2 sm:grid-cols-3">
+                                <button
+                                    v-for="option in [
+                                        { value: 'project', label: 'Task' },
+                                        { value: 'ongoing', label: 'Continuativa' },
+                                        { value: 'meeting', label: 'Meeting' },
+                                    ]"
+                                    :key="`project-drawer-type-${option.value}`"
+                                    type="button"
+                                    :class="[
+                                        'rounded-[var(--radius-sm)] border px-3 py-2 text-left text-sm font-semibold transition',
+                                        projectTaskDrawerForm.task_type === option.value ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50',
+                                    ]"
+                                    @click="toggleProjectTaskType(option.value)"
+                                >
+                                    {{ option.label }}
+                                </button>
                             </div>
                             <div class="grid gap-4 sm:grid-cols-2">
                                 <div>
@@ -4848,33 +5153,196 @@ onUnmounted(() => {
                                     <label class="block text-sm font-medium text-gray-700">Scadenza</label>
                                     <AppDateInput v-model="projectTaskDrawerForm.due_date" @change="saveProjectTaskDrawer(0)" />
                                 </div>
-                                <div>
+                                <div v-if="projectTaskDrawerForm.task_type === 'meeting'">
                                     <label class="block text-sm font-medium text-gray-700">Ora</label>
                                     <AppTimeInput v-model="projectTaskDrawerForm.due_time" @change="saveProjectTaskDrawer(0)" />
                                 </div>
+                                <div v-if="projectTaskDrawerForm.task_type === 'meeting'">
+                                    <label class="block text-sm font-medium text-gray-700">Luogo / link</label>
+                                    <input v-model="projectTaskDrawerForm.location" class="form-control" placeholder="Sala riunioni o link meeting" />
+                                </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700">Luogo</label>
-                                    <input v-model="projectTaskDrawerForm.location" class="form-control" />
+                                    <label class="block text-sm font-medium text-gray-700">Cliente</label>
+                                    <AppSelect v-model="projectTaskDrawerForm.client_id" :options="namedOptions(related.taskClients, { value: '', label: 'Nessun cliente' })" searchable @change="saveProjectTaskDrawer(0)" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Servizio</label>
+                                    <AppSelect v-model="projectTaskDrawerForm.service_id" :options="namedOptions(related.taskServices, { value: '', label: 'Nessun servizio' })" searchable @change="saveProjectTaskDrawer(0)" />
                                 </div>
                             </div>
+                            <div v-if="projectTaskDrawerForm.task_type !== 'meeting'" class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/80 p-4">
+                                <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
+                                    <input v-model="projectTaskDrawerForm.recurring_enabled" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" @change="saveProjectTaskDrawer(0)" />
+                                    Ricorrente
+                                </label>
+                                <div v-if="projectTaskDrawerForm.recurring_enabled" class="mt-3 grid gap-3 md:grid-cols-2">
+                                    <input v-model="projectTaskDrawerForm.recurring_interval_value" type="number" min="1" class="form-control" @input="saveProjectTaskDrawer()" />
+                                    <AppSelect v-model="projectTaskDrawerForm.recurring_interval_unit" :options="recurrenceUnitOptions" @change="saveProjectTaskDrawer(0)" />
+                                    <AppSelect v-model="projectTaskDrawerForm.recurring_mode" :options="recurrenceModeOptions" @change="saveProjectTaskDrawer(0)" />
+                                    <input v-if="projectTaskDrawerForm.recurring_interval_unit === 'week'" v-model="projectTaskDrawerForm.recurring_weekday" type="number" min="1" max="7" class="form-control" @input="saveProjectTaskDrawer()" />
+                                    <input v-if="projectTaskDrawerForm.recurring_interval_unit === 'month' && projectTaskDrawerForm.recurring_mode === 'fixed'" v-model="projectTaskDrawerForm.recurring_month_day" type="number" min="1" max="31" class="form-control" @input="saveProjectTaskDrawer()" />
+                                </div>
+                            </div>
+                            <div class="grid gap-4 md:grid-cols-2">
+                                <div>
+                                    <div class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">{{ projectTaskDrawerForm.task_type === 'meeting' ? 'Partecipanti' : 'Assegnatari' }}</div>
+                                    <div class="people-avatar-picker max-h-36">
+                                        <button v-for="user in related.users || []" :key="`project-drawer-assignee-${user.id}`" type="button" :class="personAvatarClass((projectTaskDrawerForm.assignee_ids || []).includes(user.id))" @click="toggleProjectDrawerTaskPerson('assignee_ids', user.id)">
+                                            <UserAvatar :user="user" size="md" />
+                                        </button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Follower</div>
+                                    <div class="people-avatar-picker max-h-36">
+                                        <button v-for="user in related.users || []" :key="`project-drawer-follower-${user.id}`" type="button" :class="personAvatarClass((projectTaskDrawerForm.follower_ids || []).includes(user.id))" @click="toggleProjectDrawerTaskPerson('follower_ids', user.id)">
+                                            <UserAvatar :user="user" size="md" />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <section class="content-card rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
+                                <div class="mb-3 flex items-center justify-between gap-3">
+                                    <div>
+                                        <h4 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Dipendenze</h4>
+                                        <p class="mt-1 text-xs text-gray-500">Questa task resta bloccata finché le dipendenze non sono completate.</p>
+                                    </div>
+                                    <span v-if="blockedDependencyCount(projectTaskDrawerTask)" class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">
+                                        <AlertTriangle class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                        Bloccata
+                                    </span>
+                                </div>
+                                <div class="grid gap-2 md:grid-cols-[170px_minmax(0,1fr)]">
+                                    <AppSelect v-model="projectDrawerDependencyDirection" :options="taskDependencyDirectionOptions" placeholder="Tipo relazione" />
+                                    <AppSelect
+                                        v-model="projectDrawerDependencyToAdd"
+                                        :options="projectDrawerDependencyOptions(projectDrawerDependencyDirection)"
+                                        :placeholder="projectDrawerDependencyDirection === 'blocks' ? 'Scegli task bloccata' : 'Scegli task bloccante'"
+                                        searchable
+                                        @change="addProjectDrawerDependency(projectDrawerDependencyToAdd, projectDrawerDependencyDirection)"
+                                    />
+                                </div>
+                                <div class="mt-3 flex flex-wrap gap-2">
+                                    <span
+                                        v-for="dependency in selectedProjectDrawerDependencies()"
+                                        :key="`project-drawer-dep-${dependency.id}`"
+                                        :class="['inline-flex max-w-full items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold', dependency.status === 'done' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700']"
+                                    >
+                                        <span class="truncate">{{ dependency.title }}</span>
+                                        <button type="button" class="text-current opacity-60 transition hover:opacity-100" title="Rimuovi dipendenza" @click="removeProjectDrawerDependency(dependency.id)">
+                                            <X class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                        </button>
+                                    </span>
+                                    <span v-if="!selectedProjectDrawerDependencies().length" class="text-xs text-gray-500">Nessuna dipendenza.</span>
+                                </div>
+                                <div v-if="selectedProjectDrawerDependents().length" class="mt-3 border-t border-gray-100 pt-3">
+                                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Blocca</p>
+                                    <div class="mt-2 flex flex-wrap gap-2">
+                                        <span
+                                            v-for="dependent in selectedProjectDrawerDependents()"
+                                            :key="`project-drawer-blocks-${dependent.id}`"
+                                            :class="['inline-flex max-w-full items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold', dependent.status === 'done' ? 'bg-emerald-50 text-emerald-700' : 'bg-white text-gray-600']"
+                                        >
+                                            <span class="truncate">{{ dependent.title }}</span>
+                                            <button type="button" class="text-current opacity-60 transition hover:opacity-100" title="Rimuovi relazione" @click="removeProjectDrawerDependent(dependent.id)">
+                                                <X class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                            </button>
+                                        </span>
+                                    </div>
+                                </div>
+                            </section>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Descrizione</label>
-                                <div class="toolbar mt-2">
-                                    <button type="button" class="toolbar-btn" @click="runProjectTaskDrawerCommand('bold')"><Bold class="h-4 w-4" /></button>
-                                    <button type="button" class="toolbar-btn" @click="runProjectTaskDrawerCommand('italic')"><Italic class="h-4 w-4" /></button>
-                                    <button type="button" class="toolbar-btn" @click="runProjectTaskDrawerCommand('underline')"><Underline class="h-4 w-4" /></button>
-                                    <button type="button" class="toolbar-btn" @click="runProjectTaskDrawerCommand('insertUnorderedList')"><List class="h-4 w-4" /></button>
-                                    <button type="button" class="toolbar-btn" @click="runProjectTaskDrawerCommand('insertOrderedList')"><ListOrdered class="h-4 w-4" /></button>
+                                <div class="mt-1 overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white/90 shadow-inner">
+                                    <div class="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50/80 p-2">
+                                        <button type="button" class="icon-btn h-8 w-8" title="Grassetto" @click="runProjectTaskDrawerCommand('bold')"><Bold class="h-4 w-4" :stroke-width="1.7" /></button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Corsivo" @click="runProjectTaskDrawerCommand('italic')"><Italic class="h-4 w-4" :stroke-width="1.7" /></button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Sottolineato" @click="runProjectTaskDrawerCommand('underline')"><Underline class="h-4 w-4" :stroke-width="1.7" /></button>
+                                        <span class="mx-1 h-5 w-px bg-gray-200"></span>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Titolo" @click="runProjectTaskDrawerCommand('formatBlock', 'h3')"><Heading3 class="h-4 w-4" :stroke-width="1.7" /></button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Elenco puntato" @click="runProjectTaskDrawerCommand('insertUnorderedList')"><List class="h-4 w-4" :stroke-width="1.7" /></button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Elenco numerato" @click="runProjectTaskDrawerCommand('insertOrderedList')"><ListOrdered class="h-4 w-4" :stroke-width="1.7" /></button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Citazione" @click="runProjectTaskDrawerCommand('formatBlock', 'blockquote')"><Quote class="h-4 w-4" :stroke-width="1.7" /></button>
+                                    </div>
+                                    <div
+                                        ref="projectTaskDrawerDescriptionEditor"
+                                        contenteditable="true"
+                                        class="min-h-[150px] px-4 py-3 text-sm leading-6 text-gray-800 outline-none empty:before:text-gray-400 empty:before:content-[attr(data-placeholder)] wysiwyg-content"
+                                        data-placeholder="Aggiungi una descrizione..."
+                                        @input="updateProjectTaskDrawerDescription(); saveProjectTaskDrawer()"
+                                        @blur="saveProjectTaskDrawer(0)"
+                                    ></div>
                                 </div>
-                                <div
-                                    ref="projectTaskDrawerDescriptionEditor"
-                                    contenteditable="true"
-                                    class="form-control mt-2 min-h-40 px-4 py-3 wysiwyg-content"
-                                    data-placeholder="Aggiungi una descrizione..."
-                                    @input="updateProjectTaskDrawerDescription(); saveProjectTaskDrawer()"
-                                    @blur="saveProjectTaskDrawer(0)"
-                                ></div>
                             </div>
+                            <section class="content-card rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
+                                <div class="mb-3 flex items-center justify-between gap-3">
+                                    <h4 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Sottoattività</h4>
+                                    <span class="text-xs text-gray-500">{{ projectTaskDrawerTask.subtasks?.length || 0 }}</span>
+                                </div>
+                                <form class="mb-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_80px_auto]" @submit.prevent="addProjectDrawerSubtask">
+                                    <input v-model="projectDrawerSubtaskForm.title" class="subtask-line-control font-medium" placeholder="Nuova sottoattività..." />
+                                    <AppDateInput v-model="projectDrawerSubtaskForm.due_date" variant="token" :label="shortDateIt(projectDrawerSubtaskForm.due_date)" placeholder="Data" />
+                                    <button type="submit" class="btn btn-outline px-3 py-1.5 text-xs">Aggiungi</button>
+                                </form>
+                                <div class="space-y-1">
+                                    <div v-for="subtask in projectTaskDrawerTask.subtasks || []" :key="`project-drawer-subtask-${subtask.id}`" class="flex items-center gap-3 border-t border-gray-100 py-2 text-sm">
+                                        <span :class="['h-2 w-2 rounded-full', subtask.status === 'done' ? 'bg-emerald-400' : 'bg-gray-300']"></span>
+                                        <span class="min-w-0 flex-1 truncate font-medium text-gray-800">{{ subtask.title }}</span>
+                                        <span class="text-xs text-gray-500">{{ subtask.due_date ? shortDateIt(subtask.due_date) : '' }}</span>
+                                        <Link :href="route('tasks.show', subtask.id)" class="icon-btn h-8 w-8" title="Apri sottoattività">
+                                            <ExternalLink class="h-4 w-4" :stroke-width="1.7" />
+                                        </Link>
+                                    </div>
+                                    <p v-if="!projectTaskDrawerTask.subtasks?.length" class="text-sm text-gray-500">Nessuna sottoattività.</p>
+                                </div>
+                            </section>
+                            <section class="content-card rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
+                                <div class="mb-4 flex items-center gap-4 border-b border-gray-100 pb-3">
+                                    <button type="button" :class="['text-sm font-semibold uppercase tracking-wide transition', projectTaskDrawerFeedTab === 'comments' ? 'text-gray-900' : 'text-gray-400 hover:text-gray-700']" @click="projectTaskDrawerFeedTab = 'comments'">
+                                        Commenti
+                                    </button>
+                                    <button type="button" :class="['text-sm font-semibold uppercase tracking-wide transition', projectTaskDrawerFeedTab === 'activity' ? 'text-gray-900' : 'text-gray-400 hover:text-gray-700']" @click="projectTaskDrawerFeedTab = 'activity'">
+                                        Attività
+                                    </button>
+                                </div>
+                                <div v-if="projectTaskDrawerFeedTab === 'comments'" class="space-y-3">
+                                    <form class="space-y-2" @submit.prevent="addProjectDrawerComment">
+                                        <div
+                                            ref="projectDrawerCommentEditor"
+                                            contenteditable="true"
+                                            class="form-control min-h-24 px-4 py-3 wysiwyg-content bg-white"
+                                            data-placeholder="Scrivi un commento..."
+                                            @input="updateProjectDrawerCommentFromEditor"
+                                        ></div>
+                                        <div class="flex justify-end">
+                                            <button type="submit" class="btn btn-primary px-4 py-2 text-sm">Invia</button>
+                                        </div>
+                                    </form>
+                                    <div v-for="comment in visibleProjectDrawerComments()" :key="`project-drawer-comment-${comment.id}`" class="rounded-[var(--radius-sm)] border border-gray-100 bg-white px-3 py-3 text-sm">
+                                        <div class="mb-2 text-xs font-medium text-gray-500">{{ comment.user_name || 'Utente' }} · {{ dateTimeIt(comment.created_at) }}</div>
+                                        <div class="wysiwyg-content text-sm text-gray-700" v-html="comment.content"></div>
+                                    </div>
+                                    <button v-if="!projectDrawerShowAllComments && projectDrawerComments().length > 3" type="button" class="text-sm font-semibold text-indigo-600" @click="projectDrawerShowAllComments = true">
+                                        Mostra i {{ projectDrawerComments().length - 3 }} commenti precedenti
+                                    </button>
+                                    <p v-if="!projectDrawerComments().length" class="text-sm text-gray-500">Nessun commento.</p>
+                                </div>
+                                <div v-else class="space-y-3">
+                                    <div v-for="activity in visibleProjectDrawerActivity()" :key="`project-drawer-activity-${activity.id}`" class="rounded-[var(--radius-sm)] border border-gray-100 bg-white px-3 py-3 text-sm">
+                                        <div class="flex items-start gap-3">
+                                            <span class="mt-1 h-2 w-2 shrink-0 rounded-full bg-indigo-300"></span>
+                                            <div class="min-w-0">
+                                                <div class="font-medium leading-6 text-gray-700">{{ activityText(activity) }}</div>
+                                                <div class="text-xs text-gray-400">{{ dateTimeIt(activity.created_at) }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button v-if="!projectDrawerShowAllActivity && projectDrawerActivity().length > 3" type="button" class="text-sm font-semibold text-indigo-600" @click="projectDrawerShowAllActivity = true">
+                                        Mostra i {{ projectDrawerActivity().length - 3 }} aggiornamenti precedenti
+                                    </button>
+                                    <p v-if="!projectDrawerActivity().length" class="text-sm text-gray-500">Nessuna attività registrata.</p>
+                                </div>
+                            </section>
                         </div>
                     </div>
                     <footer class="flex items-center justify-between gap-3 border-t border-gray-100 px-5 py-4">
