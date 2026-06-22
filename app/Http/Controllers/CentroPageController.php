@@ -1071,6 +1071,7 @@ class CentroPageController extends Controller
 
         $payload = $this->validatedPayload($request, $section);
         $taskPeople = $section === 'tasks' ? $this->extractTaskPeoplePayload($payload) : null;
+        $taskDependencies = $section === 'tasks' ? $this->extractTaskDependencyPayload($payload) : null;
         $projectFollowers = $section === 'projects' ? $this->extractProjectFollowersPayload($payload) : null;
         $oldTask = $section === 'tasks' ? DB::table('tasks')->where('id', $id)->first() : null;
         $oldProject = $section === 'projects' ? DB::table('projects')->where('id', $id)->first() : null;
@@ -1094,6 +1095,10 @@ class CentroPageController extends Controller
             $this->syncTaskPeopleLists($id, $taskPeople['assignees'], $taskPeople['followers']);
         }
 
+        if ($section === 'tasks' && $taskDependencies !== null) {
+            $this->syncTaskDependencyEdges($id, $taskDependencies['dependencies'], $taskDependencies['dependents']);
+        }
+
         if ($section === 'tasks' && $oldTask) {
             $changedFields = $this->changedTaskFields($oldTask, $payload);
             $this->recordTaskFieldChanges($id, $request->user()->id, $oldTask, $payload);
@@ -1102,7 +1107,7 @@ class CentroPageController extends Controller
                 $this->recordTaskPeopleChanges($id, $request->user()->id, $oldTaskPeople, $taskPeople);
             }
 
-            if ($changedFields || $taskPeople !== null) {
+            if ($changedFields || $taskPeople !== null || $taskDependencies !== null) {
                 $details = $changedFields ? 'campi: '.implode(', ', array_map(fn ($field) => $this->taskFieldLabel($field), $changedFields)) : 'persone coinvolte';
                 $this->notifyTaskPeople(
                     $id,

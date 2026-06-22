@@ -2204,8 +2204,6 @@ function projectTaskDrawerPayload() {
         recurring_month_day: projectTaskDrawerForm.recurring_enabled ? projectTaskDrawerForm.recurring_month_day : '',
         assignee_ids: [...(projectTaskDrawerForm.assignee_ids || [])],
         follower_ids: [...(projectTaskDrawerForm.follower_ids || [])],
-        dependency_ids: [...(projectTaskDrawerForm.dependency_ids || [])],
-        dependent_ids: [...(projectTaskDrawerForm.dependent_ids || [])],
     };
 }
 
