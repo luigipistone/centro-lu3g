@@ -305,12 +305,16 @@ const defaults = computed(() => {
     if (props.section === 'tasks') {
         base.assignee_ids = [];
         base.follower_ids = [];
+        base.dependency_ids = [];
+        base.dependent_ids = [];
     }
 
     return base;
 });
 
 const form = useForm({ ...defaults.value });
+const formDependencyToAdd = ref('');
+const formDependencyDirection = ref('blocked_by');
 const calendarTaskForm = useForm({
     id: '',
     title: '',
@@ -551,6 +555,56 @@ function taskDependencySelectOptions(currentTaskId = null) {
             value: task.id,
             label: taskDependencyLabel(task),
         }));
+}
+
+function formTaskDependencySelectOptions() {
+    const selected = formDependencyDirection.value === 'blocks' ? (form.dependent_ids || []) : (form.dependency_ids || []);
+    const opposite = formDependencyDirection.value === 'blocks' ? (form.dependency_ids || []) : (form.dependent_ids || []);
+
+    return (props.taskDependencyOptions || [])
+        .filter((task) => task.status !== 'done' && !selected.includes(task.id) && !opposite.includes(task.id))
+        .map((task) => ({
+            value: task.id,
+            label: taskDependencyLabel(task),
+        }));
+}
+
+function selectedFormDependencies() {
+    const selected = form.dependency_ids || [];
+    const byId = new Map((props.taskDependencyOptions || []).map((task) => [task.id, task]));
+
+    return selected.map((id) => byId.get(id)).filter(Boolean);
+}
+
+function selectedFormDependents() {
+    const selected = form.dependent_ids || [];
+    const byId = new Map((props.taskDependencyOptions || []).map((task) => [task.id, task]));
+
+    return selected.map((id) => byId.get(id)).filter(Boolean);
+}
+
+function addFormTaskDependency(taskId) {
+    if (!taskId) return;
+
+    if (formDependencyDirection.value === 'blocks') {
+        if ((form.dependent_ids || []).includes(taskId) || (form.dependency_ids || []).includes(taskId)) return;
+
+        form.dependent_ids = [...(form.dependent_ids || []), taskId];
+    } else {
+        if ((form.dependency_ids || []).includes(taskId) || (form.dependent_ids || []).includes(taskId)) return;
+
+        form.dependency_ids = [...(form.dependency_ids || []), taskId];
+    }
+
+    formDependencyToAdd.value = '';
+}
+
+function removeFormTaskDependency(taskId) {
+    form.dependency_ids = (form.dependency_ids || []).filter((id) => id !== taskId);
+}
+
+function removeFormTaskDependent(taskId) {
+    form.dependent_ids = (form.dependent_ids || []).filter((id) => id !== taskId);
 }
 
 function selectedCalendarDependencies() {
@@ -1074,6 +1128,8 @@ function openCreate(patch = {}) {
     form.defaults({ ...defaults.value });
     form.reset();
     Object.assign(form, { ...defaults.value, ...patch });
+    formDependencyToAdd.value = '';
+    formDependencyDirection.value = 'blocked_by';
     formOpen.value = true;
     taskPeopleMenuOpen.value = null;
     taskSearchSelectOpen.value = null;
@@ -1089,6 +1145,8 @@ function resetForm() {
     form.defaults({ ...defaults.value });
     form.reset();
     Object.assign(form, { ...defaults.value });
+    formDependencyToAdd.value = '';
+    formDependencyDirection.value = 'blocked_by';
     refreshTaskDescriptionEditor();
 }
 
@@ -1129,6 +1187,10 @@ function editRow(row) {
     if (props.section === 'tasks') {
         form.assignee_ids = [...(row.assignee_ids || [])];
         form.follower_ids = [...(row.follower_ids || [])];
+        form.dependency_ids = [];
+        form.dependent_ids = [];
+        formDependencyToAdd.value = '';
+        formDependencyDirection.value = 'blocked_by';
         refreshTaskDescriptionEditor();
     }
 }
@@ -3011,6 +3073,62 @@ function calendarDayStyle(sectionMonth, cell) {
                                 </div>
                             </div>
                         </div>
+
+                        <section v-if="section === 'tasks' && field.name === 'recurring_enabled' && !editing" class="rounded-md border border-gray-100 bg-gray-50/90 p-3 md:col-span-6">
+                            <div class="mb-3">
+                                <h4 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Dipendenze</h4>
+                                <p class="mt-1 text-xs text-gray-500">Imposta se la nuova task è bloccata da altre task o se blocca task già aperte.</p>
+                            </div>
+                            <div class="grid gap-2 md:grid-cols-[170px_minmax(0,1fr)]">
+                                <AppSelect
+                                    v-model="formDependencyDirection"
+                                    :options="taskDependencyDirectionOptions"
+                                    placeholder="Tipo relazione"
+                                />
+                                <AppSelect
+                                    v-model="formDependencyToAdd"
+                                    :options="formTaskDependencySelectOptions()"
+                                    :placeholder="formDependencyDirection === 'blocks' ? 'Scegli task bloccata' : 'Scegli task bloccante'"
+                                    searchable
+                                    @change="addFormTaskDependency"
+                                />
+                            </div>
+                            <div class="mt-3 grid gap-3 md:grid-cols-2">
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Bloccata da</p>
+                                    <div class="mt-2 flex flex-wrap gap-2">
+                                        <span
+                                            v-for="dependency in selectedFormDependencies()"
+                                            :key="`form-dependency-${dependency.id}`"
+                                            class="inline-flex max-w-full items-center gap-2 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700"
+                                        >
+                                            <span class="truncate">{{ dependency.title }}</span>
+                                            <button type="button" class="text-current opacity-60 transition hover:opacity-100" title="Rimuovi dipendenza" @click="removeFormTaskDependency(dependency.id)">
+                                                <X class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                            </button>
+                                        </span>
+                                        <span v-if="!selectedFormDependencies().length" class="text-xs text-gray-500">Nessuna task.</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Blocca</p>
+                                    <div class="mt-2 flex flex-wrap gap-2">
+                                        <span
+                                            v-for="dependent in selectedFormDependents()"
+                                            :key="`form-dependent-${dependent.id}`"
+                                            class="inline-flex max-w-full items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-gray-600"
+                                        >
+                                            <span class="truncate">{{ dependent.title }}</span>
+                                            <button type="button" class="text-current opacity-60 transition hover:opacity-100" title="Rimuovi relazione" @click="removeFormTaskDependent(dependent.id)">
+                                                <X class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                            </button>
+                                        </span>
+                                        <span v-if="!selectedFormDependents().length" class="text-xs text-gray-500">Nessuna task.</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div v-if="form.errors.dependencies" class="mt-2 text-sm text-red-600">{{ form.errors.dependencies }}</div>
+                        </section>
 
                         <div
                             v-show="shouldShowField(field)"

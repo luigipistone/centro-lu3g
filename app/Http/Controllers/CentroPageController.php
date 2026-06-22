@@ -1001,6 +1001,22 @@ class CentroPageController extends Controller
 
         $payload = $this->validatedPayload($request, $section);
         $taskPeople = $section === 'tasks' ? $this->extractTaskPeoplePayload($payload) : null;
+        $taskDependencies = $section === 'tasks' ? $this->extractTaskDependencyPayload($payload) : null;
+
+        if ($taskDependencies) {
+            $dependencyIds = collect($taskDependencies['dependencies']);
+            $dependentIds = collect($taskDependencies['dependents']);
+
+            if ($dependencyIds->intersect($dependentIds)->isNotEmpty()) {
+                return back()->withErrors(['dependencies' => 'Una task non può essere sia bloccante sia bloccata dalla stessa task.'])->withInput();
+            }
+
+            $cyclicPair = $dependencyIds->first(fn ($dependencyId) => $dependentIds->first(fn ($dependentId) => $this->taskDependsOn($dependencyId, $dependentId)));
+            if ($cyclicPair) {
+                return back()->withErrors(['dependencies' => 'Questa relazione creerebbe un ciclo tra task.'])->withInput();
+            }
+        }
+
         $payload['id'] = (string) str()->uuid();
         $payload['created_at'] = now();
         $payload['updated_at'] = now();
@@ -1013,6 +1029,9 @@ class CentroPageController extends Controller
 
         if ($section === 'tasks') {
             $this->syncTaskPeopleLists($payload['id'], $taskPeople['assignees'] ?? [], $taskPeople['followers'] ?? []);
+            if ($taskDependencies) {
+                $this->syncTaskDependencyEdges($payload['id'], $taskDependencies['dependencies'], $taskDependencies['dependents']);
+            }
             $this->notifyTaskPeople(
                 $payload['id'],
                 $request->user()->id,
@@ -1670,6 +1689,10 @@ class CentroPageController extends Controller
                 'assignee_ids.*' => ['uuid', 'exists:users,id'],
                 'follower_ids' => ['nullable', 'array'],
                 'follower_ids.*' => ['uuid', 'exists:users,id'],
+                'dependency_ids' => ['nullable', 'array'],
+                'dependency_ids.*' => ['uuid', 'exists:tasks,id'],
+                'dependent_ids' => ['nullable', 'array'],
+                'dependent_ids.*' => ['uuid', 'exists:tasks,id'],
                 'description' => ['nullable', 'string'],
             ],
             'settings' => [
@@ -1741,6 +1764,26 @@ class CentroPageController extends Controller
         unset($payload['assignee_ids'], $payload['follower_ids']);
 
         return $people;
+    }
+
+    private function extractTaskDependencyPayload(array &$payload): ?array
+    {
+        $hasDependencies = array_key_exists('dependency_ids', $payload);
+        $hasDependents = array_key_exists('dependent_ids', $payload);
+
+        if (! $hasDependencies && ! $hasDependents) {
+            return null;
+        }
+
+        $dependencies = array_values(array_unique($payload['dependency_ids'] ?? []));
+        $dependents = array_values(array_unique($payload['dependent_ids'] ?? []));
+
+        unset($payload['dependency_ids'], $payload['dependent_ids']);
+
+        return [
+            'dependencies' => $dependencies,
+            'dependents' => $dependents,
+        ];
     }
 
     private function extractProjectFollowersPayload(array &$payload): ?array
@@ -3057,34 +3100,7 @@ class CentroPageController extends Controller
                 ->all()
             : [];
 
-        DB::transaction(function () use ($id, $dependencyIds, $dependentIds, $syncDependents) {
-            DB::table('task_dependencies')->where('task_id', $id)->delete();
-            if ($syncDependents) {
-                DB::table('task_dependencies')->where('depends_on_task_id', $id)->delete();
-            }
-
-            foreach ($dependencyIds as $dependencyId) {
-                DB::table('task_dependencies')->insert([
-                    'id' => (string) str()->uuid(),
-                    'task_id' => $id,
-                    'depends_on_task_id' => $dependencyId,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            }
-
-            if ($syncDependents) {
-                foreach ($dependentIds as $dependentId) {
-                    DB::table('task_dependencies')->insert([
-                        'id' => (string) str()->uuid(),
-                        'task_id' => $dependentId,
-                        'depends_on_task_id' => $id,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
-                }
-            }
-        });
+        $this->syncTaskDependencyEdges($id, $dependencyIds->all(), $dependentIds->all(), $syncDependents);
 
         $newDependencyIds = $dependencyIds->sort()->values()->all();
         $newDependentIds = $syncDependents ? $dependentIds->sort()->values()->all() : [];
@@ -3107,6 +3123,40 @@ class CentroPageController extends Controller
         }
 
         return back()->with('status', 'Dipendenze aggiornate.');
+    }
+
+    private function syncTaskDependencyEdges(string $taskId, array $dependencyIds, array $dependentIds = [], bool $syncDependents = true): void
+    {
+        DB::transaction(function () use ($taskId, $dependencyIds, $dependentIds, $syncDependents) {
+            DB::table('task_dependencies')->where('task_id', $taskId)->delete();
+            if ($syncDependents) {
+                DB::table('task_dependencies')->where('depends_on_task_id', $taskId)->delete();
+            }
+
+            foreach ($dependencyIds as $dependencyId) {
+                DB::table('task_dependencies')->insert([
+                    'id' => (string) str()->uuid(),
+                    'task_id' => $taskId,
+                    'depends_on_task_id' => $dependencyId,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            if (! $syncDependents) {
+                return;
+            }
+
+            foreach ($dependentIds as $dependentId) {
+                DB::table('task_dependencies')->insert([
+                    'id' => (string) str()->uuid(),
+                    'task_id' => $dependentId,
+                    'depends_on_task_id' => $taskId,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        });
     }
 
     public function storeClientContact(Request $request, string $id): RedirectResponse

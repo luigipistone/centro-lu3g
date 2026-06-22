@@ -658,4 +658,43 @@ class TaskWorkflowTest extends TestCase
             ->patch("/tasks/{$blockedTaskId}/status", ['status' => 'done'])
             ->assertSessionHasErrors(['status']);
     }
+
+    public function test_task_creation_can_create_blocking_dependency(): void
+    {
+        $user = User::factory()->create();
+        $blockedTaskId = (string) Str::uuid();
+
+        DB::table('tasks')->insert([
+            'id' => $blockedTaskId,
+            'title' => 'Mettere online',
+            'priority' => 'medium',
+            'status' => 'todo',
+            'task_type' => 'project',
+            'created_by' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->post('/tasks', [
+                'title' => 'Completare approvazione',
+                'task_type' => 'project',
+                'status' => 'todo',
+                'priority' => 'medium',
+                'recurring_enabled' => false,
+                'dependent_ids' => [$blockedTaskId],
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $createdTaskId = DB::table('tasks')
+            ->where('title', 'Completare approvazione')
+            ->value('id');
+
+        $this->assertDatabaseHas('task_dependencies', [
+            'task_id' => $blockedTaskId,
+            'depends_on_task_id' => $createdTaskId,
+        ]);
+    }
 }
