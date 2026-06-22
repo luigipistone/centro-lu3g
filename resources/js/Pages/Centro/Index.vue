@@ -2905,9 +2905,9 @@ function taskSpanRole(row, date) {
 }
 
 function taskSpanClass(task) {
-    if (task.spanRole === 'start') return 'rounded-l-xl rounded-r-none border-r-0';
-    if (task.spanRole === 'middle') return 'rounded-none border-x-0 opacity-80';
-    if (task.spanRole === 'end') return 'rounded-l-none rounded-r-xl border-l-0';
+    if (task.spanRole === 'start') return 'z-10 -mr-[9px] rounded-l-xl rounded-r-none border-r-0 pr-4';
+    if (task.spanRole === 'middle') return 'z-10 -mx-[9px] rounded-none border-x-0 px-4 opacity-80';
+    if (task.spanRole === 'end') return 'z-10 -ml-[9px] rounded-l-none rounded-r-xl border-l-0 pl-4';
     return 'rounded-xl';
 }
 
