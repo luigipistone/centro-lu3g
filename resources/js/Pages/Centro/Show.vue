@@ -602,6 +602,7 @@ const projectTaskActionMenuStyle = ref({});
 const draggedProjectTaskId = ref(null);
 const projectTaskDropTarget = ref(null);
 const projectTaskDropPlacement = ref(null);
+const projectTaskDropSectionId = ref(null);
 let projectTaskDrawerAutosaveTimer = null;
 const projectColors = ['#2563eb', '#7c3aed', '#db2777', '#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#475569'];
 const userForm = useForm({
@@ -2129,7 +2130,11 @@ function dropdownMenuStyleFromEvent(event, width = 220) {
     if (!rect) return { right: '1.5rem', top: '4.5rem' };
 
     const left = Math.min(Math.max(12, rect.right - width), window.innerWidth - width - 12);
-    const top = Math.min(rect.bottom + 8, window.innerHeight - 12);
+    const estimatedHeight = 160;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top = spaceBelow >= estimatedHeight + 16
+        ? rect.bottom + 8
+        : Math.max(12, rect.top - estimatedHeight - 8);
 
     return {
         left: `${left}px`,
@@ -2588,6 +2593,25 @@ function startProjectTaskDrag(task) {
     draggedProjectTaskId.value = task.id;
 }
 
+function dragOverProjectSection(section, clearTaskTarget = false) {
+    if (!draggedProjectTaskId.value) return;
+    projectTaskDropSectionId.value = section.id;
+    if (clearTaskTarget) {
+        projectTaskDropTarget.value = null;
+    }
+    if (!projectTaskDropTarget.value) {
+        projectTaskDropPlacement.value = 'after';
+    }
+}
+
+function leaveProjectTaskSection(section, event) {
+    if (!draggedProjectTaskId.value) return;
+    if (event.currentTarget?.contains?.(event.relatedTarget)) return;
+    if (projectTaskDropSectionId.value === section.id) {
+        projectTaskDropSectionId.value = null;
+    }
+}
+
 function dragOverProjectTask(task, event) {
     if (!draggedProjectTaskId.value || draggedProjectTaskId.value === task.id) return;
     const rect = event.currentTarget.getBoundingClientRect();
@@ -2601,6 +2625,7 @@ function dropProjectTask(section, targetTask = null) {
     draggedProjectTaskId.value = null;
     projectTaskDropTarget.value = null;
     projectTaskDropPlacement.value = null;
+    projectTaskDropSectionId.value = null;
     if (!fromId) return;
 
     const current = projectTasksForSection(section).filter((task) => task.id !== fromId);
@@ -2630,6 +2655,7 @@ function endProjectTaskDrag() {
     draggedProjectTaskId.value = null;
     projectTaskDropTarget.value = null;
     projectTaskDropPlacement.value = null;
+    projectTaskDropSectionId.value = null;
 }
 
 function addProjectSection() {
@@ -4020,7 +4046,14 @@ onUnmounted(() => {
                                 <span>Stato</span>
                                 <span>Priorità</span>
                             </div>
-                            <div v-for="sectionRow in projectTaskSections()" :key="sectionRow.id" class="border-b border-gray-100 last:border-b-0">
+                            <div
+                                v-for="sectionRow in projectTaskSections()"
+                                :key="sectionRow.id"
+                                :class="['border-b border-gray-100 transition last:border-b-0', draggedProjectTaskId && projectTaskDropSectionId === sectionRow.id ? 'bg-indigo-50/35 ring-1 ring-inset ring-indigo-200' : '']"
+                                @dragover.prevent="dragOverProjectSection(sectionRow)"
+                                @dragleave="leaveProjectTaskSection(sectionRow, $event)"
+                                @drop.prevent="dropProjectTask(sectionRow)"
+                            >
                                 <div class="group/project-section flex w-full items-center gap-2 px-3 py-3 text-left text-sm font-semibold text-gray-800">
                                     <button type="button" class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 transition hover:bg-gray-50 hover:text-gray-700" :aria-expanded="!projectSectionCollapsed[sectionRow.id]" @click="toggleProjectSection(sectionRow.id)">
                                         <ChevronDown :class="['h-4 w-4 transition-transform', projectSectionCollapsed[sectionRow.id] ? '-rotate-90' : '']" :stroke-width="1.8" />
@@ -4066,10 +4099,10 @@ onUnmounted(() => {
                                         v-for="task in projectTasksForSection(sectionRow)"
                                         :key="task.id"
                                         draggable="true"
-                                        :class="['group/project-task relative grid w-full gap-3 border-t border-gray-100 px-3 py-2.5 text-left text-sm transition hover:bg-indigo-50/40 md:grid-cols-[24px_minmax(0,1.7fr)_minmax(140px,0.7fr)_140px_120px_120px] md:items-center', task.status === 'done' ? 'opacity-60' : '', projectTaskDropTarget === task.id ? (projectTaskDropPlacement === 'before' ? 'before:absolute before:left-0 before:right-0 before:top-0 before:h-0.5 before:bg-indigo-500' : 'after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-indigo-500') : '']"
+                                        :class="['group/project-task relative grid w-full gap-3 border-t border-gray-100 px-3 py-2.5 text-left text-sm transition hover:bg-indigo-50/40 md:grid-cols-[24px_minmax(0,1.7fr)_minmax(140px,0.7fr)_140px_120px_120px] md:items-center', task.status === 'done' ? 'opacity-60' : '', draggedProjectTaskId && draggedProjectTaskId !== task.id ? 'outline-offset-[-1px]' : '', projectTaskDropTarget === task.id ? (projectTaskDropPlacement === 'before' ? 'before:absolute before:left-3 before:right-3 before:top-0 before:h-1 before:rounded-full before:bg-indigo-500 before:shadow-[0_0_0_4px_rgba(99,102,241,0.12)]' : 'after:absolute after:bottom-0 after:left-3 after:right-3 after:h-1 after:rounded-full after:bg-indigo-500 after:shadow-[0_0_0_4px_rgba(99,102,241,0.12)]') : '']"
                                         @dragstart="startProjectTaskDrag(task)"
                                         @dragover.prevent="dragOverProjectTask(task, $event)"
-                                        @drop.prevent="dropProjectTask(sectionRow, task)"
+                                        @drop.prevent.stop="dropProjectTask(sectionRow, task)"
                                         @dragend="endProjectTaskDrag"
                                     >
                                         <span class="hidden cursor-grab text-gray-300 transition group-hover/project-task:text-gray-500 md:inline-flex">
@@ -4092,7 +4125,7 @@ onUnmounted(() => {
                                             <span :class="['rounded-full px-2 py-1 text-xs font-semibold', projectTaskPriorityClass(task.priority)]">{{ displayValue(task.priority) }}</span>
                                         </span>
                                     </div>
-                                    <form class="border-t border-gray-100 px-3 py-2.5" @submit.prevent="addProjectTask(sectionRow)" @dragover.prevent @drop.prevent="dropProjectTask(sectionRow)">
+                                    <form :class="['border-t border-gray-100 px-3 py-2.5 transition', draggedProjectTaskId && projectTaskDropSectionId === sectionRow.id && !projectTaskDropTarget ? 'bg-indigo-50/70 ring-1 ring-inset ring-indigo-200' : '']" @submit.prevent="addProjectTask(sectionRow)" @dragover.prevent="dragOverProjectSection(sectionRow, true)" @drop.prevent.stop="dropProjectTask(sectionRow)">
                                         <input
                                             :value="projectTaskDrafts[sectionRow.id] || ''"
                                             class="subtask-line-control font-medium"
