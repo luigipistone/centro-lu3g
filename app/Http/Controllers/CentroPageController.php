@@ -1034,6 +1034,16 @@ class CentroPageController extends Controller
             $payload['created_by'] = $request->user()->id;
         }
 
+        if ($section === 'tasks' && ! empty($payload['project_section_id'])) {
+            $sectionProjectId = DB::table('project_sections')
+                ->where('id', $payload['project_section_id'])
+                ->value('project_id');
+
+            if ($sectionProjectId) {
+                $payload['project_id'] = $sectionProjectId;
+            }
+        }
+
         DB::table($this->config($section)['table'])->insert($payload);
 
         if ($section === 'tasks') {

@@ -2511,13 +2511,14 @@ function setProjectTaskDraft(sectionId, value) {
 function addProjectTask(section) {
     const title = String(projectTaskDrafts.value[section.id] || '').trim();
     if (!title) return;
+    const currentProjectId = String(props.record.id || '');
 
     router.post(route('tasks.store'), {
         title,
         task_type: 'project',
         status: 'todo',
         priority: 'medium',
-        project_id: props.record.id,
+        project_id: currentProjectId,
         project_section_id: section.virtual ? '' : section.id,
         client_id: projectForm.client_id || '',
         recurring_enabled: false,
