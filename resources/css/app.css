@@ -139,7 +139,10 @@
     }
 
     .toolbar {
-        @apply surface flex flex-wrap items-center gap-3 p-3;
+        @apply flex flex-wrap items-center gap-3 p-3;
+        border: 1px solid hsl(var(--border) / 0.72);
+        border-radius: var(--radius-sm);
+        background: hsl(0 0% 100% / 0.72);
     }
 
     .action-link {
@@ -525,7 +528,7 @@
         border-color: hsl(var(--primary-app) / 0.24);
         background: linear-gradient(180deg, hsl(var(--primary-app-soft) / 0.98), hsl(213 94% 91% / 0.72));
         color: hsl(var(--primary-app));
-        box-shadow: 0 10px 24px hsl(var(--primary-app) / 0.13), inset 0 1px 0 hsl(0 0% 100% / 0.76);
+        box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.76);
     }
 
     .restore-backup-button {

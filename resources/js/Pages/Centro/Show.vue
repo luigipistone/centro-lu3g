@@ -532,6 +532,26 @@ const projectTaskDrafts = ref({});
 const projectNewSectionName = ref('');
 const projectTaskDrawerOpen = ref(false);
 const projectTaskDrawerTask = ref(null);
+const projectTaskDrawerForm = useForm({
+    title: '',
+    description: '',
+    project_id: '',
+    client_id: '',
+    service_id: '',
+    task_type: 'project',
+    status: 'todo',
+    priority: 'medium',
+    start_date: '',
+    due_date: '',
+    due_time: '',
+    location: '',
+    recurring_enabled: false,
+});
+const projectTaskDrawerDescriptionEditor = ref(null);
+const draggedProjectTaskId = ref(null);
+const projectTaskDropTarget = ref(null);
+const projectTaskDropPlacement = ref(null);
+let projectTaskDrawerAutosaveTimer = null;
 const projectColors = ['#2563eb', '#7c3aed', '#db2777', '#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#475569'];
 const userForm = useForm({
     name: props.record.name || '',
@@ -2103,23 +2123,65 @@ function setProjectSectionName(section, value) {
         ...projectSectionDrafts.value,
         [section.id]: value,
     };
+}
 
+function saveProjectSectionName(section) {
     if (section.virtual) return;
-    window.clearTimeout(projectSectionSaveTimers[section.id]);
-    projectSectionSaveTimers[section.id] = window.setTimeout(() => {
-        const name = String(projectSectionDrafts.value[section.id] || '').trim();
-        if (!name || name === section.name) return;
+    const name = String(projectSectionDrafts.value[section.id] || '').trim();
+    if (!name) {
+        projectSectionDrafts.value = { ...projectSectionDrafts.value, [section.id]: section.name };
+        return;
+    }
+    if (name === section.name) return;
 
-        router.put(route('projects.sections.update', [props.record.id, section.id]), { name }, {
-            preserveScroll: true,
-            preserveState: true,
-            only: ['related', 'errors', 'flash'],
-        });
-    }, autosaveDelay());
+    router.put(route('projects.sections.update', [props.record.id, section.id]), { name }, {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['related', 'errors', 'flash'],
+    });
+}
+
+function projectTaskDrawerPayload() {
+    return {
+        title: projectTaskDrawerForm.title,
+        description: projectTaskDrawerForm.description || '',
+        project_id: props.record.id,
+        client_id: projectTaskDrawerForm.client_id || projectForm.client_id || '',
+        service_id: projectTaskDrawerForm.service_id || '',
+        task_type: projectTaskDrawerForm.task_type || 'project',
+        status: projectTaskDrawerForm.status || 'todo',
+        priority: projectTaskDrawerForm.priority || 'medium',
+        start_date: projectTaskDrawerForm.start_date || '',
+        due_date: projectTaskDrawerForm.due_date || '',
+        due_time: projectTaskDrawerForm.due_time || '',
+        location: projectTaskDrawerForm.location || '',
+        recurring_enabled: Boolean(projectTaskDrawerForm.recurring_enabled),
+    };
 }
 
 function openProjectTaskDrawer(task) {
     projectTaskDrawerTask.value = task;
+    projectTaskDrawerForm.defaults({
+        title: task.title || '',
+        description: task.description || '',
+        project_id: task.project_id || props.record.id,
+        client_id: task.client_id || projectForm.client_id || '',
+        service_id: task.service_id || '',
+        task_type: task.task_type || 'project',
+        status: task.status || 'todo',
+        priority: task.priority || 'medium',
+        start_date: task.start_date || '',
+        due_date: task.due_date || '',
+        due_time: task.due_time ? String(task.due_time).slice(0, 5) : '',
+        location: task.location || '',
+        recurring_enabled: Boolean(task.recurring_enabled),
+    });
+    projectTaskDrawerForm.reset();
+    nextTick(() => {
+        if (projectTaskDrawerDescriptionEditor.value) {
+            projectTaskDrawerDescriptionEditor.value.innerHTML = projectTaskDrawerForm.description || '';
+        }
+    });
     projectTaskDrawerOpen.value = true;
     document.body.classList.add('overflow-hidden');
 }
@@ -2127,7 +2189,38 @@ function openProjectTaskDrawer(task) {
 function closeProjectTaskDrawer() {
     projectTaskDrawerOpen.value = false;
     projectTaskDrawerTask.value = null;
+    window.clearTimeout(projectTaskDrawerAutosaveTimer);
     document.body.classList.remove('overflow-hidden');
+}
+
+function updateProjectTaskDrawerDescription() {
+    projectTaskDrawerForm.description = projectTaskDrawerDescriptionEditor.value?.innerHTML || '';
+}
+
+function runProjectTaskDrawerCommand(command, value = null) {
+    projectTaskDrawerDescriptionEditor.value?.focus();
+    document.execCommand(command, false, value);
+    updateProjectTaskDrawerDescription();
+    saveProjectTaskDrawer();
+}
+
+function saveProjectTaskDrawer(delay = AUTOSAVE_IDLE_DELAY) {
+    if (!projectTaskDrawerTask.value?.id || !projectTaskDrawerForm.title) return;
+    window.clearTimeout(projectTaskDrawerAutosaveTimer);
+    projectTaskDrawerAutosaveTimer = window.setTimeout(() => {
+        projectTaskDrawerForm.transform(() => projectTaskDrawerPayload()).put(route('tasks.update', projectTaskDrawerTask.value.id), {
+            preserveScroll: true,
+            preserveState: true,
+            only: ['related', 'errors', 'flash'],
+            onSuccess: () => {
+                projectTaskDrawerTask.value = {
+                    ...projectTaskDrawerTask.value,
+                    ...projectTaskDrawerPayload(),
+                };
+            },
+            onFinish: () => projectTaskDrawerForm.transform((data) => data),
+        });
+    }, autosaveDelay(delay));
 }
 
 function setProjectTaskDraft(sectionId, value) {
@@ -2155,6 +2248,54 @@ function addProjectTask(section) {
         preserveState: true,
         onSuccess: () => setProjectTaskDraft(section.id, ''),
     });
+}
+
+function startProjectTaskDrag(task) {
+    draggedProjectTaskId.value = task.id;
+}
+
+function dragOverProjectTask(task, event) {
+    if (!draggedProjectTaskId.value || draggedProjectTaskId.value === task.id) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    projectTaskDropTarget.value = task.id;
+    projectTaskDropPlacement.value = event.clientY < rect.top + (rect.height / 2) ? 'before' : 'after';
+}
+
+function dropProjectTask(section, targetTask = null) {
+    const fromId = draggedProjectTaskId.value;
+    const placement = projectTaskDropPlacement.value || 'after';
+    draggedProjectTaskId.value = null;
+    projectTaskDropTarget.value = null;
+    projectTaskDropPlacement.value = null;
+    if (!fromId) return;
+
+    const current = projectTasksForSection(section).filter((task) => task.id !== fromId);
+    const moved = parentTaskRows(props.related.tasks).find((task) => task.id === fromId);
+    if (!moved) return;
+
+    if (!targetTask) {
+        current.push(moved);
+    } else {
+        let index = current.findIndex((task) => task.id === targetTask.id);
+        if (index < 0) index = current.length;
+        if (placement === 'after') index += 1;
+        current.splice(index, 0, moved);
+    }
+
+    router.put(route('projects.tasks.reorder', props.record.id), {
+        section_id: section.virtual ? null : section.id,
+        ids: current.map((task) => task.id),
+    }, {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['related', 'errors', 'flash'],
+    });
+}
+
+function endProjectTaskDrag() {
+    draggedProjectTaskId.value = null;
+    projectTaskDropTarget.value = null;
+    projectTaskDropPlacement.value = null;
 }
 
 function addProjectSection() {
@@ -2380,6 +2521,21 @@ watch(
         projectSectionDrafts.value = next;
     },
     { immediate: true },
+);
+
+watch(
+    () => [
+        projectTaskDrawerForm.title,
+        projectTaskDrawerForm.status,
+        projectTaskDrawerForm.priority,
+        projectTaskDrawerForm.start_date,
+        projectTaskDrawerForm.due_date,
+        projectTaskDrawerForm.due_time,
+        projectTaskDrawerForm.location,
+    ],
+    () => {
+        if (projectTaskDrawerOpen.value) saveProjectTaskDrawer();
+    },
 );
 
 watch(
@@ -3433,7 +3589,7 @@ onUnmounted(() => {
                             </div>
                         </div>
 
-                        <div v-if="projectWorkspaceTab === 'overview'" class="space-y-5">
+                        <div v-if="projectWorkspaceTab === 'overview'" class="mt-8 space-y-5">
                             <div>
                                 <div class="toolbar mb-2">
                                     <button type="button" class="toolbar-btn" @click="runProjectDescriptionCommand('bold')"><Bold class="h-4 w-4" /></button>
@@ -3481,8 +3637,9 @@ onUnmounted(() => {
                             </aside>
                         </div>
 
-                        <div v-else-if="projectWorkspaceTab === 'tasks'" class="overflow-visible">
-                            <div class="hidden grid-cols-[minmax(0,1.7fr)_minmax(140px,0.7fr)_140px_120px_120px] border-y border-gray-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400 md:grid">
+                        <div v-else-if="projectWorkspaceTab === 'tasks'" class="mt-8 overflow-visible">
+                            <div class="hidden grid-cols-[24px_minmax(0,1.7fr)_minmax(140px,0.7fr)_140px_120px_120px] border-y border-gray-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400 md:grid">
+                                <span></span>
                                 <span>Nome</span>
                                 <span>Incaricato</span>
                                 <span>Scadenza</span>
@@ -3497,22 +3654,30 @@ onUnmounted(() => {
                                     <input
                                         :value="projectSectionName(sectionRow)"
                                         :readonly="sectionRow.virtual"
-                                        class="subtask-line-control min-w-0 flex-1 text-sm font-semibold"
+                                        class="min-w-0 flex-1 cursor-pointer rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-semibold outline-none transition hover:border-gray-200 hover:bg-white focus:cursor-text focus:border-indigo-200 focus:bg-white focus:shadow-sm"
                                         @input="setProjectSectionName(sectionRow, $event.target.value)"
+                                        @blur="saveProjectSectionName(sectionRow)"
+                                        @keydown.enter.prevent="$event.target.blur()"
                                     />
                                     <span class="text-xs font-medium text-gray-400">{{ projectTasksForSection(sectionRow).length }}</span>
                                 </div>
                                 <div v-show="!projectSectionCollapsed[sectionRow.id]">
-                                    <button
+                                    <div
                                         v-for="task in projectTasksForSection(sectionRow)"
                                         :key="task.id"
-                                        type="button"
-                                        :class="['grid w-full gap-3 border-t border-gray-100 px-3 py-2.5 text-left text-sm transition hover:bg-indigo-50/40 md:grid-cols-[minmax(0,1.7fr)_minmax(140px,0.7fr)_140px_120px_120px] md:items-center', task.status === 'done' ? 'opacity-60' : '']"
-                                        @click="openProjectTaskDrawer(task)"
+                                        draggable="true"
+                                        :class="['group/project-task relative grid w-full gap-3 border-t border-gray-100 px-3 py-2.5 text-left text-sm transition hover:bg-indigo-50/40 md:grid-cols-[24px_minmax(0,1.7fr)_minmax(140px,0.7fr)_140px_120px_120px] md:items-center', task.status === 'done' ? 'opacity-60' : '', projectTaskDropTarget === task.id ? (projectTaskDropPlacement === 'before' ? 'before:absolute before:left-0 before:right-0 before:top-0 before:h-0.5 before:bg-indigo-500' : 'after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-indigo-500') : '']"
+                                        @dragstart="startProjectTaskDrag(task)"
+                                        @dragover.prevent="dragOverProjectTask(task, $event)"
+                                        @drop.prevent="dropProjectTask(sectionRow, task)"
+                                        @dragend="endProjectTaskDrag"
                                     >
-                                        <span class="min-w-0 font-medium text-indigo-700">
-                                            <span :class="['block truncate', task.status === 'done' ? 'line-through' : '']">{{ task.title }}</span>
+                                        <span class="hidden cursor-grab text-gray-300 transition group-hover/project-task:text-gray-500 md:inline-flex">
+                                            <GripVertical class="h-4 w-4" :stroke-width="1.7" />
                                         </span>
+                                        <button type="button" class="min-w-0 text-left font-medium text-indigo-700" @click="openProjectTaskDrawer(task)">
+                                            <span :class="['block truncate', task.status === 'done' ? 'line-through' : '']">{{ task.title }}</span>
+                                        </button>
                                         <div class="flex min-w-0 items-center gap-2 text-xs text-gray-600">
                                             <span v-if="task.assignees?.length" class="flex -space-x-2">
                                                 <UserAvatar v-for="user in task.assignees.slice(0, 3)" :key="`project-task-user-${task.id}-${user.id}`" :user="user" size="xs" class="ring-2 ring-white" />
@@ -3526,18 +3691,16 @@ onUnmounted(() => {
                                         <span>
                                             <span :class="['rounded-full px-2 py-1 text-xs font-semibold', projectTaskPriorityClass(task.priority)]">{{ displayValue(task.priority) }}</span>
                                         </span>
-                                    </button>
-                                    <form class="grid gap-3 border-t border-gray-100 px-3 py-2.5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center" @submit.prevent="addProjectTask(sectionRow)">
+                                    </div>
+                                    <form class="border-t border-gray-100 px-3 py-2.5" @submit.prevent="addProjectTask(sectionRow)" @dragover.prevent @drop.prevent="dropProjectTask(sectionRow)">
                                         <input
                                             :value="projectTaskDrafts[sectionRow.id] || ''"
                                             class="subtask-line-control font-medium"
                                             placeholder="Aggiungi attività..."
                                             @input="setProjectTaskDraft(sectionRow.id, $event.target.value)"
+                                            @keydown.enter.prevent="addProjectTask(sectionRow)"
+                                            @blur="addProjectTask(sectionRow)"
                                         />
-                                        <button type="submit" class="btn btn-outline justify-center px-3 py-1.5 text-xs">
-                                            <Plus class="h-3.5 w-3.5" :stroke-width="1.7" />
-                                            Aggiungi
-                                        </button>
                                     </form>
                                 </div>
                             </div>
@@ -3548,7 +3711,7 @@ onUnmounted(() => {
                             </form>
                         </div>
 
-                        <div v-else-if="projectWorkspaceTab === 'messages'" class="space-y-4">
+                        <div v-else-if="projectWorkspaceTab === 'messages'" class="mt-8 space-y-4">
                             <form class="space-y-3" @submit.prevent="submitProjectMessage">
                                 <div class="toolbar mb-2">
                                     <button type="button" class="toolbar-btn" @click="runProjectMessageCommand('bold')"><Bold class="h-4 w-4" /></button>
@@ -3586,7 +3749,7 @@ onUnmounted(() => {
                             </p>
                         </div>
 
-                        <div v-else class="space-y-4">
+                        <div v-else class="mt-8 space-y-4">
                             <div
                                 :class="['rounded-md border border-dashed p-8 text-center transition', projectFileDragActive ? 'border-indigo-300 bg-indigo-50/70' : 'border-gray-200 bg-gray-50/70 hover:border-indigo-200 hover:bg-indigo-50/40']"
                                 @dragover.prevent="projectFileDragActive = true"
@@ -4656,7 +4819,7 @@ onUnmounted(() => {
                     <header class="flex items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
                         <div class="min-w-0">
                             <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Task progetto</p>
-                            <h3 class="truncate text-lg font-bold text-gray-950">{{ projectTaskDrawerTask.title }}</h3>
+                            <h3 class="truncate text-lg font-bold text-gray-950">{{ projectTaskDrawerForm.title || projectTaskDrawerTask.title }}</h3>
                         </div>
                         <button type="button" class="icon-btn h-9 w-9" aria-label="Chiudi" @click="closeProjectTaskDrawer">
                             <X class="h-4 w-4" :stroke-width="1.8" />
@@ -4664,33 +4827,53 @@ onUnmounted(() => {
                     </header>
                     <div class="flex-1 overflow-y-auto px-5 py-5">
                         <div class="space-y-5">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Titolo</label>
+                                <input v-model="projectTaskDrawerForm.title" class="form-control" required />
+                            </div>
                             <div class="grid gap-4 sm:grid-cols-2">
-                                <div class="rounded-md border border-gray-100 bg-gray-50/70 p-4">
-                                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Stato</p>
-                                    <span :class="['mt-2 inline-flex rounded-full px-2 py-1 text-xs font-semibold', projectTaskStatusClass(projectTaskDrawerTask.status)]">{{ displayValue(projectTaskDrawerTask.status) }}</span>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Stato</label>
+                                    <AppSelect v-model="projectTaskDrawerForm.status" :options="taskStatusOptions" />
                                 </div>
-                                <div class="rounded-md border border-gray-100 bg-gray-50/70 p-4">
-                                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Priorità</p>
-                                    <span :class="['mt-2 inline-flex rounded-full px-2 py-1 text-xs font-semibold', projectTaskPriorityClass(projectTaskDrawerTask.priority)]">{{ displayValue(projectTaskDrawerTask.priority) }}</span>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Priorità</label>
+                                    <AppSelect v-model="projectTaskDrawerForm.priority" :options="priorityOptions" />
                                 </div>
-                                <div class="rounded-md border border-gray-100 bg-gray-50/70 p-4">
-                                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Scadenza</p>
-                                    <p class="mt-2 text-sm font-semibold text-gray-800">{{ projectTaskDrawerTask.due_date ? dateIt(projectTaskDrawerTask.due_date) : 'Nessuna scadenza' }}</p>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Inizio</label>
+                                    <AppDateInput v-model="projectTaskDrawerForm.start_date" @change="saveProjectTaskDrawer(0)" />
                                 </div>
-                                <div class="rounded-md border border-gray-100 bg-gray-50/70 p-4">
-                                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Incaricato</p>
-                                    <div class="mt-2 flex items-center gap-2">
-                                        <span v-if="projectTaskDrawerTask.assignees?.length" class="flex -space-x-2">
-                                            <UserAvatar v-for="user in projectTaskDrawerTask.assignees.slice(0, 4)" :key="`project-drawer-user-${user.id}`" :user="user" size="xs" class="ring-2 ring-white" />
-                                        </span>
-                                        <span class="truncate text-sm font-semibold text-gray-800">{{ projectTaskDrawerTask.assignees?.[0]?.name || projectTaskDrawerTask.assignees?.[0]?.email || 'Non assegnata' }}</span>
-                                    </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Scadenza</label>
+                                    <AppDateInput v-model="projectTaskDrawerForm.due_date" @change="saveProjectTaskDrawer(0)" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Ora</label>
+                                    <AppTimeInput v-model="projectTaskDrawerForm.due_time" @change="saveProjectTaskDrawer(0)" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Luogo</label>
+                                    <input v-model="projectTaskDrawerForm.location" class="form-control" />
                                 </div>
                             </div>
-                            <div class="rounded-md border border-gray-100 bg-white p-4">
-                                <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Descrizione</p>
-                                <div v-if="projectTaskDrawerTask.description" class="wysiwyg-content mt-3 text-sm text-gray-700" v-html="projectTaskDrawerTask.description"></div>
-                                <p v-else class="mt-3 text-sm text-gray-500">Nessuna descrizione inserita.</p>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Descrizione</label>
+                                <div class="toolbar mt-2">
+                                    <button type="button" class="toolbar-btn" @click="runProjectTaskDrawerCommand('bold')"><Bold class="h-4 w-4" /></button>
+                                    <button type="button" class="toolbar-btn" @click="runProjectTaskDrawerCommand('italic')"><Italic class="h-4 w-4" /></button>
+                                    <button type="button" class="toolbar-btn" @click="runProjectTaskDrawerCommand('underline')"><Underline class="h-4 w-4" /></button>
+                                    <button type="button" class="toolbar-btn" @click="runProjectTaskDrawerCommand('insertUnorderedList')"><List class="h-4 w-4" /></button>
+                                    <button type="button" class="toolbar-btn" @click="runProjectTaskDrawerCommand('insertOrderedList')"><ListOrdered class="h-4 w-4" /></button>
+                                </div>
+                                <div
+                                    ref="projectTaskDrawerDescriptionEditor"
+                                    contenteditable="true"
+                                    class="form-control mt-2 min-h-40 px-4 py-3 wysiwyg-content"
+                                    data-placeholder="Aggiungi una descrizione..."
+                                    @input="updateProjectTaskDrawerDescription(); saveProjectTaskDrawer()"
+                                    @blur="saveProjectTaskDrawer(0)"
+                                ></div>
                             </div>
                         </div>
                     </div>

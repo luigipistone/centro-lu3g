@@ -1887,6 +1887,36 @@ class CentroPageController extends Controller
         return back()->with('status', 'Sezione aggiornata.');
     }
 
+    public function reorderProjectTasks(Request $request, string $id): RedirectResponse
+    {
+        abort_unless(DB::table('projects')->where('id', $id)->exists(), 404);
+
+        $payload = $request->validate([
+            'section_id' => ['nullable', 'uuid', 'exists:project_sections,id'],
+            'ids' => ['required', 'array'],
+            'ids.*' => ['required', 'uuid', 'exists:tasks,id'],
+        ]);
+
+        $sectionId = $payload['section_id'] ?? null;
+        if ($sectionId) {
+            abort_unless(DB::table('project_sections')->where('project_id', $id)->where('id', $sectionId)->exists(), 404);
+        }
+
+        foreach (array_values($payload['ids']) as $position => $taskId) {
+            DB::table('tasks')
+                ->where('id', $taskId)
+                ->where('project_id', $id)
+                ->where(fn ($query) => $query->whereNull('parent_task_id')->orWhereRaw("TRIM(parent_task_id) = ''"))
+                ->update([
+                    'project_section_id' => $sectionId,
+                    'position' => $position,
+                    'updated_at' => now(),
+                ]);
+        }
+
+        return back()->with('status', 'Ordine task aggiornato.');
+    }
+
     public function storeProjectMessage(Request $request, string $id): RedirectResponse
     {
         $project = DB::table('projects')->where('id', $id)->first();
