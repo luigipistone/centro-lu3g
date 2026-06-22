@@ -35,6 +35,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/projects/{id}', [CentroPageController::class, 'show'])->defaults('section', 'projects')->name('projects.show');
     Route::put('/projects/{id}', [CentroPageController::class, 'update'])->defaults('section', 'projects')->name('projects.update');
     Route::post('/projects/{id}/sections', [CentroPageController::class, 'storeProjectSection'])->name('projects.sections.store');
+    Route::put('/projects/{projectId}/sections/{sectionId}', [CentroPageController::class, 'updateProjectSection'])->name('projects.sections.update');
     Route::post('/projects/{id}/messages', [CentroPageController::class, 'storeProjectMessage'])->name('projects.messages.store');
     Route::post('/projects/{id}/files', [CentroPageController::class, 'storeProjectFile'])->name('projects.files.store');
     Route::get('/projects/{projectId}/files/{fileId}', [CentroPageController::class, 'downloadProjectFile'])->name('projects.files.download');

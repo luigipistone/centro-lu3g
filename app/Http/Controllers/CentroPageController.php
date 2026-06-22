@@ -1868,6 +1868,25 @@ class CentroPageController extends Controller
         return back()->with('status', 'Sezione aggiunta.');
     }
 
+    public function updateProjectSection(Request $request, string $projectId, string $sectionId): RedirectResponse
+    {
+        abort_unless(DB::table('project_sections')->where('project_id', $projectId)->where('id', $sectionId)->exists(), 404);
+
+        $payload = $request->validate([
+            'name' => ['required', 'string', 'max:120'],
+        ]);
+
+        DB::table('project_sections')
+            ->where('project_id', $projectId)
+            ->where('id', $sectionId)
+            ->update([
+                'name' => $payload['name'],
+                'updated_at' => now(),
+            ]);
+
+        return back()->with('status', 'Sezione aggiornata.');
+    }
+
     public function storeProjectMessage(Request $request, string $id): RedirectResponse
     {
         $project = DB::table('projects')->where('id', $id)->first();
