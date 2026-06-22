@@ -941,6 +941,7 @@ class CentroPageController extends Controller
                 'projectUsers' => $this->userOptions(),
                 'users' => $this->userOptions(),
                 'taskClients' => DB::table('clients')->orderBy('name')->get(['id', 'name']),
+                'taskProjects' => DB::table('projects')->orderBy('name')->get(['id', 'name']),
                 'taskServices' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name', 'color']),
                 'taskDependencyOptions' => $this->taskDependencyOptions(),
                 'followers' => DB::table('project_followers')->where('project_id', $id)->pluck('user_id'),
@@ -2435,16 +2436,55 @@ class CentroPageController extends Controller
             ->where('parent_task_id', $taskId)
             ->orderBy('position')
             ->orderBy('created_at')
-            ->get(['id', 'title', 'status', 'priority', 'due_date', 'due_time', 'position']);
+            ->get([
+                'id',
+                'title',
+                'description',
+                'project_id',
+                'project_section_id',
+                'client_id',
+                'service_id',
+                'parent_task_id',
+                'task_type',
+                'status',
+                'priority',
+                'start_date',
+                'due_date',
+                'due_time',
+                'location',
+                'recurring_enabled',
+                'recurring_interval_value',
+                'recurring_interval_unit',
+                'recurring_mode',
+                'recurring_weekday',
+                'recurring_month_day',
+                'position',
+            ]);
 
         $assigneesBySubtask = DB::table('task_assignees')
             ->whereIn('task_id', $subtasks->pluck('id'))
             ->get(['task_id', 'user_id'])
             ->groupBy('task_id');
+        $followersBySubtask = DB::table('task_followers')
+            ->whereIn('task_id', $subtasks->pluck('id'))
+            ->get(['task_id', 'user_id'])
+            ->groupBy('task_id');
         $dependencyRows = $this->taskDependencyRows($subtasks->pluck('id'));
+        $comments = DB::table('task_comments')
+            ->leftJoin('users', 'users.id', '=', 'task_comments.user_id')
+            ->whereIn('task_comments.task_id', $subtasks->pluck('id'))
+            ->latest('task_comments.created_at')
+            ->get(['task_comments.*', 'users.name as user_name'])
+            ->groupBy('task_id')
+            ->map(fn ($items) => $items->take(30)->values());
+        $activity = $this->taskActivityRows($subtasks->pluck('id'));
 
-        return $subtasks->map(function ($subtask) use ($assigneesBySubtask, $dependencyRows) {
+        return $subtasks->map(function ($subtask) use ($assigneesBySubtask, $followersBySubtask, $dependencyRows, $comments, $activity) {
             $subtask->assignee_ids = ($assigneesBySubtask[$subtask->id] ?? collect())->pluck('user_id')->values();
+            $subtask->follower_ids = ($followersBySubtask[$subtask->id] ?? collect())->pluck('user_id')->values();
+            $subtask->subtasks = collect();
+            $subtask->comments = ($comments[$subtask->id] ?? collect())->values();
+            $subtask->activity = ($activity[$subtask->id] ?? collect())->values();
             $subtask->dependencies = ($dependencyRows[$subtask->id]['dependencies'] ?? collect())->values();
             $subtask->dependents = ($dependencyRows[$subtask->id]['dependents'] ?? collect())->values();
             $subtask->blocked_dependencies_count = ($subtask->dependencies ?? collect())->where('status', '!=', 'done')->count();

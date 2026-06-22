@@ -127,6 +127,11 @@ const priorityOptions = [
     { value: 'high', label: 'Alta' },
     { value: 'urgent', label: 'Urgente' },
 ];
+const taskEditTypeOptions = [
+    { value: 'project', label: 'Task' },
+    { value: 'ongoing', label: 'Continuativa' },
+    { value: 'meeting', label: 'Meeting' },
+];
 const recurrenceUnitOptions = [
     { value: 'week', label: 'Settimana' },
     { value: 'month', label: 'Mese' },
@@ -554,6 +559,7 @@ const projectTaskDrafts = ref({});
 const projectNewSectionName = ref('');
 const projectTaskDrawerOpen = ref(false);
 const projectTaskDrawerTask = ref(null);
+const projectTaskParentStack = ref([]);
 const projectTaskDrawerForm = useForm({
     title: '',
     description: '',
@@ -2186,7 +2192,9 @@ function projectTaskDrawerPayload() {
     return {
         title: projectTaskDrawerForm.title,
         description: projectTaskDrawerForm.description || '',
-        project_id: props.record.id,
+        project_id: projectTaskDrawerForm.task_type === 'project' || projectTaskDrawerForm.task_type === 'task'
+            ? (projectTaskDrawerForm.project_id || '')
+            : '',
         client_id: projectTaskDrawerForm.client_id || projectForm.client_id || '',
         service_id: projectTaskDrawerForm.service_id || '',
         task_type: projectTaskDrawerForm.task_type || 'project',
@@ -2207,7 +2215,12 @@ function projectTaskDrawerPayload() {
     };
 }
 
-function openProjectTaskDrawer(task) {
+function openProjectTaskDrawer(task, options = {}) {
+    if (options.pushCurrent && projectTaskDrawerTask.value) {
+        projectTaskParentStack.value = [...projectTaskParentStack.value, projectTaskDrawerTask.value];
+    } else if (!options.keepStack) {
+        projectTaskParentStack.value = [];
+    }
     projectTaskDrawerTask.value = task;
     projectTaskDrawerForm.defaults({
         title: task.title || '',
@@ -2256,9 +2269,30 @@ function openProjectTaskDrawer(task) {
 function closeProjectTaskDrawer() {
     projectTaskDrawerOpen.value = false;
     projectTaskDrawerTask.value = null;
+    projectTaskParentStack.value = [];
     projectTaskActionMenuOpen.value = false;
     window.clearTimeout(projectTaskDrawerAutosaveTimer);
     document.body.classList.remove('overflow-hidden');
+}
+
+function openProjectDrawerSubtask(subtask) {
+    openProjectTaskDrawer(subtask, { pushCurrent: true });
+    nextTick(() => {
+        const drawerBody = document.querySelector('[data-project-task-drawer-body]');
+        drawerBody?.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+}
+
+function returnToProjectDrawerParentTask() {
+    const parent = projectTaskParentStack.value.at(-1);
+    if (!parent) return;
+
+    projectTaskParentStack.value = projectTaskParentStack.value.slice(0, -1);
+    openProjectTaskDrawer(parent, { keepStack: true });
+    nextTick(() => {
+        const drawerBody = document.querySelector('[data-project-task-drawer-body]');
+        drawerBody?.scrollTo({ top: 0, behavior: 'smooth' });
+    });
 }
 
 function updateProjectTaskDrawerDescription() {
@@ -2310,10 +2344,12 @@ function visibleProjectDrawerActivity() {
 function toggleProjectTaskType(type) {
     projectTaskDrawerForm.task_type = type;
     if (type === 'meeting') {
+        projectTaskDrawerForm.project_id = '';
         projectTaskDrawerForm.due_time = projectTaskDrawerForm.due_time || '09:00';
         projectTaskDrawerForm.recurring_enabled = false;
     } else {
         projectTaskDrawerForm.location = '';
+        if (type === 'ongoing') projectTaskDrawerForm.project_id = '';
     }
     saveProjectTaskDrawer(0);
 }
@@ -2571,6 +2607,32 @@ function projectTaskPriorityClass(priority) {
     }[priority] || 'bg-gray-100 text-gray-700';
 }
 
+function taskPriorityColor(priority) {
+    return {
+        urgent: '#dc2626',
+        high: '#f97316',
+        medium: '#f59e0b',
+        low: '#10b981',
+    }[priority] || '#64748b';
+}
+
+function projectTaskTypeButtonClass(type) {
+    const active = projectTaskDrawerForm.task_type === type || (type === 'project' && projectTaskDrawerForm.task_type === 'task');
+    const styles = {
+        project: active
+            ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm'
+            : 'border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50',
+        ongoing: active
+            ? 'border-amber-500 bg-amber-50 text-amber-800 shadow-sm'
+            : 'border-amber-200 bg-white text-amber-700 hover:bg-amber-50',
+        meeting: active
+            ? 'border-violet-500 bg-violet-50 text-violet-800 shadow-sm'
+            : 'border-violet-200 bg-white text-violet-700 hover:bg-violet-50',
+    };
+
+    return styles[type] || styles.project;
+}
+
 function personAvatarClass(selected) {
     return [
         'group/person relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300',
@@ -2775,6 +2837,7 @@ watch(
         projectTaskDrawerForm.due_date,
         projectTaskDrawerForm.due_time,
         projectTaskDrawerForm.location,
+        projectTaskDrawerForm.project_id,
         projectTaskDrawerForm.client_id,
         projectTaskDrawerForm.service_id,
         projectTaskDrawerForm.recurring_enabled,
@@ -5069,8 +5132,17 @@ onUnmounted(() => {
                 <aside class="calendar-task-drawer-panel absolute right-0 top-0 flex h-full w-full max-w-3xl flex-col border-l border-white/80 bg-white shadow-2xl sm:w-[62vw]">
                     <header class="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
                         <div class="min-w-0">
+                            <button
+                                v-if="projectTaskParentStack.length"
+                                type="button"
+                                class="mb-2 inline-flex items-center gap-1 text-xs font-semibold text-gray-500 transition hover:text-indigo-600"
+                                @click="returnToProjectDrawerParentTask"
+                            >
+                                <ChevronLeft class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                Torna alla task genitore
+                            </button>
                             <div class="flex items-center gap-2">
-                                <span class="h-2.5 w-2.5 rounded-full" :class="projectTaskPriorityClass(projectTaskDrawerForm.priority).split(' ')[0]"></span>
+                                <span class="h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: taskPriorityColor(projectTaskDrawerForm.priority) }"></span>
                                 <h3 class="truncate text-lg font-bold text-gray-950">Modifica task</h3>
                             </div>
                             <p class="mt-1 text-sm text-gray-500">Le modifiche si salvano automaticamente.</p>
@@ -5110,7 +5182,7 @@ onUnmounted(() => {
                             </button>
                         </div>
                     </header>
-                    <div class="flex-1 overflow-y-auto px-5 py-5">
+                    <div class="flex-1 overflow-y-auto px-5 py-5" data-project-task-drawer-body>
                         <div class="space-y-5">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Titolo</label>
@@ -5118,16 +5190,12 @@ onUnmounted(() => {
                             </div>
                             <div class="grid gap-2 sm:grid-cols-3">
                                 <button
-                                    v-for="option in [
-                                        { value: 'project', label: 'Task' },
-                                        { value: 'ongoing', label: 'Continuativa' },
-                                        { value: 'meeting', label: 'Meeting' },
-                                    ]"
+                                    v-for="option in taskEditTypeOptions"
                                     :key="`project-drawer-type-${option.value}`"
                                     type="button"
                                     :class="[
                                         'rounded-[var(--radius-sm)] border px-3 py-2 text-left text-sm font-semibold transition',
-                                        projectTaskDrawerForm.task_type === option.value ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50',
+                                        projectTaskTypeButtonClass(option.value),
                                     ]"
                                     @click="toggleProjectTaskType(option.value)"
                                 >
@@ -5158,6 +5226,10 @@ onUnmounted(() => {
                                 <div v-if="projectTaskDrawerForm.task_type === 'meeting'">
                                     <label class="block text-sm font-medium text-gray-700">Luogo / link</label>
                                     <input v-model="projectTaskDrawerForm.location" class="form-control" placeholder="Sala riunioni o link meeting" />
+                                </div>
+                                <div v-if="projectTaskDrawerForm.task_type === 'project' || projectTaskDrawerForm.task_type === 'task'">
+                                    <label class="block text-sm font-medium text-gray-700">Progetto</label>
+                                    <AppSelect v-model="projectTaskDrawerForm.project_id" :options="namedOptions(related.taskProjects, { value: '', label: 'Nessun progetto' })" searchable @change="saveProjectTaskDrawer(0)" />
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Cliente</label>
@@ -5199,7 +5271,7 @@ onUnmounted(() => {
                                     </div>
                                 </div>
                             </div>
-                            <section class="content-card rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
+                            <section v-if="!projectTaskDrawerTask.parent_task_id" class="content-card rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
                                 <div class="mb-3 flex items-center justify-between gap-3">
                                     <div>
                                         <h4 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Dipendenze</h4>
@@ -5287,9 +5359,9 @@ onUnmounted(() => {
                                         <span :class="['h-2 w-2 rounded-full', subtask.status === 'done' ? 'bg-emerald-400' : 'bg-gray-300']"></span>
                                         <span class="min-w-0 flex-1 truncate font-medium text-gray-800">{{ subtask.title }}</span>
                                         <span class="text-xs text-gray-500">{{ subtask.due_date ? shortDateIt(subtask.due_date) : '' }}</span>
-                                        <Link :href="route('tasks.show', subtask.id)" class="icon-btn h-8 w-8" title="Apri sottoattività">
+                                        <button type="button" class="icon-btn h-8 w-8" title="Apri sottoattività" @click="openProjectDrawerSubtask(subtask)">
                                             <ExternalLink class="h-4 w-4" :stroke-width="1.7" />
-                                        </Link>
+                                        </button>
                                     </div>
                                     <p v-if="!projectTaskDrawerTask.subtasks?.length" class="text-sm text-gray-500">Nessuna sottoattività.</p>
                                 </div>
@@ -5343,12 +5415,6 @@ onUnmounted(() => {
                             </section>
                         </div>
                     </div>
-                    <footer class="flex items-center justify-between gap-3 border-t border-gray-100 px-5 py-4">
-                        <button type="button" class="text-sm font-semibold text-gray-500 transition hover:text-gray-800" @click="closeProjectTaskDrawer">Chiudi</button>
-                        <Link :href="route('tasks.show', projectTaskDrawerTask.id)" class="btn btn-primary px-4 py-2 text-sm">
-                            Apri scheda completa
-                        </Link>
-                    </footer>
                 </aside>
             </div>
         </Transition>
