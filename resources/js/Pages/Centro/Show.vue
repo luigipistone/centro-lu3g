@@ -560,7 +560,7 @@ const projectNewSectionName = ref('');
 const projectNewSectionOpen = ref(false);
 const projectNewSectionInput = ref(null);
 const projectSectionActionMenuOpen = ref(null);
-const projectSectionActionMenuStyle = ref({});
+const projectSectionActionMenuPlacement = ref('down');
 const projectTaskDrawerOpen = ref(false);
 const projectTaskDrawerTask = ref(null);
 const projectTaskParentStack = ref([]);
@@ -2204,7 +2204,8 @@ function saveProjectSectionName(section) {
 
 function toggleProjectSectionActionMenu(section, event = null) {
     if (section.virtual) return;
-    projectSectionActionMenuStyle.value = dropdownMenuStyleFromEvent(event, 220);
+    const rect = event?.currentTarget?.getBoundingClientRect?.();
+    projectSectionActionMenuPlacement.value = rect && window.innerHeight - rect.bottom < 170 ? 'up' : 'down';
     projectSectionActionMenuOpen.value = projectSectionActionMenuOpen.value === section.id ? null : section.id;
 }
 
@@ -4067,18 +4068,23 @@ onUnmounted(() => {
                                         @keydown.enter.prevent="$event.target.blur()"
                                     />
                                     <span class="text-xs font-medium text-gray-400">{{ projectTasksForSection(sectionRow).length }}</span>
-                                    <button
-                                        v-if="!sectionRow.virtual"
-                                        type="button"
-                                        class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-400 opacity-0 transition hover:bg-gray-50 hover:text-gray-800 group-hover/project-section:opacity-100 focus:opacity-100"
-                                        aria-label="Azioni sezione"
-                                        data-project-section-menu
-                                        @click.stop="toggleProjectSectionActionMenu(sectionRow, $event)"
-                                    >
-                                        <MoreHorizontal class="h-4 w-4" :stroke-width="1.8" />
-                                    </button>
-                                    <div v-if="projectSectionActionMenuOpen === sectionRow.id" class="fixed inset-0 z-[7600] bg-transparent" data-project-section-menu @click.self="closeProjectSectionActionMenu">
-                                        <div class="app-popover field-dropdown-menu fixed w-56 p-2" :style="projectSectionActionMenuStyle" @click.stop>
+                                    <div v-if="!sectionRow.virtual" class="relative shrink-0" data-project-section-menu>
+                                        <button
+                                            type="button"
+                                            class="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 opacity-0 transition hover:bg-gray-50 hover:text-gray-800 group-hover/project-section:opacity-100 focus:opacity-100"
+                                            aria-label="Azioni sezione"
+                                            @click.stop="toggleProjectSectionActionMenu(sectionRow, $event)"
+                                        >
+                                            <MoreHorizontal class="h-4 w-4" :stroke-width="1.8" />
+                                        </button>
+                                        <div
+                                            v-if="projectSectionActionMenuOpen === sectionRow.id"
+                                            :class="[
+                                                'app-popover field-dropdown-menu absolute right-0 z-[7600] w-56 p-2',
+                                                projectSectionActionMenuPlacement === 'up' ? 'bottom-full mb-2' : 'top-full mt-2',
+                                            ]"
+                                            @click.stop
+                                        >
                                             <button type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50" @click="duplicateProjectSection(sectionRow)">
                                                 <Copy class="h-4 w-4" :stroke-width="1.7" />
                                                 Duplica sezione
