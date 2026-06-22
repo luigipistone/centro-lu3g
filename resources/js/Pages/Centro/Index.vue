@@ -334,8 +334,10 @@ const calendarTaskForm = useForm({
     assignee_ids: [],
     follower_ids: [],
     dependency_ids: [],
+    dependent_ids: [],
 });
 const calendarDependencyToAdd = ref('');
+const calendarDependencyDirection = ref('blocked_by');
 const calendarSubtaskForm = useForm({
     title: '',
     priority: 'medium',
@@ -534,14 +536,20 @@ function taskDependencyLabel(task) {
         .join(' · ');
 }
 
+const taskDependencyDirectionOptions = [
+    { value: 'blocked_by', label: 'Bloccata da' },
+    { value: 'blocks', label: 'Blocca' },
+];
+
 function taskDependencySelectOptions(currentTaskId = null) {
-    const selected = calendarTaskForm.dependency_ids || [];
+    const selected = calendarDependencyDirection.value === 'blocks' ? (calendarTaskForm.dependent_ids || []) : (calendarTaskForm.dependency_ids || []);
+    const opposite = calendarDependencyDirection.value === 'blocks' ? (calendarTaskForm.dependency_ids || []) : (calendarTaskForm.dependent_ids || []);
+
     return (props.taskDependencyOptions || [])
-        .filter((task) => task.id !== currentTaskId && !selected.includes(task.id))
+        .filter((task) => task.id !== currentTaskId && task.status !== 'done' && !selected.includes(task.id) && !opposite.includes(task.id))
         .map((task) => ({
             value: task.id,
             label: taskDependencyLabel(task),
-            disabled: task.status === 'done',
         }));
 }
 
@@ -552,11 +560,19 @@ function selectedCalendarDependencies() {
     return selected.map((id) => byId.get(id)).filter(Boolean);
 }
 
+function selectedCalendarDependents() {
+    const selected = calendarTaskForm.dependent_ids || [];
+    const byId = new Map([...(props.taskDependencyOptions || []), ...(calendarTaskPanel.value?.dependents || [])].map((task) => [task.id, task]));
+
+    return selected.map((id) => byId.get(id)).filter(Boolean);
+}
+
 function syncCalendarTaskDependencies() {
     if (!calendarTaskForm.id) return;
 
     router.put(route('tasks.dependencies.sync', calendarTaskForm.id), {
         dependency_ids: calendarTaskForm.dependency_ids || [],
+        dependent_ids: calendarTaskForm.dependent_ids || [],
     }, {
         preserveScroll: true,
         preserveState: true,
@@ -565,6 +581,7 @@ function syncCalendarTaskDependencies() {
             calendarTaskPanel.value = {
                 ...(calendarTaskPanel.value || {}),
                 dependencies: selectedCalendarDependencies(),
+                dependents: selectedCalendarDependents(),
                 blocked_dependencies_count: selectedCalendarDependencies().filter((dependency) => dependency.status !== 'done').length,
             };
         },
@@ -572,15 +589,29 @@ function syncCalendarTaskDependencies() {
 }
 
 function addCalendarTaskDependency(dependencyId) {
-    if (!dependencyId || (calendarTaskForm.dependency_ids || []).includes(dependencyId)) return;
+    if (!dependencyId) return;
 
-    calendarTaskForm.dependency_ids = [...(calendarTaskForm.dependency_ids || []), dependencyId];
+    if (calendarDependencyDirection.value === 'blocks') {
+        if ((calendarTaskForm.dependent_ids || []).includes(dependencyId) || (calendarTaskForm.dependency_ids || []).includes(dependencyId)) return;
+
+        calendarTaskForm.dependent_ids = [...(calendarTaskForm.dependent_ids || []), dependencyId];
+    } else {
+        if ((calendarTaskForm.dependency_ids || []).includes(dependencyId) || (calendarTaskForm.dependent_ids || []).includes(dependencyId)) return;
+
+        calendarTaskForm.dependency_ids = [...(calendarTaskForm.dependency_ids || []), dependencyId];
+    }
+
     calendarDependencyToAdd.value = '';
     syncCalendarTaskDependencies();
 }
 
 function removeCalendarTaskDependency(dependencyId) {
     calendarTaskForm.dependency_ids = (calendarTaskForm.dependency_ids || []).filter((id) => id !== dependencyId);
+    syncCalendarTaskDependencies();
+}
+
+function removeCalendarTaskDependent(dependentId) {
+    calendarTaskForm.dependent_ids = (calendarTaskForm.dependent_ids || []).filter((id) => id !== dependentId);
     syncCalendarTaskDependencies();
 }
 
@@ -2033,6 +2064,7 @@ function openCalendarTask(task, options = {}) {
         assignee_ids: [...(task.assignee_ids || [])],
         follower_ids: [...(task.follower_ids || [])],
         dependency_ids: (task.dependencies || []).map((dependency) => dependency.id),
+        dependent_ids: (task.dependents || []).map((dependent) => dependent.id),
     });
     calendarTaskForm.reset();
     calendarTaskForm.clearErrors();
@@ -2072,6 +2104,7 @@ function openCalendarTaskCreate(type, date) {
         assignee_ids: [],
         follower_ids: [],
         dependency_ids: [],
+        dependent_ids: [],
         dependencies: [],
         dependents: [],
         blocked_dependencies_count: 0,
@@ -2124,6 +2157,7 @@ function openCalendarSubtask(subtask) {
         assignee_ids: subtask.assignee_ids || [],
         follower_ids: subtask.follower_ids || [],
         dependency_ids: (subtask.dependencies || []).map((dependency) => dependency.id),
+        dependent_ids: (subtask.dependents || []).map((dependent) => dependent.id),
         parent_task_id: parent.id,
         parent_title: parent.title,
     }, { preserveStack: true });
@@ -3682,13 +3716,20 @@ function calendarDayStyle(sectionMonth, cell) {
                                         Bloccata
                                     </span>
                                 </div>
-                                <AppSelect
-                                    v-model="calendarDependencyToAdd"
-                                    :options="taskDependencySelectOptions(calendarTaskForm.id)"
-                                    placeholder="Aggiungi task bloccante"
-                                    searchable
-                                    @change="addCalendarTaskDependency"
-                                />
+                                <div class="grid gap-2 md:grid-cols-[170px_minmax(0,1fr)]">
+                                    <AppSelect
+                                        v-model="calendarDependencyDirection"
+                                        :options="taskDependencyDirectionOptions"
+                                        placeholder="Tipo relazione"
+                                    />
+                                    <AppSelect
+                                        v-model="calendarDependencyToAdd"
+                                        :options="taskDependencySelectOptions(calendarTaskForm.id)"
+                                        :placeholder="calendarDependencyDirection === 'blocks' ? 'Scegli task bloccata' : 'Scegli task bloccante'"
+                                        searchable
+                                        @change="addCalendarTaskDependency"
+                                    />
+                                </div>
                                 <div class="mt-3 flex flex-wrap gap-2">
                                     <span
                                         v-for="dependency in selectedCalendarDependencies()"
@@ -3702,11 +3743,18 @@ function calendarDayStyle(sectionMonth, cell) {
                                     </span>
                                     <span v-if="!selectedCalendarDependencies().length" class="text-xs text-gray-500">Nessuna dipendenza.</span>
                                 </div>
-                                <div v-if="calendarTaskPanel?.dependents?.length" class="mt-3 border-t border-gray-100 pt-3">
+                                <div v-if="selectedCalendarDependents().length" class="mt-3 border-t border-gray-100 pt-3">
                                     <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Blocca</p>
                                     <div class="mt-2 flex flex-wrap gap-2">
-                                        <span v-for="dependent in calendarTaskPanel.dependents" :key="`calendar-dependent-${dependent.id}`" class="rounded-full bg-white px-3 py-1 text-xs font-semibold text-gray-600">
-                                            {{ dependent.title }}
+                                        <span
+                                            v-for="dependent in selectedCalendarDependents()"
+                                            :key="`calendar-dependent-${dependent.id}`"
+                                            :class="['inline-flex max-w-full items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold', dependent.status === 'done' ? 'bg-emerald-50 text-emerald-700' : 'bg-white text-gray-600']"
+                                        >
+                                            <span class="truncate">{{ dependent.title }}</span>
+                                            <button type="button" class="text-current opacity-60 transition hover:opacity-100" title="Rimuovi relazione" @click="removeCalendarTaskDependent(dependent.id)">
+                                                <X class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                            </button>
                                         </span>
                                     </div>
                                 </div>

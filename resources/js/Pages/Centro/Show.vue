@@ -205,20 +205,33 @@ function taskDependencyLabel(task) {
         .join(' · ');
 }
 
+const taskDependencyDirectionOptions = [
+    { value: 'blocked_by', label: 'Bloccata da' },
+    { value: 'blocks', label: 'Blocca' },
+];
+
 function taskDependencySelectOptions() {
-    const selected = taskForm.dependency_ids || [];
+    const selected = taskDependencyDirection.value === 'blocks' ? (taskForm.dependent_ids || []) : (taskForm.dependency_ids || []);
+    const opposite = taskDependencyDirection.value === 'blocks' ? (taskForm.dependency_ids || []) : (taskForm.dependent_ids || []);
+
     return (props.related.taskDependencyOptions || [])
-        .filter((task) => task.id !== props.record.id && !selected.includes(task.id))
+        .filter((task) => task.id !== props.record.id && task.status !== 'done' && !selected.includes(task.id) && !opposite.includes(task.id))
         .map((task) => ({
             value: task.id,
             label: taskDependencyLabel(task),
-            disabled: task.status === 'done',
         }));
 }
 
 function selectedTaskDependencies() {
     const selected = taskForm.dependency_ids || [];
     const byId = new Map([...(props.related.taskDependencyOptions || []), ...(props.related.dependencies || [])].map((task) => [task.id, task]));
+
+    return selected.map((id) => byId.get(id)).filter(Boolean);
+}
+
+function selectedTaskDependents() {
+    const selected = taskForm.dependent_ids || [];
+    const byId = new Map([...(props.related.taskDependencyOptions || []), ...(props.related.dependents || [])].map((task) => [task.id, task]));
 
     return selected.map((id) => byId.get(id)).filter(Boolean);
 }
@@ -232,6 +245,7 @@ function blockedDependencyCount(task = null) {
 function syncTaskDependencies() {
     router.put(route('tasks.dependencies.sync', props.record.id), {
         dependency_ids: taskForm.dependency_ids || [],
+        dependent_ids: taskForm.dependent_ids || [],
     }, {
         preserveScroll: true,
         preserveState: true,
@@ -240,15 +254,29 @@ function syncTaskDependencies() {
 }
 
 function addTaskDependency(dependencyId) {
-    if (!dependencyId || (taskForm.dependency_ids || []).includes(dependencyId)) return;
+    if (!dependencyId) return;
 
-    taskForm.dependency_ids = [...(taskForm.dependency_ids || []), dependencyId];
+    if (taskDependencyDirection.value === 'blocks') {
+        if ((taskForm.dependent_ids || []).includes(dependencyId) || (taskForm.dependency_ids || []).includes(dependencyId)) return;
+
+        taskForm.dependent_ids = [...(taskForm.dependent_ids || []), dependencyId];
+    } else {
+        if ((taskForm.dependency_ids || []).includes(dependencyId) || (taskForm.dependent_ids || []).includes(dependencyId)) return;
+
+        taskForm.dependency_ids = [...(taskForm.dependency_ids || []), dependencyId];
+    }
+
     taskDependencyToAdd.value = '';
     syncTaskDependencies();
 }
 
 function removeTaskDependency(dependencyId) {
     taskForm.dependency_ids = (taskForm.dependency_ids || []).filter((id) => id !== dependencyId);
+    syncTaskDependencies();
+}
+
+function removeTaskDependent(dependentId) {
+    taskForm.dependent_ids = (taskForm.dependent_ids || []).filter((id) => id !== dependentId);
     syncTaskDependencies();
 }
 
@@ -443,8 +471,10 @@ const taskForm = useForm({
     assignee_ids: [...(props.related.assignees || [])],
     follower_ids: [...(props.related.followers || [])],
     dependency_ids: (props.related.dependencies || []).map((dependency) => dependency.id),
+    dependent_ids: (props.related.dependents || []).map((dependent) => dependent.id),
 });
 const taskDependencyToAdd = ref('');
+const taskDependencyDirection = ref('blocked_by');
 const subtaskForm = useForm({
     title: '',
     priority: 'medium',
@@ -3277,13 +3307,20 @@ onUnmounted(() => {
                                     Bloccata
                                 </span>
                             </div>
-                            <AppSelect
-                                v-model="taskDependencyToAdd"
-                                :options="taskDependencySelectOptions()"
-                                placeholder="Aggiungi task bloccante"
-                                searchable
-                                @change="addTaskDependency"
-                            />
+                            <div class="grid gap-2 md:grid-cols-[170px_minmax(0,1fr)]">
+                                <AppSelect
+                                    v-model="taskDependencyDirection"
+                                    :options="taskDependencyDirectionOptions"
+                                    placeholder="Tipo relazione"
+                                />
+                                <AppSelect
+                                    v-model="taskDependencyToAdd"
+                                    :options="taskDependencySelectOptions()"
+                                    :placeholder="taskDependencyDirection === 'blocks' ? 'Scegli task bloccata' : 'Scegli task bloccante'"
+                                    searchable
+                                    @change="addTaskDependency"
+                                />
+                            </div>
                             <div class="mt-3 flex flex-wrap gap-2">
                                 <span
                                     v-for="dependency in selectedTaskDependencies()"
@@ -3297,17 +3334,19 @@ onUnmounted(() => {
                                 </span>
                                 <span v-if="!selectedTaskDependencies().length" class="text-xs text-gray-500">Nessuna dipendenza.</span>
                             </div>
-                            <div v-if="related.dependents?.length" class="mt-3 border-t border-gray-100 pt-3">
+                            <div v-if="selectedTaskDependents().length" class="mt-3 border-t border-gray-100 pt-3">
                                 <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Questa task blocca</p>
                                 <div class="mt-2 flex flex-wrap gap-2">
-                                    <Link
-                                        v-for="dependent in related.dependents"
+                                    <span
+                                        v-for="dependent in selectedTaskDependents()"
                                         :key="`dependent-${dependent.id}`"
-                                        :href="route('tasks.show', dependent.id)"
-                                        class="rounded-full bg-white px-3 py-1 text-xs font-semibold text-gray-600 transition hover:text-indigo-600"
+                                        :class="['inline-flex max-w-full items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold', dependent.status === 'done' ? 'bg-emerald-50 text-emerald-700' : 'bg-white text-gray-600']"
                                     >
-                                        {{ dependent.title }}
-                                    </Link>
+                                        <span class="truncate">{{ dependent.title }}</span>
+                                        <button type="button" class="text-current opacity-60 transition hover:opacity-100" title="Rimuovi relazione" @click="removeTaskDependent(dependent.id)">
+                                            <X class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                        </button>
+                                    </span>
                                 </div>
                             </div>
                             <div v-if="taskForm.errors.dependencies || taskForm.errors.status" class="mt-2 text-sm text-red-600">

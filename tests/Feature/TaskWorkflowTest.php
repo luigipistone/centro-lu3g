@@ -609,4 +609,53 @@ class TaskWorkflowTest extends TestCase
             'status' => 'done',
         ]);
     }
+
+    public function test_task_can_be_marked_as_blocking_another_task(): void
+    {
+        $user = User::factory()->create();
+        $blockingTaskId = (string) Str::uuid();
+        $blockedTaskId = (string) Str::uuid();
+
+        DB::table('tasks')->insert([
+            [
+                'id' => $blockingTaskId,
+                'title' => 'Preparare materiali',
+                'priority' => 'medium',
+                'status' => 'todo',
+                'task_type' => 'project',
+                'created_by' => $user->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'id' => $blockedTaskId,
+                'title' => 'Pubblicare landing',
+                'priority' => 'medium',
+                'status' => 'todo',
+                'task_type' => 'project',
+                'created_by' => $user->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->put("/tasks/{$blockingTaskId}/dependencies", [
+                'dependency_ids' => [],
+                'dependent_ids' => [$blockedTaskId],
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('task_dependencies', [
+            'task_id' => $blockedTaskId,
+            'depends_on_task_id' => $blockingTaskId,
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->patch("/tasks/{$blockedTaskId}/status", ['status' => 'done'])
+            ->assertSessionHasErrors(['status']);
+    }
 }

@@ -2289,7 +2289,7 @@ class CentroPageController extends Controller
         return DB::table('tasks')
             ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
             ->when($currentTaskId, fn ($query) => $query->where('tasks.id', '!=', $currentTaskId))
-            ->orderByRaw('tasks.status = ? asc', ['done'])
+            ->where('tasks.status', '!=', 'done')
             ->orderBy('tasks.due_date')
             ->orderBy('tasks.title')
             ->limit(300)
@@ -3012,16 +3012,34 @@ class CentroPageController extends Controller
         $payload = $request->validate([
             'dependency_ids' => ['array'],
             'dependency_ids.*' => ['uuid', 'exists:tasks,id'],
+            'dependent_ids' => ['array'],
+            'dependent_ids.*' => ['uuid', 'exists:tasks,id'],
         ]);
+        $syncDependents = $request->has('dependent_ids');
 
         $dependencyIds = collect($payload['dependency_ids'] ?? [])
             ->filter(fn ($dependencyId) => $dependencyId !== $id)
             ->unique()
             ->values();
+        $dependentIds = collect($payload['dependent_ids'] ?? [])
+            ->filter(fn ($dependentId) => $dependentId !== $id)
+            ->unique()
+            ->values();
+
+        if ($syncDependents && $dependencyIds->intersect($dependentIds)->isNotEmpty()) {
+            return back()->withErrors(['dependencies' => 'Una task non può essere sia bloccante sia bloccata dalla stessa task.']);
+        }
 
         $cyclicDependency = $dependencyIds->first(fn ($dependencyId) => $this->taskDependsOn($dependencyId, $id));
         if ($cyclicDependency) {
             return back()->withErrors(['dependencies' => 'Questa dipendenza creerebbe un ciclo tra task.']);
+        }
+
+        if ($syncDependents) {
+            $cyclicDependent = $dependentIds->first(fn ($dependentId) => $this->taskDependsOn($id, $dependentId));
+            if ($cyclicDependent) {
+                return back()->withErrors(['dependencies' => 'Questa relazione creerebbe un ciclo tra task.']);
+            }
         }
 
         $oldDependencyIds = DB::table('task_dependencies')
@@ -3030,9 +3048,20 @@ class CentroPageController extends Controller
             ->sort()
             ->values()
             ->all();
+        $oldDependentIds = $syncDependents
+            ? DB::table('task_dependencies')
+                ->where('depends_on_task_id', $id)
+                ->pluck('task_id')
+                ->sort()
+                ->values()
+                ->all()
+            : [];
 
-        DB::transaction(function () use ($id, $dependencyIds) {
+        DB::transaction(function () use ($id, $dependencyIds, $dependentIds, $syncDependents) {
             DB::table('task_dependencies')->where('task_id', $id)->delete();
+            if ($syncDependents) {
+                DB::table('task_dependencies')->where('depends_on_task_id', $id)->delete();
+            }
 
             foreach ($dependencyIds as $dependencyId) {
                 DB::table('task_dependencies')->insert([
@@ -3043,17 +3072,30 @@ class CentroPageController extends Controller
                     'updated_at' => now(),
                 ]);
             }
+
+            if ($syncDependents) {
+                foreach ($dependentIds as $dependentId) {
+                    DB::table('task_dependencies')->insert([
+                        'id' => (string) str()->uuid(),
+                        'task_id' => $dependentId,
+                        'depends_on_task_id' => $id,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+            }
         });
 
         $newDependencyIds = $dependencyIds->sort()->values()->all();
-        if ($oldDependencyIds !== $newDependencyIds) {
+        $newDependentIds = $syncDependents ? $dependentIds->sort()->values()->all() : [];
+        if ($oldDependencyIds !== $newDependencyIds || $oldDependentIds !== $newDependentIds) {
             $this->recordTaskActivity(
                 $id,
                 $request->user()->id,
                 'dependencies_updated',
                 'dependencies',
-                implode(',', $oldDependencyIds),
-                implode(',', $newDependencyIds),
+                implode(',', [...$oldDependencyIds, ...array_map(fn ($taskId) => 'blocks:'.$taskId, $oldDependentIds)]),
+                implode(',', [...$newDependencyIds, ...array_map(fn ($taskId) => 'blocks:'.$taskId, $newDependentIds)]),
             );
 
             $this->notifyTaskPeople(
