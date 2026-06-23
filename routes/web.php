@@ -78,6 +78,17 @@ Route::middleware('auth')->group(function () {
     Route::post('/document-groups', [CentroPageController::class, 'storeDocumentGroup'])->name('document-groups.store');
     Route::put('/document-groups/{id}', [CentroPageController::class, 'updateDocumentGroup'])->name('document-groups.update');
     Route::delete('/document-groups/{id}', [CentroPageController::class, 'destroyDocumentGroup'])->name('document-groups.destroy');
+    Route::get('/passwords', [CentroPageController::class, 'passwords'])->name('passwords.index');
+    Route::post('/passwords/vaults', [CentroPageController::class, 'storePasswordVault'])->name('passwords.vaults.store');
+    Route::put('/passwords/vaults/{id}', [CentroPageController::class, 'updatePasswordVault'])->name('passwords.vaults.update');
+    Route::delete('/passwords/vaults/{id}', [CentroPageController::class, 'destroyPasswordVault'])->name('passwords.vaults.destroy');
+    Route::post('/passwords/groups', [CentroPageController::class, 'storePasswordGroup'])->name('passwords.groups.store');
+    Route::put('/passwords/groups/{id}', [CentroPageController::class, 'updatePasswordGroup'])->name('passwords.groups.update');
+    Route::delete('/passwords/groups/{id}', [CentroPageController::class, 'destroyPasswordGroup'])->name('passwords.groups.destroy');
+    Route::post('/passwords/items', [CentroPageController::class, 'storePasswordItem'])->name('passwords.items.store');
+    Route::put('/passwords/items/{id}', [CentroPageController::class, 'updatePasswordItem'])->name('passwords.items.update');
+    Route::post('/passwords/items/{id}/reveal', [CentroPageController::class, 'revealPasswordItem'])->name('passwords.items.reveal');
+    Route::delete('/passwords/items/{id}', [CentroPageController::class, 'destroyPasswordItem'])->name('passwords.items.destroy');
     Route::get('/notifications', [CentroPageController::class, 'notifications'])->name('notifications.index');
     Route::get('/push/enable', [CentroPageController::class, 'enablePush'])->name('push.enable');
     Route::post('/push/test', [CentroPageController::class, 'testPush'])->name('push.test');

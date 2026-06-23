@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -880,6 +881,217 @@ class CentroPageController extends Controller
         DB::table('document_groups')->where('id', $id)->delete();
 
         return back()->with('status', 'Gruppo eliminato.');
+    }
+
+    public function passwords(Request $request): Response
+    {
+        return Inertia::render('Centro/Passwords', [
+            'canManage' => $this->canManagePasswords($request),
+            'vaults' => $this->passwordVaultRows($request),
+            'groups' => $this->passwordGroupRows($request),
+            'items' => $this->passwordItemRows($request),
+            'users' => $this->userOptions(),
+            'clients' => $this->isGuest($request)
+                ? DB::table('clients')->whereIn('id', $this->visibleClientIdsForUser($request->user()->id))->orderBy('name')->get(['id', 'name'])
+                : DB::table('clients')->orderBy('name')->get(['id', 'name']),
+            'projects' => $this->isGuest($request)
+                ? $this->visibleProjectOptionsForUser($request->user()->id)
+                : DB::table('projects')->orderBy('name')->get(['id', 'name']),
+        ]);
+    }
+
+    public function storePasswordVault(Request $request): RedirectResponse
+    {
+        $this->ensureCanManagePasswordStructure($request);
+
+        $payload = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:3000'],
+            'color' => ['nullable', 'string', 'max:24'],
+        ]);
+
+        DB::table('password_vaults')->insert([
+            'id' => (string) str()->uuid(),
+            'name' => $payload['name'],
+            'description' => $payload['description'] ?? null,
+            'color' => $payload['color'] ?? '#0B6EF3',
+            'created_by' => $request->user()->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return back()->with('status', 'Cassaforte creata.');
+    }
+
+    public function updatePasswordVault(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureCanManagePasswordStructure($request);
+        abort_unless(DB::table('password_vaults')->where('id', $id)->exists(), 404);
+
+        $payload = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:3000'],
+            'color' => ['nullable', 'string', 'max:24'],
+        ]);
+
+        DB::table('password_vaults')->where('id', $id)->update([
+            'name' => $payload['name'],
+            'description' => $payload['description'] ?? null,
+            'color' => $payload['color'] ?? '#0B6EF3',
+            'updated_at' => now(),
+        ]);
+
+        return back()->with('status', 'Cassaforte aggiornata.');
+    }
+
+    public function destroyPasswordVault(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureCanManagePasswordStructure($request);
+        DB::table('password_vaults')->where('id', $id)->delete();
+
+        return back()->with('status', 'Cassaforte eliminata.');
+    }
+
+    public function storePasswordGroup(Request $request): RedirectResponse
+    {
+        $this->ensureCanManagePasswordStructure($request);
+
+        $payload = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:3000'],
+            'user_ids' => ['nullable', 'array'],
+            'user_ids.*' => ['uuid', 'exists:users,id'],
+        ]);
+
+        if (empty($payload['user_ids'])) {
+            return back()->withErrors(['user_ids' => 'Seleziona almeno un utente.'])->withInput();
+        }
+
+        $groupId = (string) str()->uuid();
+        DB::transaction(function () use ($payload, $groupId, $request) {
+            DB::table('password_groups')->insert([
+                'id' => $groupId,
+                'name' => $payload['name'],
+                'description' => $payload['description'] ?? null,
+                'created_by' => $request->user()->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $this->syncPasswordGroupUsers($groupId, $payload['user_ids'] ?? []);
+        });
+
+        return back()->with('status', 'Gruppo password creato.');
+    }
+
+    public function updatePasswordGroup(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureCanManagePasswordStructure($request);
+        abort_unless(DB::table('password_groups')->where('id', $id)->exists(), 404);
+
+        $payload = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:3000'],
+            'user_ids' => ['nullable', 'array'],
+            'user_ids.*' => ['uuid', 'exists:users,id'],
+        ]);
+
+        if (empty($payload['user_ids'])) {
+            return back()->withErrors(['user_ids' => 'Seleziona almeno un utente.'])->withInput();
+        }
+
+        DB::transaction(function () use ($payload, $id) {
+            DB::table('password_groups')->where('id', $id)->update([
+                'name' => $payload['name'],
+                'description' => $payload['description'] ?? null,
+                'updated_at' => now(),
+            ]);
+
+            $this->syncPasswordGroupUsers($id, $payload['user_ids'] ?? []);
+        });
+
+        return back()->with('status', 'Gruppo password aggiornato.');
+    }
+
+    public function destroyPasswordGroup(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureCanManagePasswordStructure($request);
+        DB::table('password_groups')->where('id', $id)->delete();
+
+        return back()->with('status', 'Gruppo password eliminato.');
+    }
+
+    public function storePasswordItem(Request $request): RedirectResponse
+    {
+        $payload = $this->validatedPasswordItemPayload($request);
+        $itemId = (string) str()->uuid();
+
+        DB::transaction(function () use ($payload, $itemId, $request) {
+            DB::table('password_items')->insert($this->passwordItemPayloadForDatabase($payload, [
+                'id' => $itemId,
+                'created_by' => $request->user()->id,
+                'updated_by' => $request->user()->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]));
+
+            $this->syncPasswordItemShares($itemId, $payload['user_ids'] ?? [], $payload['group_ids'] ?? [], $payload['share_permission'] ?? 'view');
+            $this->logPasswordAction($itemId, $request->user()->id, 'created', 'Elemento password creato.');
+        });
+
+        return back()->with('status', 'Password salvata.');
+    }
+
+    public function updatePasswordItem(Request $request, string $id): RedirectResponse
+    {
+        $item = DB::table('password_items')->where('id', $id)->first();
+        abort_if(! $item, 404);
+        abort_unless($this->canEditPasswordItem($request, $item), 403);
+
+        $payload = $this->validatedPasswordItemPayload($request, true);
+
+        DB::transaction(function () use ($payload, $id, $request) {
+            DB::table('password_items')->where('id', $id)->update($this->passwordItemPayloadForDatabase($payload, [
+                'updated_by' => $request->user()->id,
+                'updated_at' => now(),
+            ], true));
+
+            $this->syncPasswordItemShares($id, $payload['user_ids'] ?? [], $payload['group_ids'] ?? [], $payload['share_permission'] ?? 'view');
+            $this->logPasswordAction($id, $request->user()->id, 'updated', 'Elemento password aggiornato.');
+        });
+
+        return back()->with('status', 'Password aggiornata.');
+    }
+
+    public function revealPasswordItem(Request $request, string $id): JsonResponse
+    {
+        $item = DB::table('password_items')->where('id', $id)->first();
+        abort_if(! $item, 404);
+        abort_unless($this->canViewPasswordItem($request, $item), 403);
+
+        $payload = $request->validate([
+            'account_password' => ['required', 'string'],
+        ]);
+
+        abort_unless(Hash::check($payload['account_password'], $request->user()->password), 403);
+
+        $this->logPasswordAction($id, $request->user()->id, 'revealed', 'Password rivelata.');
+
+        return response()->json([
+            'password' => $item->encrypted_password ? Crypt::decryptString($item->encrypted_password) : '',
+        ]);
+    }
+
+    public function destroyPasswordItem(Request $request, string $id): RedirectResponse
+    {
+        $item = DB::table('password_items')->where('id', $id)->first();
+        abort_if(! $item, 404);
+        abort_unless($this->canEditPasswordItem($request, $item), 403);
+
+        $this->logPasswordAction($id, $request->user()->id, 'deleted', 'Elemento password eliminato.');
+        DB::table('password_items')->where('id', $id)->delete();
+
+        return back()->with('status', 'Password eliminata.');
     }
 
     public function notifications(Request $request): Response
@@ -2904,6 +3116,270 @@ class CentroPageController extends Controller
     private function canManageDocuments(Request $request): bool
     {
         return in_array($this->currentUserRole($request), ['superadmin', 'admin'], true);
+    }
+
+    private function canManagePasswords(Request $request): bool
+    {
+        return in_array($this->currentUserRole($request), ['superadmin', 'admin'], true);
+    }
+
+    private function ensureCanManagePasswordStructure(Request $request): void
+    {
+        abort_unless($this->canManagePasswords($request), 403);
+    }
+
+    private function passwordVaultRows(Request $request)
+    {
+        return DB::table('password_vaults')
+            ->orderBy('name')
+            ->get()
+            ->map(function ($vault) use ($request) {
+                $items = $this->passwordItemsQuery($request)->where('password_items.password_vault_id', $vault->id)->get();
+                $vault->items_count = $items->count();
+
+                return $vault;
+            });
+    }
+
+    private function passwordGroupRows(Request $request)
+    {
+        $query = DB::table('password_groups')->orderBy('name');
+        if (! $this->canManagePasswords($request)) {
+            $query->whereIn('id', DB::table('password_group_user')->where('user_id', $request->user()->id)->pluck('password_group_id'));
+        }
+
+        $groups = $query->get();
+        $members = DB::table('password_group_user')
+            ->whereIn('password_group_id', $groups->pluck('id'))
+            ->get(['password_group_id', 'user_id'])
+            ->groupBy('password_group_id');
+
+        return $groups->map(function ($group) use ($members) {
+            $group->user_ids = ($members[$group->id] ?? collect())->pluck('user_id')->values();
+            $group->members_count = $group->user_ids->count();
+
+            return $group;
+        });
+    }
+
+    private function passwordItemRows(Request $request)
+    {
+        $items = $this->passwordItemsQuery($request)
+            ->leftJoin('password_vaults', 'password_vaults.id', '=', 'password_items.password_vault_id')
+            ->leftJoin('clients', 'clients.id', '=', 'password_items.client_id')
+            ->leftJoin('projects', 'projects.id', '=', 'password_items.project_id')
+            ->latest('password_items.updated_at')
+            ->limit(500)
+            ->get([
+                'password_items.*',
+                'password_vaults.name as vault_name',
+                'password_vaults.color as vault_color',
+                'clients.name as client_name',
+                'projects.name as project_name',
+            ]);
+
+        $itemIds = $items->pluck('id');
+        $userShares = DB::table('password_item_user')
+            ->whereIn('password_item_id', $itemIds)
+            ->get(['password_item_id', 'user_id', 'permission'])
+            ->groupBy('password_item_id');
+        $groupShares = DB::table('password_item_group')
+            ->whereIn('password_item_id', $itemIds)
+            ->get(['password_item_id', 'password_group_id', 'permission'])
+            ->groupBy('password_item_id');
+        $audit = DB::table('password_audit_logs')
+            ->leftJoin('users', 'users.id', '=', 'password_audit_logs.user_id')
+            ->whereIn('password_audit_logs.password_item_id', $itemIds)
+            ->latest('password_audit_logs.created_at')
+            ->get([
+                'password_audit_logs.password_item_id',
+                'password_audit_logs.action',
+                'password_audit_logs.details',
+                'password_audit_logs.created_at',
+                'users.name as user_name',
+            ])
+            ->groupBy('password_item_id');
+
+        return $items->map(function ($item) use ($request, $userShares, $groupShares, $audit) {
+            $item->has_password = filled($item->encrypted_password);
+            unset($item->encrypted_password);
+            $item->tags = $item->tags ? json_decode($item->tags, true) : [];
+            $item->custom_fields = $item->custom_fields ? json_decode($item->custom_fields, true) : [];
+            $item->user_ids = ($userShares[$item->id] ?? collect())->pluck('user_id')->values();
+            $item->group_ids = ($groupShares[$item->id] ?? collect())->pluck('password_group_id')->values();
+            $item->share_permission = ($userShares[$item->id] ?? collect())->first()?->permission
+                ?: (($groupShares[$item->id] ?? collect())->first()?->permission ?: 'view');
+            $item->can_edit = $this->canEditPasswordItem($request, $item);
+            $item->audit = ($audit[$item->id] ?? collect())->take(8)->values();
+
+            return $item;
+        });
+    }
+
+    private function passwordItemsQuery(Request $request)
+    {
+        $query = DB::table('password_items');
+        if ($this->canManagePasswords($request)) {
+            return $query;
+        }
+
+        $groupIds = DB::table('password_group_user')->where('user_id', $request->user()->id)->pluck('password_group_id');
+
+        return $query->where(function ($query) use ($request, $groupIds) {
+            $query->where('password_items.created_by', $request->user()->id)
+                ->orWhereIn('password_items.id', DB::table('password_item_user')->where('user_id', $request->user()->id)->pluck('password_item_id'))
+                ->orWhereIn('password_items.id', DB::table('password_item_group')->whereIn('password_group_id', $groupIds)->pluck('password_item_id'));
+        });
+    }
+
+    private function canViewPasswordItem(Request $request, object $item): bool
+    {
+        if ($this->canManagePasswords($request) || $item->created_by === $request->user()->id) {
+            return true;
+        }
+
+        $groupIds = DB::table('password_group_user')->where('user_id', $request->user()->id)->pluck('password_group_id');
+
+        return DB::table('password_item_user')->where('password_item_id', $item->id)->where('user_id', $request->user()->id)->exists()
+            || DB::table('password_item_group')->where('password_item_id', $item->id)->whereIn('password_group_id', $groupIds)->exists();
+    }
+
+    private function canEditPasswordItem(Request $request, object $item): bool
+    {
+        if ($this->canManagePasswords($request) || $item->created_by === $request->user()->id) {
+            return true;
+        }
+
+        $groupIds = DB::table('password_group_user')->where('user_id', $request->user()->id)->pluck('password_group_id');
+
+        return DB::table('password_item_user')
+            ->where('password_item_id', $item->id)
+            ->where('user_id', $request->user()->id)
+            ->where('permission', 'edit')
+            ->exists()
+            || DB::table('password_item_group')
+                ->where('password_item_id', $item->id)
+                ->whereIn('password_group_id', $groupIds)
+                ->where('permission', 'edit')
+                ->exists();
+    }
+
+    private function validatedPasswordItemPayload(Request $request, bool $updating = false): array
+    {
+        return $request->validate([
+            'password_vault_id' => ['nullable', 'uuid', 'exists:password_vaults,id'],
+            'title' => ['required', 'string', 'max:255'],
+            'url' => ['nullable', 'string', 'max:1000'],
+            'username' => ['nullable', 'string', 'max:255'],
+            'password' => [$updating ? 'nullable' : 'required', 'string', 'max:2000'],
+            'notes' => ['nullable', 'string', 'max:10000'],
+            'tags_text' => ['nullable', 'string', 'max:1000'],
+            'expires_at' => ['nullable', 'date'],
+            'favorite' => ['boolean'],
+            'client_id' => ['nullable', 'uuid', 'exists:clients,id'],
+            'project_id' => ['nullable', 'uuid', 'exists:projects,id'],
+            'share_permission' => ['nullable', Rule::in(['view', 'edit'])],
+            'user_ids' => ['nullable', 'array'],
+            'user_ids.*' => ['uuid', 'exists:users,id'],
+            'group_ids' => ['nullable', 'array'],
+            'group_ids.*' => ['uuid', 'exists:password_groups,id'],
+            'custom_fields' => ['nullable', 'array'],
+            'custom_fields.*.label' => ['nullable', 'string', 'max:120'],
+            'custom_fields.*.value' => ['nullable', 'string', 'max:1000'],
+        ]);
+    }
+
+    private function passwordItemPayloadForDatabase(array $payload, array $extra = [], bool $updating = false): array
+    {
+        $data = [
+            'password_vault_id' => $payload['password_vault_id'] ?? null,
+            'title' => $payload['title'],
+            'url' => $payload['url'] ?? null,
+            'username' => $payload['username'] ?? null,
+            'notes' => $payload['notes'] ?? null,
+            'tags' => json_encode(collect(explode(',', (string) ($payload['tags_text'] ?? '')))
+                ->map(fn ($tag) => trim($tag))
+                ->filter()
+                ->unique()
+                ->values()
+                ->all()),
+            'custom_fields' => json_encode(collect($payload['custom_fields'] ?? [])
+                ->filter(fn ($field) => filled($field['label'] ?? null) || filled($field['value'] ?? null))
+                ->values()
+                ->all()),
+            'expires_at' => $payload['expires_at'] ?? null,
+            'favorite' => (bool) ($payload['favorite'] ?? false),
+            'client_id' => $payload['client_id'] ?? null,
+            'project_id' => $payload['project_id'] ?? null,
+        ];
+
+        if (! $updating || filled($payload['password'] ?? null)) {
+            $data['encrypted_password'] = Crypt::encryptString($payload['password'] ?? '');
+        }
+
+        return [...$data, ...$extra];
+    }
+
+    private function syncPasswordItemShares(string $itemId, array $userIds, array $groupIds, string $sharePermission = 'view'): void
+    {
+        $permission = $sharePermission === 'edit' ? 'edit' : 'view';
+        DB::table('password_item_user')->where('password_item_id', $itemId)->delete();
+        DB::table('password_item_group')->where('password_item_id', $itemId)->delete();
+
+        $now = now();
+        $userRows = collect($userIds)->unique()->values()->map(fn ($userId) => [
+            'id' => (string) str()->uuid(),
+            'password_item_id' => $itemId,
+            'user_id' => $userId,
+            'permission' => $permission,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ])->all();
+        $groupRows = collect($groupIds)->unique()->values()->map(fn ($groupId) => [
+            'id' => (string) str()->uuid(),
+            'password_item_id' => $itemId,
+            'password_group_id' => $groupId,
+            'permission' => $permission,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ])->all();
+
+        if ($userRows) {
+            DB::table('password_item_user')->insert($userRows);
+        }
+        if ($groupRows) {
+            DB::table('password_item_group')->insert($groupRows);
+        }
+    }
+
+    private function syncPasswordGroupUsers(string $groupId, array $userIds): void
+    {
+        DB::table('password_group_user')->where('password_group_id', $groupId)->delete();
+
+        $rows = collect($userIds)->unique()->values()->map(fn ($userId) => [
+            'id' => (string) str()->uuid(),
+            'password_group_id' => $groupId,
+            'user_id' => $userId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ])->all();
+
+        if ($rows) {
+            DB::table('password_group_user')->insert($rows);
+        }
+    }
+
+    private function logPasswordAction(?string $itemId, ?string $userId, string $action, string $details): void
+    {
+        DB::table('password_audit_logs')->insert([
+            'id' => (string) str()->uuid(),
+            'password_item_id' => $itemId,
+            'user_id' => $userId,
+            'action' => $action,
+            'details' => $details,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     private function canAccessAbsence(Request $request, object $absence): bool
