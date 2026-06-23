@@ -99,8 +99,21 @@ const restoreConfirmText = ref('');
 const updateDrafts = ref({});
 const savingUpdateKeys = ref([]);
 const page = usePage();
+const currentRole = computed(() => page.props.auth?.user?.role || 'guest');
 const isGuest = computed(() => page.props.auth?.user?.role === 'guest');
-const canWrite = computed(() => props.fields.length > 0 && !isGuest.value);
+const isEditor = computed(() => currentRole.value === 'editor');
+const canWrite = computed(() => {
+    if (!props.fields.length || isGuest.value) return false;
+    if (!isEditor.value) return true;
+
+    return props.section === 'projects' || props.section === 'tasks' || props.section.startsWith('updates-');
+});
+const canCreate = computed(() => {
+    if (!canWrite.value) return false;
+    if (!isEditor.value) return true;
+
+    return props.section === 'tasks' || props.section.startsWith('updates-');
+});
 const billingSearch = ref('');
 const billingType = ref('all');
 const billingStatus = ref('all');
@@ -1361,9 +1374,20 @@ function fileSize(value) {
 }
 
 function remove(row, action = null) {
+    if (!canDeleteRow(row)) return;
     deleteTarget.value = row;
     deleteTargetAction.value = action;
     deleteConfirmText.value = '';
+}
+
+function canDeleteRow(row) {
+    if (isGuest.value) return false;
+    if (!isEditor.value) return true;
+    if (props.section === 'tasks' || props.section === 'calendar') {
+        return row?.created_by === page.props.auth?.user?.id;
+    }
+
+    return props.section.startsWith('updates-');
 }
 
 function deleteTargetName() {
@@ -3499,7 +3523,7 @@ function calendarDayStyle(sectionMonth, cell) {
                         <div class="w-80 shrink-0">
                             <AppSelect v-model="calendarType" :options="calendarTypeOptions" />
                         </div>
-                        <div ref="calendarPeopleMenu" class="relative z-30 w-64 shrink-0">
+                        <div v-if="!isGuest" ref="calendarPeopleMenu" class="relative z-30 w-64 shrink-0">
                             <button
                                 type="button"
                                 :class="[
@@ -3784,7 +3808,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                             <Printer class="h-4 w-4" :stroke-width="1.7" />
                                             Stampa
                                         </button>
-                                        <button type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50" @click="removeCalendarTask">
+                                        <button v-if="canDeleteRow(calendarTaskPanel)" type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50" @click="removeCalendarTask">
                                             <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                             Elimina
                                         </button>
@@ -4172,7 +4196,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                             <button type="button" class="icon-btn h-9 w-9" title="Apri sottoattività" @click="openCalendarSubtask(subtask)">
                                                 <ExternalLink class="h-4 w-4" :stroke-width="1.7" />
                                             </button>
-                                            <button type="button" class="icon-btn h-9 w-9 text-red-600 hover:bg-red-50" title="Elimina sottoattività" @click="removeCalendarSubtask(subtask)">
+                                            <button v-if="canDeleteRow(subtask)" type="button" class="icon-btn h-9 w-9 text-red-600 hover:bg-red-50" title="Elimina sottoattività" @click="removeCalendarSubtask(subtask)">
                                                 <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                             </button>
                                         </div>
@@ -4382,7 +4406,7 @@ function calendarDayStyle(sectionMonth, cell) {
                         </div>
                     </div>
                     <button type="button" class="btn btn-outline" @click="resetProjectFilters"><RotateCcw class="h-4 w-4" :stroke-width="1.7" />Reset</button>
-                    <button type="button" class="btn btn-primary" @click="openCreate()">
+                    <button v-if="canCreate" type="button" class="btn btn-primary" @click="openCreate()">
                         <Plus class="h-4 w-4" :stroke-width="1.7" />
                         Nuovo Progetto
                     </button>
@@ -4427,7 +4451,7 @@ function calendarDayStyle(sectionMonth, cell) {
                         </Link>
 
                         <button
-                            v-if="!isGuest"
+                            v-if="canDeleteRow(project)"
                             type="button"
                             class="absolute right-4 top-4 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-red-100 bg-white/90 text-red-600 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-200"
                             :aria-label="`Elimina ${project.name}`"
@@ -4630,7 +4654,7 @@ function calendarDayStyle(sectionMonth, cell) {
                             <span class="rounded-full bg-white/60 px-2 py-0.5 text-[11px] text-current">{{ filter.count }}</span>
                         </button>
                     </div>
-                    <button type="button" class="btn btn-primary" @click="openCreate()">
+                    <button v-if="canCreate" type="button" class="btn btn-primary" @click="openCreate()">
                         <UserPlus class="h-4 w-4" :stroke-width="1.7" />
                         Crea Utente
                     </button>
@@ -4683,7 +4707,7 @@ function calendarDayStyle(sectionMonth, cell) {
                         searchable
                     />
                     <button type="button" class="btn btn-outline" @click="clientSearch = ''; clientService = 'all'"><RotateCcw class="h-4 w-4" :stroke-width="1.7" />Reset</button>
-                    <button type="button" class="btn btn-primary" @click="openCreate()"><Plus class="h-4 w-4" :stroke-width="1.7" />Nuovo Cliente</button>
+                    <button v-if="canCreate" type="button" class="btn btn-primary" @click="openCreate()"><Plus class="h-4 w-4" :stroke-width="1.7" />Nuovo Cliente</button>
                 </div>
 
                 <div class="grid gap-6">
@@ -4780,6 +4804,7 @@ function calendarDayStyle(sectionMonth, cell) {
                             </Link>
 
                             <button
+                                v-if="canDeleteRow(client)"
                                 type="button"
                                 class="absolute right-4 top-4 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-red-100 bg-white/90 text-red-600 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-200"
                                 :aria-label="`Elimina ${client.name}`"
@@ -4822,9 +4847,9 @@ function calendarDayStyle(sectionMonth, cell) {
                     <AppSelect v-model="taskPriority" :options="taskPriorityOptions" />
                     <AppSelect v-model="taskType" :options="taskTypeOptions" />
                     <button type="button" class="btn btn-outline" @click="taskSearch = ''; taskStatus = 'all'; taskPriority = 'all'; taskType = 'all'"><RotateCcw class="h-4 w-4" :stroke-width="1.7" />Reset</button>
-                    <button v-if="!isGuest" type="button" class="btn btn-primary" @click="openCreate({ task_type: 'project' })"><Briefcase class="h-4 w-4" :stroke-width="1.7" />Task</button>
-                    <button v-if="!isGuest" type="button" class="btn border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100" @click="openCreate({ task_type: 'ongoing' })"><RefreshCw class="h-4 w-4" :stroke-width="1.7" />Continuativa</button>
-                    <button v-if="!isGuest" type="button" class="btn border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100" @click="openCreate({ task_type: 'meeting', due_time: '09:00' })"><CalendarClock class="h-4 w-4" :stroke-width="1.7" />Meeting</button>
+                    <button v-if="canCreate" type="button" class="btn btn-primary" @click="openCreate({ task_type: 'project' })"><Briefcase class="h-4 w-4" :stroke-width="1.7" />Task</button>
+                    <button v-if="canCreate" type="button" class="btn border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100" @click="openCreate({ task_type: 'ongoing' })"><RefreshCw class="h-4 w-4" :stroke-width="1.7" />Continuativa</button>
+                    <button v-if="canCreate" type="button" class="btn border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100" @click="openCreate({ task_type: 'meeting', due_time: '09:00' })"><CalendarClock class="h-4 w-4" :stroke-width="1.7" />Meeting</button>
                 </div>
 
                 <div class="grid gap-4">
@@ -4943,7 +4968,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                     ]"
                                 >
                                     <button
-                                        v-if="!isGuest"
+                                        v-if="canDeleteRow(task)"
                                         type="button"
                                         class="absolute right-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-red-100 bg-white/86 text-red-500 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-200"
                                         :aria-label="`Elimina ${task.title}`"
@@ -5330,7 +5355,7 @@ function calendarDayStyle(sectionMonth, cell) {
 
                 <section v-else class="space-y-4">
                     <div class="flex justify-end">
-                        <button type="button" class="btn btn-primary" @click="openCreate()">
+                        <button v-if="canCreate" type="button" class="btn btn-primary" @click="openCreate()">
                             <Plus class="h-4 w-4" :stroke-width="1.7" />
                             Aggiungi servizio
                         </button>
@@ -5468,7 +5493,7 @@ function calendarDayStyle(sectionMonth, cell) {
                         <AppSelect v-model="billingType" :options="objectOptions(documentTypeLabels, { value: 'all', label: 'Tutti i tipi' })" />
                         <AppSelect v-model="billingStatus" :options="objectOptions(documentStatusLabels, { value: 'all', label: 'Tutti gli stati' })" />
                         <button type="button" class="btn btn-outline" @click="billingSearch = ''; billingType = 'all'; billingStatus = 'all'"><RotateCcw class="h-4 w-4" :stroke-width="1.7" />Reset</button>
-                        <button type="button" class="btn btn-primary" @click="openCreate()"><Plus class="h-4 w-4" :stroke-width="1.7" />Nuovo documento</button>
+                        <button v-if="canCreate" type="button" class="btn btn-primary" @click="openCreate()"><Plus class="h-4 w-4" :stroke-width="1.7" />Nuovo documento</button>
                     </div>
 
                     <div class="overflow-x-auto">
@@ -5679,7 +5704,7 @@ function calendarDayStyle(sectionMonth, cell) {
 
         <div v-else class="py-8">
             <div class="mx-auto max-w-7xl space-y-4 px-4 sm:px-6 lg:px-8">
-                <div v-if="canWrite" class="flex justify-end">
+                <div v-if="canCreate" class="flex justify-end">
                     <button type="button" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500" @click="openCreate()">
                         {{ createButtonLabel }}
                     </button>
@@ -5791,7 +5816,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                     <td v-if="canWrite" class="whitespace-nowrap px-4 py-3 text-right">
                                         <Link v-if="showRoute(row)" :href="showRoute(row)" class="text-sm font-medium text-indigo-600 hover:text-indigo-500">Apri</Link>
                                         <button v-else type="button" class="text-sm font-medium text-indigo-600 hover:text-indigo-500" @click="editRow(row)">Modifica</button>
-                                        <button type="button" class="ml-4 text-sm font-medium text-red-600 hover:text-red-500" @click="remove(row)">Elimina</button>
+                                        <button v-if="canDeleteRow(row)" type="button" class="ml-4 text-sm font-medium text-red-600 hover:text-red-500" @click="remove(row)">Elimina</button>
                                     </td>
                                 </tr>
                                 <tr v-if="!rows.length">

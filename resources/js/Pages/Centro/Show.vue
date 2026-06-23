@@ -55,7 +55,24 @@ const props = defineProps({
 });
 
 const page = usePage();
+const currentRole = computed(() => page.props.auth?.user?.role || 'guest');
 const isGuest = computed(() => page.props.auth?.user?.role === 'guest');
+const isEditor = computed(() => currentRole.value === 'editor');
+const canEditClient = computed(() => !isGuest.value && !isEditor.value);
+const canDeleteProject = computed(() => !isGuest.value && !isEditor.value);
+const canDeleteCurrentTask = computed(() => {
+    if (isGuest.value) return false;
+    if (!isEditor.value) return true;
+
+    return props.record?.created_by === page.props.auth?.user?.id;
+});
+
+function canDeleteTaskRecord(task) {
+    if (isGuest.value) return false;
+    if (!isEditor.value) return true;
+
+    return task?.created_by === page.props.auth?.user?.id;
+}
 const AUTOSAVE_IDLE_DELAY = 2500;
 
 function autosaveDelay(delay = AUTOSAVE_IDLE_DELAY) {
@@ -1157,6 +1174,7 @@ function printTask() {
 }
 
 function deleteTaskFromDetail() {
+    if (!canDeleteCurrentTask.value) return;
     taskActionMenuOpen.value = false;
     openConfirm({
         title: 'Eliminare questa task?',
@@ -1527,6 +1545,7 @@ function sendDocumentEmail() {
 }
 
 function addContact() {
+    if (!canEditClient.value) return;
     contactForm.post(route('clients.contacts.store', props.record.id), {
         preserveScroll: true,
         onSuccess: () => contactForm.reset(),
@@ -1546,7 +1565,7 @@ function contactDraftPayload(contactId) {
 }
 
 function saveContactInline(contact, delay = AUTOSAVE_IDLE_DELAY) {
-    if (props.section !== 'clients') return;
+    if (props.section !== 'clients' || !canEditClient.value) return;
 
     const payload = contactDraftPayload(contact.id);
     if (!String(payload.first_name).trim() || !String(payload.last_name).trim()) {
@@ -1613,7 +1632,7 @@ function clientPayload() {
 }
 
 function saveClientInline(delay = AUTOSAVE_IDLE_DELAY) {
-    if (props.section !== 'clients') return;
+    if (props.section !== 'clients' || !canEditClient.value) return;
 
     window.clearTimeout(clientAutosaveTimer);
     clientAutosaveState.value = 'queued';
@@ -1647,6 +1666,7 @@ function saveClientInline(delay = AUTOSAVE_IDLE_DELAY) {
 }
 
 function removeContact(contact) {
+    if (!canEditClient.value) return;
     openConfirm({
         title: 'Eliminare questo referente?',
         description: [contact.first_name, contact.last_name].filter(Boolean).join(' ') || contact.email || 'Referente',
@@ -1925,7 +1945,7 @@ function toggleProjectPerson(userId) {
 }
 
 function deleteProjectFromDetail() {
-    if (isGuest.value) return;
+    if (!canDeleteProject.value) return;
     openConfirm({
         title: 'Eliminare questo progetto?',
         description: props.record.name || 'Progetto',
@@ -1941,6 +1961,7 @@ function deleteProjectFromDetail() {
 }
 
 function resetSubscriptionForm() {
+    if (!canEditClient.value) return;
     editingSubscription.value = null;
     subscriptionForm.clearErrors();
     subscriptionForm.defaults({ ...subscriptionDefaults });
@@ -1949,6 +1970,7 @@ function resetSubscriptionForm() {
 }
 
 function editSubscription(subscription) {
+    if (!canEditClient.value) return;
     editingSubscription.value = subscription;
     subscriptionForm.clearErrors();
     Object.keys(subscriptionDefaults).forEach((key) => {
@@ -1957,6 +1979,7 @@ function editSubscription(subscription) {
 }
 
 function saveSubscription() {
+    if (!canEditClient.value) return;
     if (editingSubscription.value) {
         subscriptionForm.put(route('clients.subscriptions.update', [props.record.id, editingSubscription.value.id]), {
             preserveScroll: true,
@@ -1972,14 +1995,17 @@ function saveSubscription() {
 }
 
 function toggleSubscription(subscription) {
+    if (!canEditClient.value) return;
     router.patch(route('clients.subscriptions.active', [props.record.id, subscription.id]), { active: !subscription.active }, { preserveScroll: true });
 }
 
 function generateSubscription(subscription) {
+    if (!canEditClient.value) return;
     router.post(route('clients.subscriptions.generate', [props.record.id, subscription.id]));
 }
 
 function removeSubscription(subscription) {
+    if (!canEditClient.value) return;
     openConfirm({
         title: 'Eliminare questo abbonamento?',
         description: subscription.name || 'Abbonamento',
@@ -2020,6 +2046,7 @@ function setClientService(serviceId, enabled) {
 }
 
 function toggleService(service) {
+    if (!canEditClient.value) return;
     const wasEnabled = clientHasService(service);
     const nextEnabled = !wasEnabled;
 
@@ -2592,6 +2619,7 @@ function printProjectDrawerTask() {
 
 function removeProjectDrawerTask() {
     if (!projectTaskDrawerTask.value?.id) return;
+    if (!canDeleteTaskRecord(projectTaskDrawerTask.value)) return;
     projectTaskActionMenuOpen.value = false;
     openConfirm({
         title: 'Eliminare questa task?',
@@ -3220,7 +3248,7 @@ onUnmounted(() => {
                                     <Printer class="h-4 w-4" :stroke-width="1.7" />
                                     Stampa
                                 </button>
-                                <button v-if="!isGuest" type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50" @click="deleteTaskFromDetail">
+                                <button v-if="canDeleteCurrentTask" type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50" @click="deleteTaskFromDetail">
                                     <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                     Elimina
                                 </button>
@@ -3228,7 +3256,7 @@ onUnmounted(() => {
                         </div>
                     </Teleport>
                 </div>
-                <div v-else-if="section === 'projects' && !isGuest" class="flex flex-wrap justify-end gap-2">
+                <div v-else-if="section === 'projects' && canDeleteProject" class="flex flex-wrap justify-end gap-2">
                     <button type="button" class="btn btn-danger" @click="deleteProjectFromDetail">
                         <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                         Elimina
@@ -5475,7 +5503,7 @@ onUnmounted(() => {
                                             <Printer class="h-4 w-4" :stroke-width="1.7" />
                                             Stampa
                                         </button>
-                                        <button type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50" @click="removeProjectDrawerTask">
+                                        <button v-if="canDeleteTaskRecord(projectTaskDrawerTask)" type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50" @click="removeProjectDrawerTask">
                                             <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                             Elimina
                                         </button>

@@ -274,7 +274,7 @@ class CentroPageController extends Controller
             $this->ensureAdmin($request);
         }
 
-        $this->ensureGuestCanAccessIndex($request, $section);
+        $this->ensureRoleCanAccessIndex($request, $section);
 
         $config = $this->config($section);
         $limit = $section === 'billing' ? 500 : 100;
@@ -343,7 +343,7 @@ class CentroPageController extends Controller
                 ->whereIn('parent_task_id', $taskIds)
                 ->orderBy('position')
                 ->orderBy('created_at')
-                ->get(['id', 'parent_task_id', 'title', 'status', 'priority', 'due_date', 'due_time', 'project_id', 'client_id', 'service_id', 'description', 'position'])
+                ->get(['id', 'parent_task_id', 'title', 'status', 'priority', 'due_date', 'due_time', 'project_id', 'client_id', 'service_id', 'description', 'position', 'created_by'])
                 ->groupBy('parent_task_id');
             $subtaskIds = $subtasksByTask->flatten(1)->pluck('id');
             $assigneesBySubtask = DB::table('task_assignees')
@@ -962,6 +962,7 @@ class CentroPageController extends Controller
             default => DB::table($config['table'])->where('id', $id)->first(),
         };
         abort_if(! $record, 404);
+        $this->ensureRoleCanViewRecord($request, $section, $id);
         $this->ensureGuestCanViewRecord($request, $section, $id);
 
         $related = match ($section) {
@@ -1061,7 +1062,7 @@ class CentroPageController extends Controller
 
     public function store(Request $request, string $section): RedirectResponse
     {
-        abort_if($this->isGuest($request), 403);
+        $this->ensureRoleCanStore($request, $section);
 
         if ($section === 'users') {
             return $this->storeUser($request);
@@ -1134,7 +1135,7 @@ class CentroPageController extends Controller
     public function update(Request $request, string $id): RedirectResponse
     {
         $section = $request->route('section');
-        $this->ensureGuestCanUpdateRecord($request, $section, $id);
+        $this->ensureRoleCanUpdateRecord($request, $section, $id);
 
         if ($section === 'users') {
             return $this->updateUser($request, $id);
@@ -1227,9 +1228,8 @@ class CentroPageController extends Controller
 
     public function destroy(Request $request, string $id): RedirectResponse
     {
-        abort_if($this->isGuest($request), 403);
-
         $section = $request->route('section');
+        $this->ensureRoleCanDestroyRecord($request, $section, $id);
 
         if ($section === 'users') {
             $this->ensureSuperadmin($request);
@@ -2626,6 +2626,11 @@ class CentroPageController extends Controller
         return $this->currentUserRole($request) === 'guest';
     }
 
+    private function isEditor(Request $request): bool
+    {
+        return $this->currentUserRole($request) === 'editor';
+    }
+
     private function ensureSuperadmin(Request $request): void
     {
         abort_unless($this->currentUserRole($request) === 'superadmin', 403);
@@ -2636,13 +2641,21 @@ class CentroPageController extends Controller
         abort_unless(in_array($this->currentUserRole($request), ['superadmin', 'admin'], true), 403);
     }
 
-    private function ensureGuestCanAccessIndex(Request $request, string $section): void
+    private function ensureRoleCanAccessIndex(Request $request, string $section): void
     {
-        if (! $this->isGuest($request)) {
+        if ($this->isGuest($request)) {
+            abort_unless(in_array($section, ['projects', 'tasks', 'calendar'], true), 403);
+
             return;
         }
 
-        abort_unless(in_array($section, ['projects', 'tasks', 'calendar'], true), 403);
+        if ($this->isEditor($request)) {
+            abort_unless(
+                in_array($section, ['clients', 'projects', 'tasks', 'calendar'], true)
+                    || str_starts_with($section, 'updates-'),
+                403,
+            );
+        }
     }
 
     private function ensureGuestCanViewRecord(Request $request, string $section, string $id): void
@@ -2666,13 +2679,64 @@ class CentroPageController extends Controller
         abort(403);
     }
 
-    private function ensureGuestCanUpdateRecord(Request $request, string $section, string $id): void
+    private function ensureRoleCanViewRecord(Request $request, string $section, string $id): void
     {
-        if (! $this->isGuest($request)) {
+        if (! $this->isEditor($request)) {
             return;
         }
 
-        abort_unless($section === 'tasks' && $this->isTaskParticipant($id, $request->user()->id), 403);
+        abort_unless(
+            in_array($section, ['clients', 'projects', 'tasks'], true)
+                || str_starts_with($section, 'updates-'),
+            403,
+        );
+    }
+
+    private function ensureRoleCanStore(Request $request, string $section): void
+    {
+        if ($this->isGuest($request)) {
+            abort(403);
+        }
+
+        if ($this->isEditor($request)) {
+            abort_unless($section === 'tasks' || str_starts_with($section, 'updates-'), 403);
+        }
+    }
+
+    private function ensureRoleCanUpdateRecord(Request $request, string $section, string $id): void
+    {
+        if ($this->isGuest($request)) {
+            abort_unless($section === 'tasks' && $this->isTaskParticipant($id, $request->user()->id), 403);
+
+            return;
+        }
+
+        if ($this->isEditor($request)) {
+            abort_unless($section === 'projects' || $section === 'tasks' || str_starts_with($section, 'updates-'), 403);
+        }
+    }
+
+    private function ensureRoleCanDestroyRecord(Request $request, string $section, string $id): void
+    {
+        if ($this->isGuest($request)) {
+            abort(403);
+        }
+
+        if (! $this->isEditor($request)) {
+            return;
+        }
+
+        if ($section === 'tasks') {
+            abort_unless($this->canEditorDeleteTask($request, $id), 403);
+
+            return;
+        }
+
+        if (str_starts_with($section, 'updates-')) {
+            return;
+        }
+
+        abort(403);
     }
 
     private function ensureGuestCanEditTask(Request $request, string $taskId): void
@@ -2687,6 +2751,28 @@ class CentroPageController extends Controller
     private function ensureGuestCanEditProject(Request $request): void
     {
         abort_if($this->isGuest($request), 403);
+    }
+
+    private function ensureCanManageClients(Request $request): void
+    {
+        abort_if($this->isGuest($request) || $this->isEditor($request), 403);
+    }
+
+    private function ensureCanManageBilling(Request $request): void
+    {
+        abort_if($this->isGuest($request) || $this->isEditor($request), 403);
+    }
+
+    private function canEditorDeleteTask(Request $request, string $taskId): bool
+    {
+        if (! $this->isEditor($request)) {
+            return true;
+        }
+
+        return DB::table('tasks')
+            ->where('id', $taskId)
+            ->where('created_by', $request->user()->id)
+            ->exists();
     }
 
     private function visibleTaskIdsForUser(string $userId): \Illuminate\Support\Collection
@@ -3081,6 +3167,7 @@ class CentroPageController extends Controller
                 'recurring_weekday',
                 'recurring_month_day',
                 'position',
+                'created_by',
             ]);
 
         $assigneesBySubtask = DB::table('task_assignees')
@@ -3354,6 +3441,7 @@ class CentroPageController extends Controller
 
     public function updateDocumentHeader(Request $request, string $id): RedirectResponse
     {
+        $this->ensureCanManageBilling($request);
         DB::table('documents')->where('id', $id)->exists() || abort(404);
 
         $payload = $request->validate([
@@ -3386,8 +3474,9 @@ class CentroPageController extends Controller
         return back()->with('status', 'Documento salvato.');
     }
 
-    public function issueDocument(string $id): RedirectResponse
+    public function issueDocument(Request $request, string $id): RedirectResponse
     {
+        $this->ensureCanManageBilling($request);
         $document = DB::table('documents')->where('id', $id)->first();
         abort_if(! $document, 404);
 
@@ -3451,6 +3540,7 @@ class CentroPageController extends Controller
 
     public function duplicateDocument(Request $request, string $id): RedirectResponse
     {
+        $this->ensureCanManageBilling($request);
         $newId = $this->copyDocument($id, null, $request->user()->id);
 
         return redirect()->route('billing.show', $newId)->with('status', 'Documento duplicato.');
@@ -3458,6 +3548,7 @@ class CentroPageController extends Controller
 
     public function convertDocument(Request $request, string $id, string $type): RedirectResponse
     {
+        $this->ensureCanManageBilling($request);
         abort_unless(in_array($type, ['proforma', 'fattura', 'nota_credito'], true), 404);
         $newId = $this->copyDocument($id, $type, $request->user()->id);
 
@@ -3493,6 +3584,7 @@ class CentroPageController extends Controller
 
     public function sendDocumentEmail(Request $request, string $id): RedirectResponse
     {
+        $this->ensureCanManageBilling($request);
         $payload = $request->validate([
             'recipient' => ['required', 'email', 'max:255'],
             'cc' => ['nullable', 'string', 'max:500'],
@@ -4126,7 +4218,7 @@ class CentroPageController extends Controller
 
     public function storeClientContact(Request $request, string $id): RedirectResponse
     {
-        abort_if($this->isGuest($request), 403);
+        $this->ensureCanManageClients($request);
 
         DB::table('clients')->where('id', $id)->exists() || abort(404);
 
@@ -4145,7 +4237,7 @@ class CentroPageController extends Controller
 
     public function updateClientContact(Request $request, string $clientId, string $contactId): RedirectResponse
     {
-        abort_if($this->isGuest($request), 403);
+        $this->ensureCanManageClients($request);
 
         DB::table('client_contacts')->where('client_id', $clientId)->where('id', $contactId)->exists() || abort(404);
 
@@ -4162,7 +4254,7 @@ class CentroPageController extends Controller
 
     public function destroyClientContact(Request $request, string $clientId, string $contactId): RedirectResponse
     {
-        abort_if($this->isGuest($request), 403);
+        $this->ensureCanManageClients($request);
 
         DB::table('client_contacts')
             ->where('client_id', $clientId)
@@ -4174,7 +4266,7 @@ class CentroPageController extends Controller
 
     public function attachClientService(Request $request, string $clientId, string $serviceId): RedirectResponse
     {
-        abort_if($this->isGuest($request), 403);
+        $this->ensureCanManageClients($request);
 
         DB::table('clients')->where('id', $clientId)->exists() || abort(404);
         DB::table('services')->where('id', $serviceId)->exists() || abort(404);
@@ -4190,7 +4282,7 @@ class CentroPageController extends Controller
 
     public function detachClientService(Request $request, string $clientId, string $serviceId): RedirectResponse
     {
-        abort_if($this->isGuest($request), 403);
+        $this->ensureCanManageClients($request);
 
         DB::table('client_services')
             ->where('client_id', $clientId)
@@ -4559,6 +4651,7 @@ class CentroPageController extends Controller
 
     public function storeDocumentLine(Request $request, string $id): RedirectResponse
     {
+        $this->ensureCanManageBilling($request);
         DB::table('documents')->where('id', $id)->exists() || abort(404);
 
         [$payload, $subtotal] = $this->validatedDocumentLinePayload($request);
@@ -4580,6 +4673,7 @@ class CentroPageController extends Controller
 
     public function updateDocumentLine(Request $request, string $documentId, string $lineId): RedirectResponse
     {
+        $this->ensureCanManageBilling($request);
         DB::table('document_lines')->where('document_id', $documentId)->where('id', $lineId)->exists() || abort(404);
 
         [$payload, $subtotal] = $this->validatedDocumentLinePayload($request);
@@ -4598,8 +4692,9 @@ class CentroPageController extends Controller
         return back()->with('status', 'Riga aggiornata.');
     }
 
-    public function destroyDocumentLine(string $documentId, string $lineId): RedirectResponse
+    public function destroyDocumentLine(Request $request, string $documentId, string $lineId): RedirectResponse
     {
+        $this->ensureCanManageBilling($request);
         DB::table('document_lines')->where('document_id', $documentId)->where('id', $lineId)->delete();
         $this->recalculateDocument($documentId);
 
@@ -4608,6 +4703,7 @@ class CentroPageController extends Controller
 
     public function storeDocumentPayment(Request $request, string $id): RedirectResponse
     {
+        $this->ensureCanManageBilling($request);
         DB::table('documents')->where('id', $id)->exists() || abort(404);
 
         $payload = $this->validatedDocumentPaymentPayload($request);
@@ -4628,6 +4724,7 @@ class CentroPageController extends Controller
 
     public function updateDocumentPayment(Request $request, string $documentId, string $paymentId): RedirectResponse
     {
+        $this->ensureCanManageBilling($request);
         DB::table('document_payments')->where('document_id', $documentId)->where('id', $paymentId)->exists() || abort(404);
 
         $payload = $this->validatedDocumentPaymentPayload($request);
@@ -4645,8 +4742,9 @@ class CentroPageController extends Controller
         return back()->with('status', 'Pagamento aggiornato.');
     }
 
-    public function destroyDocumentPayment(string $documentId, string $paymentId): RedirectResponse
+    public function destroyDocumentPayment(Request $request, string $documentId, string $paymentId): RedirectResponse
     {
+        $this->ensureCanManageBilling($request);
         DB::table('document_payments')->where('document_id', $documentId)->where('id', $paymentId)->delete();
         $this->recalculateDocument($documentId);
 
@@ -4655,6 +4753,7 @@ class CentroPageController extends Controller
 
     public function storeSubscription(Request $request, string $clientId): RedirectResponse
     {
+        $this->ensureCanManageClients($request);
         DB::table('clients')->where('id', $clientId)->exists() || abort(404);
         $payload = $this->validatedSubscriptionPayload($request);
         $payload['id'] = (string) str()->uuid();
@@ -4670,6 +4769,7 @@ class CentroPageController extends Controller
 
     public function updateSubscription(Request $request, string $clientId, string $subscriptionId): RedirectResponse
     {
+        $this->ensureCanManageClients($request);
         $this->subscriptionForClient($clientId, $subscriptionId);
         $payload = $this->validatedSubscriptionPayload($request);
         $payload['updated_at'] = now();
@@ -4681,6 +4781,7 @@ class CentroPageController extends Controller
 
     public function toggleSubscription(Request $request, string $clientId, string $subscriptionId): RedirectResponse
     {
+        $this->ensureCanManageClients($request);
         $this->subscriptionForClient($clientId, $subscriptionId);
 
         DB::table('subscriptions')->where('id', $subscriptionId)->update([
@@ -4691,8 +4792,9 @@ class CentroPageController extends Controller
         return back()->with('status', 'Stato abbonamento aggiornato.');
     }
 
-    public function destroySubscription(string $clientId, string $subscriptionId): RedirectResponse
+    public function destroySubscription(Request $request, string $clientId, string $subscriptionId): RedirectResponse
     {
+        $this->ensureCanManageClients($request);
         $this->subscriptionForClient($clientId, $subscriptionId);
         DB::table('subscriptions')->where('id', $subscriptionId)->delete();
 
@@ -4701,6 +4803,7 @@ class CentroPageController extends Controller
 
     public function generateSubscriptionDocument(Request $request, string $clientId, string $subscriptionId): RedirectResponse
     {
+        $this->ensureCanManageClients($request);
         $subscription = $this->subscriptionForClient($clientId, $subscriptionId);
         $settings = DB::table('document_settings')->first();
         $issueDate = now()->toDateString();

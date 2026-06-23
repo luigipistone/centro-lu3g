@@ -53,6 +53,7 @@ const notificationStorageKey = computed(() => `centro:last-browser-notification:
 const themeStorageKey = 'centro:theme';
 const currentRole = computed(() => page.props.auth?.user?.role || 'guest');
 const isGuest = computed(() => currentRole.value === 'guest');
+const isEditor = computed(() => currentRole.value === 'editor');
 const canManageAbsences = computed(() => ['admin', 'superadmin'].includes(page.props.auth?.user?.role));
 
 function isGroupOpen(group) {
@@ -242,6 +243,32 @@ const groups = computed(() => {
                     ['tasks.index', 'Task', CheckSquare],
                     ['calendar.index', 'Calendario', Calendar],
                     ['notifications.index', 'Notifiche', Bell],
+                ],
+            },
+        ];
+    }
+
+    if (isEditor.value) {
+        return [
+            {
+                label: 'Menu',
+                links: [
+                    ['dashboard', 'Dashboard', LayoutDashboard],
+                    ['clients.index', 'Clienti', Users],
+                    ['projects.index', 'Progetti', Briefcase],
+                    ['tasks.index', 'Task', CheckSquare],
+                    ['calendar.index', 'Calendario', Calendar],
+                    ['notifications.index', 'Notifiche', Bell],
+                ],
+            },
+            {
+                label: 'Aggiornamenti',
+                collapsible: true,
+                links: [
+                    ['updates.social', 'Social', Megaphone],
+                    ['updates.newsletter', 'Newsletter', Mail],
+                    ['updates.seo', 'SEO', Search],
+                    ['updates.adv', 'ADV', Target],
                 ],
             },
         ];
