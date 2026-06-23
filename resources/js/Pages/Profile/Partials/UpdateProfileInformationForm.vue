@@ -18,6 +18,7 @@ defineProps({
 
 const user = usePage().props.auth.user;
 const profile = usePage().props.profile || {};
+const notificationPreferences = usePage().props.notificationPreferences || [];
 
 const completionEffectOptions = [
     { value: 'balloons', label: 'Palloncini' },
@@ -34,6 +35,13 @@ const form = useForm({
     name: user.name,
     email: user.email,
     completion_effect: currentCompletionEffect,
+    notification_preferences: notificationPreferences.map((preference) => ({
+        category: preference.category,
+        label: preference.label,
+        in_app: Boolean(preference.in_app),
+        browser: Boolean(preference.browser),
+        mail: Boolean(preference.mail),
+    })),
 });
 
 const avatarInput = ref(null);
@@ -61,6 +69,14 @@ function uploadAvatar(event) {
         forceFormData: true,
         preserveScroll: true,
     });
+}
+
+function channelLabel(channel) {
+    return {
+        in_app: 'In app',
+        browser: 'Browser',
+        mail: 'Email',
+    }[channel];
 }
 </script>
 
@@ -157,6 +173,55 @@ function uploadAvatar(event) {
 
                 <p class="mt-1 text-xs text-gray-500">Viene mostrata a fullscreen per qualche secondo quando completi una task.</p>
                 <InputError class="mt-2" :message="form.errors.completion_effect" />
+            </div>
+
+            <div>
+                <div class="mb-3">
+                    <h3 class="text-sm font-semibold text-gray-900">Preferenze notifiche</h3>
+                    <p class="mt-1 text-xs text-gray-500">Scegli per ogni area quali canali usare per ricevere gli aggiornamenti.</p>
+                </div>
+
+                <div class="overflow-hidden rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70">
+                    <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b border-gray-100 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 sm:grid-cols-[minmax(0,1fr)_repeat(3,6.5rem)]">
+                        <span>Area</span>
+                        <span class="hidden text-center sm:block">In app</span>
+                        <span class="hidden text-center sm:block">Browser</span>
+                        <span class="hidden text-center sm:block">Email</span>
+                    </div>
+
+                    <div
+                        v-for="(preference, index) in form.notification_preferences"
+                        :key="preference.category"
+                        class="grid gap-3 border-b border-gray-100 px-4 py-3 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_repeat(3,6.5rem)] sm:items-center"
+                    >
+                        <input type="hidden" v-model="preference.category" />
+                        <div class="text-sm font-semibold text-gray-900">{{ preference.label }}</div>
+
+                        <label
+                            v-for="channel in ['in_app', 'browser', 'mail']"
+                            :key="channel"
+                            class="flex items-center justify-between gap-3 rounded-[var(--radius-sm)] bg-white/70 px-3 py-2 text-xs font-semibold text-gray-600 sm:justify-center sm:bg-transparent sm:px-0 sm:py-0"
+                        >
+                            <span class="sm:hidden">{{ channelLabel(channel) }}</span>
+                            <input
+                                v-model="form.notification_preferences[index][channel]"
+                                type="checkbox"
+                                class="sr-only"
+                            />
+                            <span
+                                class="relative h-6 w-11 rounded-full transition"
+                                :class="form.notification_preferences[index][channel] ? 'bg-[var(--brand-primary,#3b82f6)]' : 'bg-gray-200'"
+                            >
+                                <span
+                                    class="absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow-sm transition"
+                                    :class="form.notification_preferences[index][channel] ? 'translate-x-5' : 'translate-x-0'"
+                                ></span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <InputError class="mt-2" :message="form.errors.notification_preferences" />
             </div>
 
             <div class="flex items-center gap-4">

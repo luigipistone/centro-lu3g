@@ -20,6 +20,10 @@ const props = defineProps({
         type: Object,
         default: () => ({}),
     },
+    notificationPreferences: {
+        type: Array,
+        default: () => [],
+    },
     absences: {
         type: Array,
         default: () => [],
@@ -173,7 +177,7 @@ watch(() => absenceForm.type, () => {
                     <UpdateProfileInformationForm
                         :must-verify-email="mustVerifyEmail"
                         :status="status"
-                        class="max-w-xl"
+                        class="max-w-3xl"
                     />
                 </div>
 

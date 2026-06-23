@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Services\CentroNotificationService;
 use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -27,6 +28,11 @@ class ProfileUpdateRequest extends FormRequest
                 Rule::unique(User::class)->ignore($this->user()->id),
             ],
             'completion_effect' => ['nullable', Rule::in(['balloons', 'fireworks', 'snow', 'glitch'])],
+            'notification_preferences' => ['nullable', 'array'],
+            'notification_preferences.*.category' => ['required', Rule::in(CentroNotificationService::CATEGORIES)],
+            'notification_preferences.*.in_app' => ['boolean'],
+            'notification_preferences.*.browser' => ['boolean'],
+            'notification_preferences.*.mail' => ['boolean'],
         ];
     }
 }

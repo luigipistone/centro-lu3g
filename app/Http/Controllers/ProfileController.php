@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ProfileUpdateRequest;
+use App\Services\CentroNotificationService;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -25,6 +26,7 @@ class ProfileController extends Controller
             'mustVerifyEmail' => $request->user() instanceof MustVerifyEmail,
             'status' => session('status'),
             'profile' => DB::table('profiles')->where('user_id', $request->user()->id)->first(['completion_effect', 'smartworking_day']),
+            'notificationPreferences' => $this->notificationPreferenceRows($request->user()->id),
             'absences' => DB::table('absence_requests')
                 ->where('user_id', $request->user()->id)
                 ->latest('start_date')
@@ -60,6 +62,26 @@ class ProfileController extends Controller
                 'created_at' => now(),
             ],
         );
+
+        foreach (($payload['notification_preferences'] ?? []) as $preference) {
+            DB::table('notification_preferences')->updateOrInsert(
+                [
+                    'user_id' => $request->user()->id,
+                    'category' => $preference['category'],
+                ],
+                [
+                    'id' => DB::table('notification_preferences')
+                        ->where('user_id', $request->user()->id)
+                        ->where('category', $preference['category'])
+                        ->value('id') ?: (string) str()->uuid(),
+                    'in_app' => (bool) ($preference['in_app'] ?? false),
+                    'browser' => (bool) ($preference['browser'] ?? false),
+                    'mail' => (bool) ($preference['mail'] ?? false),
+                    'updated_at' => now(),
+                    'created_at' => now(),
+                ],
+            );
+        }
 
         return Redirect::route('profile.edit');
     }
@@ -214,19 +236,34 @@ class ProfileController extends Controller
             ->unique()
             ->values();
 
-        foreach ($userIds as $userId) {
-            DB::table('notifications')->insert([
-                'id' => (string) str()->uuid(),
-                'user_id' => $userId,
-                'actor_id' => $actorId,
-                'task_id' => null,
-                'type' => $type,
-                'message' => $message,
-                'read' => false,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-        }
+        app(CentroNotificationService::class)->notifyUsers($userIds, $actorId, $type, $message);
+    }
+
+    private function notificationPreferenceRows(string $userId): array
+    {
+        $labels = [
+            'tasks' => 'Task',
+            'projects' => 'Progetti',
+            'absences' => 'Assenze',
+            'documents' => 'Documenti',
+            'system' => 'Sistema',
+        ];
+
+        $rows = DB::table('notification_preferences')
+            ->where('user_id', $userId)
+            ->get()
+            ->keyBy('category');
+
+        return collect(CentroNotificationService::CATEGORIES)
+            ->map(fn (string $category) => [
+                'category' => $category,
+                'label' => $labels[$category] ?? ucfirst($category),
+                'in_app' => (bool) ($rows[$category]->in_app ?? true),
+                'browser' => (bool) ($rows[$category]->browser ?? true),
+                'mail' => (bool) ($rows[$category]->mail ?? false),
+            ])
+            ->values()
+            ->all();
     }
 
     /**

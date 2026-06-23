@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Services\CentroBackupService;
+use App\Services\CentroNotificationService;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Illuminate\Http\JsonResponse;
@@ -4626,53 +4627,7 @@ class CentroPageController extends Controller
 
     private function notifyUsers(iterable $userIds, ?string $actorId, string $type, string $message, ?string $taskId = null, ?string $companyDocumentId = null): void
     {
-        $now = now();
-
-        foreach (collect($userIds)->filter()->unique()->values() as $userId) {
-            $existingNotification = DB::table('notifications')
-                ->where('user_id', $userId)
-                ->where('type', $type)
-                ->where('read', false)
-                ->whereNull('archived_at')
-                ->where('created_at', '>=', $now->copy()->subMinutes(2))
-                ->when($actorId, fn ($query) => $query->where('actor_id', $actorId), fn ($query) => $query->whereNull('actor_id'))
-                ->when($taskId, fn ($query) => $query->where('task_id', $taskId), fn ($query) => $query->whereNull('task_id'))
-                ->when($companyDocumentId, fn ($query) => $query->where('company_document_id', $companyDocumentId), fn ($query) => $query->whereNull('company_document_id'))
-                ->when(! $this->shouldCoalesceNotification($type, $taskId), fn ($query) => $query->where('message', $message))
-                ->latest('created_at')
-                ->first(['id']);
-
-            if ($existingNotification) {
-                DB::table('notifications')
-                    ->where('id', $existingNotification->id)
-                    ->update([
-                        'message' => $message,
-                        'created_at' => $now,
-                        'updated_at' => $now,
-                    ]);
-
-                $this->sendBrowserPushNotification((string) $userId, (string) $existingNotification->id, $message, $taskId, $companyDocumentId);
-
-                continue;
-            }
-
-            $notificationId = (string) str()->uuid();
-
-            DB::table('notifications')->insert([
-                'id' => $notificationId,
-                'user_id' => $userId,
-                'actor_id' => $actorId,
-                'task_id' => $taskId,
-                'company_document_id' => $companyDocumentId,
-                'type' => $type,
-                'message' => $message,
-                'read' => false,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]);
-
-            $this->sendBrowserPushNotification((string) $userId, $notificationId, $message, $taskId, $companyDocumentId);
-        }
+        app(CentroNotificationService::class)->notifyUsers($userIds, $actorId, $type, $message, $taskId, $companyDocumentId);
     }
 
     private function shouldCoalesceNotification(string $type, ?string $taskId): bool
