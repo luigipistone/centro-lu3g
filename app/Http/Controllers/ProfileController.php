@@ -73,6 +73,7 @@ class ProfileController extends Controller
         $user = $request->user();
         $currentAvatar = DB::table('profiles')->where('user_id', $user->id)->value('avatar_url');
         $path = $request->file('avatar')->store('avatars', 'local');
+        Storage::disk('local')->setVisibility($path, 'private');
 
         if ($currentAvatar && str_starts_with($currentAvatar, '/avatars/')) {
             Storage::disk('local')->delete('avatars/'.basename($currentAvatar));
@@ -121,6 +122,7 @@ class ProfileController extends Controller
         if ($payload['type'] === 'sickness' && $request->hasFile('medical_document')) {
             $file = $request->file('medical_document');
             $medicalDocumentPath = $file->store('absence-medical-documents', 'local');
+            Storage::disk('local')->setVisibility($medicalDocumentPath, 'private');
             $medicalDocumentName = $file->getClientOriginalName();
             $medicalDocumentMime = $file->getMimeType();
         }
@@ -193,6 +195,7 @@ class ProfileController extends Controller
 
         if (! Storage::disk('local')->exists($relativePath) && Storage::disk('public')->exists($relativePath)) {
             Storage::disk('local')->put($relativePath, Storage::disk('public')->get($relativePath));
+            Storage::disk('local')->setVisibility($relativePath, 'private');
             Storage::disk('public')->delete($relativePath);
         }
 

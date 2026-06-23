@@ -511,6 +511,7 @@ class CentroPageController extends Controller
 
         $file = $payload['medical_document'];
         $path = $file->store('absence-medical-documents', 'local');
+        Storage::disk('local')->setVisibility($path, 'private');
 
         if ($absence->medical_document_path) {
             Storage::disk('local')->delete($absence->medical_document_path);
@@ -628,6 +629,7 @@ class CentroPageController extends Controller
         $documentId = (string) str()->uuid();
         $file = $payload['file'];
         $path = $file->store('company-documents', 'local');
+        Storage::disk('local')->setVisibility($path, 'private');
         $now = now();
 
         DB::transaction(function () use ($payload, $documentId, $file, $path, $request, $now) {
@@ -2112,6 +2114,7 @@ class CentroPageController extends Controller
 
         $uploadedFile = $payload['file'];
         $path = $uploadedFile->store('project-files/'.$id, 'local');
+        Storage::disk('local')->setVisibility($path, 'private');
 
         DB::table('project_files')->insert([
             'id' => (string) str()->uuid(),
@@ -2148,6 +2151,7 @@ class CentroPageController extends Controller
 
         if (! Storage::disk('local')->exists($file->path) && Storage::disk('public')->exists($file->path)) {
             Storage::disk('local')->put($file->path, Storage::disk('public')->get($file->path));
+            Storage::disk('local')->setVisibility($file->path, 'private');
             Storage::disk('public')->delete($file->path);
         }
 
@@ -2274,6 +2278,7 @@ class CentroPageController extends Controller
         $user = User::query()->findOrFail($id);
         $currentAvatar = DB::table('profiles')->where('user_id', $user->id)->value('avatar_url');
         $path = $request->file('avatar')->store('avatars', 'local');
+        Storage::disk('local')->setVisibility($path, 'private');
 
         if ($currentAvatar && str_starts_with($currentAvatar, '/avatars/')) {
             Storage::disk('local')->delete('avatars/'.basename($currentAvatar));

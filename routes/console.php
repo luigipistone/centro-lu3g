@@ -42,6 +42,7 @@ Artisan::command('centro:privatize-files', function () {
         }
 
         Storage::disk('local')->put($file->path, Storage::disk('public')->get($file->path));
+        Storage::disk('local')->setVisibility($file->path, 'private');
         Storage::disk('public')->delete($file->path);
         $moved++;
     }
@@ -62,6 +63,7 @@ Artisan::command('centro:privatize-files', function () {
         }
 
         Storage::disk('local')->put($path, Storage::disk('public')->get($path));
+        Storage::disk('local')->setVisibility($path, 'private');
         Storage::disk('public')->delete($path);
         $moved++;
     }

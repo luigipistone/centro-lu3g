@@ -30,6 +30,7 @@ class CentroBackupService
             $dump = $this->dumpDatabase();
 
             Storage::disk('local')->put($relativePath, $dump);
+            Storage::disk('local')->setVisibility($relativePath, 'private');
 
             DB::table('backup_runs')->where('id', $id)->update([
                 'status' => 'completed',
