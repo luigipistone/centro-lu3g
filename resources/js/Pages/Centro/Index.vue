@@ -274,10 +274,19 @@ const emailSettingDefaults = {
     pec_password_saved: false,
 };
 
-const documentSettingsForm = useForm({ ...docSettingDefaults, ...(props.documentSettings || {}) });
-const emailSettingsForm = useForm({
+const toBoolean = (value) => value === true || value === 1 || value === '1' || value === 'true';
+const emailSettingsInitial = {
     ...emailSettingDefaults,
     ...(props.emailSettings || {}),
+    smtp_enabled: toBoolean(props.emailSettings?.smtp_enabled),
+    smtp_secure: props.emailSettings ? toBoolean(props.emailSettings.smtp_secure) : true,
+    smtp_password_saved: toBoolean(props.emailSettings?.smtp_password_saved),
+    pec_password_saved: toBoolean(props.emailSettings?.pec_password_saved),
+};
+
+const documentSettingsForm = useForm({ ...docSettingDefaults, ...(props.documentSettings || {}) });
+const emailSettingsForm = useForm({
+    ...emailSettingsInitial,
     smtp_password: '',
     pec_password: '',
 });
@@ -1241,12 +1250,12 @@ function saveEmailSettings() {
 
     emailSettingsForm
         .transform((data) => ({
-            smtp_enabled: Boolean(data.smtp_enabled),
+            smtp_enabled: toBoolean(data.smtp_enabled),
             smtp_host: data.smtp_host || '',
             smtp_port: data.smtp_port || '',
             smtp_username: data.smtp_username || '',
             smtp_password: data.smtp_password || '',
-            smtp_secure: Boolean(data.smtp_secure),
+            smtp_secure: toBoolean(data.smtp_secure),
             smtp_from_email: data.smtp_from_email || '',
             smtp_from_name: data.smtp_from_name || '',
             smtp_reply_to: data.smtp_reply_to || '',
@@ -5144,13 +5153,47 @@ function calendarDayStyle(sectionMonth, cell) {
                     <form class="app-card" @submit.prevent="saveEmailSettings">
                         <h3 class="section-title"><span class="section-icon"><Mail class="h-4 w-4" :stroke-width="1.7" /></span>Email e SMTP</h3>
                         <div class="mt-5 grid gap-4 md:grid-cols-3">
-                            <label class="flex items-center gap-2 text-sm text-gray-700">
-                                <input v-model="emailSettingsForm.smtp_enabled" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
-                                SMTP attivo
+                            <label class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-3 text-sm text-gray-700">
+                                <span class="flex items-center justify-between gap-3">
+                                    <span>
+                                        <span class="block font-semibold text-gray-900">SMTP attivo</span>
+                                        <span class="mt-0.5 block text-xs text-gray-500">Usa queste credenziali per inviare email dalla piattaforma.</span>
+                                    </span>
+                                    <input v-model="emailSettingsForm.smtp_enabled" type="checkbox" class="sr-only" />
+                                    <span
+                                        class="relative h-6 w-11 shrink-0 rounded-full transition"
+                                        :class="emailSettingsForm.smtp_enabled ? 'bg-[hsl(var(--primary-app))]' : 'bg-gray-200'"
+                                    >
+                                        <span
+                                            class="absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow-sm transition"
+                                            :class="emailSettingsForm.smtp_enabled ? 'translate-x-5' : 'translate-x-0'"
+                                        ></span>
+                                    </span>
+                                </span>
+                                <span class="mt-2 block text-xs font-semibold" :class="emailSettingsForm.smtp_enabled ? 'text-emerald-600' : 'text-gray-400'">
+                                    {{ emailSettingsForm.smtp_enabled ? 'Attivo' : 'Disattivo' }}
+                                </span>
                             </label>
-                            <label class="flex items-center gap-2 text-sm text-gray-700">
-                                <input v-model="emailSettingsForm.smtp_secure" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
-                                TLS/SSL
+                            <label class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-3 text-sm text-gray-700">
+                                <span class="flex items-center justify-between gap-3">
+                                    <span>
+                                        <span class="block font-semibold text-gray-900">TLS/SSL</span>
+                                        <span class="mt-0.5 block text-xs text-gray-500">Connessione cifrata verso il server SMTP.</span>
+                                    </span>
+                                    <input v-model="emailSettingsForm.smtp_secure" type="checkbox" class="sr-only" />
+                                    <span
+                                        class="relative h-6 w-11 shrink-0 rounded-full transition"
+                                        :class="emailSettingsForm.smtp_secure ? 'bg-[hsl(var(--primary-app))]' : 'bg-gray-200'"
+                                    >
+                                        <span
+                                            class="absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow-sm transition"
+                                            :class="emailSettingsForm.smtp_secure ? 'translate-x-5' : 'translate-x-0'"
+                                        ></span>
+                                    </span>
+                                </span>
+                                <span class="mt-2 block text-xs font-semibold" :class="emailSettingsForm.smtp_secure ? 'text-emerald-600' : 'text-gray-400'">
+                                    {{ emailSettingsForm.smtp_secure ? 'Attivo' : 'Disattivo' }}
+                                </span>
                             </label>
                             <input v-model="emailSettingsForm.smtp_host" class="form-control mt-0" placeholder="Host SMTP" />
                             <input v-model="emailSettingsForm.smtp_port" type="number" class="form-control mt-0" placeholder="Porta" />
