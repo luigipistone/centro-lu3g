@@ -4560,6 +4560,77 @@ onUnmounted(() => {
                     </section>
 
                     <section class="surface rounded-md p-5">
+                        <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Informazioni profilo</h3>
+                                <p class="mt-1 text-sm text-gray-500">Le modifiche si salvano automaticamente mentre lavori.</p>
+                            </div>
+                            <div
+                                v-if="userAutosaveState !== 'idle'"
+                                :class="[
+                                    'inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold transition',
+                                    userAutosaveState === 'saving' || userAutosaveState === 'queued' ? 'bg-sky-50 text-sky-700' : '',
+                                    userAutosaveState === 'saved' ? 'bg-emerald-50 text-emerald-700' : '',
+                                    userAutosaveState === 'error' ? 'bg-red-50 text-red-700' : '',
+                                ]"
+                            >
+                                <span v-if="userAutosaveState === 'queued'">In attesa...</span>
+                                <span v-else-if="userAutosaveState === 'saving'">Salvataggio...</span>
+                                <span v-else-if="userAutosaveState === 'saved'">Salvato</span>
+                                <span v-else>{{ userAutosaveError || 'Errore salvataggio' }}</span>
+                            </div>
+                        </div>
+
+                        <div class="grid gap-4 md:grid-cols-2">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Nome</label>
+                                <input v-model="userForm.name" class="form-control" required />
+                                <div v-if="userForm.errors.name" class="mt-1 text-sm text-red-600">{{ userForm.errors.name }}</div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Email</label>
+                                <input v-model="userForm.email" type="email" class="form-control" required />
+                                <div v-if="userForm.errors.email" class="mt-1 text-sm text-red-600">{{ userForm.errors.email }}</div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Ruolo</label>
+                                <AppSelect v-model="userForm.role" :options="primitiveOptions(related.roleOptions)" />
+                                <div v-if="userForm.errors.role" class="mt-1 text-sm text-red-600">{{ userForm.errors.role }}</div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Qualifica</label>
+                                <input v-model="userForm.job_title" class="form-control" placeholder="Es. Account manager" />
+                                <div v-if="userForm.errors.job_title" class="mt-1 text-sm text-red-600">{{ userForm.errors.job_title }}</div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Telefono</label>
+                                <input v-model="userForm.phone" class="form-control" />
+                                <div v-if="userForm.errors.phone" class="mt-1 text-sm text-red-600">{{ userForm.errors.phone }}</div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Animazione completamento</label>
+                                <AppSelect v-model="userForm.completion_effect" :options="completionEffectOptions" @change="saveUserInline(0)" />
+                                <div v-if="userForm.errors.completion_effect" class="mt-1 text-sm text-red-600">{{ userForm.errors.completion_effect }}</div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Giorno smart working</label>
+                                <AppSelect v-model="userForm.smartworking_day" :options="smartworkingDayOptions" @change="saveUserInline(0)" />
+                                <div v-if="userForm.errors.smartworking_day" class="mt-1 text-sm text-red-600">{{ userForm.errors.smartworking_day }}</div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Nuova password</label>
+                                <input v-model="userForm.password" type="password" autocomplete="new-password" class="form-control" placeholder="Lascia vuoto per non cambiarla" />
+                                <div v-if="userForm.errors.password" class="mt-1 text-sm text-red-600">{{ userForm.errors.password }}</div>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700">Bio</label>
+                                <textarea v-model="userForm.bio" rows="5" class="form-control" placeholder="Note interne sul profilo..."></textarea>
+                                <div v-if="userForm.errors.bio" class="mt-1 text-sm text-red-600">{{ userForm.errors.bio }}</div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="surface rounded-md p-5">
                         <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
                             <div>
                                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Andamento persona</h3>
@@ -4668,77 +4739,6 @@ onUnmounted(() => {
                                     </div>
                                     <p v-else class="mt-2 text-xs text-gray-500">Nessuna task completata di recente.</p>
                                 </div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <section class="surface rounded-md p-5">
-                        <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                                <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Informazioni profilo</h3>
-                                <p class="mt-1 text-sm text-gray-500">Le modifiche si salvano automaticamente mentre lavori.</p>
-                            </div>
-                            <div
-                                v-if="userAutosaveState !== 'idle'"
-                                :class="[
-                                    'inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold transition',
-                                    userAutosaveState === 'saving' || userAutosaveState === 'queued' ? 'bg-sky-50 text-sky-700' : '',
-                                    userAutosaveState === 'saved' ? 'bg-emerald-50 text-emerald-700' : '',
-                                    userAutosaveState === 'error' ? 'bg-red-50 text-red-700' : '',
-                                ]"
-                            >
-                                <span v-if="userAutosaveState === 'queued'">In attesa...</span>
-                                <span v-else-if="userAutosaveState === 'saving'">Salvataggio...</span>
-                                <span v-else-if="userAutosaveState === 'saved'">Salvato</span>
-                                <span v-else>{{ userAutosaveError || 'Errore salvataggio' }}</span>
-                            </div>
-                        </div>
-
-                        <div class="grid gap-4 md:grid-cols-2">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Nome</label>
-                                <input v-model="userForm.name" class="form-control" required />
-                                <div v-if="userForm.errors.name" class="mt-1 text-sm text-red-600">{{ userForm.errors.name }}</div>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Email</label>
-                                <input v-model="userForm.email" type="email" class="form-control" required />
-                                <div v-if="userForm.errors.email" class="mt-1 text-sm text-red-600">{{ userForm.errors.email }}</div>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Ruolo</label>
-                                <AppSelect v-model="userForm.role" :options="primitiveOptions(related.roleOptions)" />
-                                <div v-if="userForm.errors.role" class="mt-1 text-sm text-red-600">{{ userForm.errors.role }}</div>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Qualifica</label>
-                                <input v-model="userForm.job_title" class="form-control" placeholder="Es. Account manager" />
-                                <div v-if="userForm.errors.job_title" class="mt-1 text-sm text-red-600">{{ userForm.errors.job_title }}</div>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Telefono</label>
-                                <input v-model="userForm.phone" class="form-control" />
-                                <div v-if="userForm.errors.phone" class="mt-1 text-sm text-red-600">{{ userForm.errors.phone }}</div>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Animazione completamento</label>
-                                <AppSelect v-model="userForm.completion_effect" :options="completionEffectOptions" @change="saveUserInline(0)" />
-                                <div v-if="userForm.errors.completion_effect" class="mt-1 text-sm text-red-600">{{ userForm.errors.completion_effect }}</div>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Giorno smart working</label>
-                                <AppSelect v-model="userForm.smartworking_day" :options="smartworkingDayOptions" @change="saveUserInline(0)" />
-                                <div v-if="userForm.errors.smartworking_day" class="mt-1 text-sm text-red-600">{{ userForm.errors.smartworking_day }}</div>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Nuova password</label>
-                                <input v-model="userForm.password" type="password" autocomplete="new-password" class="form-control" placeholder="Lascia vuoto per non cambiarla" />
-                                <div v-if="userForm.errors.password" class="mt-1 text-sm text-red-600">{{ userForm.errors.password }}</div>
-                            </div>
-                            <div class="md:col-span-2">
-                                <label class="block text-sm font-medium text-gray-700">Bio</label>
-                                <textarea v-model="userForm.bio" rows="5" class="form-control" placeholder="Note interne sul profilo..."></textarea>
-                                <div v-if="userForm.errors.bio" class="mt-1 text-sm text-red-600">{{ userForm.errors.bio }}</div>
                             </div>
                         </div>
                     </section>
