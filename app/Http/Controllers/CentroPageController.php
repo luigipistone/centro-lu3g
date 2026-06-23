@@ -737,12 +737,15 @@ class CentroPageController extends Controller
         abort_if(! $document, 404);
         abort_unless($this->canAccessCompanyDocument($request, $document), 403);
 
-        $this->markCompanyDocumentOpened($id, (string) $request->user()->id);
+        $canManage = $this->canManageDocuments($request);
+        if (! $canManage) {
+            $this->markCompanyDocumentOpened($id, (string) $request->user()->id);
+        }
 
         return Inertia::render('Centro/DocumentShow', [
-            'canManage' => $this->canManageDocuments($request),
-            'document' => $this->companyDocumentRow($document, (string) $request->user()->id),
-            'readers' => $this->canManageDocuments($request) ? $this->companyDocumentReaderRows($id) : [],
+            'canManage' => $canManage,
+            'document' => $this->companyDocumentRow($document, $canManage ? null : (string) $request->user()->id),
+            'readers' => $canManage ? $this->companyDocumentReaderRows($id) : [],
         ]);
     }
 
@@ -753,7 +756,9 @@ class CentroPageController extends Controller
         abort_unless($this->canAccessCompanyDocument($request, $document), 403);
         abort_unless(Storage::disk('local')->exists($document->file_path), 404);
 
-        $this->markCompanyDocumentOpened($id, (string) $request->user()->id);
+        if (! $this->canManageDocuments($request)) {
+            $this->markCompanyDocumentOpened($id, (string) $request->user()->id);
+        }
 
         return response()->file(Storage::disk('local')->path($document->file_path), [
             'Content-Type' => $document->file_mime ?: 'application/pdf',
@@ -766,6 +771,7 @@ class CentroPageController extends Controller
         $document = DB::table('company_documents')->where('id', $id)->first();
         abort_if(! $document, 404);
         abort_unless($this->canAccessCompanyDocument($request, $document), 403);
+        abort_if($this->canManageDocuments($request), 403);
 
         $row = DB::table('company_document_reads')
             ->where('company_document_id', $id)

@@ -68,10 +68,10 @@ function markRead() {
                     </div>
 
                     <aside class="space-y-6">
-                        <section class="surface p-5">
-                            <h3 class="text-base font-semibold text-gray-900">Lettura</h3>
+                        <section v-if="!canManage || document.description" class="surface p-5">
+                            <h3 class="text-base font-semibold text-gray-900">{{ canManage ? 'Descrizione' : 'Lettura' }}</h3>
                             <div v-if="document.description" class="mt-2 text-sm leading-6 text-gray-500" v-html="document.description"></div>
-                            <div class="mt-4 rounded-[var(--radius)] bg-gray-50/80 p-3">
+                            <div v-if="!canManage" class="mt-4 rounded-[var(--radius)] bg-gray-50/80 p-3">
                                 <p class="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">Stato personale</p>
                                 <p :class="['mt-2 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold', document.user_read_at ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700']">
                                     <Check v-if="document.user_read_at" class="h-4 w-4" :stroke-width="1.8" />
@@ -79,7 +79,7 @@ function markRead() {
                                 </p>
                             </div>
                             <button
-                                v-if="!document.user_read_at"
+                                v-if="!canManage && !document.user_read_at"
                                 type="button"
                                 class="btn btn-primary mt-4 w-full justify-center"
                                 @click="markRead"
