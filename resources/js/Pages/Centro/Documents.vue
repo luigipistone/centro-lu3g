@@ -172,10 +172,25 @@ function confirmDeleteAction() {
     });
 }
 
+function openDocument(document) {
+    router.visit(route('documents.show', document.id));
+}
+
 function audienceLabel(document) {
     if (document.audience === 'all') return 'Tutti';
-    if (document.audience === 'groups') return 'Gruppi';
-    return 'Utenti';
+    if (document.audience === 'groups') {
+        const names = (document.group_ids || [])
+            .map((id) => (props.groups || []).find((group) => group.id === id)?.name)
+            .filter(Boolean);
+
+        return names.length ? names.join(', ') : 'Gruppi';
+    }
+
+    const names = (document.user_ids || [])
+        .map((id) => (props.users || []).find((user) => user.id === id)?.name)
+        .filter(Boolean);
+
+    return names.length ? names.join(', ') : 'Utenti';
 }
 
 function fileSize(bytes) {
@@ -446,7 +461,12 @@ function showMoreCurrentYearDocuments() {
                                 <article
                                     v-for="document in visibleCurrentYearDocuments"
                                     :key="document.id"
-                                    :class="['surface group p-4 transition', !canManage && !document.user_read_at ? 'ring-1 ring-amber-100' : '']"
+                                    role="button"
+                                    tabindex="0"
+                                    :class="['surface group cursor-pointer p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]', !canManage && !document.user_read_at ? 'ring-1 ring-amber-100' : '']"
+                                    @click="openDocument(document)"
+                                    @keydown.enter.prevent="openDocument(document)"
+                                    @keydown.space.prevent="openDocument(document)"
                                 >
                                     <div class="flex items-start justify-between gap-3">
                                         <div class="flex min-w-0 items-center gap-3">
@@ -454,13 +474,13 @@ function showMoreCurrentYearDocuments() {
                                                 <FileText class="h-5 w-5" :stroke-width="1.7" />
                                             </span>
                                             <div class="min-w-0">
-                                                <Link :href="route('documents.show', document.id)" class="line-clamp-2 text-sm font-semibold text-gray-900 transition hover:text-[hsl(var(--primary-app))]">
+                                                <p class="line-clamp-2 text-sm font-semibold text-gray-900 transition group-hover:text-[hsl(var(--primary-app))]">
                                                     {{ document.title }}
-                                                </Link>
+                                                </p>
                                                 <p class="mt-1 text-xs text-gray-500">{{ audienceLabel(document) }} · {{ fileSize(document.file_size) }}</p>
                                             </div>
                                         </div>
-                                        <button v-if="canManage" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina documento" @click="removeDocument(document)">
+                                        <button v-if="canManage" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina documento" @click.stop="removeDocument(document)">
                                             <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                         </button>
                                     </div>
@@ -505,7 +525,12 @@ function showMoreCurrentYearDocuments() {
                                     <article
                                         v-for="document in group.documents"
                                         :key="document.id"
-                                        :class="['surface group p-4 transition', !canManage && !document.user_read_at ? 'ring-1 ring-amber-100' : '']"
+                                        role="button"
+                                        tabindex="0"
+                                        :class="['surface group cursor-pointer p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]', !canManage && !document.user_read_at ? 'ring-1 ring-amber-100' : '']"
+                                        @click="openDocument(document)"
+                                        @keydown.enter.prevent="openDocument(document)"
+                                        @keydown.space.prevent="openDocument(document)"
                                     >
                                         <div class="flex items-start justify-between gap-3">
                                             <div class="flex min-w-0 items-center gap-3">
@@ -513,13 +538,13 @@ function showMoreCurrentYearDocuments() {
                                                     <FileText class="h-5 w-5" :stroke-width="1.7" />
                                                 </span>
                                                 <div class="min-w-0">
-                                                    <Link :href="route('documents.show', document.id)" class="line-clamp-2 text-sm font-semibold text-gray-900 transition hover:text-[hsl(var(--primary-app))]">
+                                                    <p class="line-clamp-2 text-sm font-semibold text-gray-900 transition group-hover:text-[hsl(var(--primary-app))]">
                                                         {{ document.title }}
-                                                    </Link>
+                                                    </p>
                                                     <p class="mt-1 text-xs text-gray-500">{{ audienceLabel(document) }} · {{ fileSize(document.file_size) }}</p>
                                                 </div>
                                             </div>
-                                            <button v-if="canManage" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina documento" @click="removeDocument(document)">
+                                            <button v-if="canManage" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina documento" @click.stop="removeDocument(document)">
                                                 <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                             </button>
                                         </div>
