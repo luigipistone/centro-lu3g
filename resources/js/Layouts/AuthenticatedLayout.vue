@@ -54,6 +54,7 @@ const themeStorageKey = 'centro:theme';
 const currentRole = computed(() => page.props.auth?.user?.role || 'guest');
 const isGuest = computed(() => currentRole.value === 'guest');
 const isEditor = computed(() => currentRole.value === 'editor');
+const isSuperadmin = computed(() => currentRole.value === 'superadmin');
 const canManageAbsences = computed(() => ['admin', 'superadmin'].includes(page.props.auth?.user?.role));
 
 function isGroupOpen(group) {
@@ -242,6 +243,7 @@ const groups = computed(() => {
                     ['projects.index', 'Progetti', Briefcase],
                     ['tasks.index', 'Task', CheckSquare],
                     ['calendar.index', 'Calendario', Calendar],
+                    ['documents.index', 'Documenti', FileText],
                     ['notifications.index', 'Notifiche', Bell],
                 ],
             },
@@ -285,7 +287,7 @@ const groups = computed(() => {
                 ['calendar.index', 'Calendario', Calendar],
                 ['documents.index', 'Documenti', FileText],
                 ...(canManageAbsences.value ? [['absences.index', 'Assenze', CalendarX]] : []),
-                ['settings.index', 'Impostazioni', Settings],
+                ...(isSuperadmin.value ? [['settings.index', 'Impostazioni', Settings]] : []),
             ],
         },
         {

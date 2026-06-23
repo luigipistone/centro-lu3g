@@ -273,6 +273,9 @@ class CentroPageController extends Controller
         if ($section === 'absences') {
             $this->ensureAdmin($request);
         }
+        if ($section === 'settings') {
+            $this->ensureSuperadmin($request);
+        }
 
         $this->ensureRoleCanAccessIndex($request, $section);
 
@@ -1267,6 +1270,8 @@ class CentroPageController extends Controller
 
     public function updateDocumentSettings(Request $request): RedirectResponse
     {
+        $this->ensureSuperadmin($request);
+
         $payload = $request->validate([
             'company_name' => ['required', 'string', 'max:255'],
             'legal_form' => ['nullable', 'string', 'max:255'],
@@ -1311,6 +1316,8 @@ class CentroPageController extends Controller
 
     public function updateEmailSettings(Request $request): RedirectResponse
     {
+        $this->ensureSuperadmin($request);
+
         $payload = $request->validate([
             'smtp_enabled' => ['boolean'],
             'smtp_host' => ['nullable', 'string', 'max:255'],
@@ -1347,6 +1354,8 @@ class CentroPageController extends Controller
 
     public function sendTestEmail(Request $request): RedirectResponse
     {
+        $this->ensureSuperadmin($request);
+
         $payload = $request->validate([
             'recipient' => ['required', 'email', 'max:255'],
         ]);
@@ -1415,6 +1424,8 @@ class CentroPageController extends Controller
 
     public function updateNumbering(Request $request, string $id): RedirectResponse
     {
+        $this->ensureSuperadmin($request);
+
         $payload = $request->validate([
             'prefix' => ['nullable', 'string', 'max:32'],
             'format' => ['required', 'string', 'max:255'],
@@ -1433,7 +1444,7 @@ class CentroPageController extends Controller
 
     public function runBackup(Request $request, CentroBackupService $backupService): RedirectResponse
     {
-        $this->ensureAdmin($request);
+        $this->ensureSuperadmin($request);
 
         try {
             $backupService->create('manual');
@@ -1446,7 +1457,7 @@ class CentroPageController extends Controller
 
     public function restoreBackup(Request $request, CentroBackupService $backupService, string $id): RedirectResponse
     {
-        $this->ensureAdmin($request);
+        $this->ensureSuperadmin($request);
 
         try {
             $backupService->restore($id);
@@ -1459,7 +1470,7 @@ class CentroPageController extends Controller
 
     public function destroyBackup(Request $request, CentroBackupService $backupService, string $id): RedirectResponse
     {
-        $this->ensureAdmin($request);
+        $this->ensureSuperadmin($request);
 
         try {
             $backupService->delete($id);
@@ -2643,6 +2654,12 @@ class CentroPageController extends Controller
 
     private function ensureRoleCanAccessIndex(Request $request, string $section): void
     {
+        if ($section === 'settings') {
+            $this->ensureSuperadmin($request);
+
+            return;
+        }
+
         if ($this->isGuest($request)) {
             abort_unless(in_array($section, ['projects', 'tasks', 'calendar'], true), 403);
 
@@ -2694,6 +2711,10 @@ class CentroPageController extends Controller
 
     private function ensureRoleCanStore(Request $request, string $section): void
     {
+        if ($section === 'settings') {
+            $this->ensureSuperadmin($request);
+        }
+
         if ($this->isGuest($request)) {
             abort(403);
         }
@@ -2705,6 +2726,10 @@ class CentroPageController extends Controller
 
     private function ensureRoleCanUpdateRecord(Request $request, string $section, string $id): void
     {
+        if ($section === 'settings') {
+            $this->ensureSuperadmin($request);
+        }
+
         if ($this->isGuest($request)) {
             abort_unless($section === 'tasks' && $this->isTaskParticipant($id, $request->user()->id), 403);
 
@@ -2718,6 +2743,10 @@ class CentroPageController extends Controller
 
     private function ensureRoleCanDestroyRecord(Request $request, string $section, string $id): void
     {
+        if ($section === 'settings') {
+            $this->ensureSuperadmin($request);
+        }
+
         if ($this->isGuest($request)) {
             abort(403);
         }

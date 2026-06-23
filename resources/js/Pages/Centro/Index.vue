@@ -102,6 +102,7 @@ const page = usePage();
 const currentRole = computed(() => page.props.auth?.user?.role || 'guest');
 const isGuest = computed(() => page.props.auth?.user?.role === 'guest');
 const isEditor = computed(() => currentRole.value === 'editor');
+const isSuperadmin = computed(() => currentRole.value === 'superadmin');
 const canWrite = computed(() => {
     if (!props.fields.length || isGuest.value) return false;
     if (!isEditor.value) return true;
@@ -1375,6 +1376,11 @@ function fileSize(value) {
 
 function remove(row, action = null) {
     if (!canDeleteRow(row)) return;
+    if (isSuperadmin.value) {
+        executeDelete(row, action);
+        return;
+    }
+
     deleteTarget.value = row;
     deleteTargetAction.value = action;
     deleteConfirmText.value = '';
@@ -1402,12 +1408,16 @@ function cancelDelete() {
 
 function confirmDelete() {
     if (!deleteTarget.value || deleteConfirmText.value !== 'ELIMINA') return;
-    if (deleteTargetAction.value) {
-        deleteTargetAction.value();
+    executeDelete(deleteTarget.value, deleteTargetAction.value);
+}
+
+function executeDelete(row, action = null) {
+    if (action) {
+        action();
         return;
     }
 
-    router.delete(route(`${routeBase.value}.destroy`, deleteTarget.value.id), {
+    router.delete(route(`${routeBase.value}.destroy`, row.id), {
         preserveScroll: true,
         onFinish: cancelDelete,
     });

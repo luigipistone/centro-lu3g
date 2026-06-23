@@ -58,6 +58,7 @@ const page = usePage();
 const currentRole = computed(() => page.props.auth?.user?.role || 'guest');
 const isGuest = computed(() => page.props.auth?.user?.role === 'guest');
 const isEditor = computed(() => currentRole.value === 'editor');
+const isSuperadmin = computed(() => currentRole.value === 'superadmin');
 const canEditClient = computed(() => !isGuest.value && !isEditor.value);
 const canEditProject = computed(() => !isGuest.value);
 const canDeleteProject = computed(() => !isGuest.value && !isEditor.value);
@@ -2032,6 +2033,11 @@ function removeSubscription(subscription) {
 }
 
 function openConfirm(action) {
+    if (isSuperadmin.value && action?.danger && action?.keyword === 'ELIMINA') {
+        action.action();
+        return;
+    }
+
     confirmAction.value = action;
     confirmText.value = '';
 }

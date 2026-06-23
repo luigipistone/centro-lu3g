@@ -20,6 +20,7 @@ const confirmDelete = ref(null);
 const confirmDeleteText = ref('');
 const currentYearVisibleCount = ref(5);
 const documentDescriptionEditor = ref(null);
+const isSuperadmin = computed(() => page.props.auth?.user?.role === 'superadmin');
 
 const documentForm = useForm({
     title: '',
@@ -130,6 +131,11 @@ function toggleGroupUser(userId) {
 }
 
 function removeDocument(document) {
+    if (isSuperadmin.value) {
+        router.delete(route('documents.destroy', document.id), { preserveScroll: true });
+        return;
+    }
+
     confirmDelete.value = {
         type: 'document',
         title: document.title,
@@ -139,6 +145,11 @@ function removeDocument(document) {
 }
 
 function removeGroup(group) {
+    if (isSuperadmin.value) {
+        router.delete(route('document-groups.destroy', group.id), { preserveScroll: true });
+        return;
+    }
+
     confirmDelete.value = {
         type: 'group',
         title: group.name,
