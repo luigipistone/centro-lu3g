@@ -264,12 +264,14 @@ const emailSettingDefaults = {
     smtp_port: '',
     smtp_username: '',
     smtp_password: '',
+    smtp_password_saved: false,
     smtp_secure: true,
     smtp_from_email: '',
     smtp_from_name: '',
     smtp_reply_to: '',
     pec_username: '',
     pec_password: '',
+    pec_password_saved: false,
 };
 
 const documentSettingsForm = useForm({ ...docSettingDefaults, ...(props.documentSettings || {}) });
@@ -1234,7 +1236,32 @@ function saveDocumentSettings() {
 }
 
 function saveEmailSettings() {
-    emailSettingsForm.put(route('settings.email.update'), { preserveScroll: true });
+    const hadNewSmtpPassword = Boolean(emailSettingsForm.smtp_password);
+    const hadNewPecPassword = Boolean(emailSettingsForm.pec_password);
+
+    emailSettingsForm
+        .transform((data) => ({
+            smtp_enabled: Boolean(data.smtp_enabled),
+            smtp_host: data.smtp_host || '',
+            smtp_port: data.smtp_port || '',
+            smtp_username: data.smtp_username || '',
+            smtp_password: data.smtp_password || '',
+            smtp_secure: Boolean(data.smtp_secure),
+            smtp_from_email: data.smtp_from_email || '',
+            smtp_from_name: data.smtp_from_name || '',
+            smtp_reply_to: data.smtp_reply_to || '',
+            pec_username: data.pec_username || '',
+            pec_password: data.pec_password || '',
+        }))
+        .put(route('settings.email.update'), {
+            preserveScroll: true,
+            onSuccess: () => {
+                emailSettingsForm.smtp_password = '';
+                emailSettingsForm.pec_password = '';
+                if (hadNewSmtpPassword) emailSettingsForm.smtp_password_saved = true;
+                if (hadNewPecPassword) emailSettingsForm.pec_password_saved = true;
+            },
+        });
 }
 
 function saveNumbering(row) {
@@ -5128,12 +5155,20 @@ function calendarDayStyle(sectionMonth, cell) {
                             <input v-model="emailSettingsForm.smtp_host" class="form-control mt-0" placeholder="Host SMTP" />
                             <input v-model="emailSettingsForm.smtp_port" type="number" class="form-control mt-0" placeholder="Porta" />
                             <input v-model="emailSettingsForm.smtp_username" class="form-control mt-0" placeholder="Username" />
-                            <input v-model="emailSettingsForm.smtp_password" type="password" class="form-control mt-0" placeholder="Nuova password SMTP" />
+                            <div>
+                                <input v-model="emailSettingsForm.smtp_password" type="password" class="form-control mt-0" placeholder="Nuova password SMTP" autocomplete="new-password" />
+                                <p v-if="emailSettingsForm.smtp_password_saved" class="mt-1 text-xs font-medium text-emerald-600">Password SMTP salvata. Compila questo campo solo per sostituirla.</p>
+                                <p v-else class="mt-1 text-xs text-gray-500">Nessuna password SMTP salvata.</p>
+                            </div>
                             <input v-model="emailSettingsForm.smtp_from_email" type="email" class="form-control mt-0" placeholder="Email mittente" />
                             <input v-model="emailSettingsForm.smtp_from_name" class="form-control mt-0" placeholder="Nome mittente" />
                             <input v-model="emailSettingsForm.smtp_reply_to" type="email" class="form-control mt-0" placeholder="Reply-to" />
                             <input v-model="emailSettingsForm.pec_username" class="form-control mt-0" placeholder="PEC username" />
-                            <input v-model="emailSettingsForm.pec_password" type="password" class="form-control mt-0" placeholder="Nuova password PEC" />
+                            <div>
+                                <input v-model="emailSettingsForm.pec_password" type="password" class="form-control mt-0" placeholder="Nuova password PEC" autocomplete="new-password" />
+                                <p v-if="emailSettingsForm.pec_password_saved" class="mt-1 text-xs font-medium text-emerald-600">Password PEC salvata. Compila questo campo solo per sostituirla.</p>
+                                <p v-else class="mt-1 text-xs text-gray-500">Nessuna password PEC salvata.</p>
+                            </div>
                         </div>
                         <button type="submit" class="btn btn-primary mt-5" :disabled="emailSettingsForm.processing">
                             <Save class="h-4 w-4" :stroke-width="1.7" />

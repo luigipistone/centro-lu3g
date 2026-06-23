@@ -105,7 +105,22 @@ function channelLabel(channel) {
             </button>
         </div>
 
-        <form @submit.prevent="form.patch(route('profile.update'))" class="mt-6 space-y-6">
+        <form
+            @submit.prevent="form
+                .transform((data) => ({
+                    name: data.name,
+                    email: data.email,
+                    completion_effect: data.completion_effect,
+                    notification_preferences: data.notification_preferences.map((preference) => ({
+                        category: preference.category,
+                        in_app: Boolean(preference.in_app),
+                        browser: Boolean(preference.browser),
+                        mail: Boolean(preference.mail),
+                    })),
+                }))
+                .patch(route('profile.update'))"
+            class="mt-6 space-y-6"
+        >
             <div>
                 <InputLabel for="name" value="Nome" />
 

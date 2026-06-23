@@ -429,7 +429,7 @@ class CentroPageController extends Controller
             'billingStats' => $section === 'billing' ? $this->billingStats() : null,
             'clientStats' => $section === 'clients' ? $this->clientStats() : null,
             'documentSettings' => $section === 'settings' ? DB::table('document_settings')->first() : null,
-            'emailSettings' => $section === 'settings' ? DB::table('email_settings')->first() : null,
+            'emailSettings' => $section === 'settings' ? $this->emailSettingsForView() : null,
             'numberings' => $section === 'settings' ? DB::table('document_numbering')->orderBy('doc_type')->orderByDesc('year')->get() : [],
             'backupRuns' => $section === 'settings' ? $this->backupRuns() : [],
             'clients' => DB::table('clients')->orderBy('name')->get(['id', 'name']),
@@ -1272,6 +1272,21 @@ class CentroPageController extends Controller
         );
 
         return back()->with('status', 'Impostazioni email aggiornate.');
+    }
+
+    private function emailSettingsForView(): ?object
+    {
+        $settings = DB::table('email_settings')->first();
+        if (! $settings) {
+            return null;
+        }
+
+        $settings->smtp_password_saved = filled($settings->smtp_password);
+        $settings->pec_password_saved = filled($settings->pec_password);
+        $settings->smtp_password = '';
+        $settings->pec_password = '';
+
+        return $settings;
     }
 
     public function updateNumbering(Request $request, string $id): RedirectResponse

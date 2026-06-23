@@ -52,33 +52,36 @@ class ProfileController extends Controller
 
         $request->user()->save();
 
+        $existingProfile = DB::table('profiles')->where('user_id', $request->user()->id)->first(['id', 'created_at']);
         DB::table('profiles')->updateOrInsert(
             ['user_id' => $request->user()->id],
             [
-                'id' => (string) str()->uuid(),
+                'id' => $existingProfile->id ?? (string) str()->uuid(),
                 'full_name' => $request->user()->name,
                 'completion_effect' => $payload['completion_effect'] ?? 'balloons',
                 'updated_at' => now(),
-                'created_at' => now(),
+                'created_at' => $existingProfile->created_at ?? now(),
             ],
         );
 
         foreach (($payload['notification_preferences'] ?? []) as $preference) {
+            $existingPreference = DB::table('notification_preferences')
+                ->where('user_id', $request->user()->id)
+                ->where('category', $preference['category'])
+                ->first(['id', 'created_at']);
+
             DB::table('notification_preferences')->updateOrInsert(
                 [
                     'user_id' => $request->user()->id,
                     'category' => $preference['category'],
                 ],
                 [
-                    'id' => DB::table('notification_preferences')
-                        ->where('user_id', $request->user()->id)
-                        ->where('category', $preference['category'])
-                        ->value('id') ?: (string) str()->uuid(),
+                    'id' => $existingPreference->id ?? (string) str()->uuid(),
                     'in_app' => (bool) ($preference['in_app'] ?? false),
                     'browser' => (bool) ($preference['browser'] ?? false),
                     'mail' => (bool) ($preference['mail'] ?? false),
                     'updated_at' => now(),
-                    'created_at' => now(),
+                    'created_at' => $existingPreference->created_at ?? now(),
                 ],
             );
         }
