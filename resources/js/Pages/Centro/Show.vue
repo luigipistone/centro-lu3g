@@ -59,6 +59,7 @@ const currentRole = computed(() => page.props.auth?.user?.role || 'guest');
 const isGuest = computed(() => page.props.auth?.user?.role === 'guest');
 const isEditor = computed(() => currentRole.value === 'editor');
 const canEditClient = computed(() => !isGuest.value && !isEditor.value);
+const canEditProject = computed(() => !isGuest.value);
 const canDeleteProject = computed(() => !isGuest.value && !isEditor.value);
 const canDeleteCurrentTask = computed(() => {
     if (isGuest.value) return false;
@@ -72,6 +73,20 @@ function canDeleteTaskRecord(task) {
     if (!isEditor.value) return true;
 
     return task?.created_by === page.props.auth?.user?.id;
+}
+
+function canOpenRelatedProject(project) {
+    if (!project?.id) return false;
+    if (!isGuest.value) return true;
+
+    return (props.related.taskProjects || []).some((item) => item.id === project.id);
+}
+
+function canOpenRelatedItem(name) {
+    if (isGuest.value && name === 'clients') return false;
+    if (isEditor.value && props.section === 'clients' && name === 'documents') return false;
+
+    return true;
 }
 const AUTOSAVE_IDLE_DELAY = 2500;
 
@@ -1688,7 +1703,7 @@ function projectPayload() {
 }
 
 function saveProjectInline(delay = AUTOSAVE_IDLE_DELAY) {
-    if (props.section !== 'projects' || isGuest.value) return;
+    if (props.section !== 'projects' || !canEditProject.value) return;
 
     window.clearTimeout(projectAutosaveTimer);
     projectAutosaveState.value = 'queued';
@@ -3620,7 +3635,7 @@ onUnmounted(() => {
 
             <div v-else class="mx-auto grid max-w-7xl gap-6 px-4 sm:px-6 lg:grid-cols-[1fr_360px] lg:px-8">
                 <section v-if="section === 'clients'" class="space-y-6">
-                    <section class="surface rounded-md p-5">
+                    <section v-if="canEditClient" class="surface rounded-md p-5">
                         <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
                             <div>
                                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Anagrafica cliente</h3>
@@ -3774,13 +3789,43 @@ onUnmounted(() => {
                         </div>
                     </section>
 
+                    <section v-else class="surface rounded-md p-5">
+                        <div class="mb-5">
+                            <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Anagrafica cliente</h3>
+                            <p class="mt-1 text-sm text-gray-500">Consultazione dati cliente.</p>
+                        </div>
+                        <dl class="grid gap-4 md:grid-cols-2">
+                            <div v-for="[label, value] in [
+                                ['Nome', clientForm.name],
+                                ['Ragione sociale', clientForm.legal_name],
+                                ['Partita IVA', clientForm.vat_number],
+                                ['Codice fiscale', clientForm.tax_code],
+                                ['Email', clientForm.email],
+                                ['Telefono', clientForm.phone],
+                                ['Sito web', clientForm.website],
+                                ['Città', [clientForm.city, clientForm.province].filter(Boolean).join(', ')],
+                                ['PEC', clientForm.pec],
+                                ['Codice SDI', clientForm.sdi_code],
+                                ['IBAN', clientForm.iban],
+                                ['Trattamento IVA', displayValue(clientForm.vat_treatment)],
+                            ]" :key="label" class="rounded-md border border-gray-100 bg-gray-50 px-4 py-3">
+                                <dt class="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{{ label }}</dt>
+                                <dd class="mt-1 min-h-5 text-sm font-medium text-gray-900">{{ value || '-' }}</dd>
+                            </div>
+                            <div class="rounded-md border border-gray-100 bg-gray-50 px-4 py-3 md:col-span-2">
+                                <dt class="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Note</dt>
+                                <dd class="mt-1 text-sm text-gray-700 whitespace-pre-line">{{ clientForm.notes || '-' }}</dd>
+                            </div>
+                        </dl>
+                    </section>
+
                     <section class="surface rounded-md p-5">
                         <div class="mb-5 flex items-center justify-between">
                             <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Referenti</h3>
                             <span class="text-xs text-gray-500">{{ related.contacts?.length || 0 }} contatti</span>
                         </div>
 
-                        <form class="mb-5 grid gap-3 md:grid-cols-6" @submit.prevent="addContact">
+                        <form v-if="canEditClient" class="mb-5 grid gap-3 md:grid-cols-6" @submit.prevent="addContact">
                             <input v-model="contactForm.first_name" class="form-control mt-0" placeholder="Nome" required />
                             <input v-model="contactForm.last_name" class="form-control mt-0" placeholder="Cognome" required />
                             <input v-model="contactForm.email" class="form-control mt-0" type="email" placeholder="Email" />
@@ -3793,7 +3838,7 @@ onUnmounted(() => {
                             <article v-for="contact in related.contacts" :key="contact.id" class="rounded-md border border-gray-100 bg-gray-50 p-4 transition hover:border-indigo-100 hover:bg-white">
                                 <div class="flex items-start justify-between gap-3">
                                     <div class="min-w-0 flex-1 space-y-3">
-                                        <div class="grid gap-2 sm:grid-cols-2">
+                                        <div v-if="canEditClient" class="grid gap-2 sm:grid-cols-2">
                                             <input
                                                 v-if="contactDrafts[contact.id]"
                                                 v-model="contactDrafts[contact.id].first_name"
@@ -3809,7 +3854,7 @@ onUnmounted(() => {
                                                 @input="saveContactInline(contact)"
                                             />
                                         </div>
-                                        <div class="grid gap-2 sm:grid-cols-2">
+                                        <div v-if="canEditClient" class="grid gap-2 sm:grid-cols-2">
                                             <input
                                                 v-if="contactDrafts[contact.id]"
                                                 v-model="contactDrafts[contact.id].role"
@@ -3825,6 +3870,33 @@ onUnmounted(() => {
                                                 @input="saveContactInline(contact)"
                                             />
                                         </div>
+                                        <input
+                                            v-if="canEditClient && contactDrafts[contact.id]"
+                                            v-model="contactDrafts[contact.id].email"
+                                            class="form-control mt-0"
+                                            type="email"
+                                            placeholder="Email"
+                                            @input="saveContactInline(contact)"
+                                        />
+                                        <textarea
+                                            v-if="canEditClient && contactDrafts[contact.id]"
+                                            v-model="contactDrafts[contact.id].notes"
+                                            rows="2"
+                                            class="form-control mt-0"
+                                            placeholder="Note"
+                                            @input="saveContactInline(contact)"
+                                        ></textarea>
+                                        <div v-if="!canEditClient" class="space-y-1 text-sm">
+                                            <div class="font-semibold text-gray-900">{{ [contact.first_name, contact.last_name].filter(Boolean).join(' ') || 'Referente' }}</div>
+                                            <div v-if="contact.role" class="text-gray-600">{{ contact.role }}</div>
+                                            <div v-if="contact.email" class="text-gray-600">{{ contact.email }}</div>
+                                            <div v-if="contact.phone" class="text-gray-600">{{ contact.phone }}</div>
+                                            <div v-if="contact.notes" class="text-gray-500">{{ contact.notes }}</div>
+                                        </div>
+                                        <div v-if="canEditClient && contactAutosaveStates[contact.id] && contactAutosaveStates[contact.id] !== 'idle'" :class="['text-[11px] font-medium', contactAutosaveStates[contact.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
+                                            {{ autosaveLabel(contactAutosaveStates[contact.id], contactAutosaveErrors[contact.id]) }}
+                                        </div>
+                                        <template v-if="false">
                                         <input
                                             v-if="contactDrafts[contact.id]"
                                             v-model="contactDrafts[contact.id].email"
@@ -3844,8 +3916,9 @@ onUnmounted(() => {
                                         <div v-if="contactAutosaveStates[contact.id] && contactAutosaveStates[contact.id] !== 'idle'" :class="['text-[11px] font-medium', contactAutosaveStates[contact.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
                                             {{ autosaveLabel(contactAutosaveStates[contact.id], contactAutosaveErrors[contact.id]) }}
                                         </div>
+                                        </template>
                                     </div>
-                                    <button type="button" class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-red-600 transition hover:bg-red-50 hover:text-red-700" aria-label="Elimina referente" @click="removeContact(contact)">
+                                    <button v-if="canEditClient" type="button" class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-red-600 transition hover:bg-red-50 hover:text-red-700" aria-label="Elimina referente" @click="removeContact(contact)">
                                         <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                     </button>
                                 </div>
@@ -3862,12 +3935,12 @@ onUnmounted(() => {
                                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Abbonamenti</h3>
                                 <p class="mt-1 text-sm text-gray-500">{{ related.subscriptions?.length || 0 }} ricorrenze collegate al cliente</p>
                             </div>
-                            <button v-if="editingSubscription" type="button" class="text-sm font-medium text-gray-500 hover:text-gray-800" @click="resetSubscriptionForm">
+                            <button v-if="canEditClient && editingSubscription" type="button" class="text-sm font-medium text-gray-500 hover:text-gray-800" @click="resetSubscriptionForm">
                                 Annulla modifica
                             </button>
                         </div>
 
-                        <form class="grid gap-3 rounded-md border border-gray-100 bg-gray-50 p-4 md:grid-cols-4" @submit.prevent="saveSubscription">
+                        <form v-if="canEditClient" class="grid gap-3 rounded-md border border-gray-100 bg-gray-50 p-4 md:grid-cols-4" @submit.prevent="saveSubscription">
                             <div class="md:col-span-2">
                                 <label class="block text-sm font-medium text-gray-700">Nome *</label>
                                 <input v-model="subscriptionForm.name" class="form-control" required />
@@ -3953,7 +4026,7 @@ onUnmounted(() => {
                                         </p>
                                         <p v-if="subscription.description" class="mt-1 text-sm text-gray-600">{{ subscription.description }}</p>
                                     </div>
-                                    <div class="flex flex-wrap gap-2">
+                                    <div v-if="canEditClient" class="flex flex-wrap gap-2">
                                         <button type="button" class="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50" @click="generateSubscription(subscription)">
                                             Genera fattura
                                         </button>
@@ -4007,7 +4080,7 @@ onUnmounted(() => {
                         <div class="space-y-5">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Nome</label>
-                                <input v-model="projectForm.name" class="form-control" required />
+                                <input v-model="projectForm.name" class="form-control" required :readonly="!canEditProject" />
                                 <div v-if="projectForm.errors.name" class="mt-1 text-sm text-red-600">{{ projectForm.errors.name }}</div>
                             </div>
                             <div class="grid gap-4 md:grid-cols-2">
@@ -4017,11 +4090,12 @@ onUnmounted(() => {
                                         v-model="projectForm.client_id"
                                         :options="namedOptions(related.projectClients, { value: '', label: 'Nessun cliente' })"
                                         searchable
+                                        :disabled="!canEditProject"
                                     />
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Stato</label>
-                                    <AppSelect v-model="projectForm.status" :options="projectStatusOptions" />
+                                    <AppSelect v-model="projectForm.status" :options="projectStatusOptions" :disabled="!canEditProject" />
                                 </div>
                             </div>
                             <div>
@@ -4034,13 +4108,14 @@ onUnmounted(() => {
                                         :class="['h-8 w-8 rounded-full border-2', projectForm.color === color ? 'border-gray-900 ring-2 ring-gray-300' : 'border-white']"
                                         :style="{ backgroundColor: color }"
                                         :aria-label="`Colore ${color}`"
+                                        :disabled="!canEditProject"
                                         @click="projectForm.color = color; saveProjectInline(0)"
                                     ></button>
-                                    <label class="relative inline-flex h-8 w-8 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm ring-1 ring-gray-200 transition hover:ring-gray-300" :style="{ backgroundColor: normalizeHexColor(projectForm.color) }">
+                                    <label :class="['relative inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-sm ring-1 ring-gray-200 transition', canEditProject ? 'cursor-pointer hover:ring-gray-300' : 'cursor-default opacity-70']" :style="{ backgroundColor: normalizeHexColor(projectForm.color) }">
                                         <span class="sr-only">Scegli colore custom</span>
-                                        <input v-model="projectForm.color" type="color" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+                                        <input v-model="projectForm.color" type="color" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" :disabled="!canEditProject" />
                                     </label>
-                                    <input v-model="projectForm.color" type="text" class="form-control mt-0 w-28 font-mono text-xs" />
+                                    <input v-model="projectForm.color" type="text" class="form-control mt-0 w-28 font-mono text-xs" :readonly="!canEditProject" />
                                 </div>
                             </div>
                         </div>
@@ -4147,7 +4222,7 @@ onUnmounted(() => {
                                         @keydown.enter.prevent="$event.target.blur()"
                                     />
                                     <span class="text-xs font-medium text-gray-400">{{ projectTasksForSection(sectionRow).length }}</span>
-                                    <div v-if="!sectionRow.virtual" class="relative shrink-0" data-project-section-menu>
+                                    <div v-if="!sectionRow.virtual && canEditProject" class="relative shrink-0" data-project-section-menu>
                                         <button
                                             type="button"
                                             class="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 opacity-0 transition hover:bg-gray-50 hover:text-gray-800 group-hover/project-section:opacity-100 focus:opacity-100"
@@ -4211,19 +4286,21 @@ onUnmounted(() => {
                                         </span>
                                     </div>
                                     <form :class="['border-t border-gray-100 px-3 py-2.5 transition', draggedProjectTaskId && projectTaskDropSectionId === sectionRow.id && !projectTaskDropTarget ? 'bg-indigo-50/70 ring-1 ring-inset ring-indigo-200' : '']" @submit.prevent="addProjectTask(sectionRow)" @dragover.prevent="dragOverProjectSection(sectionRow, true)" @drop.prevent.stop="dropProjectTask(sectionRow)">
-                                        <input
-                                            :value="projectTaskDrafts[sectionRow.id] || ''"
+                                    <input
+                                        v-if="canEditProject"
+                                        :value="projectTaskDrafts[sectionRow.id] || ''"
                                             class="subtask-line-control font-medium"
                                             placeholder="Aggiungi attività..."
                                             @input="setProjectTaskDraft(sectionRow.id, $event.target.value)"
                                             @keydown.enter.prevent="addProjectTask(sectionRow)"
                                             @blur="addProjectTask(sectionRow)"
                                         />
+                                        <p v-else class="px-1 py-2 text-sm text-gray-400">Solo consultazione.</p>
                                     </form>
                                 </div>
                             </div>
                             <div class="group/add-section px-3 py-3">
-                                <form v-if="projectNewSectionOpen" class="mb-2 flex max-w-lg items-center gap-2 rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 px-3 py-2" @submit.prevent="addProjectSection">
+                                <form v-if="canEditProject && projectNewSectionOpen" class="mb-2 flex max-w-lg items-center gap-2 rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 px-3 py-2" @submit.prevent="addProjectSection">
                                     <Plus class="h-4 w-4 shrink-0 text-gray-400" :stroke-width="1.7" />
                                     <input
                                         ref="projectNewSectionInput"
@@ -4235,6 +4312,7 @@ onUnmounted(() => {
                                     />
                                 </form>
                                 <button
+                                    v-if="canEditProject"
                                     type="button"
                                     class="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-semibold text-gray-400 opacity-80 transition hover:bg-gray-50 hover:text-indigo-600 group-hover/add-section:opacity-100"
                                     @click="showProjectSectionInput"
@@ -4980,6 +5058,7 @@ onUnmounted(() => {
                     <section v-if="section === 'tasks' && related.client" class="surface rounded-md p-5">
                         <h3 class="text-sm font-semibold text-gray-900">Cliente</h3>
                         <Link
+                            v-if="!isGuest"
                             :href="route('clients.show', related.client.id)"
                             class="group/item mt-2 block rounded-md border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm transition duration-200 hover:-translate-y-0.5 hover:border-indigo-100 hover:bg-white hover:shadow-[0_12px_28px_rgba(28,42,73,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
                         >
@@ -4990,6 +5069,12 @@ onUnmounted(() => {
                                 {{ [related.client.legal_name, related.client.vat_number || related.client.tax_code].filter(Boolean).join(' · ') }}
                             </span>
                         </Link>
+                        <div v-else class="mt-2 block rounded-md border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm">
+                            <span class="block truncate font-semibold text-gray-900">{{ related.client.name }}</span>
+                            <span v-if="related.client.legal_name || related.client.vat_number || related.client.tax_code" class="mt-1 block truncate text-xs text-gray-500">
+                                {{ [related.client.legal_name, related.client.vat_number || related.client.tax_code].filter(Boolean).join(' · ') }}
+                            </span>
+                        </div>
                     </section>
 
                     <section v-if="section === 'tasks'" class="surface rounded-md p-5">
@@ -5088,6 +5173,7 @@ onUnmounted(() => {
                     <section v-if="section !== 'tasks' && related.client" class="surface rounded-md p-5">
                         <h3 class="text-sm font-semibold text-gray-900">Cliente</h3>
                         <Link
+                            v-if="!isGuest"
                             :href="route('clients.show', related.client.id)"
                             class="group/item mt-2 block rounded-md border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm transition duration-200 hover:-translate-y-0.5 hover:border-indigo-100 hover:bg-white hover:shadow-[0_12px_28px_rgba(28,42,73,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
                         >
@@ -5098,31 +5184,42 @@ onUnmounted(() => {
                                 {{ [related.client.legal_name, related.client.vat_number || related.client.tax_code].filter(Boolean).join(' · ') }}
                             </span>
                         </Link>
+                        <div v-else class="mt-2 block rounded-md border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm">
+                            <span class="block truncate font-semibold text-gray-900">{{ related.client.name }}</span>
+                            <span v-if="related.client.legal_name || related.client.vat_number || related.client.tax_code" class="mt-1 block truncate text-xs text-gray-500">
+                                {{ [related.client.legal_name, related.client.vat_number || related.client.tax_code].filter(Boolean).join(' · ') }}
+                            </span>
+                        </div>
                     </section>
 
                     <section v-if="related.project" class="surface rounded-md p-5">
                         <h3 class="text-sm font-semibold text-gray-900">Progetto</h3>
-                        <Link :href="route('projects.show', related.project.id)" class="mt-2 block text-sm font-medium text-indigo-600">
+                        <Link v-if="canOpenRelatedProject(related.project)" :href="route('projects.show', related.project.id)" class="mt-2 block text-sm font-medium text-indigo-600">
                             {{ related.project.name }}
                         </Link>
+                        <div v-else class="mt-2 text-sm font-medium text-gray-700">{{ related.project.name }}</div>
                     </section>
 
                     <section v-for="name in (section === 'projects' ? ['documents'] : ['projects', 'tasks', 'documents'])" :key="name" v-show="related[name]?.length" class="surface rounded-md p-5">
                         <h3 class="mb-3 text-sm font-semibold text-gray-900">{{ relatedSectionLabel(name) }}</h3>
                         <div class="space-y-2">
-                            <Link
+                            <component
                                 v-for="item in related[name]"
                                 :key="item.id"
-                                :href="relatedItemHref(name, item)"
-                                class="group/item block rounded-md border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm transition duration-200 hover:-translate-y-0.5 hover:border-indigo-100 hover:bg-white hover:shadow-[0_12px_28px_rgba(28,42,73,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                                :is="canOpenRelatedItem(name) ? Link : 'div'"
+                                :href="canOpenRelatedItem(name) ? relatedItemHref(name, item) : undefined"
+                                :class="[
+                                    'group/item block rounded-md border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm transition duration-200',
+                                    canOpenRelatedItem(name) ? 'hover:-translate-y-0.5 hover:border-indigo-100 hover:bg-white hover:shadow-[0_12px_28px_rgba(28,42,73,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200' : '',
+                                ]"
                             >
-                                <span class="block truncate font-semibold text-gray-900 transition group-hover/item:text-indigo-600">
+                                <span :class="['block truncate font-semibold text-gray-900 transition', canOpenRelatedItem(name) ? 'group-hover/item:text-indigo-600' : '']">
                                     {{ relatedItemTitle(name, item) }}
                                 </span>
                                 <span class="mt-1 block truncate text-xs text-gray-500">
                                     {{ relatedItemMeta(name, item) }}
                                 </span>
-                            </Link>
+                            </component>
                         </div>
                     </section>
                 </aside>
