@@ -738,13 +738,15 @@ class CentroPageController extends Controller
         abort_unless($this->canAccessCompanyDocument($request, $document), 403);
 
         $canManage = $this->canManageDocuments($request);
-        if (! $canManage) {
-            $this->markCompanyDocumentOpened($id, (string) $request->user()->id);
+        $userId = (string) $request->user()->id;
+        $isRecipient = $this->companyDocumentRecipientIds($id)->contains($userId);
+        if ($isRecipient) {
+            $this->markCompanyDocumentOpened($id, $userId);
         }
 
         return Inertia::render('Centro/DocumentShow', [
             'canManage' => $canManage,
-            'document' => $this->companyDocumentRow($document, $canManage ? null : (string) $request->user()->id),
+            'document' => $this->companyDocumentRow($document, $isRecipient ? $userId : null),
             'readers' => $canManage ? $this->companyDocumentReaderRows($id) : [],
         ]);
     }
@@ -756,8 +758,9 @@ class CentroPageController extends Controller
         abort_unless($this->canAccessCompanyDocument($request, $document), 403);
         abort_unless(Storage::disk('local')->exists($document->file_path), 404);
 
-        if (! $this->canManageDocuments($request)) {
-            $this->markCompanyDocumentOpened($id, (string) $request->user()->id);
+        $userId = (string) $request->user()->id;
+        if ($this->companyDocumentRecipientIds($id)->contains($userId)) {
+            $this->markCompanyDocumentOpened($id, $userId);
         }
 
         return response()->file(Storage::disk('local')->path($document->file_path), [
@@ -771,7 +774,7 @@ class CentroPageController extends Controller
         $document = DB::table('company_documents')->where('id', $id)->first();
         abort_if(! $document, 404);
         abort_unless($this->canAccessCompanyDocument($request, $document), 403);
-        abort_if($this->canManageDocuments($request), 403);
+        abort_unless($this->companyDocumentRecipientIds($id)->contains((string) $request->user()->id), 403);
 
         $row = DB::table('company_document_reads')
             ->where('company_document_id', $id)
@@ -2946,6 +2949,7 @@ class CentroPageController extends Controller
         $document->recipient_count = $recipientIds->count();
         $document->read_count = $readRows->filter(fn ($row) => filled($row->read_at))->count();
         $document->opened_count = $readRows->filter(fn ($row) => filled($row->opened_at))->count();
+        $document->user_is_recipient = $userId ? $recipientIds->contains($userId) : false;
         $document->user_read_at = $userId ? ($readRows[$userId]->read_at ?? null) : null;
         $document->user_opened_at = $userId ? ($readRows[$userId]->opened_at ?? null) : null;
         $document->user_ids = DB::table('company_document_user')->where('company_document_id', $document->id)->pluck('user_id');
