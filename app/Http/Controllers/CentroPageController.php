@@ -979,6 +979,7 @@ class CentroPageController extends Controller
             ],
             'users' => [
                 'roleOptions' => ['superadmin', 'admin', 'editor', 'guest'],
+                'performance' => $this->userPerformanceStats($id),
             ],
             'absences' => [
                 'user' => [
@@ -2259,6 +2260,168 @@ class CentroPageController extends Controller
                 'updated_at' => now(),
             ]);
         }
+    }
+
+    private function userPerformanceStats(string $userId): array
+    {
+        $today = now()->toDateString();
+        $weekEnd = now()->copy()->endOfWeek()->toDateString();
+        $monthStart = now()->copy()->subDays(30);
+        $yearStart = now()->copy()->startOfYear()->toDateString();
+
+        $assignedTaskQuery = DB::table('tasks')
+            ->join('task_assignees', 'task_assignees.task_id', '=', 'tasks.id')
+            ->where('task_assignees.user_id', $userId)
+            ->where(fn ($query) => $query->whereNull('tasks.parent_task_id')->orWhereRaw("TRIM(tasks.parent_task_id) = ''"));
+
+        $openTaskQuery = (clone $assignedTaskQuery)->where('tasks.status', '!=', 'done');
+        $completedLast30 = (clone $assignedTaskQuery)
+            ->where('tasks.status', 'done')
+            ->where('tasks.updated_at', '>=', $monthStart)
+            ->count();
+        $touchedLast30 = (clone $assignedTaskQuery)
+            ->where('tasks.updated_at', '>=', $monthStart)
+            ->count();
+        $completionRate = $touchedLast30 > 0 ? (int) round(($completedLast30 / $touchedLast30) * 100) : 0;
+
+        $statusLabels = [
+            'todo' => 'Da fare',
+            'in_progress' => 'In corso',
+            'in_review' => 'Review',
+            'done' => 'Fatte',
+        ];
+        $priorityLabels = [
+            'low' => 'Bassa',
+            'medium' => 'Media',
+            'high' => 'Alta',
+            'urgent' => 'Urgente',
+        ];
+
+        $statusCounts = (clone $assignedTaskQuery)
+            ->select('tasks.status as status', DB::raw('count(*) as total'))
+            ->groupBy('tasks.status')
+            ->pluck('total', 'status');
+        $priorityCounts = (clone $openTaskQuery)
+            ->select('tasks.priority as priority', DB::raw('count(*) as total'))
+            ->groupBy('tasks.priority')
+            ->pluck('total', 'priority');
+
+        $documents = $this->companyDocumentRows($userId, false);
+        $absenceRows = DB::table('absence_requests')
+            ->where('user_id', $userId)
+            ->where('status', 'approved')
+            ->whereDate('end_date', '>=', $yearStart)
+            ->get(['type', 'start_date', 'end_date', 'start_time', 'end_time']);
+
+        $absenceDays = $absenceRows->sum(function ($absence) use ($yearStart) {
+            $start = max($absence->start_date, $yearStart);
+            $end = $absence->end_date ?: $absence->start_date;
+            $startDate = \Carbon\Carbon::parse($start)->startOfDay();
+            $endDate = \Carbon\Carbon::parse($end)->startOfDay();
+            $days = max(1, $startDate->diffInDays($endDate) + 1);
+
+            if ($absence->start_time && $absence->end_time && $startDate->equalTo($endDate)) {
+                return round(max(0.25, \Carbon\Carbon::parse($absence->start_time)->diffInMinutes(\Carbon\Carbon::parse($absence->end_time)) / 480), 2);
+            }
+
+            return $days;
+        });
+
+        $upcomingTasks = (clone $openTaskQuery)
+            ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
+            ->leftJoin('projects', 'projects.id', '=', 'tasks.project_id')
+            ->whereNotNull('tasks.due_date')
+            ->orderBy('tasks.due_date')
+            ->limit(6)
+            ->get([
+                'tasks.id',
+                'tasks.title',
+                'tasks.status',
+                'tasks.priority',
+                'tasks.task_type',
+                'tasks.due_date',
+                'tasks.due_time',
+                'clients.name as client_name',
+                'projects.name as project_name',
+            ]);
+
+        $recentCompletedTasks = (clone $assignedTaskQuery)
+            ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
+            ->where('tasks.status', 'done')
+            ->orderByDesc('tasks.updated_at')
+            ->limit(5)
+            ->get([
+                'tasks.id',
+                'tasks.title',
+                'tasks.updated_at',
+                'clients.name as client_name',
+            ]);
+
+        return [
+            'kpis' => [
+                [
+                    'label' => 'Task aperte',
+                    'value' => (clone $openTaskQuery)->count(),
+                    'detail' => 'Assegnate e non completate',
+                    'tone' => 'blue',
+                ],
+                [
+                    'label' => 'In ritardo',
+                    'value' => (clone $openTaskQuery)->whereDate('tasks.due_date', '<', $today)->count(),
+                    'detail' => 'Scadenza superata',
+                    'tone' => 'red',
+                ],
+                [
+                    'label' => 'Scadenze settimana',
+                    'value' => (clone $openTaskQuery)->whereBetween('tasks.due_date', [$today, $weekEnd])->count(),
+                    'detail' => 'Da oggi a fine settimana',
+                    'tone' => 'amber',
+                ],
+                [
+                    'label' => 'Completate 30 gg',
+                    'value' => $completedLast30,
+                    'detail' => $completionRate.'% sul lavoro aggiornato',
+                    'tone' => 'green',
+                ],
+                [
+                    'label' => 'Progetti attivi',
+                    'value' => DB::table('projects')
+                        ->join('project_followers', 'project_followers.project_id', '=', 'projects.id')
+                        ->where('project_followers.user_id', $userId)
+                        ->where('projects.status', 'active')
+                        ->count(),
+                    'detail' => 'Dove risulta coinvolto',
+                    'tone' => 'violet',
+                ],
+                [
+                    'label' => 'Documenti da leggere',
+                    'value' => $documents->filter(fn ($document) => blank($document->user_read_at))->count(),
+                    'detail' => $documents->count().' documenti assegnati',
+                    'tone' => 'slate',
+                ],
+            ],
+            'completionRate' => $completionRate,
+            'status' => collect(['todo', 'in_progress', 'in_review', 'done'])->map(fn ($status) => [
+                'key' => $status,
+                'label' => $statusLabels[$status],
+                'value' => (int) ($statusCounts[$status] ?? 0),
+            ])->values(),
+            'priority' => collect(['urgent', 'high', 'medium', 'low'])->map(fn ($priority) => [
+                'key' => $priority,
+                'label' => $priorityLabels[$priority],
+                'value' => (int) ($priorityCounts[$priority] ?? 0),
+            ])->values(),
+            'upcomingTasks' => $upcomingTasks,
+            'recentCompletedTasks' => $recentCompletedTasks,
+            'absence' => [
+                'approvedDaysYear' => $absenceDays,
+                'approvedRequestsYear' => $absenceRows->count(),
+                'pendingRequests' => DB::table('absence_requests')
+                    ->where('user_id', $userId)
+                    ->where('status', 'pending')
+                    ->count(),
+            ],
+        ];
     }
 
     private function storeUser(Request $request): RedirectResponse

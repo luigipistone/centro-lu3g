@@ -45,7 +45,7 @@ import {
     UserRound,
     X,
 } from '@lucide/vue';
-import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps({
     section: String,
@@ -346,6 +346,37 @@ function relatedItemMeta(name, item) {
     return item.status ? displayValue(item.status) : (item.created_at ? dateIt(item.created_at) : '-');
 }
 
+function userKpiClass(tone) {
+    return {
+        blue: 'border-sky-100 bg-sky-50/80 text-sky-700',
+        red: 'border-red-100 bg-red-50/80 text-red-700',
+        amber: 'border-amber-100 bg-amber-50/80 text-amber-700',
+        green: 'border-emerald-100 bg-emerald-50/80 text-emerald-700',
+        violet: 'border-violet-100 bg-violet-50/80 text-violet-700',
+        slate: 'border-slate-100 bg-slate-50/80 text-slate-700',
+    }[tone] || 'border-gray-100 bg-gray-50/80 text-gray-700';
+}
+
+function userStatBarWidth(value, rows) {
+    const max = Math.max(1, ...(rows || []).map((row) => Number(row.value || 0)));
+    return `${Math.max(5, Math.round((Number(value || 0) / max) * 100))}%`;
+}
+
+function userPriorityClass(priority) {
+    return {
+        urgent: 'bg-red-500',
+        high: 'bg-orange-400',
+        medium: 'bg-amber-300',
+        low: 'bg-emerald-400',
+    }[priority] || 'bg-gray-300';
+}
+
+function userTaskMeta(task) {
+    return [task.client_name, task.project_name, task.due_date ? dateIt(task.due_date) : null, task.due_time ? task.due_time.slice(0, 5) : null]
+        .filter(Boolean)
+        .join(' - ');
+}
+
 const visibleEntries = Object.entries(props.record).filter(([key, value]) =>
     !['id', 'created_by', 'updated_at', 'created_at', 'password', 'remember_token'].includes(key)
     && value !== null
@@ -615,6 +646,15 @@ const userForm = useForm({
     completion_effect: completionEffectValues.includes(props.record.completion_effect) ? props.record.completion_effect : 'balloons',
     smartworking_day: props.record.smartworking_day || 'none',
     password: '',
+});
+const userPerformance = computed(() => props.related?.performance || {
+    kpis: [],
+    completionRate: 0,
+    status: [],
+    priority: [],
+    upcomingTasks: [],
+    recentCompletedTasks: [],
+    absence: {},
 });
 const userAutosaveState = ref('idle');
 const userAutosaveError = ref('');
@@ -4516,6 +4556,119 @@ onUnmounted(() => {
                             <button type="button" class="btn btn-outline" :disabled="userAvatarForm.processing" @click="chooseUserAvatar">
                                 {{ userAvatarForm.processing ? 'Caricamento...' : 'Carica foto' }}
                             </button>
+                        </div>
+                    </section>
+
+                    <section class="surface rounded-md p-5">
+                        <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Andamento persona</h3>
+                                <p class="mt-1 text-sm text-gray-500">Sintesi operativa su carico, scadenze, completamenti e responsabilità.</p>
+                            </div>
+                            <div class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50 px-3 py-2 text-right">
+                                <span class="block text-[11px] font-semibold uppercase tracking-wide text-gray-400">Efficienza 30 gg</span>
+                                <span class="text-xl font-bold text-gray-900">{{ userPerformance.completionRate }}%</span>
+                            </div>
+                        </div>
+
+                        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                            <div
+                                v-for="kpi in userPerformance.kpis"
+                                :key="kpi.label"
+                                :class="['rounded-[var(--radius-sm)] border p-4', userKpiClass(kpi.tone)]"
+                            >
+                                <div class="text-xs font-semibold uppercase tracking-wide opacity-75">{{ kpi.label }}</div>
+                                <div class="mt-2 text-3xl font-bold leading-none">{{ kpi.value }}</div>
+                                <div class="mt-2 text-xs font-medium opacity-80">{{ kpi.detail }}</div>
+                            </div>
+                        </div>
+
+                        <div class="mt-5 grid gap-5 xl:grid-cols-2">
+                            <div class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
+                                <div class="mb-3 flex items-center justify-between">
+                                    <h4 class="text-sm font-semibold text-gray-900">Distribuzione task</h4>
+                                    <span class="text-xs font-medium text-gray-400">Totale assegnate</span>
+                                </div>
+                                <div class="space-y-3">
+                                    <div v-for="row in userPerformance.status" :key="row.key" class="grid grid-cols-[90px_minmax(0,1fr)_32px] items-center gap-3 text-sm">
+                                        <span class="font-medium text-gray-600">{{ row.label }}</span>
+                                        <span class="h-2 overflow-hidden rounded-full bg-white">
+                                            <span class="block h-full rounded-full bg-[hsl(var(--primary-app))]" :style="{ width: userStatBarWidth(row.value, userPerformance.status) }"></span>
+                                        </span>
+                                        <span class="text-right font-semibold text-gray-900">{{ row.value }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
+                                <div class="mb-3 flex items-center justify-between">
+                                    <h4 class="text-sm font-semibold text-gray-900">Priorità aperte</h4>
+                                    <span class="text-xs font-medium text-gray-400">Solo non completate</span>
+                                </div>
+                                <div class="space-y-3">
+                                    <div v-for="row in userPerformance.priority" :key="row.key" class="grid grid-cols-[90px_minmax(0,1fr)_32px] items-center gap-3 text-sm">
+                                        <span class="font-medium text-gray-600">{{ row.label }}</span>
+                                        <span class="h-2 overflow-hidden rounded-full bg-white">
+                                            <span :class="['block h-full rounded-full', userPriorityClass(row.key)]" :style="{ width: userStatBarWidth(row.value, userPerformance.priority) }"></span>
+                                        </span>
+                                        <span class="text-right font-semibold text-gray-900">{{ row.value }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+                            <div class="rounded-[var(--radius-sm)] border border-gray-100 bg-white/70 p-4">
+                                <h4 class="text-sm font-semibold text-gray-900">Prossime scadenze</h4>
+                                <div v-if="userPerformance.upcomingTasks.length" class="mt-3 divide-y divide-gray-100">
+                                    <Link
+                                        v-for="task in userPerformance.upcomingTasks"
+                                        :key="task.id"
+                                        :href="route('tasks.show', task.id)"
+                                        class="group flex items-start justify-between gap-3 py-2.5 text-sm transition hover:text-[hsl(var(--primary-app))]"
+                                    >
+                                        <span class="min-w-0">
+                                            <span class="block truncate font-semibold text-gray-900 transition group-hover:text-[hsl(var(--primary-app))]">{{ task.title }}</span>
+                                            <span class="mt-0.5 block truncate text-xs text-gray-500">{{ userTaskMeta(task) }}</span>
+                                        </span>
+                                        <span :class="['mt-1 h-2.5 w-2.5 shrink-0 rounded-full', userPriorityClass(task.priority)]"></span>
+                                    </Link>
+                                </div>
+                                <p v-else class="mt-3 text-sm text-gray-500">Nessuna scadenza aperta.</p>
+                            </div>
+
+                            <div class="rounded-[var(--radius-sm)] border border-gray-100 bg-white/70 p-4">
+                                <h4 class="text-sm font-semibold text-gray-900">Presenze e letture</h4>
+                                <dl class="mt-3 space-y-3 text-sm">
+                                    <div class="flex items-center justify-between gap-3">
+                                        <dt class="text-gray-500">Assenze approvate anno</dt>
+                                        <dd class="font-semibold text-gray-900">{{ userPerformance.absence.approvedDaysYear || 0 }} gg</dd>
+                                    </div>
+                                    <div class="flex items-center justify-between gap-3">
+                                        <dt class="text-gray-500">Richieste assenza</dt>
+                                        <dd class="font-semibold text-gray-900">{{ userPerformance.absence.approvedRequestsYear || 0 }} approvate</dd>
+                                    </div>
+                                    <div class="flex items-center justify-between gap-3">
+                                        <dt class="text-gray-500">In attesa</dt>
+                                        <dd class="font-semibold text-gray-900">{{ userPerformance.absence.pendingRequests || 0 }}</dd>
+                                    </div>
+                                </dl>
+                                <div class="mt-5 border-t border-gray-100 pt-4">
+                                    <h5 class="text-xs font-semibold uppercase tracking-wide text-gray-400">Ultime completate</h5>
+                                    <div v-if="userPerformance.recentCompletedTasks.length" class="mt-2 space-y-2">
+                                        <Link
+                                            v-for="task in userPerformance.recentCompletedTasks"
+                                            :key="task.id"
+                                            :href="route('tasks.show', task.id)"
+                                            class="block rounded-[var(--radius-sm)] bg-gray-50 px-3 py-2 text-xs transition hover:bg-[hsl(var(--primary-app)/0.08)]"
+                                        >
+                                            <span class="block truncate font-semibold text-gray-900">{{ task.title }}</span>
+                                            <span class="mt-0.5 block truncate text-gray-500">{{ [task.client_name, dateIt(task.updated_at)].filter(Boolean).join(' - ') }}</span>
+                                        </Link>
+                                    </div>
+                                    <p v-else class="mt-2 text-xs text-gray-500">Nessuna task completata di recente.</p>
+                                </div>
+                            </div>
                         </div>
                     </section>
 
