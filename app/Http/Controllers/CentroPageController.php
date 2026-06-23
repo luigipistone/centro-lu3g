@@ -2111,7 +2111,7 @@ class CentroPageController extends Controller
         ]);
 
         $uploadedFile = $payload['file'];
-        $path = $uploadedFile->store('project-files/'.$id, 'public');
+        $path = $uploadedFile->store('project-files/'.$id, 'local');
 
         DB::table('project_files')->insert([
             'id' => (string) str()->uuid(),
@@ -2144,9 +2144,16 @@ class CentroPageController extends Controller
             ->where('id', $fileId)
             ->first();
 
-        abort_unless($file && Storage::disk('public')->exists($file->path), 404);
+        abort_unless($file, 404);
 
-        return Storage::disk('public')->download($file->path, $file->original_name);
+        if (! Storage::disk('local')->exists($file->path) && Storage::disk('public')->exists($file->path)) {
+            Storage::disk('local')->put($file->path, Storage::disk('public')->get($file->path));
+            Storage::disk('public')->delete($file->path);
+        }
+
+        abort_unless(Storage::disk('local')->exists($file->path), 404);
+
+        return Storage::disk('local')->download($file->path, $file->original_name);
     }
 
     public function destroyProjectFile(string $projectId, string $fileId): RedirectResponse
@@ -2158,6 +2165,7 @@ class CentroPageController extends Controller
 
         abort_unless($file, 404);
 
+        Storage::disk('local')->delete($file->path);
         Storage::disk('public')->delete($file->path);
         DB::table('project_files')->where('id', $fileId)->delete();
 
@@ -2265,9 +2273,10 @@ class CentroPageController extends Controller
 
         $user = User::query()->findOrFail($id);
         $currentAvatar = DB::table('profiles')->where('user_id', $user->id)->value('avatar_url');
-        $path = $request->file('avatar')->store('avatars', 'public');
+        $path = $request->file('avatar')->store('avatars', 'local');
 
         if ($currentAvatar && str_starts_with($currentAvatar, '/avatars/')) {
+            Storage::disk('local')->delete('avatars/'.basename($currentAvatar));
             Storage::disk('public')->delete('avatars/'.basename($currentAvatar));
         }
 

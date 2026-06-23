@@ -72,9 +72,10 @@ class ProfileController extends Controller
 
         $user = $request->user();
         $currentAvatar = DB::table('profiles')->where('user_id', $user->id)->value('avatar_url');
-        $path = $request->file('avatar')->store('avatars', 'public');
+        $path = $request->file('avatar')->store('avatars', 'local');
 
         if ($currentAvatar && str_starts_with($currentAvatar, '/avatars/')) {
+            Storage::disk('local')->delete('avatars/'.basename($currentAvatar));
             Storage::disk('public')->delete('avatars/'.basename($currentAvatar));
         }
 
@@ -188,10 +189,16 @@ class ProfileController extends Controller
     {
         abort_if($filename !== basename($filename), 404);
 
-        $path = storage_path('app/public/avatars/'.$filename);
-        abort_unless(is_file($path), 404);
+        $relativePath = 'avatars/'.$filename;
 
-        return response()->file($path);
+        if (! Storage::disk('local')->exists($relativePath) && Storage::disk('public')->exists($relativePath)) {
+            Storage::disk('local')->put($relativePath, Storage::disk('public')->get($relativePath));
+            Storage::disk('public')->delete($relativePath);
+        }
+
+        abort_unless(Storage::disk('local')->exists($relativePath), 404);
+
+        return response()->file(Storage::disk('local')->path($relativePath));
     }
 
     private function notifyAbsencePeople(string $requestUserId, ?string $actorId, string $type, string $message): void
