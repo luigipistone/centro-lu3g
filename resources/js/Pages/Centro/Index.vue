@@ -5241,7 +5241,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                 <p v-if="testEmailForm.errors.recipient" class="mt-1 text-sm text-red-600">{{ testEmailForm.errors.recipient }}</p>
                                 <p v-else-if="testEmailForm.recentlySuccessful" class="mt-1 text-sm font-medium text-emerald-600">Mail di test inviata.</p>
                             </div>
-                            <button type="submit" class="btn btn-outline h-11" :disabled="testEmailForm.processing">
+                            <button type="submit" class="btn btn-outline h-[42px] self-start" :disabled="testEmailForm.processing">
                                 <Mail class="h-4 w-4" :stroke-width="1.7" />
                                 {{ testEmailForm.processing ? 'Invio...' : 'Invia test' }}
                             </button>
