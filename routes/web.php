@@ -133,6 +133,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/settings/services/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'settings')->name('settings.destroy');
     Route::put('/settings/document', [CentroPageController::class, 'updateDocumentSettings'])->name('settings.document.update');
     Route::put('/settings/email', [CentroPageController::class, 'updateEmailSettings'])->name('settings.email.update');
+    Route::post('/settings/email/test', [CentroPageController::class, 'sendTestEmail'])->name('settings.email.test');
     Route::put('/settings/numbering/{id}', [CentroPageController::class, 'updateNumbering'])->name('settings.numbering.update');
     Route::post('/settings/backup', [CentroPageController::class, 'runBackup'])->name('settings.backup.run');
     Route::post('/settings/backup/{id}/restore', [CentroPageController::class, 'restoreBackup'])->name('settings.backup.restore');

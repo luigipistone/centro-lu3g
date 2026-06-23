@@ -290,6 +290,9 @@ const emailSettingsForm = useForm({
     smtp_password: '',
     pec_password: '',
 });
+const testEmailForm = useForm({
+    recipient: '',
+});
 const numberingRows = ref((props.numberings || []).map((row) => ({ ...row })));
 
 const routeBase = computed(() => {
@@ -1271,6 +1274,12 @@ function saveEmailSettings() {
                 if (hadNewPecPassword) emailSettingsForm.pec_password_saved = true;
             },
         });
+}
+
+function sendTestEmail() {
+    testEmailForm.post(route('settings.email.test'), {
+        preserveScroll: true,
+    });
 }
 
 function saveNumbering(row) {
@@ -5217,6 +5226,26 @@ function calendarDayStyle(sectionMonth, cell) {
                             <Save class="h-4 w-4" :stroke-width="1.7" />
                             Salva email
                         </button>
+                    </form>
+
+                    <form class="app-card" @submit.prevent="sendTestEmail">
+                        <div class="flex flex-wrap items-start justify-between gap-4">
+                            <div>
+                                <h3 class="section-title"><span class="section-icon"><Mail class="h-4 w-4" :stroke-width="1.7" /></span>Test invio email</h3>
+                                <p class="mt-2 text-sm text-gray-500">Invia una mail di prova usando la configurazione SMTP salvata.</p>
+                            </div>
+                        </div>
+                        <div class="mt-5 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+                            <div>
+                                <input v-model="testEmailForm.recipient" type="email" class="form-control mt-0" placeholder="Destinatario test" autocomplete="email" />
+                                <p v-if="testEmailForm.errors.recipient" class="mt-1 text-sm text-red-600">{{ testEmailForm.errors.recipient }}</p>
+                                <p v-else-if="testEmailForm.recentlySuccessful" class="mt-1 text-sm font-medium text-emerald-600">Mail di test inviata.</p>
+                            </div>
+                            <button type="submit" class="btn btn-outline h-11" :disabled="testEmailForm.processing">
+                                <Mail class="h-4 w-4" :stroke-width="1.7" />
+                                {{ testEmailForm.processing ? 'Invio...' : 'Invia test' }}
+                            </button>
+                        </div>
                     </form>
                 </section>
 

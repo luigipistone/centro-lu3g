@@ -10,6 +10,7 @@ use Dompdf\Options;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -1274,6 +1275,47 @@ class CentroPageController extends Controller
         return back()->with('status', 'Impostazioni email aggiornate.');
     }
 
+    public function sendTestEmail(Request $request): RedirectResponse
+    {
+        $payload = $request->validate([
+            'recipient' => ['required', 'email', 'max:255'],
+        ]);
+
+        $settings = DB::table('email_settings')->first();
+        if (! $settings || ! $settings->smtp_enabled) {
+            return back()->withErrors(['recipient' => 'Attiva SMTP e salva la configurazione prima di inviare una mail di test.']);
+        }
+
+        if (! $settings->smtp_host || ! $settings->smtp_from_email || ! $settings->smtp_password) {
+            return back()->withErrors(['recipient' => 'Completa host, mittente e password SMTP prima di inviare una mail di test.']);
+        }
+
+        $this->applyEmailSettingsConfig($settings);
+
+        try {
+            Mail::raw(
+                "Questa e una mail di test inviata da Il Centro.\n\nSe la ricevi, la configurazione SMTP e corretta.",
+                function ($mail) use ($payload, $settings) {
+                    $mail->to($payload['recipient'])
+                        ->subject('Il Centro - test SMTP');
+
+                    if ($settings->smtp_reply_to) {
+                        $mail->replyTo($settings->smtp_reply_to);
+                    }
+                },
+            );
+        } catch (\Throwable $exception) {
+            Log::warning('Invio mail di test SMTP non riuscito.', [
+                'recipient' => $payload['recipient'],
+                'reason' => $exception->getMessage(),
+            ]);
+
+            return back()->withErrors(['recipient' => 'Invio non riuscito: '.$exception->getMessage()]);
+        }
+
+        return back()->with('status', 'Mail di test inviata a '.$payload['recipient'].'.');
+    }
+
     private function emailSettingsForView(): ?object
     {
         $settings = DB::table('email_settings')->first();
@@ -1287,6 +1329,18 @@ class CentroPageController extends Controller
         $settings->pec_password = '';
 
         return $settings;
+    }
+
+    private function applyEmailSettingsConfig(object $settings): void
+    {
+        Config::set('mail.default', 'smtp');
+        Config::set('mail.mailers.smtp.host', $settings->smtp_host);
+        Config::set('mail.mailers.smtp.port', $settings->smtp_port ?: 587);
+        Config::set('mail.mailers.smtp.username', $settings->smtp_username);
+        Config::set('mail.mailers.smtp.password', $settings->smtp_password);
+        Config::set('mail.mailers.smtp.encryption', $settings->smtp_secure ? 'tls' : null);
+        Config::set('mail.from.address', $settings->smtp_from_email);
+        Config::set('mail.from.name', $settings->smtp_from_name ?: 'Il Centro');
     }
 
     public function updateNumbering(Request $request, string $id): RedirectResponse
