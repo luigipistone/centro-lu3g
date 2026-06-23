@@ -1,11 +1,10 @@
 <script setup>
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
-import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Link, useForm, usePage } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, onUnmounted, ref, watch } from 'vue';
 
 defineProps({
     mustVerifyEmail: {
@@ -43,6 +42,10 @@ const form = useForm({
         mail: Boolean(preference.mail),
     })),
 });
+const AUTOSAVE_IDLE_DELAY = 2500;
+const autosaveState = ref('');
+let autosaveTimer = null;
+let autosaveSavedTimer = null;
 
 const avatarInput = ref(null);
 const avatarPreview = ref(null);
@@ -78,6 +81,75 @@ function channelLabel(channel) {
         mail: 'Email',
     }[channel];
 }
+
+function profilePayload() {
+    return {
+        name: form.name,
+        email: form.email,
+        completion_effect: form.completion_effect,
+        notification_preferences: form.notification_preferences.map((preference) => ({
+            category: preference.category,
+            in_app: Boolean(preference.in_app),
+            browser: Boolean(preference.browser),
+            mail: Boolean(preference.mail),
+        })),
+    };
+}
+
+const lastSavedSignature = ref(JSON.stringify(profilePayload()));
+
+function saveProfileAutomatically() {
+    window.clearTimeout(autosaveTimer);
+
+    const signature = JSON.stringify(profilePayload());
+    if (signature === lastSavedSignature.value) {
+        autosaveState.value = '';
+        return;
+    }
+
+    if (form.processing) {
+        autosaveTimer = window.setTimeout(saveProfileAutomatically, 800);
+        return;
+    }
+
+    autosaveState.value = 'saving';
+    form
+        .transform(() => profilePayload())
+        .patch(route('profile.update'), {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                lastSavedSignature.value = JSON.stringify(profilePayload());
+                autosaveState.value = 'saved';
+                window.clearTimeout(autosaveSavedTimer);
+                autosaveSavedTimer = window.setTimeout(() => {
+                    autosaveState.value = '';
+                }, 1600);
+            },
+            onError: () => {
+                autosaveState.value = 'error';
+            },
+        });
+}
+
+function scheduleProfileAutosave() {
+    window.clearTimeout(autosaveTimer);
+    autosaveState.value = 'pending';
+    autosaveTimer = window.setTimeout(saveProfileAutomatically, AUTOSAVE_IDLE_DELAY);
+}
+
+watch(
+    () => JSON.stringify(profilePayload()),
+    (signature) => {
+        if (signature === lastSavedSignature.value) return;
+        scheduleProfileAutosave();
+    },
+);
+
+onUnmounted(() => {
+    window.clearTimeout(autosaveTimer);
+    window.clearTimeout(autosaveSavedTimer);
+});
 </script>
 
 <template>
@@ -105,22 +177,7 @@ function channelLabel(channel) {
             </button>
         </div>
 
-        <form
-            @submit.prevent="form
-                .transform((data) => ({
-                    name: data.name,
-                    email: data.email,
-                    completion_effect: data.completion_effect,
-                    notification_preferences: data.notification_preferences.map((preference) => ({
-                        category: preference.category,
-                        in_app: Boolean(preference.in_app),
-                        browser: Boolean(preference.browser),
-                        mail: Boolean(preference.mail),
-                    })),
-                }))
-                .patch(route('profile.update'))"
-            class="mt-6 space-y-6"
-        >
+        <form class="mt-6 space-y-6" @submit.prevent>
             <div>
                 <InputLabel for="name" value="Nome" />
 
@@ -239,23 +296,19 @@ function channelLabel(channel) {
                 <InputError class="mt-2" :message="form.errors.notification_preferences" />
             </div>
 
-            <div class="flex items-center gap-4">
-                <PrimaryButton :disabled="form.processing">Salva</PrimaryButton>
-
-                <Transition
-                    enter-active-class="transition ease-in-out"
-                    enter-from-class="opacity-0"
-                    leave-active-class="transition ease-in-out"
-                    leave-to-class="opacity-0"
-                >
-                    <p
-                        v-if="form.recentlySuccessful"
-                        class="text-sm text-gray-600"
-                    >
-                        Salvato.
-                    </p>
-                </Transition>
-            </div>
+            <Transition
+                enter-active-class="transition ease-in-out"
+                enter-from-class="opacity-0"
+                leave-active-class="transition ease-in-out"
+                leave-to-class="opacity-0"
+            >
+                <p v-if="autosaveState" class="text-sm font-medium" :class="autosaveState === 'error' ? 'text-red-600' : 'text-gray-500'">
+                    <span v-if="autosaveState === 'pending'">Modifiche in attesa...</span>
+                    <span v-else-if="autosaveState === 'saving'">Salvataggio...</span>
+                    <span v-else-if="autosaveState === 'saved'">Salvato.</span>
+                    <span v-else>Controlla i campi evidenziati.</span>
+                </p>
+            </Transition>
         </form>
     </section>
 </template>
