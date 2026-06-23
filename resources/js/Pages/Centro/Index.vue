@@ -422,6 +422,7 @@ function projectCardChipStyle(project) {
 const settingsTabs = [
     ['personalizzazione', 'Personalizzazione', Building2],
     ['fatturazione', 'Fatturazione', Receipt],
+    ['smtp', 'SMTP', Mail],
     ['backup', 'Backup', DatabaseBackup],
     ['gestione', 'Gestione', Settings],
 ];
@@ -5110,6 +5111,9 @@ function calendarDayStyle(sectionMonth, cell) {
                         </div>
                     </section>
 
+                </section>
+
+                <section v-else-if="settingsTab === 'smtp'" class="space-y-6">
                     <form class="app-card" @submit.prevent="saveEmailSettings">
                         <h3 class="section-title"><span class="section-icon"><Mail class="h-4 w-4" :stroke-width="1.7" /></span>Email e SMTP</h3>
                         <div class="mt-5 grid gap-4 md:grid-cols-3">
