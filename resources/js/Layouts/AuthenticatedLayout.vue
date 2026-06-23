@@ -51,6 +51,8 @@ const latestUnreadNotification = computed(() => latestNotifications.value.find((
 const notificationBadgeCount = computed(() => page.props.notifications?.unread || 0);
 const notificationStorageKey = computed(() => `centro:last-browser-notification:${page.props.auth?.user?.id || 'guest'}`);
 const themeStorageKey = 'centro:theme';
+const currentRole = computed(() => page.props.auth?.user?.role || 'guest');
+const isGuest = computed(() => currentRole.value === 'guest');
 const canManageAbsences = computed(() => ['admin', 'superadmin'].includes(page.props.auth?.user?.role));
 
 function isGroupOpen(group) {
@@ -229,40 +231,57 @@ onUnmounted(() => {
     window.removeEventListener('centro:browser-notification-permission', handleBrowserPermissionEvent);
 });
 
-const groups = computed(() => [
-    {
-        label: 'Menu',
-        links: [
-            ['dashboard', 'Dashboard', LayoutDashboard],
-            ['clients.index', 'Clienti', Users],
-            ['projects.index', 'Progetti', Briefcase],
-            ['tasks.index', 'Task', CheckSquare],
-            ['calendar.index', 'Calendario', Calendar],
-            ['documents.index', 'Documenti', FileText],
-            ...(canManageAbsences.value ? [['absences.index', 'Assenze', CalendarX]] : []),
-            ['settings.index', 'Impostazioni', Settings],
-        ],
-    },
-    {
-        label: 'Aggiornamenti',
-        collapsible: true,
-        links: [
-            ['updates.social', 'Social', Megaphone],
-            ['updates.newsletter', 'Newsletter', Mail],
-            ['updates.seo', 'SEO', Search],
-            ['updates.adv', 'ADV', Target],
-        ],
-    },
-    {
-        label: 'Amministrazione',
-        collapsible: true,
-        links: [
-            ['notifications.index', 'Notifiche', Bell],
-            ['billing.index', 'Fatturazione', Receipt],
-            ['users.index', 'Utenti', UserCog],
-        ],
-    },
-]);
+const groups = computed(() => {
+    if (isGuest.value) {
+        return [
+            {
+                label: 'Menu',
+                links: [
+                    ['dashboard', 'Dashboard', LayoutDashboard],
+                    ['projects.index', 'Progetti', Briefcase],
+                    ['tasks.index', 'Task', CheckSquare],
+                    ['calendar.index', 'Calendario', Calendar],
+                    ['notifications.index', 'Notifiche', Bell],
+                ],
+            },
+        ];
+    }
+
+    return [
+        {
+            label: 'Menu',
+            links: [
+                ['dashboard', 'Dashboard', LayoutDashboard],
+                ['clients.index', 'Clienti', Users],
+                ['projects.index', 'Progetti', Briefcase],
+                ['tasks.index', 'Task', CheckSquare],
+                ['calendar.index', 'Calendario', Calendar],
+                ['documents.index', 'Documenti', FileText],
+                ...(canManageAbsences.value ? [['absences.index', 'Assenze', CalendarX]] : []),
+                ['settings.index', 'Impostazioni', Settings],
+            ],
+        },
+        {
+            label: 'Aggiornamenti',
+            collapsible: true,
+            links: [
+                ['updates.social', 'Social', Megaphone],
+                ['updates.newsletter', 'Newsletter', Mail],
+                ['updates.seo', 'SEO', Search],
+                ['updates.adv', 'ADV', Target],
+            ],
+        },
+        {
+            label: 'Amministrazione',
+            collapsible: true,
+            links: [
+                ['notifications.index', 'Notifiche', Bell],
+                ['billing.index', 'Fatturazione', Receipt],
+                ['users.index', 'Utenti', UserCog],
+            ],
+        },
+    ];
+});
 </script>
 
 <template>

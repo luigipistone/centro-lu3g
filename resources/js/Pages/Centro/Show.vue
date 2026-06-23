@@ -13,7 +13,7 @@ import {
     plainText,
     shortDateIt,
 } from '@/utils/formatters';
-import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import {
     AlertTriangle,
     Bold,
@@ -54,6 +54,8 @@ const props = defineProps({
     related: Object,
 });
 
+const page = usePage();
+const isGuest = computed(() => page.props.auth?.user?.role === 'guest');
 const AUTOSAVE_IDLE_DELAY = 2500;
 
 function autosaveDelay(delay = AUTOSAVE_IDLE_DELAY) {
@@ -1666,7 +1668,7 @@ function projectPayload() {
 }
 
 function saveProjectInline(delay = AUTOSAVE_IDLE_DELAY) {
-    if (props.section !== 'projects') return;
+    if (props.section !== 'projects' || isGuest.value) return;
 
     window.clearTimeout(projectAutosaveTimer);
     projectAutosaveState.value = 'queued';
@@ -1743,6 +1745,7 @@ function addProjectMessageLink() {
 }
 
 function submitProjectMessage() {
+    if (isGuest.value) return;
     updateProjectMessageFromEditor();
     if (!plainText(projectMessageForm.content).trim()) return;
 
@@ -1757,6 +1760,7 @@ function submitProjectMessage() {
 }
 
 function chooseProjectFile(kind) {
+    if (isGuest.value) return;
     if (kind === 'resource') {
         projectResourceInput.value?.click();
         return;
@@ -1766,7 +1770,7 @@ function chooseProjectFile(kind) {
 }
 
 function uploadProjectFile(file, kind = 'file') {
-    if (!file) return;
+    if (!file || isGuest.value) return;
 
     projectFileForm.file = file;
     projectFileForm.kind = kind;
@@ -1792,6 +1796,7 @@ function dropProjectFile(event) {
 }
 
 function removeProjectFile(file) {
+    if (isGuest.value) return;
     openConfirm({
         title: 'Eliminare questo file?',
         description: file.original_name || file.name || 'File progetto',
@@ -1894,6 +1899,7 @@ function uploadUserAvatar(event) {
 }
 
 function toggleProjectPerson(userId) {
+    if (isGuest.value) return;
     togglePerson(selectedProjectFollowers, userId);
     projectAutosaveState.value = 'saving';
     projectAutosaveError.value = '';
@@ -1919,6 +1925,7 @@ function toggleProjectPerson(userId) {
 }
 
 function deleteProjectFromDetail() {
+    if (isGuest.value) return;
     openConfirm({
         title: 'Eliminare questo progetto?',
         description: props.record.name || 'Progetto',
@@ -2227,7 +2234,7 @@ function setProjectSectionName(section, value) {
 }
 
 function saveProjectSectionName(section) {
-    if (section.virtual) return;
+    if (section.virtual || isGuest.value) return;
     const name = String(projectSectionDrafts.value[section.id] || '').trim();
     if (!name) {
         projectSectionDrafts.value = { ...projectSectionDrafts.value, [section.id]: section.name };
@@ -2243,7 +2250,7 @@ function saveProjectSectionName(section) {
 }
 
 function toggleProjectSectionActionMenu(section, event = null) {
-    if (section.virtual) return;
+    if (section.virtual || isGuest.value) return;
     const rect = event?.currentTarget?.getBoundingClientRect?.();
     projectSectionActionMenuPlacement.value = rect && window.innerHeight - rect.bottom < 170 ? 'up' : 'down';
     projectSectionActionMenuOpen.value = projectSectionActionMenuOpen.value === section.id ? null : section.id;
@@ -2254,7 +2261,7 @@ function closeProjectSectionActionMenu() {
 }
 
 function duplicateProjectSection(section) {
-    if (section.virtual) return;
+    if (section.virtual || isGuest.value) return;
     closeProjectSectionActionMenu();
     router.post(route('projects.sections.duplicate', [props.record.id, section.id]), {}, {
         preserveScroll: true,
@@ -2272,7 +2279,7 @@ function collapseProjectSectionFromMenu(section) {
 }
 
 function removeProjectSection(section) {
-    if (section.virtual) return;
+    if (section.virtual || isGuest.value) return;
     closeProjectSectionActionMenu();
     openConfirm({
         title: 'Eliminare questa sezione?',
@@ -2610,6 +2617,7 @@ function setProjectTaskDraft(sectionId, value) {
 }
 
 function addProjectTask(section) {
+    if (isGuest.value) return;
     const title = String(projectTaskDrafts.value[section.id] || '').trim();
     if (!title) return;
     const currentProjectId = String(props.record.id || '');
@@ -2631,6 +2639,7 @@ function addProjectTask(section) {
 }
 
 function startProjectTaskDrag(task) {
+    if (isGuest.value) return;
     draggedProjectTaskId.value = task.id;
 }
 
@@ -2661,6 +2670,7 @@ function dragOverProjectTask(task, event) {
 }
 
 function dropProjectTask(section, targetTask = null) {
+    if (isGuest.value) return;
     const fromId = draggedProjectTaskId.value;
     const placement = projectTaskDropPlacement.value || 'after';
     draggedProjectTaskId.value = null;
@@ -2700,6 +2710,7 @@ function endProjectTaskDrag() {
 }
 
 function addProjectSection() {
+    if (isGuest.value) return;
     const name = projectNewSectionName.value.trim();
     if (!name) return;
 
@@ -3201,7 +3212,7 @@ onUnmounted(() => {
                                     <Copy class="h-4 w-4" :stroke-width="1.7" />
                                     Copia link
                                 </button>
-                                <button type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50" @click="duplicateTask">
+                                <button v-if="!isGuest" type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50" @click="duplicateTask">
                                     <Copy class="h-4 w-4" :stroke-width="1.7" />
                                     Duplica
                                 </button>
@@ -3209,7 +3220,7 @@ onUnmounted(() => {
                                     <Printer class="h-4 w-4" :stroke-width="1.7" />
                                     Stampa
                                 </button>
-                                <button type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50" @click="deleteTaskFromDetail">
+                                <button v-if="!isGuest" type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50" @click="deleteTaskFromDetail">
                                     <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                     Elimina
                                 </button>
@@ -3217,7 +3228,7 @@ onUnmounted(() => {
                         </div>
                     </Teleport>
                 </div>
-                <div v-else-if="section === 'projects'" class="flex flex-wrap justify-end gap-2">
+                <div v-else-if="section === 'projects' && !isGuest" class="flex flex-wrap justify-end gap-2">
                     <button type="button" class="btn btn-danger" @click="deleteProjectFromDetail">
                         <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                         Elimina

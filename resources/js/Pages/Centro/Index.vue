@@ -99,7 +99,8 @@ const restoreConfirmText = ref('');
 const updateDrafts = ref({});
 const savingUpdateKeys = ref([]);
 const page = usePage();
-const canWrite = computed(() => props.fields.length > 0);
+const isGuest = computed(() => page.props.auth?.user?.role === 'guest');
+const canWrite = computed(() => props.fields.length > 0 && !isGuest.value);
 const billingSearch = ref('');
 const billingType = ref('all');
 const billingStatus = ref('all');
@@ -3578,7 +3579,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                 <template v-if="!cell.empty">
                                     <div class="mb-2 flex items-center justify-between">
                                         <span :class="['text-sm font-semibold', cell.today ? 'text-indigo-600' : 'text-gray-500']">{{ cell.day }}</span>
-                                        <div v-if="!(compactWeekend && cell.weekend)" class="relative" data-calendar-create-menu>
+                                        <div v-if="!isGuest && !(compactWeekend && cell.weekend)" class="relative" data-calendar-create-menu>
                                             <button
                                                 type="button"
                                                 class="rounded-xl bg-white/58 px-2 py-1 text-[11px] font-semibold text-gray-400 opacity-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] transition hover:bg-indigo-50/90 hover:text-indigo-600 group-hover:opacity-100"
@@ -4426,6 +4427,7 @@ function calendarDayStyle(sectionMonth, cell) {
                         </Link>
 
                         <button
+                            v-if="!isGuest"
                             type="button"
                             class="absolute right-4 top-4 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-red-100 bg-white/90 text-red-600 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-200"
                             :aria-label="`Elimina ${project.name}`"
@@ -4820,9 +4822,9 @@ function calendarDayStyle(sectionMonth, cell) {
                     <AppSelect v-model="taskPriority" :options="taskPriorityOptions" />
                     <AppSelect v-model="taskType" :options="taskTypeOptions" />
                     <button type="button" class="btn btn-outline" @click="taskSearch = ''; taskStatus = 'all'; taskPriority = 'all'; taskType = 'all'"><RotateCcw class="h-4 w-4" :stroke-width="1.7" />Reset</button>
-                    <button type="button" class="btn btn-primary" @click="openCreate({ task_type: 'project' })"><Briefcase class="h-4 w-4" :stroke-width="1.7" />Task</button>
-                    <button type="button" class="btn border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100" @click="openCreate({ task_type: 'ongoing' })"><RefreshCw class="h-4 w-4" :stroke-width="1.7" />Continuativa</button>
-                    <button type="button" class="btn border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100" @click="openCreate({ task_type: 'meeting', due_time: '09:00' })"><CalendarClock class="h-4 w-4" :stroke-width="1.7" />Meeting</button>
+                    <button v-if="!isGuest" type="button" class="btn btn-primary" @click="openCreate({ task_type: 'project' })"><Briefcase class="h-4 w-4" :stroke-width="1.7" />Task</button>
+                    <button v-if="!isGuest" type="button" class="btn border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100" @click="openCreate({ task_type: 'ongoing' })"><RefreshCw class="h-4 w-4" :stroke-width="1.7" />Continuativa</button>
+                    <button v-if="!isGuest" type="button" class="btn border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100" @click="openCreate({ task_type: 'meeting', due_time: '09:00' })"><CalendarClock class="h-4 w-4" :stroke-width="1.7" />Meeting</button>
                 </div>
 
                 <div class="grid gap-4">
@@ -4941,6 +4943,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                     ]"
                                 >
                                     <button
+                                        v-if="!isGuest"
                                         type="button"
                                         class="absolute right-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-red-100 bg-white/86 text-red-500 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-200"
                                         :aria-label="`Elimina ${task.title}`"

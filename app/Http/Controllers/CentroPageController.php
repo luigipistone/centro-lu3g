@@ -27,16 +27,21 @@ class CentroPageController extends Controller
 {
     public function dashboard(Request $request): Response
     {
+        $guestTaskIds = $this->isGuest($request) ? $this->visibleTaskIdsForUser($request->user()->id) : null;
+        $taskScope = fn ($query) => $query
+            ->where(fn ($query) => $query->whereNull('tasks.parent_task_id')->orWhere('tasks.parent_task_id', ''))
+            ->when($guestTaskIds !== null, fn ($query) => $query->whereIn('tasks.id', $guestTaskIds));
+
         return Inertia::render('Dashboard', [
             'stats' => [
-                'clients' => DB::table('clients')->count(),
-                'openTasks' => DB::table('tasks')->where('status', '!=', 'done')->count(),
-                'urgentTasks' => DB::table('tasks')->where('priority', 'urgent')->where('status', '!=', 'done')->count(),
+                'clients' => $this->isGuest($request) ? 0 : DB::table('clients')->count(),
+                'openTasks' => DB::table('tasks')->where($taskScope)->where('status', '!=', 'done')->count(),
+                'urgentTasks' => DB::table('tasks')->where($taskScope)->where('priority', 'urgent')->where('status', '!=', 'done')->count(),
             ],
-            'recentClients' => DB::table('clients')->latest()->limit(6)->get(['id', 'name', 'email', 'phone', 'created_at']),
+            'recentClients' => $this->isGuest($request) ? collect() : DB::table('clients')->latest()->limit(6)->get(['id', 'name', 'email', 'phone', 'created_at']),
             'upcomingTasks' => DB::table('tasks')
                 ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
-                ->whereNull('tasks.parent_task_id')
+                ->where($taskScope)
                 ->where('tasks.status', '!=', 'done')
                 ->whereNotNull('tasks.due_date')
                 ->orderBy('tasks.due_date')
@@ -44,16 +49,16 @@ class CentroPageController extends Controller
                 ->get(['tasks.id', 'tasks.title', 'tasks.status', 'tasks.priority', 'tasks.due_date', 'clients.name as client_name']),
             'urgentTasks' => DB::table('tasks')
                 ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
-                ->whereNull('tasks.parent_task_id')
+                ->where($taskScope)
                 ->where('tasks.priority', 'urgent')
                 ->where('tasks.status', '!=', 'done')
                 ->orderBy('tasks.due_date')
                 ->limit(6)
                 ->get(['tasks.id', 'tasks.title', 'tasks.status', 'tasks.priority', 'tasks.due_date', 'clients.name as client_name']),
             'myTasks' => DB::table('tasks')
-                ->join('task_assignees', 'task_assignees.task_id', '=', 'tasks.id')
                 ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
-                ->where('task_assignees.user_id', $request->user()->id)
+                ->where($taskScope)
+                ->when(! $this->isGuest($request), fn ($query) => $query->whereIn('tasks.id', $this->visibleTaskIdsForUser($request->user()->id)))
                 ->where('tasks.status', '!=', 'done')
                 ->orderBy('tasks.due_date')
                 ->limit(6)
@@ -67,14 +72,14 @@ class CentroPageController extends Controller
                 ->limit(6)
                 ->get(['projects.id', 'projects.name', 'projects.color', 'clients.name as client_name']),
             'dashboardWidgets' => $this->dashboardWidgetsFor($request->user()),
-            'availableDashboardWidgets' => $this->availableDashboardWidgets(),
+            'availableDashboardWidgets' => $this->availableDashboardWidgetsFor($request),
             'dashboardNote' => $this->dashboardNoteFor($request->user()),
         ]);
     }
 
     public function updateDashboardWidgets(Request $request): JsonResponse
     {
-        $allowedTypes = array_column($this->availableDashboardWidgets(), 'type');
+        $allowedTypes = array_column($this->availableDashboardWidgetsFor($request), 'type');
 
         $data = $request->validate([
             'widgets' => ['required', 'array'],
@@ -135,6 +140,10 @@ class CentroPageController extends Controller
     private function dashboardWidgetsFor(User $user): array
     {
         $defaults = collect($this->defaultDashboardWidgets());
+        $isGuest = ((string) (DB::table('user_roles')->where('user_id', $user->id)->value('role') ?: 'guest')) === 'guest';
+        if ($isGuest) {
+            $defaults = $defaults->reject(fn ($widget) => in_array($widget['widget_type'], ['stat_clients', 'recent_clients'], true))->values();
+        }
         $saved = DB::table('dashboard_widgets')
             ->where('user_id', $user->id)
             ->orderBy('position')
@@ -220,6 +229,16 @@ class CentroPageController extends Controller
         ];
     }
 
+    private function availableDashboardWidgetsFor(Request $request): array
+    {
+        $widgets = collect($this->availableDashboardWidgets());
+        if ($this->isGuest($request)) {
+            $widgets = $widgets->reject(fn ($widget) => in_array($widget['type'], ['stat_clients', 'recent_clients'], true));
+        }
+
+        return $widgets->values()->all();
+    }
+
     private function dashboardNoteFor(User $user): array
     {
         $note = DB::table('user_notes')->where('user_id', $user->id)->latest('updated_at')->first();
@@ -255,8 +274,14 @@ class CentroPageController extends Controller
             $this->ensureAdmin($request);
         }
 
+        $this->ensureGuestCanAccessIndex($request, $section);
+
         $config = $this->config($section);
         $limit = $section === 'billing' ? 500 : 100;
+        $guestVisibleTaskIds = $this->isGuest($request) ? $this->visibleTaskIdsForUser($request->user()->id) : null;
+        $guestTaskIds = $this->isGuest($request) && in_array($section, ['tasks', 'calendar'], true)
+            ? $guestVisibleTaskIds
+            : null;
         if ($section === 'absences') {
             $rows = DB::table('absence_requests')
                 ->leftJoin('users', 'users.id', '=', 'absence_requests.user_id')
@@ -275,11 +300,16 @@ class CentroPageController extends Controller
         } else {
             $rows = DB::table($config['table'])
                 ->when($config['table'] === 'projects', fn ($query) => $query->leftJoin('clients', 'clients.id', '=', 'projects.client_id')->select('projects.*', 'clients.name as client_name'))
+                ->when($config['table'] === 'projects' && $this->isGuest($request), fn ($query) => $query
+                    ->join('project_followers', 'project_followers.project_id', '=', 'projects.id')
+                    ->where('project_followers.user_id', $request->user()->id)
+                )
                 ->when($config['table'] === 'tasks' && $section !== 'calendar', fn ($query) => $query
                     ->leftJoin('projects', 'projects.id', '=', 'tasks.project_id')
                     ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
                     ->leftJoin('services', 'services.id', '=', 'tasks.service_id')
                     ->where(fn ($query) => $query->whereNull('tasks.parent_task_id')->orWhere('tasks.parent_task_id', ''))
+                    ->when($guestTaskIds !== null, fn ($query) => $query->whereIn('tasks.id', $guestTaskIds))
                     ->select('tasks.*', 'projects.name as project_name', 'clients.name as client_name', 'services.name as service_name', 'services.color as service_color')
                 )
                 ->when($section === 'calendar', fn ($query) => $query
@@ -287,6 +317,7 @@ class CentroPageController extends Controller
                     ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
                     ->leftJoin('services', 'services.id', '=', 'tasks.service_id')
                     ->where(fn ($query) => $query->whereNull('tasks.parent_task_id')->orWhere('tasks.parent_task_id', ''))
+                    ->when($guestTaskIds !== null, fn ($query) => $query->whereIn('tasks.id', $guestTaskIds))
                     ->whereNotNull('tasks.due_date')
                     ->select('tasks.*', 'projects.name as project_name', 'projects.color as project_color', 'clients.name as client_name', 'services.name as service_name', 'services.color as service_color')
                 )
@@ -433,11 +464,24 @@ class CentroPageController extends Controller
             'emailSettings' => $section === 'settings' ? $this->emailSettingsForView() : null,
             'numberings' => $section === 'settings' ? DB::table('document_numbering')->orderBy('doc_type')->orderByDesc('year')->get() : [],
             'backupRuns' => $section === 'settings' ? $this->backupRuns() : [],
-            'clients' => DB::table('clients')->orderBy('name')->get(['id', 'name']),
-            'projects' => DB::table('projects')->orderBy('name')->get(['id', 'name']),
+            'clients' => $this->isGuest($request)
+                ? DB::table('clients')
+                    ->whereIn('id', $this->visibleClientIdsForUser($request->user()->id))
+                    ->orderBy('name')
+                    ->get(['id', 'name'])
+                : DB::table('clients')->orderBy('name')->get(['id', 'name']),
+            'projects' => DB::table('projects')
+                ->when($this->isGuest($request), fn ($query) => $query
+                    ->join('project_followers', 'project_followers.project_id', '=', 'projects.id')
+                    ->where('project_followers.user_id', $request->user()->id)
+                )
+                ->orderBy('projects.name')
+                ->get(['projects.id', 'projects.name']),
             'services' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name']),
-            'users' => $this->userOptions(),
-            'taskDependencyOptions' => in_array($section, ['tasks', 'calendar'], true) ? $this->taskDependencyOptions() : [],
+            'users' => $this->isGuest($request) ? $this->visibleUserOptionsForGuest($request->user()->id) : $this->userOptions(),
+            'taskDependencyOptions' => in_array($section, ['tasks', 'calendar'], true)
+                ? ($this->isGuest($request) ? collect() : $this->taskDependencyOptions())
+                : [],
         ]);
     }
 
@@ -918,6 +962,7 @@ class CentroPageController extends Controller
             default => DB::table($config['table'])->where('id', $id)->first(),
         };
         abort_if(! $record, 404);
+        $this->ensureGuestCanViewRecord($request, $section, $id);
 
         $related = match ($section) {
             'clients' => [
@@ -936,18 +981,24 @@ class CentroPageController extends Controller
             ],
             'projects' => [
                 'sections' => $this->projectSections($id),
-                'tasks' => $this->projectTaskRows($id),
+                'tasks' => $this->projectTaskRows($id, $this->isGuest($request) ? $request->user()->id : null),
                 'messages' => $this->projectMessages($id),
                 'resources' => $this->projectFiles($id, 'resource'),
                 'files' => $this->projectFiles($id, 'file'),
                 'client' => $record->client_id ? DB::table('clients')->where('id', $record->client_id)->first() : null,
-                'projectClients' => DB::table('clients')->orderBy('name')->get(['id', 'name']),
-                'projectUsers' => $this->userOptions(),
-                'users' => $this->userOptions(),
-                'taskClients' => DB::table('clients')->orderBy('name')->get(['id', 'name']),
-                'taskProjects' => DB::table('projects')->orderBy('name')->get(['id', 'name']),
+                'projectClients' => $this->isGuest($request)
+                    ? DB::table('clients')->where('id', $record->client_id)->get(['id', 'name'])
+                    : DB::table('clients')->orderBy('name')->get(['id', 'name']),
+                'projectUsers' => $this->isGuest($request) ? $this->userOptionsForProject($id) : $this->userOptions(),
+                'users' => $this->isGuest($request) ? $this->userOptionsForProject($id) : $this->userOptions(),
+                'taskClients' => $this->isGuest($request)
+                    ? DB::table('clients')->where('id', $record->client_id)->get(['id', 'name'])
+                    : DB::table('clients')->orderBy('name')->get(['id', 'name']),
+                'taskProjects' => $this->isGuest($request)
+                    ? DB::table('projects')->where('id', $id)->get(['id', 'name'])
+                    : DB::table('projects')->orderBy('name')->get(['id', 'name']),
                 'taskServices' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name', 'color']),
-                'taskDependencyOptions' => $this->taskDependencyOptions(),
+                'taskDependencyOptions' => $this->isGuest($request) ? collect() : $this->taskDependencyOptions(),
                 'followers' => DB::table('project_followers')->where('project_id', $id)->pluck('user_id'),
             ],
             'tasks' => [
@@ -960,9 +1011,18 @@ class CentroPageController extends Controller
                 'activity' => $this->taskActivityRows(collect([$id]))[$id] ?? collect(),
                 'assignees' => DB::table('task_assignees')->where('task_id', $id)->pluck('user_id'),
                 'followers' => DB::table('task_followers')->where('task_id', $id)->pluck('user_id'),
-                'users' => $this->userOptions(),
-                'taskClients' => DB::table('clients')->orderBy('name')->get(['id', 'name']),
-                'taskProjects' => DB::table('projects')->orderBy('name')->get(['id', 'name']),
+                'users' => $this->isGuest($request)
+                    ? $this->userOptions()->filter(fn ($user) => collect([
+                        ...DB::table('task_assignees')->where('task_id', $id)->pluck('user_id')->all(),
+                        ...DB::table('task_followers')->where('task_id', $id)->pluck('user_id')->all(),
+                    ])->contains($user->id))->values()
+                    : $this->userOptions(),
+                'taskClients' => $this->isGuest($request)
+                    ? DB::table('clients')->where('id', $record->client_id)->get(['id', 'name'])
+                    : DB::table('clients')->orderBy('name')->get(['id', 'name']),
+                'taskProjects' => $this->isGuest($request)
+                    ? $this->visibleProjectOptionsForUser($request->user()->id)
+                    : DB::table('projects')->orderBy('name')->get(['id', 'name']),
                 'taskServices' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name', 'color']),
                 'subtasks' => $this->taskSubtaskRows($id),
                 'parentTask' => $record->parent_task_id ? DB::table('tasks')->where('id', $record->parent_task_id)->first(['id', 'title']) : null,
@@ -970,7 +1030,7 @@ class CentroPageController extends Controller
                 'client' => $record->client_id ? DB::table('clients')->where('id', $record->client_id)->first() : null,
                 'dependencies' => ($this->taskDependencyRows(collect([$id]))[$id]['dependencies'] ?? collect())->values(),
                 'dependents' => ($this->taskDependencyRows(collect([$id]))[$id]['dependents'] ?? collect())->values(),
-                'taskDependencyOptions' => $this->taskDependencyOptions($id),
+                'taskDependencyOptions' => $this->isGuest($request) ? collect() : $this->taskDependencyOptions($id),
             ],
             'billing' => [
                 'client' => DB::table('clients')->where('id', $record->client_id)->first(),
@@ -1001,6 +1061,8 @@ class CentroPageController extends Controller
 
     public function store(Request $request, string $section): RedirectResponse
     {
+        abort_if($this->isGuest($request), 403);
+
         if ($section === 'users') {
             return $this->storeUser($request);
         }
@@ -1072,6 +1134,7 @@ class CentroPageController extends Controller
     public function update(Request $request, string $id): RedirectResponse
     {
         $section = $request->route('section');
+        $this->ensureGuestCanUpdateRecord($request, $section, $id);
 
         if ($section === 'users') {
             return $this->updateUser($request, $id);
@@ -1088,6 +1151,10 @@ class CentroPageController extends Controller
         $payload = $this->validatedPayload($request, $section);
         $taskPeople = $section === 'tasks' ? $this->extractTaskPeoplePayload($payload) : null;
         $taskDependencies = $section === 'tasks' ? $this->extractTaskDependencyPayload($payload) : null;
+        if ($section === 'tasks' && $this->isGuest($request)) {
+            $taskPeople = null;
+            $taskDependencies = null;
+        }
         $projectFollowers = $section === 'projects' ? $this->extractProjectFollowersPayload($payload) : null;
         $oldTask = $section === 'tasks' ? DB::table('tasks')->where('id', $id)->first() : null;
         $oldProject = $section === 'projects' ? DB::table('projects')->where('id', $id)->first() : null;
@@ -1160,6 +1227,8 @@ class CentroPageController extends Controller
 
     public function destroy(Request $request, string $id): RedirectResponse
     {
+        abort_if($this->isGuest($request), 403);
+
         $section = $request->route('section');
 
         if ($section === 'users') {
@@ -1915,6 +1984,8 @@ class CentroPageController extends Controller
 
     public function syncProjectFollowers(Request $request, string $id): RedirectResponse
     {
+        $this->ensureGuestCanEditProject($request);
+
         $project = DB::table('projects')->where('id', $id)->first();
         abort_unless($project, 404);
 
@@ -1943,6 +2014,7 @@ class CentroPageController extends Controller
 
     public function storeProjectSection(Request $request, string $id): RedirectResponse
     {
+        $this->ensureGuestCanEditProject($request);
         abort_unless(DB::table('projects')->where('id', $id)->exists(), 404);
 
         $payload = $request->validate([
@@ -1963,6 +2035,7 @@ class CentroPageController extends Controller
 
     public function updateProjectSection(Request $request, string $projectId, string $sectionId): RedirectResponse
     {
+        $this->ensureGuestCanEditProject($request);
         abort_unless(DB::table('project_sections')->where('project_id', $projectId)->where('id', $sectionId)->exists(), 404);
 
         $payload = $request->validate([
@@ -1982,6 +2055,7 @@ class CentroPageController extends Controller
 
     public function duplicateProjectSection(Request $request, string $projectId, string $sectionId): RedirectResponse
     {
+        $this->ensureGuestCanEditProject($request);
         $section = DB::table('project_sections')->where('project_id', $projectId)->where('id', $sectionId)->first();
         abort_unless($section, 404);
 
@@ -2093,8 +2167,9 @@ class CentroPageController extends Controller
         return back()->with('status', 'Sezione duplicata.');
     }
 
-    public function destroyProjectSection(string $projectId, string $sectionId): RedirectResponse
+    public function destroyProjectSection(Request $request, string $projectId, string $sectionId): RedirectResponse
     {
+        $this->ensureGuestCanEditProject($request);
         abort_unless(DB::table('project_sections')->where('project_id', $projectId)->where('id', $sectionId)->exists(), 404);
 
         DB::transaction(function () use ($projectId, $sectionId) {
@@ -2117,6 +2192,7 @@ class CentroPageController extends Controller
 
     public function reorderProjectTasks(Request $request, string $id): RedirectResponse
     {
+        $this->ensureGuestCanEditProject($request);
         abort_unless(DB::table('projects')->where('id', $id)->exists(), 404);
 
         $payload = $request->validate([
@@ -2147,6 +2223,7 @@ class CentroPageController extends Controller
 
     public function storeProjectMessage(Request $request, string $id): RedirectResponse
     {
+        $this->ensureGuestCanEditProject($request);
         $project = DB::table('projects')->where('id', $id)->first();
         abort_unless($project, 404);
 
@@ -2175,6 +2252,7 @@ class CentroPageController extends Controller
 
     public function storeProjectFile(Request $request, string $id): RedirectResponse
     {
+        $this->ensureGuestCanEditProject($request);
         $project = DB::table('projects')->where('id', $id)->first();
         abort_unless($project, 404);
 
@@ -2211,8 +2289,12 @@ class CentroPageController extends Controller
         return back()->with('status', 'File caricato.');
     }
 
-    public function downloadProjectFile(string $projectId, string $fileId)
+    public function downloadProjectFile(Request $request, string $projectId, string $fileId)
     {
+        if ($this->isGuest($request)) {
+            abort_unless($this->isProjectParticipant($projectId, $request->user()->id), 403);
+        }
+
         $file = DB::table('project_files')
             ->where('project_id', $projectId)
             ->where('id', $fileId)
@@ -2231,8 +2313,10 @@ class CentroPageController extends Controller
         return Storage::disk('local')->download($file->path, $file->original_name);
     }
 
-    public function destroyProjectFile(string $projectId, string $fileId): RedirectResponse
+    public function destroyProjectFile(Request $request, string $projectId, string $fileId): RedirectResponse
     {
+        $this->ensureGuestCanEditProject($request);
+
         $file = DB::table('project_files')
             ->where('project_id', $projectId)
             ->where('id', $fileId)
@@ -2534,7 +2618,12 @@ class CentroPageController extends Controller
 
     private function currentUserRole(Request $request): string
     {
-        return (string) DB::table('user_roles')->where('user_id', $request->user()->id)->value('role');
+        return (string) (DB::table('user_roles')->where('user_id', $request->user()->id)->value('role') ?: 'guest');
+    }
+
+    private function isGuest(Request $request): bool
+    {
+        return $this->currentUserRole($request) === 'guest';
     }
 
     private function ensureSuperadmin(Request $request): void
@@ -2545,6 +2634,147 @@ class CentroPageController extends Controller
     private function ensureAdmin(Request $request): void
     {
         abort_unless(in_array($this->currentUserRole($request), ['superadmin', 'admin'], true), 403);
+    }
+
+    private function ensureGuestCanAccessIndex(Request $request, string $section): void
+    {
+        if (! $this->isGuest($request)) {
+            return;
+        }
+
+        abort_unless(in_array($section, ['projects', 'tasks', 'calendar'], true), 403);
+    }
+
+    private function ensureGuestCanViewRecord(Request $request, string $section, string $id): void
+    {
+        if (! $this->isGuest($request)) {
+            return;
+        }
+
+        if ($section === 'projects') {
+            abort_unless($this->isProjectParticipant($id, $request->user()->id), 403);
+
+            return;
+        }
+
+        if ($section === 'tasks') {
+            abort_unless($this->isTaskParticipant($id, $request->user()->id), 403);
+
+            return;
+        }
+
+        abort(403);
+    }
+
+    private function ensureGuestCanUpdateRecord(Request $request, string $section, string $id): void
+    {
+        if (! $this->isGuest($request)) {
+            return;
+        }
+
+        abort_unless($section === 'tasks' && $this->isTaskParticipant($id, $request->user()->id), 403);
+    }
+
+    private function ensureGuestCanEditTask(Request $request, string $taskId): void
+    {
+        if (! $this->isGuest($request)) {
+            return;
+        }
+
+        abort_unless($this->isTaskParticipant($taskId, $request->user()->id), 403);
+    }
+
+    private function ensureGuestCanEditProject(Request $request): void
+    {
+        abort_if($this->isGuest($request), 403);
+    }
+
+    private function visibleTaskIdsForUser(string $userId): \Illuminate\Support\Collection
+    {
+        $directTaskIds = DB::table('task_assignees')
+            ->where('user_id', $userId)
+            ->pluck('task_id')
+            ->merge(DB::table('task_followers')->where('user_id', $userId)->pluck('task_id'))
+            ->unique()
+            ->values();
+
+        if ($directTaskIds->isEmpty()) {
+            return collect();
+        }
+
+        $parentTaskIds = DB::table('tasks')
+            ->whereIn('id', $directTaskIds)
+            ->pluck('parent_task_id')
+            ->filter()
+            ->values();
+
+        return $directTaskIds->merge($parentTaskIds)->unique()->values();
+    }
+
+    private function isTaskParticipant(string $taskId, string $userId): bool
+    {
+        $task = DB::table('tasks')->where('id', $taskId)->first(['id', 'parent_task_id']);
+        if (! $task) {
+            return false;
+        }
+
+        $taskIds = collect([$task->id, $task->parent_task_id])->filter()->unique()->values();
+
+        return DB::table('task_assignees')->whereIn('task_id', $taskIds)->where('user_id', $userId)->exists()
+            || DB::table('task_followers')->whereIn('task_id', $taskIds)->where('user_id', $userId)->exists();
+    }
+
+    private function isProjectParticipant(string $projectId, string $userId): bool
+    {
+        return DB::table('project_followers')->where('project_id', $projectId)->where('user_id', $userId)->exists();
+    }
+
+    private function userOptionsForProject(string $projectId)
+    {
+        $userIds = DB::table('project_followers')->where('project_id', $projectId)->pluck('user_id');
+
+        return $this->userOptions()->filter(fn ($user) => $userIds->contains($user->id))->values();
+    }
+
+    private function visibleProjectOptionsForUser(string $userId)
+    {
+        return DB::table('projects')
+            ->join('project_followers', 'project_followers.project_id', '=', 'projects.id')
+            ->where('project_followers.user_id', $userId)
+            ->orderBy('projects.name')
+            ->get(['projects.id', 'projects.name']);
+    }
+
+    private function visibleClientIdsForUser(string $userId): \Illuminate\Support\Collection
+    {
+        $taskClientIds = DB::table('tasks')
+            ->whereIn('id', $this->visibleTaskIdsForUser($userId))
+            ->pluck('client_id');
+
+        $projectClientIds = DB::table('projects')
+            ->join('project_followers', 'project_followers.project_id', '=', 'projects.id')
+            ->where('project_followers.user_id', $userId)
+            ->pluck('projects.client_id');
+
+        return $taskClientIds->merge($projectClientIds)->filter()->unique()->values();
+    }
+
+    private function visibleUserOptionsForGuest(string $userId)
+    {
+        $visibleTaskIds = $this->visibleTaskIdsForUser($userId);
+        $visibleProjectIds = DB::table('project_followers')
+            ->where('user_id', $userId)
+            ->pluck('project_id');
+
+        $userIds = collect([$userId])
+            ->merge(DB::table('task_assignees')->whereIn('task_id', $visibleTaskIds)->pluck('user_id'))
+            ->merge(DB::table('task_followers')->whereIn('task_id', $visibleTaskIds)->pluck('user_id'))
+            ->merge(DB::table('project_followers')->whereIn('project_id', $visibleProjectIds)->pluck('user_id'))
+            ->filter()
+            ->unique()
+            ->values();
+
+        return $this->userOptions()->filter(fn ($user) => $userIds->contains($user->id))->values();
     }
 
     private function canManageDocuments(Request $request): bool
@@ -2983,11 +3213,14 @@ class CentroPageController extends Controller
             ->get();
     }
 
-    private function projectTaskRows(string $projectId): \Illuminate\Support\Collection
+    private function projectTaskRows(string $projectId, ?string $visibleForUserId = null): \Illuminate\Support\Collection
     {
+        $visibleTaskIds = $visibleForUserId ? $this->visibleTaskIdsForUser($visibleForUserId) : null;
+
         $rows = DB::table('tasks')
             ->where('project_id', $projectId)
             ->where(fn ($query) => $query->whereNull('parent_task_id')->orWhereRaw("TRIM(parent_task_id) = ''"))
+            ->when($visibleTaskIds !== null, fn ($query) => $query->whereIn('tasks.id', $visibleTaskIds))
             ->orderByRaw('project_section_id is null')
             ->orderBy('project_section_id')
             ->orderBy('position')
@@ -3530,6 +3763,8 @@ class CentroPageController extends Controller
 
     public function storeTaskComment(Request $request, string $id): RedirectResponse
     {
+        $this->ensureGuestCanEditTask($request, $id);
+
         $task = DB::table('tasks')->where('id', $id)->first();
         abort_if(! $task, 404);
 
@@ -3560,6 +3795,8 @@ class CentroPageController extends Controller
 
     public function updateTaskComment(Request $request, string $taskId, string $commentId): RedirectResponse
     {
+        $this->ensureGuestCanEditTask($request, $taskId);
+
         $comment = DB::table('task_comments')
             ->where('task_id', $taskId)
             ->where('id', $commentId)
@@ -3595,6 +3832,8 @@ class CentroPageController extends Controller
 
     public function destroyTaskComment(Request $request, string $taskId, string $commentId): RedirectResponse
     {
+        abort_if($this->isGuest($request), 403);
+
         $comment = DB::table('task_comments')
             ->where('task_id', $taskId)
             ->where('id', $commentId)
@@ -3622,6 +3861,8 @@ class CentroPageController extends Controller
 
     public function storeSubtask(Request $request, string $id): RedirectResponse
     {
+        $this->ensureGuestCanEditTask($request, $id);
+
         $task = DB::table('tasks')->where('id', $id)->first();
         abort_if(! $task, 404);
 
@@ -3688,6 +3929,8 @@ class CentroPageController extends Controller
 
     public function reorderSubtasks(Request $request, string $id): RedirectResponse
     {
+        $this->ensureGuestCanEditTask($request, $id);
+
         DB::table('tasks')->where('id', $id)->whereNull('parent_task_id')->exists() || abort(404);
 
         $payload = $request->validate([
@@ -3720,6 +3963,8 @@ class CentroPageController extends Controller
 
     public function syncTaskPeople(Request $request, string $id, string $type): RedirectResponse
     {
+        abort_if($this->isGuest($request), 403);
+
         DB::table('tasks')->where('id', $id)->exists() || abort(404);
         abort_unless(in_array($type, ['assignees', 'followers'], true), 404);
 
@@ -3767,6 +4012,8 @@ class CentroPageController extends Controller
 
     public function syncTaskDependencies(Request $request, string $id): RedirectResponse
     {
+        abort_if($this->isGuest($request), 403);
+
         $task = DB::table('tasks')->where('id', $id)->first(['id', 'title']);
         abort_if(! $task, 404);
 
@@ -3879,6 +4126,8 @@ class CentroPageController extends Controller
 
     public function storeClientContact(Request $request, string $id): RedirectResponse
     {
+        abort_if($this->isGuest($request), 403);
+
         DB::table('clients')->where('id', $id)->exists() || abort(404);
 
         $payload = $this->validatedClientContactPayload($request);
@@ -3896,6 +4145,8 @@ class CentroPageController extends Controller
 
     public function updateClientContact(Request $request, string $clientId, string $contactId): RedirectResponse
     {
+        abort_if($this->isGuest($request), 403);
+
         DB::table('client_contacts')->where('client_id', $clientId)->where('id', $contactId)->exists() || abort(404);
 
         DB::table('client_contacts')
@@ -3909,8 +4160,10 @@ class CentroPageController extends Controller
         return back()->with('status', 'Referente aggiornato.');
     }
 
-    public function destroyClientContact(string $clientId, string $contactId): RedirectResponse
+    public function destroyClientContact(Request $request, string $clientId, string $contactId): RedirectResponse
     {
+        abort_if($this->isGuest($request), 403);
+
         DB::table('client_contacts')
             ->where('client_id', $clientId)
             ->where('id', $contactId)
@@ -3919,8 +4172,10 @@ class CentroPageController extends Controller
         return back()->with('status', 'Referente eliminato.');
     }
 
-    public function attachClientService(string $clientId, string $serviceId): RedirectResponse
+    public function attachClientService(Request $request, string $clientId, string $serviceId): RedirectResponse
     {
+        abort_if($this->isGuest($request), 403);
+
         DB::table('clients')->where('id', $clientId)->exists() || abort(404);
         DB::table('services')->where('id', $serviceId)->exists() || abort(404);
 
@@ -3933,8 +4188,10 @@ class CentroPageController extends Controller
         return back()->with('status', 'Servizio collegato.');
     }
 
-    public function detachClientService(string $clientId, string $serviceId): RedirectResponse
+    public function detachClientService(Request $request, string $clientId, string $serviceId): RedirectResponse
     {
+        abort_if($this->isGuest($request), 403);
+
         DB::table('client_services')
             ->where('client_id', $clientId)
             ->where('service_id', $serviceId)
@@ -3945,6 +4202,8 @@ class CentroPageController extends Controller
 
     public function updateTaskStatus(Request $request, string $id): RedirectResponse
     {
+        $this->ensureGuestCanEditTask($request, $id);
+
         $task = DB::table('tasks')->where('id', $id)->first();
         abort_if(! $task, 404);
 
@@ -4009,6 +4268,8 @@ class CentroPageController extends Controller
 
     public function duplicateTask(Request $request, string $id): RedirectResponse
     {
+        abort_if($this->isGuest($request), 403);
+
         $task = DB::table('tasks')->where('id', $id)->first();
         abort_if(! $task, 404);
 
@@ -4082,6 +4343,8 @@ class CentroPageController extends Controller
 
     public function updateTaskSchedule(Request $request, string $id): RedirectResponse
     {
+        $this->ensureGuestCanEditTask($request, $id);
+
         $task = DB::table('tasks')->where('id', $id)->first();
         abort_if(! $task, 404);
 
