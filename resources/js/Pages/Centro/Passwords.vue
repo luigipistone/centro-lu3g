@@ -490,13 +490,13 @@ function userName(id) {
                     <button type="button" class="icon-btn" @click="drawerOpen = false"><X class="h-4 w-4" /></button>
                 </div>
 
-                <div class="mt-8 space-y-10">
-                    <label class="block space-y-1.5">
-                        <span class="text-xs font-semibold uppercase text-gray-400">Nome utente</span>
+                <div class="mt-7 space-y-5">
+                    <label class="block">
+                        <span class="block text-sm font-medium text-gray-700">Nome utente</span>
                         <input v-model="itemForm.username" class="form-control" />
                     </label>
-                    <label class="block space-y-1.5">
-                        <span class="text-xs font-semibold uppercase text-gray-400">Password</span>
+                    <label class="block">
+                        <span class="block text-sm font-medium text-gray-700">Password</span>
                         <div class="flex gap-2">
                             <input v-model="itemForm.password" class="form-control" :placeholder="editingItem ? 'Lascia vuoto per non cambiarla' : ''" />
                             <button type="button" class="btn btn-outline h-[38px] shrink-0" @click="openGenerator">Genera</button>
@@ -540,24 +540,24 @@ function userName(id) {
                             </div>
                         </div>
                     </label>
-                    <label class="block space-y-1.5">
-                        <span class="text-xs font-semibold uppercase text-gray-400">Cassaforte</span>
+                    <label class="block">
+                        <span class="block text-sm font-medium text-gray-700">Cassaforte</span>
                         <AppSelect
                             v-model="itemForm.password_vault_id"
                             :options="vaults.map((vault) => ({ value: vault.id, label: vault.name }))"
                             searchable
                         />
                     </label>
-                    <label class="block space-y-1.5">
-                        <span class="text-xs font-semibold uppercase text-gray-400">Sito web</span>
+                    <label class="block">
+                        <span class="block text-sm font-medium text-gray-700">Sito web</span>
                         <input v-model="itemForm.url" class="form-control" />
                     </label>
-                    <label class="block space-y-1.5">
-                        <span class="text-xs font-semibold uppercase text-gray-400">Cliente</span>
+                    <label class="block">
+                        <span class="block text-sm font-medium text-gray-700">Cliente</span>
                         <AppSelect v-model="itemForm.client_id" :options="[{ value: '', label: 'Nessuno' }, ...clients.map((client) => ({ value: client.id, label: client.name }))]" searchable />
                     </label>
-                    <div class="space-y-1.5">
-                        <span class="text-xs font-semibold uppercase text-gray-400">Note</span>
+                    <div>
+                        <span class="block text-sm font-medium text-gray-700">Note</span>
                         <div class="overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white">
                             <div class="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50/80 px-2 py-2">
                                 <button type="button" class="icon-btn h-8 w-8" title="Grassetto" @mousedown.prevent @click="runNoteCommand('bold')">
