@@ -3,7 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, Bold, Copy, Eye, Italic, KeyRound, List, ListOrdered, Plus, Quote, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
+import { ArrowLeft, Bold, Copy, Eye, Italic, KeyRound, List, ListOrdered, Pencil, Plus, Quote, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -79,6 +79,55 @@ const visibleItems = computed(() => {
 
 const compromisedItems = computed(() => (props.items || []).filter((item) => item.risk_flags?.length));
 const itemFormErrorMessages = computed(() => Object.values(itemForm.errors || {}).filter(Boolean));
+
+function normalizeHexColor(value, fallback = '#0B6EF3') {
+    if (!value) return fallback;
+    const color = String(value).trim();
+    if (/^#[0-9a-f]{6}$/i.test(color)) return color;
+    if (/^#[0-9a-f]{3}$/i.test(color)) {
+        return `#${color.slice(1).split('').map((char) => `${char}${char}`).join('')}`;
+    }
+
+    return fallback;
+}
+
+function isLightColor(value) {
+    const color = normalizeHexColor(value);
+    const r = parseInt(color.slice(1, 3), 16);
+    const g = parseInt(color.slice(3, 5), 16);
+    const b = parseInt(color.slice(5, 7), 16);
+    const luminance = ((0.2126 * r) + (0.7152 * g) + (0.0722 * b)) / 255;
+
+    return luminance > 0.62;
+}
+
+function vaultCardStyle(vault) {
+    const backgroundColor = normalizeHexColor(vault?.color, '#0B6EF3');
+    const light = isLightColor(backgroundColor);
+
+    return {
+        backgroundColor,
+        color: light ? '#111827' : '#ffffff',
+        borderColor: light ? 'rgba(17, 24, 39, 0.14)' : 'rgba(255, 255, 255, 0.24)',
+        boxShadow: light ? '0 18px 40px rgba(28, 42, 73, 0.12)' : '0 18px 40px rgba(15, 23, 42, 0.22)',
+    };
+}
+
+function vaultMutedStyle(vault) {
+    return {
+        color: isLightColor(vault?.color || '#0B6EF3') ? 'rgba(17, 24, 39, 0.68)' : 'rgba(255, 255, 255, 0.78)',
+    };
+}
+
+function vaultChipStyle(vault) {
+    const light = isLightColor(vault?.color || '#0B6EF3');
+
+    return {
+        color: light ? '#111827' : '#ffffff',
+        borderColor: light ? 'rgba(17, 24, 39, 0.14)' : 'rgba(255, 255, 255, 0.28)',
+        backgroundColor: light ? 'rgba(255, 255, 255, 0.46)' : 'rgba(255, 255, 255, 0.16)',
+    };
+}
 
 function defaultItemForm() {
     return {
@@ -385,13 +434,16 @@ if (props.selectedGroup) {
                                         <KeyRound class="h-5 w-5" :stroke-width="1.7" />
                                     </span>
                                     <div class="min-w-0">
-                                        <button type="button" class="truncate text-left text-sm font-semibold text-gray-900 hover:text-[hsl(var(--primary-app))]" @click="item.can_edit ? openEditItem(item) : openReveal(item)">
+                                        <button type="button" class="truncate text-left text-sm font-semibold text-gray-900 hover:text-[hsl(var(--primary-app))]" @click="openReveal(item)">
                                             {{ item.url || item.title }}
                                         </button>
                                         <p class="truncate text-xs text-gray-500">{{ item.username || 'Nessun nome utente' }}</p>
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-1">
+                                    <button v-if="item.can_edit" type="button" class="icon-btn h-8 w-8" title="Modifica" @click="openEditItem(item)">
+                                        <Pencil class="h-4 w-4" :stroke-width="1.7" />
+                                    </button>
                                     <button type="button" class="icon-btn h-8 w-8" title="Mostra" @click="openReveal(item)">
                                         <Eye class="h-4 w-4" :stroke-width="1.7" />
                                     </button>
@@ -409,35 +461,33 @@ if (props.selectedGroup) {
                     <div v-else class="surface px-6 py-12 text-center text-sm text-gray-500">Nessuna password disponibile.</div>
                 </section>
 
-                <section v-if="currentView === 'vaults'" class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-                    <div class="grid gap-4 md:grid-cols-2">
+                <section v-if="currentView === 'vaults'" class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+                    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                         <article
                             v-for="vault in vaults"
                             :key="vault.id"
-                            :class="['surface relative p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]', vault.can_edit ? 'cursor-pointer' : '']"
+                            :class="['content-card project-preview-card group relative flex min-h-[150px] flex-col border p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg', vault.can_edit ? 'cursor-pointer' : '']"
+                            :style="vaultCardStyle(vault)"
                         >
                             <Link v-if="vault.can_edit" :href="route('passwords.vaults.show', vault.id)" class="absolute inset-0 z-0 rounded-[inherit]" :aria-label="`Apri cassaforte ${vault.name}`" />
                             <div class="pointer-events-none relative z-10 flex items-start justify-between gap-3">
-                                <div>
-                                    <p class="flex items-center gap-2 text-sm font-semibold text-gray-900">
-                                        <span class="h-3 w-3 rounded-full" :style="{ backgroundColor: vault.color || '#0B6EF3' }"></span>
+                                <div class="min-w-0">
+                                    <p class="truncate text-sm font-semibold">
                                         {{ vault.name }}
                                     </p>
-                                    <p class="mt-1 text-xs text-gray-500">{{ vault.items_count }} password</p>
+                                    <p class="mt-1 text-xs" :style="vaultMutedStyle(vault)">{{ vault.items_count }} password</p>
                                 </div>
                                 <div v-if="vault.can_edit" class="pointer-events-auto flex gap-1">
-                                    <button v-if="manageable" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700" title="Elimina cassaforte" @click.stop="openDelete(vault, 'vault')">
+                                    <button v-if="manageable" type="button" class="vault-action-button h-8 w-8" title="Elimina cassaforte" @click.stop.prevent="openDelete(vault, 'vault')">
                                         <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                     </button>
                                 </div>
                             </div>
-                            <p v-if="vault.description" class="pointer-events-none relative z-10 mt-3 text-sm text-gray-500">{{ vault.description }}</p>
-                            <span class="pointer-events-none relative z-10 mt-3 inline-flex rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">{{ vault.visibility === 'shared' ? 'Condivisa' : 'Personale' }}</span>
-                            <div v-if="vault.group_ids?.length" class="pointer-events-none relative z-10 mt-3 flex flex-wrap gap-1">
-                                <span v-for="id in vault.group_ids" :key="id" class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">{{ groupName(id) }}</span>
-                            </div>
-                            <div v-if="vault.user_ids?.length" class="pointer-events-none relative z-10 mt-3 flex flex-wrap gap-1">
-                                <span v-for="id in vault.user_ids" :key="id" class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">{{ userName(id) }}</span>
+                            <p v-if="vault.description" class="pointer-events-none relative z-10 mt-3 line-clamp-2 text-sm" :style="vaultMutedStyle(vault)">{{ vault.description }}</p>
+                            <div class="pointer-events-none relative z-10 mt-auto flex flex-wrap items-end gap-1 pt-4">
+                                <span class="rounded-full border px-2 py-0.5 text-xs font-medium" :style="vaultChipStyle(vault)">{{ vault.visibility === 'shared' ? 'Condivisa' : 'Personale' }}</span>
+                                <span v-if="vault.group_ids?.length" class="rounded-full border px-2 py-0.5 text-xs font-medium" :style="vaultChipStyle(vault)">{{ vault.group_ids.length }} gruppi</span>
+                                <span v-if="vault.user_ids?.length" class="rounded-full border px-2 py-0.5 text-xs font-medium" :style="vaultChipStyle(vault)">{{ vault.user_ids.length }} utenti</span>
                             </div>
                         </article>
                     </div>
@@ -565,11 +615,11 @@ if (props.selectedGroup) {
                 </section>
 
                 <section v-if="currentView === 'groups'" class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-                    <div class="grid gap-4 md:grid-cols-2">
+                    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                         <article
                             v-for="group in groups"
                             :key="group.id"
-                            :class="['surface relative p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]', manageable ? 'cursor-pointer' : '']"
+                            :class="['surface relative min-h-[130px] p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]', manageable ? 'cursor-pointer' : '']"
                         >
                             <Link v-if="manageable" :href="route('passwords.groups.show', group.id)" class="absolute inset-0 z-0 rounded-[inherit]" :aria-label="`Apri gruppo ${group.name}`" />
                             <div class="pointer-events-none relative z-10 flex items-start justify-between gap-3">
@@ -583,8 +633,9 @@ if (props.selectedGroup) {
                                     </button>
                                 </div>
                             </div>
-                            <div class="pointer-events-none relative z-10 mt-3 flex flex-wrap gap-1">
-                                <span v-for="id in group.user_ids" :key="id" class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">{{ userName(id) }}</span>
+                            <div class="pointer-events-none relative z-10 mt-4 flex flex-wrap gap-1">
+                                <span v-for="id in (group.user_ids || []).slice(0, 3)" :key="id" class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">{{ userName(id) }}</span>
+                                <span v-if="(group.user_ids || []).length > 3" class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">+{{ group.user_ids.length - 3 }}</span>
                             </div>
                         </article>
                     </div>
@@ -670,12 +721,12 @@ if (props.selectedGroup) {
                 <div class="mt-7 space-y-5">
                     <label class="block">
                         <span class="block text-sm font-medium text-gray-700">Nome utente</span>
-                        <input v-model="itemForm.username" class="form-control" />
+                        <input v-model="itemForm.username" class="form-control" name="centro_password_item_username" autocomplete="off" />
                     </label>
                     <label class="block">
                         <span class="block text-sm font-medium text-gray-700">Password</span>
                         <div class="flex gap-2">
-                            <input v-model="itemForm.password" class="form-control" :placeholder="editingItem ? 'Lascia vuoto per non cambiarla' : ''" />
+                            <input v-model="itemForm.password" class="form-control" name="centro_password_item_secret" autocomplete="new-password" :placeholder="editingItem ? 'Lascia vuoto per non cambiarla' : ''" />
                             <button type="button" class="btn btn-outline h-[38px] shrink-0" @click="openGenerator">Genera</button>
                         </div>
                         <div v-if="generatorOpen" class="rounded-[var(--radius)] bg-gray-50/80 p-4">
@@ -727,7 +778,7 @@ if (props.selectedGroup) {
                     </label>
                     <label class="block">
                         <span class="block text-sm font-medium text-gray-700">Sito web</span>
-                        <input v-model="itemForm.url" class="form-control" />
+                        <input v-model="itemForm.url" class="form-control" name="centro_password_item_url" autocomplete="off" />
                     </label>
                     <label class="block">
                         <span class="block text-sm font-medium text-gray-700">Cliente</span>
@@ -786,7 +837,7 @@ if (props.selectedGroup) {
                     <button type="button" class="icon-btn" @click="revealItem = null"><X class="h-4 w-4" /></button>
                 </div>
                 <p class="mt-2 text-sm text-gray-500">Conferma la password del tuo account.</p>
-                <input v-model="accountPassword" type="password" class="form-control mt-4" placeholder="Password account" @keydown.enter.prevent="revealPassword" />
+                <input v-model="accountPassword" type="password" name="account_password" autocomplete="current-password" class="form-control mt-4" placeholder="Password account" @keydown.enter.prevent="revealPassword" />
                 <button type="button" class="btn btn-primary mt-3 w-full justify-center" @click="revealPassword">
                     <Eye class="h-4 w-4" :stroke-width="1.7" />
                     Mostra
@@ -825,5 +876,21 @@ if (props.selectedGroup) {
 .password-length-slider {
     accent-color: hsl(var(--primary-app));
     cursor: pointer;
+}
+
+.vault-action-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    color: currentColor;
+    opacity: 0.78;
+    transition: background-color 0.18s ease, opacity 0.18s ease, transform 0.18s ease;
+}
+
+.vault-action-button:hover {
+    background: rgba(255, 255, 255, 0.18);
+    opacity: 1;
+    transform: translateY(-1px);
 }
 </style>
