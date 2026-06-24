@@ -887,6 +887,20 @@ class CentroPageController extends Controller
     {
         abort_if($this->isGuest($request), 403);
         $view = $request->route('view', 'items');
+        $selectedVault = null;
+        $selectedGroup = null;
+
+        if ($view === 'vault-detail') {
+            $selectedVault = $this->passwordVaultRows($request)->firstWhere('id', $request->route('id'));
+            abort_if(! $selectedVault, 404);
+            abort_unless($selectedVault->can_edit, 403);
+        }
+
+        if ($view === 'group-detail') {
+            $selectedGroup = $this->passwordGroupRows($request)->firstWhere('id', $request->route('id'));
+            abort_if(! $selectedGroup, 404);
+            abort_unless($this->canManagePasswords($request), 403);
+        }
 
         return Inertia::render('Centro/Passwords', [
             'view' => $view,
@@ -902,6 +916,8 @@ class CentroPageController extends Controller
             'projects' => $this->isGuest($request)
                 ? $this->visibleProjectOptionsForUser($request->user()->id)
                 : DB::table('projects')->orderBy('name')->get(['id', 'name']),
+            'selectedVault' => $selectedVault,
+            'selectedGroup' => $selectedGroup,
             'nav' => [
                 ['route' => 'passwords.index', 'label' => 'Password', 'view' => 'items'],
                 ['route' => 'passwords.vaults', 'label' => 'Casseforti', 'view' => 'vaults'],
@@ -925,6 +941,9 @@ class CentroPageController extends Controller
             'group_ids' => ['nullable', 'array'],
             'group_ids.*' => ['uuid', 'exists:password_groups,id'],
         ]);
+        if (! empty($payload['user_ids']) && ! empty($payload['group_ids'])) {
+            return back()->withErrors(['group_ids' => 'Scegli gruppi oppure utenti singoli, non entrambi.'])->withInput();
+        }
         if (! $this->canManagePasswords($request)) {
             $payload['visibility'] = 'personal';
             $payload['user_ids'] = [];
@@ -971,6 +990,9 @@ class CentroPageController extends Controller
             'group_ids' => ['nullable', 'array'],
             'group_ids.*' => ['uuid', 'exists:password_groups,id'],
         ]);
+        if (! empty($payload['user_ids']) && ! empty($payload['group_ids'])) {
+            return back()->withErrors(['group_ids' => 'Scegli gruppi oppure utenti singoli, non entrambi.'])->withInput();
+        }
         if (! $this->canManagePasswords($request)) {
             $payload['visibility'] = 'personal';
             $payload['user_ids'] = [];
@@ -1002,6 +1024,10 @@ class CentroPageController extends Controller
         abort_if(! $vault, 404);
         abort_unless($this->canEditPasswordVault($request, $vault), 403);
         DB::table('password_vaults')->where('id', $id)->delete();
+
+        if (str_contains((string) $request->headers->get('referer'), "/passwords/vaults/{$id}")) {
+            return redirect()->route('passwords.vaults')->with('status', 'Cassaforte eliminata.');
+        }
 
         return back()->with('status', 'Cassaforte eliminata.');
     }
@@ -1071,6 +1097,10 @@ class CentroPageController extends Controller
     {
         $this->ensureCanManagePasswordStructure($request);
         DB::table('password_groups')->where('id', $id)->delete();
+
+        if (str_contains((string) $request->headers->get('referer'), "/passwords/groups/{$id}")) {
+            return redirect()->route('passwords.groups')->with('status', 'Gruppo password eliminato.');
+        }
 
         return back()->with('status', 'Gruppo password eliminato.');
     }
