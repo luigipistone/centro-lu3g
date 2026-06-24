@@ -739,14 +739,15 @@ if (props.selectedGroup) {
             </div>
         </div>
 
-        <div v-if="drawerOpen" class="fixed inset-0 z-[5000] flex justify-end bg-black/10" @click.self="drawerOpen = false">
-            <section class="h-full w-full max-w-xl overflow-y-auto rounded-l-[var(--radius)] bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.22)] transition">
-                <div class="flex items-center justify-between gap-3">
+        <div v-if="drawerOpen" class="fixed inset-0 z-[5200] bg-gray-950/20 backdrop-blur-[2px]" @click.self="drawerOpen = false">
+            <aside class="password-drawer-panel absolute right-0 top-0 flex h-full w-full max-w-2xl flex-col border-l border-white/80 bg-white shadow-2xl sm:w-[58vw]">
+                <div class="flex items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
                     <h3 class="text-lg font-semibold text-gray-900">{{ editingItem ? 'Modifica password' : 'Nuova password' }}</h3>
                     <button type="button" class="icon-btn" @click="drawerOpen = false"><X class="h-4 w-4" /></button>
                 </div>
 
-                <div class="mt-7 space-y-5">
+                <div class="flex-1 overflow-y-auto px-5 py-5">
+                    <div class="space-y-5">
                     <label class="block">
                         <span class="block text-sm font-medium text-gray-700">Titolo</span>
                         <input v-model="itemForm.title" class="form-control" name="centro_password_item_title" autocomplete="off" placeholder="Es. Accesso Aruba, Gmail cliente..." />
@@ -862,21 +863,22 @@ if (props.selectedGroup) {
                             ></div>
                         </div>
                     </div>
+
+                    <div v-if="itemFormErrorMessages.length" class="rounded-[var(--radius-sm)] border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                        <p v-for="message in itemFormErrorMessages" :key="message">{{ message }}</p>
+                    </div>
+                    </div>
                 </div>
 
-                <div v-if="itemFormErrorMessages.length" class="mt-5 rounded-[var(--radius-sm)] border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
-                    <p v-for="message in itemFormErrorMessages" :key="message">{{ message }}</p>
-                </div>
-
-                <div class="mt-6 flex justify-end gap-2">
+                <div class="flex justify-end gap-2 border-t border-gray-100 px-5 py-4">
                     <button type="button" class="btn btn-outline" @click="drawerOpen = false">Annulla</button>
                     <button type="button" class="btn btn-primary" :disabled="itemForm.processing" @click="saveItem">Salva</button>
                 </div>
-            </section>
+            </aside>
         </div>
 
-        <div v-if="revealItem" class="fixed left-0 top-0 z-[5200] grid h-dvh w-dvw place-items-center bg-black/10 px-4" @click.self="revealItem = null">
-            <section class="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-[var(--radius)] bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.20)]">
+        <div v-if="revealItem" class="fixed inset-0 z-[5200] grid h-dvh w-dvw place-items-center bg-gray-950/20 px-4 backdrop-blur-[2px]" @click.self="revealItem = null">
+            <section class="password-dialog-panel max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-[var(--radius)] bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.24)]">
                 <div class="flex items-center justify-between gap-3">
                     <h3 class="text-base font-semibold text-gray-900">{{ revealMode === 'copy-password' ? 'Copia password' : 'Dettaglio password' }}</h3>
                     <button type="button" class="icon-btn" @click="revealItem = null"><X class="h-4 w-4" /></button>
@@ -938,6 +940,38 @@ if (props.selectedGroup) {
 .password-length-slider {
     accent-color: hsl(var(--primary-app));
     cursor: pointer;
+}
+
+.password-drawer-panel {
+    animation: passwordDrawerIn 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.password-dialog-panel {
+    animation: passwordDialogIn 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes passwordDrawerIn {
+    from {
+        opacity: 0.92;
+        transform: translateX(28px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes passwordDialogIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.98);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
 }
 
 .vault-action-button {
