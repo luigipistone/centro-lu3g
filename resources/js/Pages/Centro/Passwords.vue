@@ -414,10 +414,10 @@ if (props.selectedGroup) {
                         <article
                             v-for="vault in vaults"
                             :key="vault.id"
-                            :class="['surface p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]', vault.can_edit ? 'cursor-pointer' : '']"
-                            @click="vault.can_edit && router.visit(route('passwords.vaults.show', vault.id))"
+                            :class="['surface relative p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]', vault.can_edit ? 'cursor-pointer' : '']"
                         >
-                            <div class="flex items-start justify-between gap-3">
+                            <Link v-if="vault.can_edit" :href="route('passwords.vaults.show', vault.id)" class="absolute inset-0 z-0 rounded-[inherit]" :aria-label="`Apri cassaforte ${vault.name}`" />
+                            <div class="pointer-events-none relative z-10 flex items-start justify-between gap-3">
                                 <div>
                                     <p class="flex items-center gap-2 text-sm font-semibold text-gray-900">
                                         <span class="h-3 w-3 rounded-full" :style="{ backgroundColor: vault.color || '#0B6EF3' }"></span>
@@ -425,18 +425,18 @@ if (props.selectedGroup) {
                                     </p>
                                     <p class="mt-1 text-xs text-gray-500">{{ vault.items_count }} password</p>
                                 </div>
-                                <div v-if="vault.can_edit" class="flex gap-1">
+                                <div v-if="vault.can_edit" class="pointer-events-auto flex gap-1">
                                     <button v-if="manageable" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700" title="Elimina cassaforte" @click.stop="openDelete(vault, 'vault')">
                                         <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                     </button>
                                 </div>
                             </div>
-                            <p v-if="vault.description" class="mt-3 text-sm text-gray-500">{{ vault.description }}</p>
-                            <span class="mt-3 inline-flex rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">{{ vault.visibility === 'shared' ? 'Condivisa' : 'Personale' }}</span>
-                            <div v-if="vault.group_ids?.length" class="mt-3 flex flex-wrap gap-1">
+                            <p v-if="vault.description" class="pointer-events-none relative z-10 mt-3 text-sm text-gray-500">{{ vault.description }}</p>
+                            <span class="pointer-events-none relative z-10 mt-3 inline-flex rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">{{ vault.visibility === 'shared' ? 'Condivisa' : 'Personale' }}</span>
+                            <div v-if="vault.group_ids?.length" class="pointer-events-none relative z-10 mt-3 flex flex-wrap gap-1">
                                 <span v-for="id in vault.group_ids" :key="id" class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">{{ groupName(id) }}</span>
                             </div>
-                            <div v-if="vault.user_ids?.length" class="mt-3 flex flex-wrap gap-1">
+                            <div v-if="vault.user_ids?.length" class="pointer-events-none relative z-10 mt-3 flex flex-wrap gap-1">
                                 <span v-for="id in vault.user_ids" :key="id" class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">{{ userName(id) }}</span>
                             </div>
                         </article>
@@ -569,21 +569,21 @@ if (props.selectedGroup) {
                         <article
                             v-for="group in groups"
                             :key="group.id"
-                            :class="['surface p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]', manageable ? 'cursor-pointer' : '']"
-                            @click="manageable && router.visit(route('passwords.groups.show', group.id))"
+                            :class="['surface relative p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]', manageable ? 'cursor-pointer' : '']"
                         >
-                            <div class="flex items-start justify-between gap-3">
+                            <Link v-if="manageable" :href="route('passwords.groups.show', group.id)" class="absolute inset-0 z-0 rounded-[inherit]" :aria-label="`Apri gruppo ${group.name}`" />
+                            <div class="pointer-events-none relative z-10 flex items-start justify-between gap-3">
                                 <div>
                                     <p class="text-sm font-semibold text-gray-900">{{ group.name }}</p>
                                     <p class="mt-1 text-xs text-gray-500">{{ group.members_count }} membri</p>
                                 </div>
-                                <div v-if="manageable" class="flex gap-1">
+                                <div v-if="manageable" class="pointer-events-auto flex gap-1">
                                     <button type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700" title="Elimina gruppo" @click.stop="openDelete(group, 'group')">
                                         <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                     </button>
                                 </div>
                             </div>
-                            <div class="mt-3 flex flex-wrap gap-1">
+                            <div class="pointer-events-none relative z-10 mt-3 flex flex-wrap gap-1">
                                 <span v-for="id in group.user_ids" :key="id" class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">{{ userName(id) }}</span>
                             </div>
                         </article>
