@@ -3,7 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { Bold, Copy, Eye, Italic, KeyRound, List, ListOrdered, Plus, Quote, Settings2, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
+import { Bold, Copy, Eye, Italic, KeyRound, List, ListOrdered, Plus, Quote, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -33,7 +33,6 @@ const groupEditor = ref(null);
 const activeClientId = ref('all');
 const noteEditor = ref(null);
 const generatorOpen = ref(false);
-const accessSettingsOpen = ref(false);
 const generatedPassword = ref('');
 const generator = ref({
     length: 20,
@@ -72,10 +71,6 @@ const visibleItems = computed(() => {
 });
 
 const compromisedItems = computed(() => (props.items || []).filter((item) => item.risk_flags?.length));
-const selectedGroupNames = computed(() => (props.groups || [])
-    .filter((group) => itemForm.group_ids.includes(group.id))
-    .map((group) => group.name));
-const groupsSummary = computed(() => selectedGroupNames.value.length ? selectedGroupNames.value.join(', ') : 'Nessun gruppo');
 
 function defaultItemForm() {
     return {
@@ -102,7 +97,6 @@ function resetItemForm() {
     itemForm.reset();
     itemForm.clearErrors();
     editingItem.value = null;
-    accessSettingsOpen.value = false;
     generatedPassword.value = '';
 }
 
@@ -183,13 +177,7 @@ function openGenerator() {
 function useGeneratedPassword() {
     if (!generatedPassword.value) refreshGeneratedPassword();
     itemForm.password = generatedPassword.value;
-}
-
-function toggleItemGroup(groupId) {
-    const current = Array.isArray(itemForm.group_ids) ? itemForm.group_ids : [];
-    itemForm.group_ids = current.includes(groupId)
-        ? current.filter((id) => id !== groupId)
-        : [...current, groupId];
+    generatorOpen.value = false;
 }
 
 watch(generator, () => {
@@ -502,12 +490,12 @@ function userName(id) {
                     <button type="button" class="icon-btn" @click="drawerOpen = false"><X class="h-4 w-4" /></button>
                 </div>
 
-                <div class="mt-7 space-y-6">
-                    <label class="space-y-2">
+                <div class="mt-8 space-y-8">
+                    <label class="space-y-3">
                         <span class="text-xs font-semibold uppercase text-gray-400">Nome utente</span>
                         <input v-model="itemForm.username" class="form-control" />
                     </label>
-                    <label class="space-y-2">
+                    <label class="space-y-3">
                         <span class="text-xs font-semibold uppercase text-gray-400">Password</span>
                         <div class="flex gap-2">
                             <input v-model="itemForm.password" class="form-control" :placeholder="editingItem ? 'Lascia vuoto per non cambiarla' : ''" />
@@ -552,7 +540,7 @@ function userName(id) {
                             </div>
                         </div>
                     </label>
-                    <label class="space-y-2">
+                    <label class="space-y-3">
                         <span class="text-xs font-semibold uppercase text-gray-400">Cassaforte</span>
                         <AppSelect
                             v-model="itemForm.password_vault_id"
@@ -560,51 +548,15 @@ function userName(id) {
                             searchable
                         />
                     </label>
-                    <div v-if="manageable" class="space-y-2">
-                        <span class="text-xs font-semibold uppercase text-gray-400">Gruppi</span>
-                        <button
-                            type="button"
-                            class="form-control flex h-[42px] items-center justify-between gap-3 text-left"
-                            @click="accessSettingsOpen = !accessSettingsOpen"
-                        >
-                            <span class="flex min-w-0 items-center gap-2">
-                                <Settings2 class="h-4 w-4 shrink-0 text-[hsl(var(--primary-app))]" :stroke-width="1.8" />
-                                <span class="truncate text-sm text-gray-700">{{ groupsSummary }}</span>
-                            </span>
-                            <span class="text-xs font-semibold text-[hsl(var(--primary-app))]">{{ accessSettingsOpen ? 'Chiudi' : 'Scegli' }}</span>
-                        </button>
-                        <div v-if="accessSettingsOpen" class="rounded-[var(--radius)] bg-gray-50/80 p-4">
-                            <div v-if="groups.length" class="space-y-2">
-                                <span class="text-xs font-semibold uppercase text-gray-400">Gruppi</span>
-                                <div class="flex flex-wrap gap-2">
-                                    <button
-                                        v-for="group in groups"
-                                        :key="group.id"
-                                        type="button"
-                                        :class="[
-                                            'rounded-full border px-3 py-1.5 text-xs font-semibold transition',
-                                            itemForm.group_ids.includes(group.id)
-                                                ? 'border-[hsl(var(--primary-app))] bg-[hsl(var(--primary-app)/0.12)] text-[hsl(var(--primary-app-dark))]'
-                                                : 'border-gray-200 bg-white text-gray-600 hover:border-[hsl(var(--primary-app)/0.35)] hover:text-gray-900',
-                                        ]"
-                                        @click="toggleItemGroup(group.id)"
-                                    >
-                                        {{ group.name }}
-                                    </button>
-                                </div>
-                            </div>
-                            <p v-else class="text-xs font-medium text-gray-500">Nessun gruppo disponibile.</p>
-                        </div>
-                    </div>
-                    <label class="space-y-2">
+                    <label class="space-y-3">
                         <span class="text-xs font-semibold uppercase text-gray-400">Sito web</span>
                         <input v-model="itemForm.url" class="form-control" />
                     </label>
-                    <label class="space-y-2">
+                    <label class="space-y-3">
                         <span class="text-xs font-semibold uppercase text-gray-400">Cliente</span>
                         <AppSelect v-model="itemForm.client_id" :options="[{ value: '', label: 'Nessuno' }, ...clients.map((client) => ({ value: client.id, label: client.name }))]" searchable />
                     </label>
-                    <div class="space-y-2">
+                    <div class="space-y-3">
                         <span class="text-xs font-semibold uppercase text-gray-400">Note</span>
                         <div class="overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white">
                             <div class="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50/80 px-2 py-2">
