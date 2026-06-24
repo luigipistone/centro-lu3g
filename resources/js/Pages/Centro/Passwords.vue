@@ -136,6 +136,14 @@ function openEditItem(item) {
 function saveItem() {
     itemForm.title = itemForm.url || itemForm.username || 'Password';
     itemForm.notes = noteEditor.value?.innerHTML || '';
+    itemForm.password_vault_id = itemForm.password_vault_id || props.vaults?.[0]?.id || '';
+    itemForm.user_ids = [];
+    itemForm.group_ids = [];
+    itemForm.custom_fields = [];
+    itemForm.tags_text = '';
+    itemForm.expires_at = '';
+    itemForm.project_id = '';
+    itemForm.share_permission = 'view';
     const options = {
         preserveScroll: true,
         onSuccess: () => {

@@ -3457,6 +3457,10 @@ class CentroPageController extends Controller
             $payload['share_permission'] = 'view';
         }
 
+        if (blank($payload['password_vault_id'] ?? null)) {
+            $payload['password_vault_id'] = $this->visiblePasswordVaultIds($request)->first();
+        }
+
         return $payload;
     }
 
