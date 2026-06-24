@@ -891,6 +891,7 @@ class CentroPageController extends Controller
         return Inertia::render('Centro/Passwords', [
             'view' => $view,
             'canManage' => $this->canManagePasswords($request),
+            'canCreateVaults' => ! $this->isGuest($request),
             'vaults' => $this->passwordVaultRows($request),
             'groups' => $this->passwordGroupRows($request),
             'items' => $this->passwordItemRows($request),
@@ -912,17 +913,23 @@ class CentroPageController extends Controller
 
     public function storePasswordVault(Request $request): RedirectResponse
     {
-        $this->ensureCanManagePasswordStructure($request);
+        abort_if($this->isGuest($request), 403);
 
         $payload = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:3000'],
             'color' => ['nullable', 'string', 'max:24'],
+            'visibility' => ['nullable', Rule::in(['personal', 'shared'])],
             'user_ids' => ['nullable', 'array'],
             'user_ids.*' => ['uuid', 'exists:users,id'],
             'group_ids' => ['nullable', 'array'],
             'group_ids.*' => ['uuid', 'exists:password_groups,id'],
         ]);
+        if (! $this->canManagePasswords($request)) {
+            $payload['visibility'] = 'personal';
+            $payload['user_ids'] = [];
+            $payload['group_ids'] = [];
+        }
 
         $vaultId = (string) str()->uuid();
         DB::transaction(function () use ($payload, $vaultId, $request) {
@@ -931,12 +938,17 @@ class CentroPageController extends Controller
                 'name' => $payload['name'],
                 'description' => $payload['description'] ?? null,
                 'color' => $payload['color'] ?? '#0B6EF3',
+                'visibility' => $payload['visibility'] ?? 'personal',
                 'created_by' => $request->user()->id,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
 
-            $this->syncPasswordVaultShares($vaultId, $payload['user_ids'] ?? [], $payload['group_ids'] ?? []);
+            $this->syncPasswordVaultShares(
+                $vaultId,
+                ($payload['visibility'] ?? 'personal') === 'shared' ? ($payload['user_ids'] ?? []) : [],
+                ($payload['visibility'] ?? 'personal') === 'shared' ? ($payload['group_ids'] ?? []) : [],
+            );
         });
 
         return back()->with('status', 'Cassaforte creata.');
@@ -944,28 +956,41 @@ class CentroPageController extends Controller
 
     public function updatePasswordVault(Request $request, string $id): RedirectResponse
     {
-        $this->ensureCanManagePasswordStructure($request);
-        abort_unless(DB::table('password_vaults')->where('id', $id)->exists(), 404);
+        abort_if($this->isGuest($request), 403);
+        $vault = DB::table('password_vaults')->where('id', $id)->first();
+        abort_if(! $vault, 404);
+        abort_unless($this->canEditPasswordVault($request, $vault), 403);
 
         $payload = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:3000'],
             'color' => ['nullable', 'string', 'max:24'],
+            'visibility' => ['nullable', Rule::in(['personal', 'shared'])],
             'user_ids' => ['nullable', 'array'],
             'user_ids.*' => ['uuid', 'exists:users,id'],
             'group_ids' => ['nullable', 'array'],
             'group_ids.*' => ['uuid', 'exists:password_groups,id'],
         ]);
+        if (! $this->canManagePasswords($request)) {
+            $payload['visibility'] = 'personal';
+            $payload['user_ids'] = [];
+            $payload['group_ids'] = [];
+        }
 
         DB::transaction(function () use ($payload, $id) {
             DB::table('password_vaults')->where('id', $id)->update([
                 'name' => $payload['name'],
                 'description' => $payload['description'] ?? null,
                 'color' => $payload['color'] ?? '#0B6EF3',
+                'visibility' => $payload['visibility'] ?? 'personal',
                 'updated_at' => now(),
             ]);
 
-            $this->syncPasswordVaultShares($id, $payload['user_ids'] ?? [], $payload['group_ids'] ?? []);
+            $this->syncPasswordVaultShares(
+                $id,
+                ($payload['visibility'] ?? 'personal') === 'shared' ? ($payload['user_ids'] ?? []) : [],
+                ($payload['visibility'] ?? 'personal') === 'shared' ? ($payload['group_ids'] ?? []) : [],
+            );
         });
 
         return back()->with('status', 'Cassaforte aggiornata.');
@@ -973,7 +998,9 @@ class CentroPageController extends Controller
 
     public function destroyPasswordVault(Request $request, string $id): RedirectResponse
     {
-        $this->ensureCanManagePasswordStructure($request);
+        $vault = DB::table('password_vaults')->where('id', $id)->first();
+        abort_if(! $vault, 404);
+        abort_unless($this->canEditPasswordVault($request, $vault), 403);
         DB::table('password_vaults')->where('id', $id)->delete();
 
         return back()->with('status', 'Cassaforte eliminata.');
@@ -1117,6 +1144,7 @@ class CentroPageController extends Controller
         abort_unless($this->canManagePasswords($request), 403);
         $item = DB::table('password_items')->where('id', $id)->first();
         abort_if(! $item, 404);
+        abort_unless($this->canEditPasswordItem($request, $item), 403);
 
         $this->logPasswordAction($id, $request->user()->id, 'deleted', 'Elemento password eliminato.');
         DB::table('password_items')->where('id', $id)->delete();
@@ -3161,7 +3189,7 @@ class CentroPageController extends Controller
     private function passwordVaultRows(Request $request)
     {
         $query = DB::table('password_vaults')->orderBy('name');
-        if (! $this->canManagePasswords($request)) {
+        if ($this->currentUserRole($request) !== 'superadmin') {
             $query->whereIn('id', $this->visiblePasswordVaultIds($request));
         }
 
@@ -3181,6 +3209,7 @@ class CentroPageController extends Controller
                 $vault->items_count = $items->count();
                 $vault->user_ids = ($userShares[$vault->id] ?? collect())->pluck('user_id')->values();
                 $vault->group_ids = ($groupShares[$vault->id] ?? collect())->pluck('password_group_id')->values();
+                $vault->can_edit = $this->canEditPasswordVault($request, $vault);
 
                 return $vault;
             });
@@ -3266,7 +3295,7 @@ class CentroPageController extends Controller
     private function passwordItemsQuery(Request $request)
     {
         $query = DB::table('password_items');
-        if ($this->canManagePasswords($request)) {
+        if ($this->currentUserRole($request) === 'superadmin') {
             return $query;
         }
 
@@ -3282,20 +3311,40 @@ class CentroPageController extends Controller
 
     private function visiblePasswordVaultIds(Request $request): \Illuminate\Support\Collection
     {
-        if ($this->canManagePasswords($request)) {
+        if ($this->currentUserRole($request) === 'superadmin') {
             return DB::table('password_vaults')->pluck('id');
         }
 
         $groupIds = DB::table('password_group_user')->where('user_id', $request->user()->id)->pluck('password_group_id');
 
         return DB::table('password_vaults')
-            ->where('created_by', $request->user()->id)
+            ->where(function ($query) use ($request, $groupIds) {
+                $query->where('created_by', $request->user()->id)
+                    ->orWhereIn('id', DB::table('password_vault_user')->where('user_id', $request->user()->id)->pluck('password_vault_id'))
+                    ->orWhereIn('id', DB::table('password_vault_group')->whereIn('password_group_id', $groupIds)->pluck('password_vault_id'));
+
+                if ($this->currentUserRole($request) === 'admin') {
+                    $query->orWhere('visibility', 'shared');
+                }
+            })
             ->pluck('id')
-            ->merge(DB::table('password_vault_user')->where('user_id', $request->user()->id)->pluck('password_vault_id'))
-            ->merge(DB::table('password_vault_group')->whereIn('password_group_id', $groupIds)->pluck('password_vault_id'))
             ->filter()
             ->unique()
             ->values();
+    }
+
+    private function canEditPasswordVault(Request $request, object $vault): bool
+    {
+        if ($this->currentUserRole($request) === 'superadmin') {
+            return true;
+        }
+
+        if ($vault->created_by === $request->user()->id) {
+            return true;
+        }
+
+        return $this->currentUserRole($request) === 'admin'
+            && ($vault->visibility ?? 'personal') === 'shared';
     }
 
     private function passwordRiskFlags(object $item): array
@@ -3316,7 +3365,7 @@ class CentroPageController extends Controller
 
     private function canViewPasswordItem(Request $request, object $item): bool
     {
-        if ($this->canManagePasswords($request) || $item->created_by === $request->user()->id) {
+        if ($this->currentUserRole($request) === 'superadmin' || $item->created_by === $request->user()->id) {
             return true;
         }
 
@@ -3329,7 +3378,7 @@ class CentroPageController extends Controller
 
     private function canEditPasswordItem(Request $request, object $item): bool
     {
-        if ($this->canManagePasswords($request) || $item->created_by === $request->user()->id || $this->visiblePasswordVaultIds($request)->contains($item->password_vault_id)) {
+        if ($this->currentUserRole($request) === 'superadmin' || $item->created_by === $request->user()->id || $this->visiblePasswordVaultIds($request)->contains($item->password_vault_id)) {
             return true;
         }
 

@@ -9,6 +9,7 @@ import { computed, ref } from 'vue';
 const props = defineProps({
     view: String,
     canManage: Boolean,
+    canCreateVaults: Boolean,
     vaults: Array,
     groups: Array,
     items: Array,
@@ -32,10 +33,11 @@ const groupEditor = ref(null);
 
 const currentView = computed(() => props.view || 'items');
 const manageable = computed(() => props.canManage);
+const canCreateVaults = computed(() => props.canCreateVaults);
 const activeVaultId = ref('all');
 
 const itemForm = useForm(defaultItemForm());
-const vaultForm = useForm({ name: '', description: '', color: '#0B6EF3', user_ids: [], group_ids: [] });
+const vaultForm = useForm({ name: '', description: '', color: '#0B6EF3', visibility: 'personal', user_ids: [], group_ids: [] });
 const groupForm = useForm({ name: '', description: '', user_ids: [] });
 
 const visibleItems = computed(() => {
@@ -168,6 +170,7 @@ function resetVaultForm(vault = null) {
         name: vault?.name || '',
         description: vault?.description || '',
         color: vault?.color || '#0B6EF3',
+        visibility: vault?.visibility || 'personal',
         user_ids: vault?.user_ids || [],
         group_ids: vault?.group_ids || [],
     });
@@ -234,14 +237,21 @@ function userName(id) {
 
         <div class="py-8">
             <div class="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
-                <nav class="surface flex flex-wrap items-center gap-2 p-2">
+                <nav class="grid gap-3 md:grid-cols-4">
                     <Link
                         v-for="item in nav"
                         :key="item.view"
                         :href="route(item.route)"
-                        :class="['rounded-[var(--radius-sm)] px-4 py-2 text-sm font-semibold transition', currentView === item.view ? 'bg-[hsl(var(--primary-app))] text-white' : 'text-gray-600 hover:bg-gray-50']"
+                        :class="['surface flex items-center justify-between gap-3 p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]', currentView === item.view ? 'ring-1 ring-[hsl(var(--primary-app)/0.25)]' : '']"
                     >
-                        {{ item.label }}
+                        <span>
+                            <span class="block text-sm font-semibold text-gray-900">{{ item.label }}</span>
+                            <span class="mt-1 block text-xs text-gray-500">Apri pagina</span>
+                        </span>
+                        <Vault v-if="item.view === 'vaults'" class="h-5 w-5 text-[hsl(var(--primary-app))]" :stroke-width="1.7" />
+                        <Users v-else-if="item.view === 'groups'" class="h-5 w-5 text-[hsl(var(--primary-app))]" :stroke-width="1.7" />
+                        <ShieldAlert v-else-if="item.view === 'compromised'" class="h-5 w-5 text-[hsl(var(--primary-app))]" :stroke-width="1.7" />
+                        <KeyRound v-else class="h-5 w-5 text-[hsl(var(--primary-app))]" :stroke-width="1.7" />
                     </Link>
                 </nav>
 
@@ -308,25 +318,31 @@ function userName(id) {
                                     </p>
                                     <p class="mt-1 text-xs text-gray-500">{{ vault.items_count }} password</p>
                                 </div>
-                                <div v-if="manageable" class="flex gap-1">
+                                <div v-if="vault.can_edit" class="flex gap-1">
                                     <button type="button" class="text-sm font-semibold text-[hsl(var(--primary-app))]" @click="resetVaultForm(vault)">Modifica</button>
-                                    <button type="button" class="icon-btn h-8 w-8 text-red-600" @click="openDelete(vault, 'vault')"><Trash2 class="h-4 w-4" /></button>
+                                    <button v-if="manageable" type="button" class="icon-btn h-8 w-8 text-red-600" @click="openDelete(vault, 'vault')"><Trash2 class="h-4 w-4" /></button>
                                 </div>
                             </div>
                             <p v-if="vault.description" class="mt-3 text-sm text-gray-500">{{ vault.description }}</p>
+                            <span class="mt-3 inline-flex rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">{{ vault.visibility === 'shared' ? 'Condivisa' : 'Personale' }}</span>
                             <div v-if="vault.user_ids?.length" class="mt-3 flex flex-wrap gap-1">
                                 <span v-for="id in vault.user_ids" :key="id" class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">{{ userName(id) }}</span>
                             </div>
                         </article>
                     </div>
 
-                    <aside v-if="manageable" class="surface p-5">
+                    <aside v-if="canCreateVaults" class="surface p-5">
                         <h3 class="text-base font-semibold text-gray-900">{{ vaultEditor ? 'Modifica cassaforte' : 'Nuova cassaforte' }}</h3>
                         <div class="mt-4 space-y-3">
                             <input v-model="vaultForm.name" class="form-control" placeholder="Nome cassaforte" />
                             <textarea v-model="vaultForm.description" class="form-control" rows="3" placeholder="Descrizione"></textarea>
                             <input v-model="vaultForm.color" type="color" class="h-11 w-full cursor-pointer rounded-[var(--radius-sm)] border border-gray-200 bg-white p-1" />
-                            <div class="rounded-[var(--radius)] bg-gray-50/80 p-3">
+                            <AppSelect
+                                v-if="manageable"
+                                v-model="vaultForm.visibility"
+                                :options="[{ value: 'personal', label: 'Personale' }, { value: 'shared', label: 'Condivisa' }]"
+                            />
+                            <div v-if="manageable && vaultForm.visibility === 'shared'" class="rounded-[var(--radius)] bg-gray-50/80 p-3">
                                 <p class="text-sm font-semibold text-gray-900">Utenti</p>
                                 <div class="mt-3 flex flex-wrap gap-2">
                                     <button v-for="user in users" :key="user.id" type="button" :class="['inline-flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-xs font-semibold transition', vaultForm.user_ids.includes(user.id) ? 'border-[hsl(var(--primary-app))] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app-dark))]' : 'border-white bg-white text-gray-600 hover:border-gray-200']" @click="toggleIn(vaultForm, 'user_ids', user.id)">
