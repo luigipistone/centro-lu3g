@@ -49,6 +49,8 @@ const generator = ref({
     symbols: true,
 });
 
+const maskedRevealedPassword = computed(() => revealedPassword.value ? '•'.repeat(Math.min(Math.max(revealedPassword.value.length, 8), 24)) : '');
+
 const currentView = computed(() => props.view || 'items');
 const manageable = computed(() => props.canManage);
 const canCreateVaults = computed(() => props.canCreateVaults);
@@ -903,7 +905,7 @@ if (props.selectedGroup) {
                     <button type="button" class="password-reveal-row group/reveal-field w-full text-left" @click="copyPassword">
                         <span class="text-xs font-semibold uppercase tracking-wide text-gray-400">Password</span>
                         <div class="mt-1 flex items-center gap-2">
-                            <p class="min-w-0 flex-1 break-all font-mono text-sm text-gray-900">{{ revealedPassword }}</p>
+                            <p class="min-w-0 flex-1 break-all font-mono text-sm tracking-[0.12em] text-gray-900">{{ maskedRevealedPassword }}</p>
                             <span class="field-copy-button" title="Copia password">
                                 <Copy class="h-4 w-4" :stroke-width="1.7" />
                             </span>
