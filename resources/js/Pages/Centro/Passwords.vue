@@ -490,12 +490,12 @@ function userName(id) {
                     <button type="button" class="icon-btn" @click="drawerOpen = false"><X class="h-4 w-4" /></button>
                 </div>
 
-                <div class="mt-8 space-y-9">
-                    <label class="space-y-1.5">
+                <div class="mt-8 space-y-10">
+                    <label class="block space-y-1.5">
                         <span class="text-xs font-semibold uppercase text-gray-400">Nome utente</span>
                         <input v-model="itemForm.username" class="form-control" />
                     </label>
-                    <label class="space-y-1.5">
+                    <label class="block space-y-1.5">
                         <span class="text-xs font-semibold uppercase text-gray-400">Password</span>
                         <div class="flex gap-2">
                             <input v-model="itemForm.password" class="form-control" :placeholder="editingItem ? 'Lascia vuoto per non cambiarla' : ''" />
@@ -540,7 +540,7 @@ function userName(id) {
                             </div>
                         </div>
                     </label>
-                    <label class="space-y-1.5">
+                    <label class="block space-y-1.5">
                         <span class="text-xs font-semibold uppercase text-gray-400">Cassaforte</span>
                         <AppSelect
                             v-model="itemForm.password_vault_id"
@@ -548,11 +548,11 @@ function userName(id) {
                             searchable
                         />
                     </label>
-                    <label class="space-y-1.5">
+                    <label class="block space-y-1.5">
                         <span class="text-xs font-semibold uppercase text-gray-400">Sito web</span>
                         <input v-model="itemForm.url" class="form-control" />
                     </label>
-                    <label class="space-y-1.5">
+                    <label class="block space-y-1.5">
                         <span class="text-xs font-semibold uppercase text-gray-400">Cliente</span>
                         <AppSelect v-model="itemForm.client_id" :options="[{ value: '', label: 'Nessuno' }, ...clients.map((client) => ({ value: client.id, label: client.name }))]" searchable />
                     </label>
