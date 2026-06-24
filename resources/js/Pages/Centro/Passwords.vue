@@ -891,24 +891,24 @@ if (props.selectedGroup) {
                 <p v-if="revealError" class="mt-3 text-sm text-red-600">{{ revealError }}</p>
                 <p v-if="revealCopied" class="mt-3 text-sm font-semibold text-[hsl(var(--primary-app))]">{{ revealCopied }}</p>
                 <div v-if="revealedPassword" class="mt-4 space-y-3">
-                    <div class="password-reveal-row group/reveal-field">
+                    <button type="button" class="password-reveal-row group/reveal-field w-full text-left" :disabled="!revealedUsername" @click="copyUsername">
                         <span class="text-xs font-semibold uppercase tracking-wide text-gray-400">Nome utente</span>
                         <div class="mt-1 flex items-center gap-2">
                             <p class="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{{ revealedUsername || 'Non inserito' }}</p>
-                            <button v-if="revealedUsername" type="button" class="field-copy-button" title="Copia nome utente" @click="copyUsername">
+                            <span v-if="revealedUsername" class="field-copy-button" title="Copia nome utente">
                                 <Copy class="h-4 w-4" :stroke-width="1.7" />
-                            </button>
+                            </span>
                         </div>
-                    </div>
-                    <div class="password-reveal-row group/reveal-field">
+                    </button>
+                    <button type="button" class="password-reveal-row group/reveal-field w-full text-left" @click="copyPassword">
                         <span class="text-xs font-semibold uppercase tracking-wide text-gray-400">Password</span>
                         <div class="mt-1 flex items-center gap-2">
                             <p class="min-w-0 flex-1 break-all font-mono text-sm text-gray-900">{{ revealedPassword }}</p>
-                            <button type="button" class="field-copy-button" title="Copia password" @click="copyPassword">
+                            <span class="field-copy-button" title="Copia password">
                                 <Copy class="h-4 w-4" :stroke-width="1.7" />
-                            </button>
+                            </span>
                         </div>
-                    </div>
+                    </button>
                 </div>
             </section>
         </div>
@@ -959,6 +959,18 @@ if (props.selectedGroup) {
     border-radius: var(--radius-sm);
     background: rgb(249 250 251 / 0.85);
     padding: 0.85rem 0.95rem;
+    cursor: pointer;
+    transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
+}
+
+.password-reveal-row:hover:not(:disabled) {
+    border-color: hsl(var(--primary-app) / 0.28);
+    background: hsl(var(--primary-app) / 0.055);
+    transform: translateY(-1px);
+}
+
+.password-reveal-row:disabled {
+    cursor: default;
 }
 
 .field-copy-button {
