@@ -891,6 +891,14 @@ class CentroPageController extends Controller
         $selectedVault = null;
         $selectedGroup = null;
 
+        if ($view === 'vault-create') {
+            abort_if($this->isGuest($request), 403);
+        }
+
+        if ($view === 'group-create') {
+            abort_unless($this->canManagePasswords($request), 403);
+        }
+
         if ($view === 'vault-detail') {
             $selectedVault = $this->passwordVaultRows($request)->firstWhere('id', $request->route('id'));
             abort_if(! $selectedVault, 404);
@@ -971,7 +979,7 @@ class CentroPageController extends Controller
             );
         });
 
-        return back()->with('status', 'Cassaforte creata.');
+        return redirect()->route('passwords.vaults')->with('status', 'Cassaforte creata.');
     }
 
     public function updatePasswordVault(Request $request, string $id): RedirectResponse
@@ -1062,7 +1070,7 @@ class CentroPageController extends Controller
             $this->syncPasswordGroupUsers($groupId, $payload['user_ids'] ?? []);
         });
 
-        return back()->with('status', 'Gruppo password creato.');
+        return redirect()->route('passwords.groups')->with('status', 'Gruppo password creato.');
     }
 
     public function updatePasswordGroup(Request $request, string $id): RedirectResponse
