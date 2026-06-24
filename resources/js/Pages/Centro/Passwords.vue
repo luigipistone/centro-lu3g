@@ -3,7 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, Bold, Copy, Eye, Italic, KeyRound, List, ListOrdered, Pencil, Plus, Quote, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
+import { ArrowLeft, Bold, Copy, Eye, Italic, KeyRound, List, ListOrdered, Plus, Quote, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -78,6 +78,7 @@ const visibleItems = computed(() => {
 });
 
 const compromisedItems = computed(() => (props.items || []).filter((item) => item.risk_flags?.length));
+const itemFormErrorMessages = computed(() => Object.values(itemForm.errors || {}).filter(Boolean));
 
 function defaultItemForm() {
     return {
@@ -88,14 +89,6 @@ function defaultItemForm() {
         url: '',
         notes: '',
         client_id: '',
-        tags_text: '',
-        expires_at: '',
-        favorite: false,
-        project_id: '',
-        share_permission: 'view',
-        user_ids: [],
-        group_ids: [],
-        custom_fields: [],
     };
 }
 
@@ -124,7 +117,6 @@ function openEditItem(item) {
         url: item.url || '',
         notes: item.notes || '',
         client_id: item.client_id || '',
-        group_ids: item.group_ids || [],
     });
     itemForm.reset();
     drawerOpen.value = true;
@@ -137,18 +129,15 @@ function saveItem() {
     itemForm.title = itemForm.url || itemForm.username || 'Password';
     itemForm.notes = noteEditor.value?.innerHTML || '';
     itemForm.password_vault_id = itemForm.password_vault_id || props.vaults?.[0]?.id || '';
-    itemForm.user_ids = [];
-    itemForm.group_ids = [];
-    itemForm.custom_fields = [];
-    itemForm.tags_text = '';
-    itemForm.expires_at = '';
-    itemForm.project_id = '';
-    itemForm.share_permission = 'view';
+    itemForm.clearErrors();
     const options = {
         preserveScroll: true,
         onSuccess: () => {
             drawerOpen.value = false;
             resetItemForm();
+        },
+        onError: () => {
+            drawerOpen.value = true;
         },
     };
 
@@ -422,7 +411,12 @@ if (props.selectedGroup) {
 
                 <section v-if="currentView === 'vaults'" class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
                     <div class="grid gap-4 md:grid-cols-2">
-                        <article v-for="vault in vaults" :key="vault.id" class="surface p-4">
+                        <article
+                            v-for="vault in vaults"
+                            :key="vault.id"
+                            :class="['surface p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]', vault.can_edit ? 'cursor-pointer' : '']"
+                            @click="vault.can_edit && router.visit(route('passwords.vaults.show', vault.id))"
+                        >
                             <div class="flex items-start justify-between gap-3">
                                 <div>
                                     <p class="flex items-center gap-2 text-sm font-semibold text-gray-900">
@@ -432,10 +426,7 @@ if (props.selectedGroup) {
                                     <p class="mt-1 text-xs text-gray-500">{{ vault.items_count }} password</p>
                                 </div>
                                 <div v-if="vault.can_edit" class="flex gap-1">
-                                    <Link :href="route('passwords.vaults.show', vault.id)" class="icon-btn h-8 w-8" title="Modifica cassaforte">
-                                        <Pencil class="h-4 w-4" :stroke-width="1.7" />
-                                    </Link>
-                                    <button v-if="manageable" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700" title="Elimina cassaforte" @click="openDelete(vault, 'vault')">
+                                    <button v-if="manageable" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700" title="Elimina cassaforte" @click.stop="openDelete(vault, 'vault')">
                                         <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                     </button>
                                 </div>
@@ -575,17 +566,19 @@ if (props.selectedGroup) {
 
                 <section v-if="currentView === 'groups'" class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
                     <div class="grid gap-4 md:grid-cols-2">
-                        <article v-for="group in groups" :key="group.id" class="surface p-4">
+                        <article
+                            v-for="group in groups"
+                            :key="group.id"
+                            :class="['surface p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]', manageable ? 'cursor-pointer' : '']"
+                            @click="manageable && router.visit(route('passwords.groups.show', group.id))"
+                        >
                             <div class="flex items-start justify-between gap-3">
                                 <div>
                                     <p class="text-sm font-semibold text-gray-900">{{ group.name }}</p>
                                     <p class="mt-1 text-xs text-gray-500">{{ group.members_count }} membri</p>
                                 </div>
                                 <div v-if="manageable" class="flex gap-1">
-                                    <Link :href="route('passwords.groups.show', group.id)" class="icon-btn h-8 w-8" title="Modifica gruppo">
-                                        <Pencil class="h-4 w-4" :stroke-width="1.7" />
-                                    </Link>
-                                    <button type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700" title="Elimina gruppo" @click="openDelete(group, 'group')">
+                                    <button type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700" title="Elimina gruppo" @click.stop="openDelete(group, 'group')">
                                         <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                     </button>
                                 </div>
@@ -773,6 +766,10 @@ if (props.selectedGroup) {
                             ></div>
                         </div>
                     </div>
+                </div>
+
+                <div v-if="itemFormErrorMessages.length" class="mt-5 rounded-[var(--radius-sm)] border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                    <p v-for="message in itemFormErrorMessages" :key="message">{{ message }}</p>
                 </div>
 
                 <div class="mt-6 flex justify-end gap-2">
