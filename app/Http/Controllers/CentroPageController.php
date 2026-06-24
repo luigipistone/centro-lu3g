@@ -13,7 +13,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -1157,12 +1156,6 @@ class CentroPageController extends Controller
         $item = DB::table('password_items')->where('id', $id)->first();
         abort_if(! $item, 404);
         abort_unless($this->canViewPasswordItem($request, $item), 403);
-
-        $payload = $request->validate([
-            'account_password' => ['required', 'string'],
-        ]);
-
-        abort_unless(Hash::check($payload['account_password'], $request->user()->password), 403);
 
         $this->logPasswordAction($id, $request->user()->id, 'revealed', 'Password rivelata.');
 

@@ -3,7 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, Bold, Copy, Eye, Italic, KeyRound, List, ListOrdered, Pencil, Plus, Quote, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
+import { ArrowLeft, Bold, Copy, Italic, KeyRound, List, ListOrdered, Pencil, Plus, Quote, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -27,7 +27,6 @@ const editingItem = ref(null);
 const revealItem = ref(null);
 const revealedPassword = ref('');
 const revealedUsername = ref('');
-const accountPassword = ref('');
 const revealError = ref('');
 const revealMode = ref('view');
 const revealCopied = ref('');
@@ -41,8 +40,6 @@ const generatorOpen = ref(false);
 const generatedPassword = ref('');
 const editPasswordLoaded = ref(false);
 const editPasswordVisible = ref(false);
-const editUnlockOpen = ref(false);
-const editAccountPassword = ref('');
 const editPasswordError = ref('');
 const generator = ref({
     length: 20,
@@ -157,8 +154,6 @@ function resetItemForm() {
     generatedPassword.value = '';
     editPasswordLoaded.value = false;
     editPasswordVisible.value = false;
-    editUnlockOpen.value = false;
-    editAccountPassword.value = '';
     editPasswordError.value = '';
 }
 
@@ -184,13 +179,12 @@ function openEditItem(item) {
     itemForm.has_password = item.has_password;
     editPasswordLoaded.value = false;
     editPasswordVisible.value = false;
-    editUnlockOpen.value = false;
-    editAccountPassword.value = '';
     editPasswordError.value = '';
     drawerOpen.value = true;
     setTimeout(() => {
         if (noteEditor.value) noteEditor.value.innerHTML = item.notes || '';
     }, 0);
+    loadEditingPassword();
 }
 
 function displayPasswordInputValue() {
@@ -206,6 +200,22 @@ function handlePasswordFieldFocus(event) {
         itemForm.password = '';
         editPasswordLoaded.value = true;
         event.target.value = '';
+    }
+}
+
+async function loadEditingPassword() {
+    if (!editingItem.value || !editingItem.value.has_password) {
+        editPasswordLoaded.value = true;
+        return;
+    }
+
+    editPasswordError.value = '';
+    try {
+        const response = await window.axios.post(route('passwords.items.reveal', editingItem.value.id));
+        itemForm.password = response.data.password || '';
+        editPasswordLoaded.value = true;
+    } catch (error) {
+        editPasswordError.value = 'Password non caricata. Verifica di avere accesso a questa credenziale.';
     }
 }
 
@@ -284,16 +294,14 @@ function openReveal(item, mode = 'view') {
     revealMode.value = mode;
     revealedPassword.value = '';
     revealedUsername.value = '';
-    accountPassword.value = '';
     revealError.value = '';
     revealCopied.value = '';
+    revealPassword();
 }
 
 async function revealPassword() {
     try {
-        const response = await window.axios.post(route('passwords.items.reveal', revealItem.value.id), {
-            account_password: accountPassword.value,
-        });
+        const response = await window.axios.post(route('passwords.items.reveal', revealItem.value.id));
         revealedPassword.value = response.data.password || '';
         revealedUsername.value = response.data.username || revealItem.value?.username || '';
         if (revealMode.value === 'copy-password') {
@@ -301,7 +309,7 @@ async function revealPassword() {
             revealCopied.value = 'Password copiata.';
         }
     } catch (error) {
-        revealError.value = 'Password account non corretta o accesso non consentito.';
+        revealError.value = 'Accesso non consentito o password non disponibile.';
     }
 }
 
@@ -316,23 +324,6 @@ async function copyUsername() {
     if (revealedUsername.value) {
         await navigator.clipboard?.writeText(revealedUsername.value);
         revealCopied.value = 'Nome utente copiato.';
-    }
-}
-
-async function unlockEditingPassword() {
-    if (!editingItem.value) return;
-    editPasswordError.value = '';
-    try {
-        const response = await window.axios.post(route('passwords.items.reveal', editingItem.value.id), {
-            account_password: editAccountPassword.value,
-        });
-        itemForm.password = response.data.password || '';
-        editPasswordLoaded.value = true;
-        editPasswordVisible.value = false;
-        editUnlockOpen.value = false;
-        editAccountPassword.value = '';
-    } catch (error) {
-        editPasswordError.value = 'Password account non corretta o accesso non consentito.';
     }
 }
 
@@ -521,9 +512,6 @@ if (props.selectedGroup) {
                                     </button>
                                     <button v-if="item.can_edit" type="button" class="icon-btn h-8 w-8" title="Modifica" @click.stop="openEditItem(item)">
                                         <Pencil class="h-4 w-4" :stroke-width="1.7" />
-                                    </button>
-                                    <button type="button" class="icon-btn h-8 w-8" title="Mostra" @click.stop="openReveal(item)">
-                                        <Eye class="h-4 w-4" :stroke-width="1.7" />
                                     </button>
                                     <button v-if="item.can_delete" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina" @click.stop="openDelete(item, 'item')">
                                         <Trash2 class="h-4 w-4" :stroke-width="1.7" />
@@ -817,19 +805,9 @@ if (props.selectedGroup) {
                             <button v-if="editingItem" type="button" class="btn btn-outline h-[38px] shrink-0 px-3" @click="editPasswordVisible = !editPasswordVisible">
                                 {{ editPasswordVisible ? 'Nascondi' : 'Vedi' }}
                             </button>
-                            <button v-if="editingItem && !editPasswordLoaded" type="button" class="btn btn-outline h-[38px] shrink-0 px-3" @click="editUnlockOpen = !editUnlockOpen">
-                                Sblocca
-                            </button>
                             <button type="button" class="btn btn-outline h-[38px] shrink-0" @click="openGenerator">Genera</button>
                         </div>
-                        <div v-if="editUnlockOpen" class="mt-3 rounded-[var(--radius-sm)] bg-gray-50/80 p-3">
-                            <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Conferma account</p>
-                            <div class="mt-2 flex gap-2">
-                                <input v-model="editAccountPassword" type="password" class="form-control" placeholder="Password account" autocomplete="current-password" @keydown.enter.prevent="unlockEditingPassword" />
-                                <button type="button" class="btn btn-primary shrink-0" @click="unlockEditingPassword">Carica</button>
-                            </div>
-                            <p v-if="editPasswordError" class="mt-2 text-sm text-red-600">{{ editPasswordError }}</p>
-                        </div>
+                        <p v-if="editPasswordError" class="mt-2 text-sm text-red-600">{{ editPasswordError }}</p>
                         <div v-if="generatorOpen" class="rounded-[var(--radius)] bg-gray-50/80 p-4">
                             <div class="mb-4 flex items-center gap-2 rounded-[var(--radius-sm)] border border-gray-200 bg-white px-3 py-2">
                                 <code class="min-w-0 flex-1 truncate text-sm font-semibold text-gray-800">{{ generatedPassword }}</code>
@@ -945,14 +923,7 @@ if (props.selectedGroup) {
                         <span v-if="revealItem.client_name">{{ revealItem.client_name }}</span>
                     </p>
                 </div>
-                <div v-if="!revealedPassword" class="mt-4">
-                    <p class="text-sm text-gray-500">Conferma la password del tuo account.</p>
-                    <input v-model="accountPassword" type="password" name="account_password" autocomplete="current-password" class="form-control mt-3" placeholder="Password account" @keydown.enter.prevent="revealPassword" />
-                    <button type="button" class="btn btn-primary mt-3 w-full justify-center" @click="revealPassword">
-                        <Eye class="h-4 w-4" :stroke-width="1.7" />
-                        {{ revealMode === 'copy-password' ? 'Sblocca e copia' : 'Mostra' }}
-                    </button>
-                </div>
+                <p v-if="!revealedPassword && !revealError" class="mt-4 text-sm text-gray-500">Caricamento credenziale...</p>
                 <p v-if="revealError" class="mt-3 text-sm text-red-600">{{ revealError }}</p>
                 <p v-if="revealCopied" class="mt-3 text-sm font-semibold text-[hsl(var(--primary-app))]">{{ revealCopied }}</p>
                 <div v-if="revealedPassword" class="mt-4 space-y-3">
