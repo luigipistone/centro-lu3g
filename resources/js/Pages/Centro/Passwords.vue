@@ -3,7 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { Copy, Eye, KeyRound, Plus, Search, ShieldAlert, Trash2, Users, Vault, X } from '@lucide/vue';
+import { Bold, Copy, Eye, Italic, KeyRound, List, ListOrdered, Plus, Quote, Search, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 const props = defineProps({
@@ -30,11 +30,27 @@ const deleteTarget = ref(null);
 const deleteText = ref('');
 const vaultEditor = ref(null);
 const groupEditor = ref(null);
+const activeClientId = ref('all');
+const noteEditor = ref(null);
+const generatorOpen = ref(false);
+const generator = ref({
+    length: 20,
+    uppercase: true,
+    lowercase: true,
+    numbers: true,
+    symbols: true,
+});
 
 const currentView = computed(() => props.view || 'items');
 const manageable = computed(() => props.canManage);
 const canCreateVaults = computed(() => props.canCreateVaults);
 const activeVaultId = ref('all');
+const navDescriptions = {
+    items: 'Credenziali salvate',
+    vaults: 'Spazi personali',
+    groups: 'Accessi condivisi',
+    compromised: 'Da controllare',
+};
 
 const itemForm = useForm(defaultItemForm());
 const vaultForm = useForm({ name: '', description: '', color: '#0B6EF3', visibility: 'personal', user_ids: [], group_ids: [] });
@@ -44,11 +60,12 @@ const visibleItems = computed(() => {
     const q = search.value.trim().toLowerCase();
     return (props.items || []).filter((item) => {
         const vaultMatch = activeVaultId.value === 'all' || item.password_vault_id === activeVaultId.value;
+        const clientMatch = activeClientId.value === 'all' || item.client_id === activeClientId.value;
         const textMatch = !q || [item.title, item.username, item.url, item.client_name, item.vault_name]
             .filter(Boolean)
             .some((value) => String(value).toLowerCase().includes(q));
 
-        return vaultMatch && textMatch;
+        return vaultMatch && clientMatch && textMatch;
     });
 });
 
@@ -84,6 +101,7 @@ function resetItemForm() {
 function openCreateItem() {
     resetItemForm();
     itemForm.password_vault_id = activeVaultId.value !== 'all' ? activeVaultId.value : (props.vaults?.[0]?.id || '');
+    if (noteEditor.value) noteEditor.value.innerHTML = '';
     drawerOpen.value = true;
 }
 
@@ -100,10 +118,14 @@ function openEditItem(item) {
     });
     itemForm.reset();
     drawerOpen.value = true;
+    setTimeout(() => {
+        if (noteEditor.value) noteEditor.value.innerHTML = item.notes || '';
+    }, 0);
 }
 
 function saveItem() {
     itemForm.title = itemForm.url || itemForm.username || 'Password';
+    itemForm.notes = noteEditor.value?.innerHTML || '';
     const options = {
         preserveScroll: true,
         onSuccess: () => {
@@ -117,6 +139,27 @@ function saveItem() {
     } else {
         itemForm.post(route('passwords.items.store'), options);
     }
+}
+
+function runNoteCommand(command, value = null) {
+    noteEditor.value?.focus();
+    document.execCommand(command, false, value);
+    itemForm.notes = noteEditor.value?.innerHTML || '';
+}
+
+function generatePassword() {
+    const sets = [
+        generator.value.uppercase ? 'ABCDEFGHJKLMNPQRSTUVWXYZ' : '',
+        generator.value.lowercase ? 'abcdefghijkmnopqrstuvwxyz' : '',
+        generator.value.numbers ? '23456789' : '',
+        generator.value.symbols ? '!?#$%&*-_' : '',
+    ].filter(Boolean);
+    const alphabet = sets.join('') || 'abcdefghijkmnopqrstuvwxyz23456789';
+    const length = Math.max(8, Math.min(64, Number(generator.value.length) || 20));
+    const bytes = new Uint32Array(length);
+    window.crypto.getRandomValues(bytes);
+
+    itemForm.password = Array.from(bytes).map((value) => alphabet[value % alphabet.length]).join('');
 }
 
 function openReveal(item) {
@@ -246,7 +289,7 @@ function userName(id) {
                     >
                         <span>
                             <span class="block text-sm font-semibold text-gray-900">{{ item.label }}</span>
-                            <span class="mt-1 block text-xs text-gray-500">Apri pagina</span>
+                            <span class="mt-1 block text-xs text-gray-500">{{ navDescriptions[item.view] }}</span>
                         </span>
                         <Vault v-if="item.view === 'vaults'" class="h-5 w-5 text-[hsl(var(--primary-app))]" :stroke-width="1.7" />
                         <Users v-else-if="item.view === 'groups'" class="h-5 w-5 text-[hsl(var(--primary-app))]" :stroke-width="1.7" />
@@ -258,17 +301,22 @@ function userName(id) {
                 <section v-if="currentView === 'items'" class="space-y-5">
                     <div class="surface p-4">
                         <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                            <div class="grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_240px]">
+                            <div class="grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_230px_230px]">
                                 <div class="relative">
-                                    <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" :stroke-width="1.7" />
-                                    <input v-model="search" class="form-control pl-9" placeholder="Cerca password" />
+                                    <Search class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" :stroke-width="1.7" />
+                                    <input v-model="search" class="form-control h-[38px] pl-10" placeholder="Cerca password" />
                                 </div>
                                 <AppSelect
                                     v-model="activeVaultId"
                                     :options="[{ value: 'all', label: 'Tutte le casseforti' }, ...vaults.map((vault) => ({ value: vault.id, label: vault.name }))]"
                                 />
+                                <AppSelect
+                                    v-model="activeClientId"
+                                    :options="[{ value: 'all', label: 'Tutti i clienti' }, ...clients.map((client) => ({ value: client.id, label: client.name }))]"
+                                    searchable
+                                />
                             </div>
-                            <button type="button" class="btn btn-primary" @click="openCreateItem">
+                            <button type="button" class="btn btn-primary h-[38px]" @click="openCreateItem">
                                 <Plus class="h-4 w-4" :stroke-width="1.7" />
                                 Password
                             </button>
@@ -428,7 +476,35 @@ function userName(id) {
                     </label>
                     <label class="space-y-1">
                         <span class="text-xs font-semibold uppercase text-gray-400">Password</span>
-                        <input v-model="itemForm.password" class="form-control" :placeholder="editingItem ? 'Lascia vuoto per non cambiarla' : ''" />
+                        <div class="flex gap-2">
+                            <input v-model="itemForm.password" class="form-control" :placeholder="editingItem ? 'Lascia vuoto per non cambiarla' : ''" />
+                            <button type="button" class="btn btn-outline h-[38px] shrink-0" @click="generatorOpen = !generatorOpen">Genera</button>
+                        </div>
+                        <div v-if="generatorOpen" class="rounded-[var(--radius)] bg-gray-50/80 p-3">
+                            <div class="flex items-center justify-between gap-3">
+                                <span class="text-sm font-semibold text-gray-800">Lunghezza</span>
+                                <input v-model.number="generator.length" type="number" min="8" max="64" class="form-control h-[34px] w-24" />
+                            </div>
+                            <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                                <label class="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                                    <input v-model="generator.uppercase" type="checkbox" class="rounded border-gray-300 text-[hsl(var(--primary-app))]" />
+                                    Maiuscole
+                                </label>
+                                <label class="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                                    <input v-model="generator.lowercase" type="checkbox" class="rounded border-gray-300 text-[hsl(var(--primary-app))]" />
+                                    Minuscole
+                                </label>
+                                <label class="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                                    <input v-model="generator.numbers" type="checkbox" class="rounded border-gray-300 text-[hsl(var(--primary-app))]" />
+                                    Numeri
+                                </label>
+                                <label class="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                                    <input v-model="generator.symbols" type="checkbox" class="rounded border-gray-300 text-[hsl(var(--primary-app))]" />
+                                    Simboli
+                                </label>
+                            </div>
+                            <button type="button" class="btn btn-outline mt-3 w-full justify-center" @click="generatePassword">Genera password</button>
+                        </div>
                     </label>
                     <label class="space-y-1">
                         <span class="text-xs font-semibold uppercase text-gray-400">Sito web</span>
@@ -436,12 +512,41 @@ function userName(id) {
                     </label>
                     <label class="space-y-1">
                         <span class="text-xs font-semibold uppercase text-gray-400">Cliente</span>
-                        <AppSelect v-model="itemForm.client_id" :options="[{ value: '', label: 'Nessuno' }, ...clients.map((client) => ({ value: client.id, label: client.name }))]" />
+                        <AppSelect v-model="itemForm.client_id" :options="[{ value: '', label: 'Nessuno' }, ...clients.map((client) => ({ value: client.id, label: client.name }))]" searchable />
                     </label>
-                    <label class="space-y-1">
+                    <div class="space-y-1">
                         <span class="text-xs font-semibold uppercase text-gray-400">Note</span>
-                        <textarea v-model="itemForm.notes" rows="6" class="form-control"></textarea>
-                    </label>
+                        <div class="overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white">
+                            <div class="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50/80 px-2 py-2">
+                                <button type="button" class="icon-btn h-8 w-8" title="Grassetto" @mousedown.prevent @click="runNoteCommand('bold')">
+                                    <Bold class="h-4 w-4" :stroke-width="1.8" />
+                                </button>
+                                <button type="button" class="icon-btn h-8 w-8" title="Corsivo" @mousedown.prevent @click="runNoteCommand('italic')">
+                                    <Italic class="h-4 w-4" :stroke-width="1.8" />
+                                </button>
+                                <button type="button" class="icon-btn h-8 w-8" title="Sottolineato" @mousedown.prevent @click="runNoteCommand('underline')">
+                                    <Underline class="h-4 w-4" :stroke-width="1.8" />
+                                </button>
+                                <span class="mx-1 h-5 w-px bg-gray-200"></span>
+                                <button type="button" class="icon-btn h-8 w-8" title="Elenco puntato" @mousedown.prevent @click="runNoteCommand('insertUnorderedList')">
+                                    <List class="h-4 w-4" :stroke-width="1.8" />
+                                </button>
+                                <button type="button" class="icon-btn h-8 w-8" title="Elenco numerato" @mousedown.prevent @click="runNoteCommand('insertOrderedList')">
+                                    <ListOrdered class="h-4 w-4" :stroke-width="1.8" />
+                                </button>
+                                <button type="button" class="icon-btn h-8 w-8" title="Citazione" @mousedown.prevent @click="runNoteCommand('formatBlock', 'blockquote')">
+                                    <Quote class="h-4 w-4" :stroke-width="1.8" />
+                                </button>
+                            </div>
+                            <div
+                                ref="noteEditor"
+                                contenteditable="true"
+                                class="min-h-40 px-4 py-3 text-sm leading-6 text-gray-800 outline-none empty:before:text-gray-400 empty:before:content-[attr(data-placeholder)] wysiwyg-content"
+                                data-placeholder="Scrivi note..."
+                                @input="itemForm.notes = noteEditor?.innerHTML || ''"
+                            ></div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="mt-6 flex justify-end gap-2">
