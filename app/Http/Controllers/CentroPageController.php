@@ -14,8 +14,10 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -908,7 +910,7 @@ class CentroPageController extends Controller
             'canCreateVaults' => ! $this->isGuest($request),
             'vaults' => $this->passwordVaultRows($request),
             'groups' => $this->passwordGroupRows($request),
-            'items' => $this->passwordItemRows($request),
+            'items' => $this->passwordItemRows($request, $view === 'compromised'),
             'users' => $this->userOptions(),
             'clients' => $this->isGuest($request)
                 ? DB::table('clients')->whereIn('id', $this->visibleClientIdsForUser($request->user()->id))->orderBy('name')->get(['id', 'name'])
@@ -1165,6 +1167,7 @@ class CentroPageController extends Controller
         $this->logPasswordAction($id, $request->user()->id, 'revealed', 'Password rivelata.');
 
         return response()->json([
+            'username' => $item->username ?? '',
             'password' => $item->encrypted_password ? Crypt::decryptString($item->encrypted_password) : '',
         ]);
     }
@@ -3266,7 +3269,7 @@ class CentroPageController extends Controller
         });
     }
 
-    private function passwordItemRows(Request $request)
+    private function passwordItemRows(Request $request, bool $withCompromiseCheck = false)
     {
         $items = $this->passwordItemsQuery($request)
             ->leftJoin('password_vaults', 'password_vaults.id', '=', 'password_items.password_vault_id')
@@ -3304,8 +3307,9 @@ class CentroPageController extends Controller
             ])
             ->groupBy('password_item_id');
 
-        return $items->map(function ($item) use ($request, $userShares, $groupShares, $audit) {
+        return $items->map(function ($item) use ($request, $userShares, $groupShares, $audit, $withCompromiseCheck) {
             $item->has_password = filled($item->encrypted_password);
+            $encryptedPassword = $item->encrypted_password;
             unset($item->encrypted_password);
             $item->tags = $item->tags ? json_decode($item->tags, true) : [];
             $item->custom_fields = $item->custom_fields ? json_decode($item->custom_fields, true) : [];
@@ -3315,7 +3319,7 @@ class CentroPageController extends Controller
                 ?: (($groupShares[$item->id] ?? collect())->first()?->permission ?: 'view');
             $item->can_edit = $this->canEditPasswordItem($request, $item);
             $item->can_delete = $this->canManagePasswords($request);
-            $item->risk_flags = $this->passwordRiskFlags($item);
+            $item->risk_flags = $this->passwordRiskFlags($item, $encryptedPassword, $withCompromiseCheck);
             $item->audit = ($audit[$item->id] ?? collect())->take(8)->values();
 
             return $item;
@@ -3377,20 +3381,76 @@ class CentroPageController extends Controller
             && ($vault->visibility ?? 'personal') === 'shared';
     }
 
-    private function passwordRiskFlags(object $item): array
+    private function passwordRiskFlags(object $item, ?string $encryptedPassword = null, bool $withCompromiseCheck = false): array
     {
         $flags = [];
         if (! $item->has_password) {
             $flags[] = 'Senza password salvata';
         }
-        if ($item->expires_at && now()->diffInDays($item->expires_at, false) <= 30) {
-            $flags[] = 'Scadenza vicina';
-        }
-        if (blank($item->url)) {
-            $flags[] = 'Sito web mancante';
+        if ($withCompromiseCheck && filled($encryptedPassword)) {
+            $count = $this->passwordCompromiseCount($item, $encryptedPassword);
+            if ($count > 0) {
+                $flags[] = "Presente in {$count} violazioni note";
+            }
         }
 
         return $flags;
+    }
+
+    private function passwordCompromiseCount(object $item, string $encryptedPassword): int
+    {
+        $hasCacheColumns = Schema::hasColumn('password_items', 'compromised_count')
+            && Schema::hasColumn('password_items', 'compromised_checked_at');
+
+        if (
+            $hasCacheColumns
+            && $item->compromised_checked_at
+            && \Carbon\Carbon::parse($item->compromised_checked_at)->greaterThan(now()->subDays(7))
+        ) {
+            return max(0, (int) ($item->compromised_count ?? 0));
+        }
+
+        try {
+            $password = Crypt::decryptString($encryptedPassword);
+            if ($password === '') {
+                return 0;
+            }
+
+            $hash = strtoupper(sha1($password));
+            $prefix = substr($hash, 0, 5);
+            $suffix = substr($hash, 5);
+            $response = Http::timeout(6)
+                ->withHeaders(['Add-Padding' => 'true'])
+                ->get("https://api.pwnedpasswords.com/range/{$prefix}");
+
+            if (! $response->ok()) {
+                return max(0, (int) ($item->compromised_count ?? 0));
+            }
+
+            $count = collect(preg_split('/\r\n|\r|\n/', trim($response->body())) ?: [])
+                ->mapWithKeys(function ($line) {
+                    [$hashSuffix, $count] = array_pad(explode(':', $line, 2), 2, 0);
+
+                    return [strtoupper($hashSuffix) => (int) $count];
+                })
+                ->get($suffix, 0);
+
+            if ($hasCacheColumns) {
+                DB::table('password_items')->where('id', $item->id)->update([
+                    'compromised_count' => $count,
+                    'compromised_checked_at' => now(),
+                ]);
+            }
+
+            return max(0, (int) $count);
+        } catch (\Throwable $exception) {
+            Log::warning('Password compromise check failed', [
+                'password_item_id' => $item->id ?? null,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return max(0, (int) ($item->compromised_count ?? 0));
+        }
     }
 
     private function canViewPasswordItem(Request $request, object $item): bool
@@ -3490,6 +3550,12 @@ class CentroPageController extends Controller
 
         if (! $updating || filled($payload['password'] ?? null)) {
             $data['encrypted_password'] = Crypt::encryptString($payload['password'] ?? '');
+            if (Schema::hasColumn('password_items', 'compromised_count')) {
+                $data['compromised_count'] = 0;
+            }
+            if (Schema::hasColumn('password_items', 'compromised_checked_at')) {
+                $data['compromised_checked_at'] = null;
+            }
         }
 
         return [...$data, ...$extra];

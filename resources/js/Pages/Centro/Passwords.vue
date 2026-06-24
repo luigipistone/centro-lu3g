@@ -26,8 +26,11 @@ const drawerOpen = ref(false);
 const editingItem = ref(null);
 const revealItem = ref(null);
 const revealedPassword = ref('');
+const revealedUsername = ref('');
 const accountPassword = ref('');
 const revealError = ref('');
+const revealMode = ref('view');
+const revealCopied = ref('');
 const deleteTarget = ref(null);
 const deleteText = ref('');
 const vaultEditor = ref(null);
@@ -36,6 +39,11 @@ const activeClientId = ref('all');
 const noteEditor = ref(null);
 const generatorOpen = ref(false);
 const generatedPassword = ref('');
+const editPasswordLoaded = ref(false);
+const editPasswordVisible = ref(false);
+const editUnlockOpen = ref(false);
+const editAccountPassword = ref('');
+const editPasswordError = ref('');
 const generator = ref({
     length: 20,
     uppercase: true,
@@ -147,6 +155,11 @@ function resetItemForm() {
     itemForm.clearErrors();
     editingItem.value = null;
     generatedPassword.value = '';
+    editPasswordLoaded.value = false;
+    editPasswordVisible.value = false;
+    editUnlockOpen.value = false;
+    editAccountPassword.value = '';
+    editPasswordError.value = '';
 }
 
 function openCreateItem() {
@@ -168,10 +181,39 @@ function openEditItem(item) {
         client_id: item.client_id || '',
     });
     itemForm.reset();
+    itemForm.has_password = item.has_password;
+    editPasswordLoaded.value = false;
+    editPasswordVisible.value = false;
+    editUnlockOpen.value = false;
+    editAccountPassword.value = '';
+    editPasswordError.value = '';
     drawerOpen.value = true;
     setTimeout(() => {
         if (noteEditor.value) noteEditor.value.innerHTML = item.notes || '';
     }, 0);
+}
+
+function displayPasswordInputValue() {
+    if (editingItem.value && !editPasswordLoaded.value && itemForm.has_password !== false) {
+        return '••••••••••••';
+    }
+
+    return itemForm.password;
+}
+
+function handlePasswordFieldFocus(event) {
+    if (editingItem.value && !editPasswordLoaded.value) {
+        itemForm.password = '';
+        editPasswordLoaded.value = true;
+        event.target.value = '';
+    }
+}
+
+function handlePasswordFieldInput(event) {
+    if (editingItem.value && !editPasswordLoaded.value) {
+        editPasswordLoaded.value = true;
+    }
+    itemForm.password = event.target.value;
 }
 
 function saveItem() {
@@ -237,11 +279,14 @@ watch(generator, () => {
     if (generatorOpen.value) refreshGeneratedPassword();
 }, { deep: true });
 
-function openReveal(item) {
+function openReveal(item, mode = 'view') {
     revealItem.value = item;
+    revealMode.value = mode;
     revealedPassword.value = '';
+    revealedUsername.value = '';
     accountPassword.value = '';
     revealError.value = '';
+    revealCopied.value = '';
 }
 
 async function revealPassword() {
@@ -250,6 +295,11 @@ async function revealPassword() {
             account_password: accountPassword.value,
         });
         revealedPassword.value = response.data.password || '';
+        revealedUsername.value = response.data.username || revealItem.value?.username || '';
+        if (revealMode.value === 'copy-password') {
+            await navigator.clipboard?.writeText(revealedPassword.value);
+            revealCopied.value = 'Password copiata.';
+        }
     } catch (error) {
         revealError.value = 'Password account non corretta o accesso non consentito.';
     }
@@ -258,6 +308,31 @@ async function revealPassword() {
 async function copyPassword() {
     if (revealedPassword.value) {
         await navigator.clipboard?.writeText(revealedPassword.value);
+        revealCopied.value = 'Password copiata.';
+    }
+}
+
+async function copyUsername() {
+    if (revealedUsername.value) {
+        await navigator.clipboard?.writeText(revealedUsername.value);
+        revealCopied.value = 'Nome utente copiato.';
+    }
+}
+
+async function unlockEditingPassword() {
+    if (!editingItem.value) return;
+    editPasswordError.value = '';
+    try {
+        const response = await window.axios.post(route('passwords.items.reveal', editingItem.value.id), {
+            account_password: editAccountPassword.value,
+        });
+        itemForm.password = response.data.password || '';
+        editPasswordLoaded.value = true;
+        editPasswordVisible.value = false;
+        editUnlockOpen.value = false;
+        editAccountPassword.value = '';
+    } catch (error) {
+        editPasswordError.value = 'Password account non corretta o accesso non consentito.';
     }
 }
 
@@ -427,34 +502,37 @@ if (props.selectedGroup) {
                     </div>
 
                     <div v-if="visibleItems.length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        <article v-for="item in visibleItems" :key="item.id" class="surface p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]">
+                        <article v-for="item in visibleItems" :key="item.id" class="surface group/password-card cursor-pointer p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]" @click="openReveal(item)">
                             <div class="flex items-start justify-between gap-3">
                                 <div class="flex min-w-0 items-center gap-3">
                                     <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]">
                                         <KeyRound class="h-5 w-5" :stroke-width="1.7" />
                                     </span>
                                     <div class="min-w-0">
-                                        <button type="button" class="truncate text-left text-sm font-semibold text-gray-900 hover:text-[hsl(var(--primary-app))]" @click="openReveal(item)">
+                                        <button type="button" class="truncate text-left text-sm font-semibold text-gray-900 hover:text-[hsl(var(--primary-app))]" @click.stop="openReveal(item)">
                                             {{ item.url || item.title }}
                                         </button>
                                         <p class="truncate text-xs text-gray-500">{{ item.username || 'Nessun nome utente' }}</p>
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-1">
-                                    <button v-if="item.can_edit" type="button" class="icon-btn h-8 w-8" title="Modifica" @click="openEditItem(item)">
+                                    <button type="button" class="icon-btn h-8 w-8" title="Copia password" @click.stop="openReveal(item, 'copy-password')">
+                                        <Copy class="h-4 w-4" :stroke-width="1.7" />
+                                    </button>
+                                    <button v-if="item.can_edit" type="button" class="icon-btn h-8 w-8" title="Modifica" @click.stop="openEditItem(item)">
                                         <Pencil class="h-4 w-4" :stroke-width="1.7" />
                                     </button>
-                                    <button type="button" class="icon-btn h-8 w-8" title="Mostra" @click="openReveal(item)">
+                                    <button type="button" class="icon-btn h-8 w-8" title="Mostra" @click.stop="openReveal(item)">
                                         <Eye class="h-4 w-4" :stroke-width="1.7" />
                                     </button>
-                                    <button v-if="item.can_delete" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina" @click="openDelete(item, 'item')">
+                                    <button v-if="item.can_delete" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina" @click.stop="openDelete(item, 'item')">
                                         <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                     </button>
                                 </div>
                             </div>
                             <div class="mt-4 flex flex-wrap gap-2">
-                                <span v-if="item.vault_name" class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">{{ item.vault_name }}</span>
-                                <span v-if="item.client_name" class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">{{ item.client_name }}</span>
+                                <span v-if="item.vault_name" class="rounded-full border px-2 py-1 text-xs font-semibold" :style="vaultChipStyle({ color: item.vault_color || '#0B6EF3' })">{{ item.vault_name }}</span>
+                                <span v-if="item.client_name" class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600 ring-1 ring-inset ring-gray-200">{{ item.client_name }}</span>
                             </div>
                         </article>
                     </div>
@@ -466,7 +544,7 @@ if (props.selectedGroup) {
                         <article
                             v-for="vault in vaults"
                             :key="vault.id"
-                            :class="['content-card project-preview-card group relative flex min-h-[150px] flex-col border p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg', vault.can_edit ? 'cursor-pointer' : '']"
+                            :class="['content-card project-preview-card group relative flex min-h-[190px] flex-col border p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg', vault.can_edit ? 'cursor-pointer' : '']"
                             :style="vaultCardStyle(vault)"
                         >
                             <Link v-if="vault.can_edit" :href="route('passwords.vaults.show', vault.id)" class="absolute inset-0 z-0 rounded-[inherit]" :aria-label="`Apri cassaforte ${vault.name}`" />
@@ -619,7 +697,7 @@ if (props.selectedGroup) {
                         <article
                             v-for="group in groups"
                             :key="group.id"
-                            :class="['surface relative min-h-[130px] p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]', manageable ? 'cursor-pointer' : '']"
+                            :class="['surface relative min-h-[190px] p-5 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]', manageable ? 'cursor-pointer' : '']"
                         >
                             <Link v-if="manageable" :href="route('passwords.groups.show', group.id)" class="absolute inset-0 z-0 rounded-[inherit]" :aria-label="`Apri gruppo ${group.name}`" />
                             <div class="pointer-events-none relative z-10 flex items-start justify-between gap-3">
@@ -726,8 +804,31 @@ if (props.selectedGroup) {
                     <label class="block">
                         <span class="block text-sm font-medium text-gray-700">Password</span>
                         <div class="flex gap-2">
-                            <input v-model="itemForm.password" class="form-control" name="centro_password_item_secret" autocomplete="new-password" :placeholder="editingItem ? 'Lascia vuoto per non cambiarla' : ''" />
+                            <input
+                                :value="displayPasswordInputValue()"
+                                :type="editPasswordVisible ? 'text' : 'password'"
+                                class="form-control"
+                                name="centro_password_item_secret"
+                                autocomplete="new-password"
+                                :placeholder="editingItem ? 'Password salvata' : ''"
+                                @focus="handlePasswordFieldFocus"
+                                @input="handlePasswordFieldInput"
+                            />
+                            <button v-if="editingItem" type="button" class="btn btn-outline h-[38px] shrink-0 px-3" @click="editPasswordVisible = !editPasswordVisible">
+                                {{ editPasswordVisible ? 'Nascondi' : 'Vedi' }}
+                            </button>
+                            <button v-if="editingItem && !editPasswordLoaded" type="button" class="btn btn-outline h-[38px] shrink-0 px-3" @click="editUnlockOpen = !editUnlockOpen">
+                                Sblocca
+                            </button>
                             <button type="button" class="btn btn-outline h-[38px] shrink-0" @click="openGenerator">Genera</button>
+                        </div>
+                        <div v-if="editUnlockOpen" class="mt-3 rounded-[var(--radius-sm)] bg-gray-50/80 p-3">
+                            <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Conferma account</p>
+                            <div class="mt-2 flex gap-2">
+                                <input v-model="editAccountPassword" type="password" class="form-control" placeholder="Password account" autocomplete="current-password" @keydown.enter.prevent="unlockEditingPassword" />
+                                <button type="button" class="btn btn-primary shrink-0" @click="unlockEditingPassword">Carica</button>
+                            </div>
+                            <p v-if="editPasswordError" class="mt-2 text-sm text-red-600">{{ editPasswordError }}</p>
                         </div>
                         <div v-if="generatorOpen" class="rounded-[var(--radius)] bg-gray-50/80 p-4">
                             <div class="mb-4 flex items-center gap-2 rounded-[var(--radius-sm)] border border-gray-200 bg-white px-3 py-2">
@@ -831,24 +932,48 @@ if (props.selectedGroup) {
         </div>
 
         <div v-if="revealItem" class="fixed inset-0 z-[5200] flex items-center justify-center bg-black/10 px-4" @click.self="revealItem = null">
-            <section class="w-full max-w-md rounded-[var(--radius)] bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.20)]">
+            <section class="w-full max-w-lg rounded-[var(--radius)] bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.20)]">
                 <div class="flex items-center justify-between gap-3">
-                    <h3 class="text-base font-semibold text-gray-900">Mostra password</h3>
+                    <h3 class="text-base font-semibold text-gray-900">{{ revealMode === 'copy-password' ? 'Copia password' : 'Dettaglio password' }}</h3>
                     <button type="button" class="icon-btn" @click="revealItem = null"><X class="h-4 w-4" /></button>
                 </div>
-                <p class="mt-2 text-sm text-gray-500">Conferma la password del tuo account.</p>
-                <input v-model="accountPassword" type="password" name="account_password" autocomplete="current-password" class="form-control mt-4" placeholder="Password account" @keydown.enter.prevent="revealPassword" />
-                <button type="button" class="btn btn-primary mt-3 w-full justify-center" @click="revealPassword">
-                    <Eye class="h-4 w-4" :stroke-width="1.7" />
-                    Mostra
-                </button>
-                <p v-if="revealError" class="mt-3 text-sm text-red-600">{{ revealError }}</p>
-                <div v-if="revealedPassword" class="mt-4 rounded-[var(--radius)] bg-gray-50 p-3">
-                    <p class="break-all font-mono text-sm text-gray-900">{{ revealedPassword }}</p>
-                    <button type="button" class="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-[hsl(var(--primary-app))]" @click="copyPassword">
-                        <Copy class="h-4 w-4" :stroke-width="1.7" />
-                        Copia
+                <div class="mt-4 rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/80 p-3">
+                    <p class="truncate text-sm font-semibold text-gray-900">{{ revealItem.url || revealItem.title }}</p>
+                    <p v-if="revealItem.vault_name || revealItem.client_name" class="mt-1 text-xs text-gray-500">
+                        <span v-if="revealItem.vault_name">{{ revealItem.vault_name }}</span>
+                        <span v-if="revealItem.vault_name && revealItem.client_name"> · </span>
+                        <span v-if="revealItem.client_name">{{ revealItem.client_name }}</span>
+                    </p>
+                </div>
+                <div v-if="!revealedPassword" class="mt-4">
+                    <p class="text-sm text-gray-500">Conferma la password del tuo account.</p>
+                    <input v-model="accountPassword" type="password" name="account_password" autocomplete="current-password" class="form-control mt-3" placeholder="Password account" @keydown.enter.prevent="revealPassword" />
+                    <button type="button" class="btn btn-primary mt-3 w-full justify-center" @click="revealPassword">
+                        <Eye class="h-4 w-4" :stroke-width="1.7" />
+                        {{ revealMode === 'copy-password' ? 'Sblocca e copia' : 'Mostra' }}
                     </button>
+                </div>
+                <p v-if="revealError" class="mt-3 text-sm text-red-600">{{ revealError }}</p>
+                <p v-if="revealCopied" class="mt-3 text-sm font-semibold text-[hsl(var(--primary-app))]">{{ revealCopied }}</p>
+                <div v-if="revealedPassword" class="mt-4 space-y-3">
+                    <div class="password-reveal-row group/reveal-field">
+                        <span class="text-xs font-semibold uppercase tracking-wide text-gray-400">Nome utente</span>
+                        <div class="mt-1 flex items-center gap-2">
+                            <p class="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{{ revealedUsername || 'Non inserito' }}</p>
+                            <button v-if="revealedUsername" type="button" class="field-copy-button" title="Copia nome utente" @click="copyUsername">
+                                <Copy class="h-4 w-4" :stroke-width="1.7" />
+                            </button>
+                        </div>
+                    </div>
+                    <div class="password-reveal-row group/reveal-field">
+                        <span class="text-xs font-semibold uppercase tracking-wide text-gray-400">Password</span>
+                        <div class="mt-1 flex items-center gap-2">
+                            <p class="min-w-0 flex-1 break-all font-mono text-sm text-gray-900">{{ revealedPassword }}</p>
+                            <button type="button" class="field-copy-button" title="Copia password" @click="copyPassword">
+                                <Copy class="h-4 w-4" :stroke-width="1.7" />
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </section>
         </div>
@@ -891,6 +1016,36 @@ if (props.selectedGroup) {
 .vault-action-button:hover {
     background: rgba(255, 255, 255, 0.18);
     opacity: 1;
+    transform: translateY(-1px);
+}
+
+.password-reveal-row {
+    border: 1px solid rgb(229 231 235 / 0.9);
+    border-radius: var(--radius-sm);
+    background: rgb(249 250 251 / 0.85);
+    padding: 0.85rem 0.95rem;
+}
+
+.field-copy-button {
+    display: inline-flex;
+    height: 2rem;
+    width: 2rem;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    color: hsl(var(--primary-app));
+    opacity: 0;
+    transition: opacity 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
+}
+
+.password-reveal-row:hover .field-copy-button,
+.field-copy-button:focus-visible {
+    opacity: 1;
+}
+
+.field-copy-button:hover {
+    background: hsl(var(--primary-app) / 0.10);
     transform: translateY(-1px);
 }
 </style>
