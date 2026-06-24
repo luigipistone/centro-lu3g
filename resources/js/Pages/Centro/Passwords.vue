@@ -3,7 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, Bold, Copy, Italic, KeyRound, List, ListOrdered, Pencil, Plus, Quote, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
+import { ArrowLeft, Bold, Building2, Copy, Italic, KeyRound, List, ListOrdered, Pencil, Plus, Quote, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -519,16 +519,22 @@ if (props.selectedGroup) {
                                 </div>
                             </div>
                             <div class="mt-4 flex flex-wrap gap-2">
-                                <span v-if="item.vault_name" class="rounded-full border px-2 py-1 text-xs font-semibold" :style="vaultChipStyle({ color: item.vault_color || '#0B6EF3' })">{{ item.vault_name }}</span>
-                                <span v-if="item.client_name" class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600 ring-1 ring-inset ring-gray-200">{{ item.client_name }}</span>
+                                <span v-if="item.vault_name" class="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs font-semibold" :style="vaultChipStyle({ color: item.vault_color || '#0B6EF3' })">
+                                    <Vault class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                    {{ item.vault_name }}
+                                </span>
+                                <span v-if="item.client_name" class="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600 ring-1 ring-inset ring-gray-200">
+                                    <Building2 class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                    {{ item.client_name }}
+                                </span>
                             </div>
                         </article>
                     </div>
                     <div v-else class="surface px-6 py-12 text-center text-sm text-gray-500">Nessuna password disponibile.</div>
                 </section>
 
-                <section v-if="currentView === 'vaults'" class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-                    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <section v-if="currentView === 'vaults'" class="space-y-6">
+                    <div class="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                         <article
                             v-for="vault in vaults"
                             :key="vault.id"
@@ -558,7 +564,7 @@ if (props.selectedGroup) {
                         </article>
                     </div>
 
-                    <aside v-if="canCreateVaults" class="surface p-5">
+                    <aside v-if="canCreateVaults" class="surface max-w-3xl p-5">
                         <h3 class="text-base font-semibold text-gray-900">Nuova cassaforte</h3>
                         <div class="mt-4 space-y-3">
                             <input v-model="vaultForm.name" class="form-control" placeholder="Nome cassaforte" />
@@ -680,8 +686,8 @@ if (props.selectedGroup) {
                     </div>
                 </section>
 
-                <section v-if="currentView === 'groups'" class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-                    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <section v-if="currentView === 'groups'" class="space-y-6">
+                    <div class="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                         <article
                             v-for="group in groups"
                             :key="group.id"
@@ -706,7 +712,7 @@ if (props.selectedGroup) {
                         </article>
                     </div>
 
-                    <aside v-if="manageable" class="surface p-5">
+                    <aside v-if="manageable" class="surface max-w-3xl p-5">
                         <h3 class="text-base font-semibold text-gray-900">{{ groupEditor ? 'Modifica gruppo' : 'Nuovo gruppo' }}</h3>
                         <div class="mt-4 space-y-3">
                             <input v-model="groupForm.name" class="form-control" placeholder="Nome gruppo" />
@@ -909,8 +915,8 @@ if (props.selectedGroup) {
             </section>
         </div>
 
-        <div v-if="revealItem" class="fixed inset-0 z-[5200] flex items-center justify-center bg-black/10 px-4" @click.self="revealItem = null">
-            <section class="w-full max-w-lg rounded-[var(--radius)] bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.20)]">
+        <div v-if="revealItem" class="fixed left-0 top-0 z-[5200] grid h-dvh w-dvw place-items-center bg-black/10 px-4" @click.self="revealItem = null">
+            <section class="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-[var(--radius)] bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.20)]">
                 <div class="flex items-center justify-between gap-3">
                     <h3 class="text-base font-semibold text-gray-900">{{ revealMode === 'copy-password' ? 'Copia password' : 'Dettaglio password' }}</h3>
                     <button type="button" class="icon-btn" @click="revealItem = null"><X class="h-4 w-4" /></button>
