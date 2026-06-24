@@ -3,7 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { Bold, Copy, Eye, Italic, KeyRound, List, ListOrdered, Plus, Quote, Search, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
+import { Bold, Copy, Eye, Italic, KeyRound, List, ListOrdered, Plus, Quote, Settings2, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 const props = defineProps({
@@ -33,6 +33,7 @@ const groupEditor = ref(null);
 const activeClientId = ref('all');
 const noteEditor = ref(null);
 const generatorOpen = ref(false);
+const accessSettingsOpen = ref(false);
 const generator = ref({
     length: 20,
     uppercase: true,
@@ -70,6 +71,14 @@ const visibleItems = computed(() => {
 });
 
 const compromisedItems = computed(() => (props.items || []).filter((item) => item.risk_flags?.length));
+const selectedVaultName = computed(() => props.vaults?.find((vault) => String(vault.id) === String(itemForm.password_vault_id))?.name || 'Nessuna cassaforte');
+const selectedGroupNames = computed(() => (props.groups || [])
+    .filter((group) => itemForm.group_ids.includes(group.id))
+    .map((group) => group.name));
+const accessSummary = computed(() => {
+    const groups = selectedGroupNames.value.length ? selectedGroupNames.value.join(', ') : 'Nessun gruppo';
+    return `${selectedVaultName.value} · ${groups}`;
+});
 
 function defaultItemForm() {
     return {
@@ -96,6 +105,7 @@ function resetItemForm() {
     itemForm.reset();
     itemForm.clearErrors();
     editingItem.value = null;
+    accessSettingsOpen.value = false;
 }
 
 function openCreateItem() {
@@ -115,6 +125,7 @@ function openEditItem(item) {
         url: item.url || '',
         notes: item.notes || '',
         client_id: item.client_id || '',
+        group_ids: item.group_ids || [],
     });
     itemForm.reset();
     drawerOpen.value = true;
@@ -160,6 +171,13 @@ function generatePassword() {
     window.crypto.getRandomValues(bytes);
 
     itemForm.password = Array.from(bytes).map((value) => alphabet[value % alphabet.length]).join('');
+}
+
+function toggleItemGroup(groupId) {
+    const current = Array.isArray(itemForm.group_ids) ? itemForm.group_ids : [];
+    itemForm.group_ids = current.includes(groupId)
+        ? current.filter((id) => id !== groupId)
+        : [...current, groupId];
 }
 
 function openReveal(item) {
@@ -301,17 +319,16 @@ function userName(id) {
                 <section v-if="currentView === 'items'" class="space-y-5">
                     <div class="surface p-4">
                         <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                            <div class="grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_230px_230px]">
-                                <div class="relative">
-                                    <Search class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" :stroke-width="1.7" />
-                                    <input v-model="search" class="form-control h-[38px] pl-10" placeholder="Cerca password" />
-                                </div>
+                            <div class="grid flex-1 items-center gap-3 md:grid-cols-[minmax(0,1fr)_230px_230px]">
+                                <input v-model="search" class="form-control h-[38px]" placeholder="Cerca password" />
                                 <AppSelect
                                     v-model="activeVaultId"
+                                    class="password-filter-control"
                                     :options="[{ value: 'all', label: 'Tutte le casseforti' }, ...vaults.map((vault) => ({ value: vault.id, label: vault.name }))]"
                                 />
                                 <AppSelect
                                     v-model="activeClientId"
+                                    class="password-filter-control"
                                     :options="[{ value: 'all', label: 'Tutti i clienti' }, ...clients.map((client) => ({ value: client.id, label: client.name }))]"
                                     searchable
                                 />
@@ -481,9 +498,19 @@ function userName(id) {
                             <button type="button" class="btn btn-outline h-[38px] shrink-0" @click="generatorOpen = !generatorOpen">Genera</button>
                         </div>
                         <div v-if="generatorOpen" class="rounded-[var(--radius)] bg-gray-50/80 p-3">
-                            <div class="flex items-center justify-between gap-3">
-                                <span class="text-sm font-semibold text-gray-800">Lunghezza</span>
-                                <input v-model.number="generator.length" type="number" min="8" max="64" class="form-control h-[34px] w-24" />
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between gap-3">
+                                    <span class="text-sm font-semibold text-gray-800">Lunghezza</span>
+                                    <span class="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-600 shadow-sm">{{ generator.length }} caratteri</span>
+                                </div>
+                                <input
+                                    v-model.number="generator.length"
+                                    type="range"
+                                    min="8"
+                                    max="64"
+                                    step="1"
+                                    class="password-length-slider w-full"
+                                />
                             </div>
                             <div class="mt-3 grid gap-2 sm:grid-cols-2">
                                 <label class="flex items-center gap-2 text-sm font-semibold text-gray-700">
@@ -506,6 +533,50 @@ function userName(id) {
                             <button type="button" class="btn btn-outline mt-3 w-full justify-center" @click="generatePassword">Genera password</button>
                         </div>
                     </label>
+                    <div class="space-y-1">
+                        <span class="text-xs font-semibold uppercase text-gray-400">Cassaforte e gruppi</span>
+                        <button
+                            type="button"
+                            class="form-control flex h-[42px] items-center justify-between gap-3 text-left"
+                            @click="accessSettingsOpen = !accessSettingsOpen"
+                        >
+                            <span class="flex min-w-0 items-center gap-2">
+                                <Settings2 class="h-4 w-4 shrink-0 text-[hsl(var(--primary-app))]" :stroke-width="1.8" />
+                                <span class="truncate text-sm text-gray-700">{{ accessSummary }}</span>
+                            </span>
+                            <span class="text-xs font-semibold text-[hsl(var(--primary-app))]">{{ accessSettingsOpen ? 'Chiudi' : 'Scegli' }}</span>
+                        </button>
+                        <div v-if="accessSettingsOpen" class="rounded-[var(--radius)] bg-gray-50/80 p-3">
+                            <div class="space-y-1">
+                                <span class="text-xs font-semibold uppercase text-gray-400">Cassaforte</span>
+                                <AppSelect
+                                    v-model="itemForm.password_vault_id"
+                                    :options="vaults.map((vault) => ({ value: vault.id, label: vault.name }))"
+                                    searchable
+                                />
+                            </div>
+                            <div v-if="manageable && groups.length" class="mt-3 space-y-2">
+                                <span class="text-xs font-semibold uppercase text-gray-400">Gruppi</span>
+                                <div class="flex flex-wrap gap-2">
+                                    <button
+                                        v-for="group in groups"
+                                        :key="group.id"
+                                        type="button"
+                                        :class="[
+                                            'rounded-full border px-3 py-1.5 text-xs font-semibold transition',
+                                            itemForm.group_ids.includes(group.id)
+                                                ? 'border-[hsl(var(--primary-app))] bg-[hsl(var(--primary-app)/0.12)] text-[hsl(var(--primary-app-dark))]'
+                                                : 'border-gray-200 bg-white text-gray-600 hover:border-[hsl(var(--primary-app)/0.35)] hover:text-gray-900',
+                                        ]"
+                                        @click="toggleItemGroup(group.id)"
+                                    >
+                                        {{ group.name }}
+                                    </button>
+                                </div>
+                            </div>
+                            <p v-else-if="manageable" class="mt-3 text-xs font-medium text-gray-500">Nessun gruppo disponibile.</p>
+                        </div>
+                    </div>
                     <label class="space-y-1">
                         <span class="text-xs font-semibold uppercase text-gray-400">Sito web</span>
                         <input v-model="itemForm.url" class="form-control" />
@@ -592,3 +663,15 @@ function userName(id) {
         </div>
     </AuthenticatedLayout>
 </template>
+
+<style scoped>
+.password-filter-control :deep(.form-control) {
+    height: 38px;
+    min-height: 38px;
+}
+
+.password-length-slider {
+    accent-color: hsl(var(--primary-app));
+    cursor: pointer;
+}
+</style>
