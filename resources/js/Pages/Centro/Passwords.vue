@@ -4,7 +4,7 @@ import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { Bold, Copy, Eye, Italic, KeyRound, List, ListOrdered, Plus, Quote, Settings2, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
     view: String,
@@ -34,6 +34,7 @@ const activeClientId = ref('all');
 const noteEditor = ref(null);
 const generatorOpen = ref(false);
 const accessSettingsOpen = ref(false);
+const generatedPassword = ref('');
 const generator = ref({
     length: 20,
     uppercase: true,
@@ -71,14 +72,10 @@ const visibleItems = computed(() => {
 });
 
 const compromisedItems = computed(() => (props.items || []).filter((item) => item.risk_flags?.length));
-const selectedVaultName = computed(() => props.vaults?.find((vault) => String(vault.id) === String(itemForm.password_vault_id))?.name || 'Nessuna cassaforte');
 const selectedGroupNames = computed(() => (props.groups || [])
     .filter((group) => itemForm.group_ids.includes(group.id))
     .map((group) => group.name));
-const accessSummary = computed(() => {
-    const groups = selectedGroupNames.value.length ? selectedGroupNames.value.join(', ') : 'Nessun gruppo';
-    return `${selectedVaultName.value} · ${groups}`;
-});
+const groupsSummary = computed(() => selectedGroupNames.value.length ? selectedGroupNames.value.join(', ') : 'Nessun gruppo');
 
 function defaultItemForm() {
     return {
@@ -106,6 +103,7 @@ function resetItemForm() {
     itemForm.clearErrors();
     editingItem.value = null;
     accessSettingsOpen.value = false;
+    generatedPassword.value = '';
 }
 
 function openCreateItem() {
@@ -158,7 +156,7 @@ function runNoteCommand(command, value = null) {
     itemForm.notes = noteEditor.value?.innerHTML || '';
 }
 
-function generatePassword() {
+function makeGeneratedPassword() {
     const sets = [
         generator.value.uppercase ? 'ABCDEFGHJKLMNPQRSTUVWXYZ' : '',
         generator.value.lowercase ? 'abcdefghijkmnopqrstuvwxyz' : '',
@@ -170,7 +168,21 @@ function generatePassword() {
     const bytes = new Uint32Array(length);
     window.crypto.getRandomValues(bytes);
 
-    itemForm.password = Array.from(bytes).map((value) => alphabet[value % alphabet.length]).join('');
+    return Array.from(bytes).map((value) => alphabet[value % alphabet.length]).join('');
+}
+
+function refreshGeneratedPassword() {
+    generatedPassword.value = makeGeneratedPassword();
+}
+
+function openGenerator() {
+    generatorOpen.value = !generatorOpen.value;
+    if (generatorOpen.value) refreshGeneratedPassword();
+}
+
+function useGeneratedPassword() {
+    if (!generatedPassword.value) refreshGeneratedPassword();
+    itemForm.password = generatedPassword.value;
 }
 
 function toggleItemGroup(groupId) {
@@ -179,6 +191,10 @@ function toggleItemGroup(groupId) {
         ? current.filter((id) => id !== groupId)
         : [...current, groupId];
 }
+
+watch(generator, () => {
+    if (generatorOpen.value) refreshGeneratedPassword();
+}, { deep: true });
 
 function openReveal(item) {
     revealItem.value = item;
@@ -480,24 +496,28 @@ function userName(id) {
         </div>
 
         <div v-if="drawerOpen" class="fixed inset-0 z-[5000] flex justify-end bg-black/10" @click.self="drawerOpen = false">
-            <section class="h-full w-full max-w-xl overflow-y-auto rounded-l-[var(--radius)] bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.22)] transition">
+            <section class="h-full w-full max-w-xl overflow-y-auto rounded-l-[var(--radius)] bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.22)] transition">
                 <div class="flex items-center justify-between gap-3">
                     <h3 class="text-lg font-semibold text-gray-900">{{ editingItem ? 'Modifica password' : 'Nuova password' }}</h3>
                     <button type="button" class="icon-btn" @click="drawerOpen = false"><X class="h-4 w-4" /></button>
                 </div>
 
-                <div class="mt-5 space-y-4">
-                    <label class="space-y-1">
+                <div class="mt-7 space-y-6">
+                    <label class="space-y-2">
                         <span class="text-xs font-semibold uppercase text-gray-400">Nome utente</span>
                         <input v-model="itemForm.username" class="form-control" />
                     </label>
-                    <label class="space-y-1">
+                    <label class="space-y-2">
                         <span class="text-xs font-semibold uppercase text-gray-400">Password</span>
                         <div class="flex gap-2">
                             <input v-model="itemForm.password" class="form-control" :placeholder="editingItem ? 'Lascia vuoto per non cambiarla' : ''" />
-                            <button type="button" class="btn btn-outline h-[38px] shrink-0" @click="generatorOpen = !generatorOpen">Genera</button>
+                            <button type="button" class="btn btn-outline h-[38px] shrink-0" @click="openGenerator">Genera</button>
                         </div>
-                        <div v-if="generatorOpen" class="rounded-[var(--radius)] bg-gray-50/80 p-3">
+                        <div v-if="generatorOpen" class="rounded-[var(--radius)] bg-gray-50/80 p-4">
+                            <div class="mb-4 flex items-center gap-2 rounded-[var(--radius-sm)] border border-gray-200 bg-white px-3 py-2">
+                                <code class="min-w-0 flex-1 truncate text-sm font-semibold text-gray-800">{{ generatedPassword }}</code>
+                                <button type="button" class="btn btn-primary h-[34px] shrink-0 px-4" @click="useGeneratedPassword">Usa</button>
+                            </div>
                             <div class="space-y-2">
                                 <div class="flex items-center justify-between gap-3">
                                     <span class="text-sm font-semibold text-gray-800">Lunghezza</span>
@@ -512,7 +532,7 @@ function userName(id) {
                                     class="password-length-slider w-full"
                                 />
                             </div>
-                            <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                            <div class="mt-4 grid gap-2 sm:grid-cols-2">
                                 <label class="flex items-center gap-2 text-sm font-semibold text-gray-700">
                                     <input v-model="generator.uppercase" type="checkbox" class="rounded border-gray-300 text-[hsl(var(--primary-app))]" />
                                     Maiuscole
@@ -530,11 +550,18 @@ function userName(id) {
                                     Simboli
                                 </label>
                             </div>
-                            <button type="button" class="btn btn-outline mt-3 w-full justify-center" @click="generatePassword">Genera password</button>
                         </div>
                     </label>
-                    <div class="space-y-1">
-                        <span class="text-xs font-semibold uppercase text-gray-400">Cassaforte e gruppi</span>
+                    <label class="space-y-2">
+                        <span class="text-xs font-semibold uppercase text-gray-400">Cassaforte</span>
+                        <AppSelect
+                            v-model="itemForm.password_vault_id"
+                            :options="vaults.map((vault) => ({ value: vault.id, label: vault.name }))"
+                            searchable
+                        />
+                    </label>
+                    <div v-if="manageable" class="space-y-2">
+                        <span class="text-xs font-semibold uppercase text-gray-400">Gruppi</span>
                         <button
                             type="button"
                             class="form-control flex h-[42px] items-center justify-between gap-3 text-left"
@@ -542,20 +569,12 @@ function userName(id) {
                         >
                             <span class="flex min-w-0 items-center gap-2">
                                 <Settings2 class="h-4 w-4 shrink-0 text-[hsl(var(--primary-app))]" :stroke-width="1.8" />
-                                <span class="truncate text-sm text-gray-700">{{ accessSummary }}</span>
+                                <span class="truncate text-sm text-gray-700">{{ groupsSummary }}</span>
                             </span>
                             <span class="text-xs font-semibold text-[hsl(var(--primary-app))]">{{ accessSettingsOpen ? 'Chiudi' : 'Scegli' }}</span>
                         </button>
-                        <div v-if="accessSettingsOpen" class="rounded-[var(--radius)] bg-gray-50/80 p-3">
-                            <div class="space-y-1">
-                                <span class="text-xs font-semibold uppercase text-gray-400">Cassaforte</span>
-                                <AppSelect
-                                    v-model="itemForm.password_vault_id"
-                                    :options="vaults.map((vault) => ({ value: vault.id, label: vault.name }))"
-                                    searchable
-                                />
-                            </div>
-                            <div v-if="manageable && groups.length" class="mt-3 space-y-2">
+                        <div v-if="accessSettingsOpen" class="rounded-[var(--radius)] bg-gray-50/80 p-4">
+                            <div v-if="groups.length" class="space-y-2">
                                 <span class="text-xs font-semibold uppercase text-gray-400">Gruppi</span>
                                 <div class="flex flex-wrap gap-2">
                                     <button
@@ -574,18 +593,18 @@ function userName(id) {
                                     </button>
                                 </div>
                             </div>
-                            <p v-else-if="manageable" class="mt-3 text-xs font-medium text-gray-500">Nessun gruppo disponibile.</p>
+                            <p v-else class="text-xs font-medium text-gray-500">Nessun gruppo disponibile.</p>
                         </div>
                     </div>
-                    <label class="space-y-1">
+                    <label class="space-y-2">
                         <span class="text-xs font-semibold uppercase text-gray-400">Sito web</span>
                         <input v-model="itemForm.url" class="form-control" />
                     </label>
-                    <label class="space-y-1">
+                    <label class="space-y-2">
                         <span class="text-xs font-semibold uppercase text-gray-400">Cliente</span>
                         <AppSelect v-model="itemForm.client_id" :options="[{ value: '', label: 'Nessuno' }, ...clients.map((client) => ({ value: client.id, label: client.name }))]" searchable />
                     </label>
-                    <div class="space-y-1">
+                    <div class="space-y-2">
                         <span class="text-xs font-semibold uppercase text-gray-400">Note</span>
                         <div class="overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white">
                             <div class="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50/80 px-2 py-2">
