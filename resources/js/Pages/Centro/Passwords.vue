@@ -519,9 +519,6 @@ if (props.selectedGroup) {
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-1">
-                                    <button type="button" class="icon-btn h-8 w-8" title="Copia password" @click.stop="openReveal(item, 'copy-password')">
-                                        <Copy class="h-4 w-4" :stroke-width="1.7" />
-                                    </button>
                                     <button v-if="item.can_edit" type="button" class="icon-btn h-8 w-8" title="Modifica" @click.stop="openEditItem(item)">
                                         <Pencil class="h-4 w-4" :stroke-width="1.7" />
                                     </button>
