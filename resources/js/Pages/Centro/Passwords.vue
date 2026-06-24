@@ -136,6 +136,16 @@ function vaultChipStyle(vault) {
     };
 }
 
+function passwordVaultBadgeStyle(item) {
+    const backgroundColor = normalizeHexColor(item?.vault_color, '#0B6EF3');
+
+    return {
+        backgroundColor,
+        borderColor: isLightColor(backgroundColor) ? 'rgba(17, 24, 39, 0.14)' : 'rgba(255, 255, 255, 0.20)',
+        color: isLightColor(backgroundColor) ? '#111827' : '#ffffff',
+    };
+}
+
 function defaultItemForm() {
     return {
         password_vault_id: '',
@@ -229,7 +239,7 @@ function handlePasswordFieldInput(event) {
 }
 
 function saveItem() {
-    itemForm.title = itemForm.url || itemForm.username || 'Password';
+    itemForm.title = itemForm.title || itemForm.url || itemForm.username || 'Password';
     itemForm.notes = noteEditor.value?.innerHTML || '';
     itemForm.password_vault_id = itemForm.password_vault_id || props.vaults?.[0]?.id || '';
     itemForm.clearErrors();
@@ -503,9 +513,9 @@ if (props.selectedGroup) {
                                     </span>
                                     <div class="min-w-0">
                                         <button type="button" class="truncate text-left text-sm font-semibold text-gray-900 hover:text-[hsl(var(--primary-app))]" @click.stop="openReveal(item)">
-                                            {{ item.url || item.title }}
+                                            {{ item.title || item.url || 'Password' }}
                                         </button>
-                                        <p class="truncate text-xs text-gray-500">{{ item.username || 'Nessun nome utente' }}</p>
+                                        <p v-if="item.url" class="truncate text-xs text-gray-500">{{ item.url }}</p>
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-1">
@@ -521,9 +531,9 @@ if (props.selectedGroup) {
                                 </div>
                             </div>
                             <div class="mt-4 flex flex-wrap gap-2">
-                                <span v-if="item.vault_name" class="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs font-semibold" :style="vaultChipStyle({ color: item.vault_color || '#0B6EF3' })">
+                                <span class="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs font-semibold" :style="passwordVaultBadgeStyle(item)">
                                     <Vault class="h-3.5 w-3.5" :stroke-width="1.8" />
-                                    {{ item.vault_name }}
+                                    {{ item.vault_name || 'Nessuna cassaforte' }}
                                 </span>
                                 <span v-if="item.client_name" class="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600 ring-1 ring-inset ring-gray-200">
                                     <Building2 class="h-3.5 w-3.5" :stroke-width="1.8" />
@@ -739,6 +749,10 @@ if (props.selectedGroup) {
 
                 <div class="mt-7 space-y-5">
                     <label class="block">
+                        <span class="block text-sm font-medium text-gray-700">Titolo</span>
+                        <input v-model="itemForm.title" class="form-control" name="centro_password_item_title" autocomplete="off" placeholder="Es. Accesso Aruba, Gmail cliente..." />
+                    </label>
+                    <label class="block">
                         <span class="block text-sm font-medium text-gray-700">Nome utente</span>
                         <input v-model="itemForm.username" class="form-control" name="centro_password_item_username" autocomplete="off" />
                     </label>
@@ -869,7 +883,7 @@ if (props.selectedGroup) {
                     <button type="button" class="icon-btn" @click="revealItem = null"><X class="h-4 w-4" /></button>
                 </div>
                 <div class="mt-4 rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/80 p-3">
-                    <p class="truncate text-sm font-semibold text-gray-900">{{ revealItem.url || revealItem.title }}</p>
+                    <p class="truncate text-sm font-semibold text-gray-900">{{ revealItem.title || revealItem.url || 'Password' }}</p>
                     <p v-if="revealItem.vault_name || revealItem.client_name" class="mt-1 text-xs text-gray-500">
                         <span v-if="revealItem.vault_name">{{ revealItem.vault_name }}</span>
                         <span v-if="revealItem.vault_name && revealItem.client_name"> · </span>
