@@ -79,6 +79,9 @@ Route::middleware('auth')->group(function () {
     Route::put('/document-groups/{id}', [CentroPageController::class, 'updateDocumentGroup'])->name('document-groups.update');
     Route::delete('/document-groups/{id}', [CentroPageController::class, 'destroyDocumentGroup'])->name('document-groups.destroy');
     Route::get('/passwords', [CentroPageController::class, 'passwords'])->name('passwords.index');
+    Route::get('/passwords/vaults', [CentroPageController::class, 'passwords'])->defaults('view', 'vaults')->name('passwords.vaults');
+    Route::get('/passwords/groups', [CentroPageController::class, 'passwords'])->defaults('view', 'groups')->name('passwords.groups');
+    Route::get('/passwords/compromised', [CentroPageController::class, 'passwords'])->defaults('view', 'compromised')->name('passwords.compromised');
     Route::post('/passwords/vaults', [CentroPageController::class, 'storePasswordVault'])->name('passwords.vaults.store');
     Route::put('/passwords/vaults/{id}', [CentroPageController::class, 'updatePasswordVault'])->name('passwords.vaults.update');
     Route::delete('/passwords/vaults/{id}', [CentroPageController::class, 'destroyPasswordVault'])->name('passwords.vaults.destroy');

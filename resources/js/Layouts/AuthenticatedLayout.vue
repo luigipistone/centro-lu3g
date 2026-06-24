@@ -244,7 +244,6 @@ const groups = computed(() => {
                     ['projects.index', 'Progetti', Briefcase],
                     ['tasks.index', 'Task', CheckSquare],
                     ['calendar.index', 'Calendario', Calendar],
-                    ['passwords.index', 'Password', KeyRound],
                     ['notifications.index', 'Notifiche', Bell],
                 ],
             },
