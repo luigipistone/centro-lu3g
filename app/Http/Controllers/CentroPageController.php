@@ -76,7 +76,6 @@ class CentroPageController extends Controller
             'dashboardWidgets' => $this->dashboardWidgetsFor($request->user()),
             'availableDashboardWidgets' => $this->availableDashboardWidgetsFor($request),
             'dashboardNote' => $this->dashboardNoteFor($request->user()),
-            'passwordVaults' => $this->dashboardPasswordVaultRows($request),
             'passwordItems' => $this->dashboardPasswordItemRows($request),
         ]);
     }
@@ -243,22 +242,6 @@ class CentroPageController extends Controller
         }
 
         return $widgets->values()->all();
-    }
-
-    private function dashboardPasswordVaultRows(Request $request)
-    {
-        if ($this->isGuest($request)) {
-            return collect();
-        }
-
-        return $this->passwordVaultRows($request)
-            ->map(fn ($vault) => [
-                'id' => $vault->id,
-                'name' => $vault->name,
-                'color' => $vault->color,
-                'items_count' => $vault->items_count,
-            ])
-            ->values();
     }
 
     private function dashboardPasswordItemRows(Request $request)

@@ -41,7 +41,6 @@ const props = defineProps({
     dashboardWidgets: Array,
     availableDashboardWidgets: Array,
     dashboardNote: Object,
-    passwordVaults: Array,
     passwordItems: Array,
 });
 
@@ -56,7 +55,6 @@ const dragOverIndex = ref(null);
 const noteEditor = ref(null);
 const noteHtml = ref(props.dashboardNote?.html || '');
 const passwordWidgetSearch = ref('');
-const passwordWidgetVaultId = ref('all');
 const passwordRevealItem = ref(null);
 const passwordRevealUsername = ref('');
 const passwordRevealPassword = ref('');
@@ -204,10 +202,9 @@ const filteredPasswordItems = computed(() => {
 
     return (props.passwordItems || [])
         .filter((item) => {
-            const vaultMatch = passwordWidgetVaultId.value === 'all' || item.password_vault_id === passwordWidgetVaultId.value;
             const textMatch = !q || String(item.title || '').toLowerCase().includes(q);
 
-            return vaultMatch && textMatch;
+            return textMatch;
         })
         .sort((first, second) => String(first.title || '').localeCompare(String(second.title || ''), 'it', { sensitivity: 'base' }));
 });
@@ -492,17 +489,6 @@ function isLightColor(value) {
     return luminance > 0.62;
 }
 
-function passwordVaultFilterStyle(vault = null) {
-    const backgroundColor = vault ? normalizeHexColor(vault.color, '#0B6EF3') : '#ffffff';
-    const light = vault ? isLightColor(backgroundColor) : true;
-
-    return {
-        backgroundColor,
-        borderColor: vault ? (light ? 'rgba(17, 24, 39, 0.16)' : 'rgba(255, 255, 255, 0.26)') : 'rgba(229, 231, 235, 0.95)',
-        color: light ? '#111827' : '#ffffff',
-    };
-}
-
 function passwordVaultBadgeStyle(item) {
     const backgroundColor = normalizeHexColor(item?.vault_color, '#0B6EF3');
 
@@ -697,29 +683,9 @@ watch(
                         <div v-if="metaFor(widget).kind === 'password'" class="flex flex-1 flex-col gap-3 pr-3">
                             <div class="space-y-2">
                                 <input v-model="passwordWidgetSearch" class="form-control h-[38px]" placeholder="Cerca per titolo" />
-                                <div class="flex flex-wrap gap-1.5">
-                                    <button
-                                        type="button"
-                                        :class="['dashboard-password-vault-pill', passwordWidgetVaultId === 'all' ? 'is-active' : '']"
-                                        :style="passwordVaultFilterStyle()"
-                                        @click="passwordWidgetVaultId = 'all'"
-                                    >
-                                        Tutte
-                                    </button>
-                                    <button
-                                        v-for="vault in passwordVaults"
-                                        :key="`dashboard-password-vault-${vault.id}`"
-                                        type="button"
-                                        :class="['dashboard-password-vault-pill', passwordWidgetVaultId === vault.id ? 'is-active' : '']"
-                                        :style="passwordVaultFilterStyle(vault)"
-                                        @click="passwordWidgetVaultId = vault.id"
-                                    >
-                                        {{ vault.name }}
-                                    </button>
-                                </div>
                             </div>
 
-                            <div class="max-h-[92px] min-h-[92px] space-y-1 overflow-y-auto pr-1">
+                            <div class="max-h-[136px] min-h-[136px] space-y-1 overflow-y-auto pr-1">
                                 <button
                                     v-for="item in filteredPasswordItems"
                                     :key="`dashboard-password-${item.id}`"
@@ -815,28 +781,6 @@ watch(
 </template>
 
 <style scoped>
-.dashboard-password-vault-pill {
-    display: inline-flex;
-    min-height: 24px;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--radius-sm);
-    border: 1px solid rgb(229 231 235 / 0.9);
-    padding: 0.25rem 0.48rem;
-    font-size: 0.64rem;
-    font-weight: 800;
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.42), 0 8px 18px rgb(15 23 42 / 0.04);
-    transition: transform 0.18s ease, box-shadow 0.18s ease;
-}
-
-.dashboard-password-vault-pill:hover {
-    transform: translateY(-1px);
-}
-
-.dashboard-password-vault-pill.is-active {
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.42), 0 10px 24px hsl(var(--primary-app) / 0.14), 0 0 0 2px hsl(var(--primary-app) / 0.18);
-}
-
 .dashboard-password-dialog {
     animation: dashboardPasswordDialogIn 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
