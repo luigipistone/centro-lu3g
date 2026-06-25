@@ -3236,11 +3236,15 @@ class CentroPageController extends Controller
             ->whereIn('password_vault_id', $vaults->pluck('id'))
             ->get(['password_vault_id', 'password_group_id'])
             ->groupBy('password_vault_id');
+        $itemCounts = DB::table('password_items')
+            ->whereIn('password_vault_id', $vaults->pluck('id'))
+            ->select('password_vault_id', DB::raw('COUNT(*) as total'))
+            ->groupBy('password_vault_id')
+            ->pluck('total', 'password_vault_id');
 
         return $vaults
-            ->map(function ($vault) use ($request, $userShares, $groupShares) {
-                $items = $this->passwordItemsQuery($request)->where('password_items.password_vault_id', $vault->id)->get();
-                $vault->items_count = $items->count();
+            ->map(function ($vault) use ($request, $userShares, $groupShares, $itemCounts) {
+                $vault->items_count = (int) ($itemCounts[$vault->id] ?? 0);
                 $vault->user_ids = ($userShares[$vault->id] ?? collect())->pluck('user_id')->values();
                 $vault->group_ids = ($groupShares[$vault->id] ?? collect())->pluck('password_group_id')->values();
                 $vault->can_edit = $this->canEditPasswordVault($request, $vault);
