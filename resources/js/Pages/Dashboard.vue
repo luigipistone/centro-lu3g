@@ -1,6 +1,5 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import UserAvatar from '@/Components/UserAvatar.vue';
 import { APP_TIME_ZONE } from '@/utils/formatters';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
@@ -506,14 +505,6 @@ function absenceExtraInfo(row) {
     return '';
 }
 
-function absenceUser(row) {
-    return {
-        name: row?.user_name,
-        email: row?.user_email,
-        avatar_url: row?.user_avatar_url,
-    };
-}
-
 function normalizeHexColor(value, fallback = '#0B6EF3') {
     if (!value) return fallback;
     const color = String(value).trim();
@@ -727,49 +718,43 @@ watch(
                         </div>
 
                         <div v-if="metaFor(widget).kind === 'attendance'" class="flex flex-1 flex-col pr-3">
-                            <div class="grid gap-3 md:grid-cols-2">
-                                <section class="rounded-2xl border border-white/70 bg-white/80 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">
-                                    <div class="flex items-center justify-between gap-2">
+                            <div class="space-y-3">
+                                <section class="rounded-2xl border border-white/70 bg-white/80 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">
+                                    <div class="flex items-center justify-between gap-2 border-b border-gray-100 pb-2">
                                         <span class="text-xs font-semibold uppercase tracking-wide text-gray-400">Assenti</span>
                                         <span class="rounded-full bg-rose-50 px-2 py-0.5 text-xs font-bold text-rose-600">{{ dashboardTodayAbsences.length }}</span>
                                     </div>
-                                    <div class="mt-2 max-h-[150px] space-y-1 overflow-y-auto pr-1">
+                                    <div class="mt-2 max-h-[94px] space-y-1 overflow-y-auto pr-1">
                                         <Link
                                             v-for="row in dashboardTodayAbsences"
                                             :key="`dashboard-absence-${row.id}`"
                                             :href="route('absences.show', row.id)"
-                                            class="group/item flex items-center gap-2 rounded-2xl px-2 py-2 transition hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_12px_28px_rgba(28,42,73,0.10)] hover:ring-1 hover:ring-indigo-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                                            class="group/item flex items-center justify-between gap-3 rounded-xl px-2 py-1.5 transition hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_10px_22px_rgba(28,42,73,0.08)] hover:ring-1 hover:ring-indigo-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
                                         >
-                                            <UserAvatar :user="absenceUser(row)" size="xs" />
-                                            <span class="min-w-0 flex-1">
-                                                <span class="block truncate text-sm font-semibold text-gray-900">{{ row.user_name || row.user_email }}</span>
-                                                <span class="block truncate text-xs text-gray-500">
-                                                    {{ absenceTypeLabel(row.type) }}<span v-if="absenceExtraInfo(row)"> - {{ absenceExtraInfo(row) }}</span>
-                                                </span>
+                                            <span class="min-w-0 truncate text-sm font-semibold text-gray-900">{{ row.user_name || row.user_email }}</span>
+                                            <span class="shrink-0 truncate text-xs text-gray-500">
+                                                {{ absenceTypeLabel(row.type) }}<span v-if="absenceExtraInfo(row)"> - {{ absenceExtraInfo(row) }}</span>
                                             </span>
                                         </Link>
-                                        <p v-if="!dashboardTodayAbsences.length" class="py-3 text-sm text-gray-500">Nessuna assenza oggi.</p>
+                                        <p v-if="!dashboardTodayAbsences.length" class="py-2 text-sm text-gray-500">Nessuna assenza oggi.</p>
                                     </div>
                                 </section>
 
-                                <section class="rounded-2xl border border-white/70 bg-white/80 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">
-                                    <div class="flex items-center justify-between gap-2">
+                                <section class="rounded-2xl border border-white/70 bg-white/80 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">
+                                    <div class="flex items-center justify-between gap-2 border-b border-gray-100 pb-2">
                                         <span class="text-xs font-semibold uppercase tracking-wide text-gray-400">Smart working</span>
                                         <span class="rounded-full bg-sky-50 px-2 py-0.5 text-xs font-bold text-sky-600">{{ dashboardTodaySmartworking.length }}</span>
                                     </div>
-                                    <div class="mt-2 max-h-[150px] space-y-1 overflow-y-auto pr-1">
+                                    <div class="mt-2 max-h-[94px] space-y-1 overflow-y-auto pr-1">
                                         <div
                                             v-for="user in dashboardTodaySmartworking"
                                             :key="`dashboard-smartworking-${user.id}`"
-                                            class="flex items-center gap-2 rounded-2xl px-2 py-2"
+                                            class="flex items-center justify-between gap-3 rounded-xl px-2 py-1.5"
                                         >
-                                            <UserAvatar :user="user" size="xs" />
-                                            <span class="min-w-0 flex-1">
-                                                <span class="block truncate text-sm font-semibold text-gray-900">{{ user.name || user.email }}</span>
-                                                <span v-if="user.job_title" class="block truncate text-xs text-gray-500">{{ user.job_title }}</span>
-                                            </span>
+                                            <span class="min-w-0 truncate text-sm font-semibold text-gray-900">{{ user.name || user.email }}</span>
+                                            <span v-if="user.job_title" class="shrink-0 truncate text-xs text-gray-500">{{ user.job_title }}</span>
                                         </div>
-                                        <p v-if="!dashboardTodaySmartworking.length" class="py-3 text-sm text-gray-500">Nessuno in smart working oggi.</p>
+                                        <p v-if="!dashboardTodaySmartworking.length" class="py-2 text-sm text-gray-500">Nessuno in smart working oggi.</p>
                                     </div>
                                 </section>
                             </div>
