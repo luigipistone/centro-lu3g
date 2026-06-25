@@ -77,6 +77,8 @@ class CentroPageController extends Controller
             'availableDashboardWidgets' => $this->availableDashboardWidgetsFor($request),
             'dashboardNote' => $this->dashboardNoteFor($request->user()),
             'passwordItems' => $this->dashboardPasswordItemRows($request),
+            'todayAbsences' => $this->dashboardTodayAbsenceRows($request),
+            'todaySmartworking' => $this->dashboardTodaySmartworkingRows($request),
         ]);
     }
 
@@ -215,6 +217,7 @@ class CentroPageController extends Controller
             ['widget_type' => 'urgent_tasks', 'position' => 7, 'col_span' => 1, 'visible' => true],
             ['widget_type' => 'notes', 'position' => 8, 'col_span' => 2, 'visible' => false],
             ['widget_type' => 'password_search', 'position' => 9, 'col_span' => 2, 'visible' => false],
+            ['widget_type' => 'attendance_today', 'position' => 10, 'col_span' => 2, 'visible' => false],
         ];
     }
 
@@ -231,6 +234,7 @@ class CentroPageController extends Controller
             ['type' => 'urgent_tasks', 'label' => 'Task urgenti', 'description' => 'Attivita prioritarie'],
             ['type' => 'notes', 'label' => 'Note', 'description' => 'Scrittura libera con editor completo'],
             ['type' => 'password_search', 'label' => 'Password', 'description' => 'Ricerca credenziali per cassaforte'],
+            ['type' => 'attendance_today', 'label' => 'Presenze oggi', 'description' => 'Assenze e smart working in giornata'],
         ];
     }
 
@@ -240,8 +244,66 @@ class CentroPageController extends Controller
         if ($this->isGuest($request)) {
             $widgets = $widgets->reject(fn ($widget) => in_array($widget['type'], ['stat_clients', 'recent_clients'], true));
         }
+        if (! $this->canViewAttendanceDashboardWidget($request)) {
+            $widgets = $widgets->reject(fn ($widget) => $widget['type'] === 'attendance_today');
+        }
 
         return $widgets->values()->all();
+    }
+
+    private function canViewAttendanceDashboardWidget(Request $request): bool
+    {
+        return in_array($this->currentUserRole($request), ['admin', 'superadmin'], true);
+    }
+
+    private function dashboardTodayAbsenceRows(Request $request)
+    {
+        if (! $this->canViewAttendanceDashboardWidget($request)) {
+            return collect();
+        }
+
+        $today = now('Europe/Rome')->toDateString();
+
+        return DB::table('absence_requests')
+            ->leftJoin('users', 'users.id', '=', 'absence_requests.user_id')
+            ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
+            ->where('absence_requests.status', '!=', 'rejected')
+            ->whereDate('absence_requests.start_date', '<=', $today)
+            ->whereRaw('DATE(COALESCE(absence_requests.end_date, absence_requests.start_date)) >= ?', [$today])
+            ->orderBy('users.name')
+            ->get([
+                'absence_requests.id',
+                'absence_requests.type',
+                'absence_requests.status',
+                'absence_requests.start_time',
+                'absence_requests.end_time',
+                'absence_requests.inps_code',
+                'users.name as user_name',
+                'users.email as user_email',
+                'profiles.avatar_url as user_avatar_url',
+            ]);
+    }
+
+    private function dashboardTodaySmartworkingRows(Request $request)
+    {
+        if (! $this->canViewAttendanceDashboardWidget($request)) {
+            return collect();
+        }
+
+        $todayKey = strtolower(now('Europe/Rome')->format('l'));
+
+        return DB::table('users')
+            ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
+            ->where('profiles.smartworking_day', $todayKey)
+            ->orderBy('users.name')
+            ->get([
+                'users.id',
+                'users.name',
+                'users.email',
+                'profiles.avatar_url',
+                'profiles.job_title',
+                'profiles.smartworking_day',
+            ]);
     }
 
     private function dashboardPasswordItemRows(Request $request)
