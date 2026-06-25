@@ -68,6 +68,16 @@ function categoryLabel(category) {
     return props.documentCategories?.[category || 'documenti_vari'] || 'Documenti Vari';
 }
 
+function categoryBadgeStyle(category) {
+    return {
+        compensi: { backgroundColor: '#DCFCE7', color: '#166534' },
+        contratti: { backgroundColor: '#DBEAFE', color: '#1E40AF' },
+        corsi_attestati: { backgroundColor: '#FEF3C7', color: '#92400E' },
+        documenti_identita: { backgroundColor: '#EDE9FE', color: '#5B21B6' },
+        documenti_vari: { backgroundColor: '#F1F5F9', color: '#334155' },
+    }[category || 'documenti_vari'] || { backgroundColor: '#F1F5F9', color: '#334155' };
+}
+
 function audienceLabel(document) {
     if (document.audience === 'all') return 'Tutti';
     if (document.audience === 'groups') return 'Gruppi';
@@ -156,7 +166,7 @@ function showMoreCurrentYearDocuments() {
                                     </div>
                                     <p class="mt-3 line-clamp-2 text-sm font-semibold text-gray-900">{{ document.title }}</p>
                                     <p class="mt-1 text-xs text-gray-500">{{ audienceLabel(document) }} · {{ dateIt(document.created_at) }}</p>
-                                    <p class="mt-2 inline-flex rounded-full bg-[hsl(var(--primary-app)/0.08)] px-2 py-0.5 text-[11px] font-semibold text-[hsl(var(--primary-app-dark))]">
+                                    <p class="mt-2 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold" :style="categoryBadgeStyle(document.category)">
                                         {{ categoryLabel(document.category) }}
                                     </p>
                                     <div class="mt-4 rounded-[var(--radius-sm)] bg-gray-50 px-3 py-2 text-xs text-gray-500">

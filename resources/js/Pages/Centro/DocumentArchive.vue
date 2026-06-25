@@ -36,6 +36,16 @@ function categoryLabel(category) {
     return props.documentCategories?.[category || 'documenti_vari'] || 'Documenti Vari';
 }
 
+function categoryBadgeStyle(category) {
+    return {
+        compensi: { backgroundColor: '#DCFCE7', color: '#166534' },
+        contratti: { backgroundColor: '#DBEAFE', color: '#1E40AF' },
+        corsi_attestati: { backgroundColor: '#FEF3C7', color: '#92400E' },
+        documenti_identita: { backgroundColor: '#EDE9FE', color: '#5B21B6' },
+        documenti_vari: { backgroundColor: '#F1F5F9', color: '#334155' },
+    }[category || 'documenti_vari'] || { backgroundColor: '#F1F5F9', color: '#334155' };
+}
+
 function audienceLabel(document) {
     if (document.audience === 'all') return 'Tutti';
     if (document.audience === 'groups') {
@@ -131,7 +141,7 @@ function confirmDeleteAction() {
                     {{ page.props.flash.status }}
                 </div>
 
-                <section class="surface space-y-4 p-5">
+                <section class="space-y-4">
                     <div class="flex flex-wrap items-end justify-between gap-4">
                         <div>
                             <h3 class="text-base font-semibold text-gray-900">Archivio {{ year }}</h3>
@@ -163,7 +173,7 @@ function confirmDeleteAction() {
                                             {{ document.title }}
                                         </p>
                                         <p class="mt-1 text-xs text-gray-500">{{ audienceLabel(document) }} · {{ fileSize(document.file_size) }}</p>
-                                        <p class="mt-1 inline-flex rounded-full bg-[hsl(var(--primary-app)/0.08)] px-2 py-0.5 text-[11px] font-semibold text-[hsl(var(--primary-app-dark))]">
+                                        <p class="mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold" :style="categoryBadgeStyle(document.category)">
                                             {{ categoryLabel(document.category) }}
                                         </p>
                                     </div>

@@ -1,9 +1,11 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { dateIt, dateTimeIt } from '@/utils/formatters';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { Check, ChevronLeft, FileText } from '@lucide/vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
     canManage: Boolean,
@@ -13,14 +15,40 @@ const props = defineProps({
 });
 
 const page = usePage();
+const selectedCategory = ref(props.document.category || 'documenti_vari');
+const savingCategory = ref(false);
+
+const documentCategoryOptions = computed(() => Object.entries(props.documentCategories || {}).map(([value, label]) => ({ value, label })));
 
 function categoryLabel(category) {
     return props.documentCategories?.[category || 'documenti_vari'] || 'Documenti Vari';
 }
 
+function categoryBadgeStyle(category) {
+    return {
+        compensi: { backgroundColor: '#DCFCE7', color: '#166534' },
+        contratti: { backgroundColor: '#DBEAFE', color: '#1E40AF' },
+        corsi_attestati: { backgroundColor: '#FEF3C7', color: '#92400E' },
+        documenti_identita: { backgroundColor: '#EDE9FE', color: '#5B21B6' },
+        documenti_vari: { backgroundColor: '#F1F5F9', color: '#334155' },
+    }[category || 'documenti_vari'] || { backgroundColor: '#F1F5F9', color: '#334155' };
+}
+
 function markRead() {
     router.post(route('documents.read', props.document.id), {}, {
         preserveScroll: true,
+    });
+}
+
+function updateCategory(value) {
+    selectedCategory.value = value;
+    savingCategory.value = true;
+
+    router.patch(route('documents.category.update', props.document.id), { category: value }, {
+        preserveScroll: true,
+        onFinish: () => {
+            savingCategory.value = false;
+        },
     });
 }
 </script>
@@ -38,7 +66,10 @@ function markRead() {
                 <div class="flex flex-col gap-1">
                     <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ document.title }}</h2>
                     <p class="text-sm text-gray-500">
-                        {{ categoryLabel(document.category) }} · Anno {{ document.document_year }} · PDF pubblicato il {{ dateIt(document.created_at) }}
+                        <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold" :style="categoryBadgeStyle(document.category)">
+                            {{ categoryLabel(document.category) }}
+                        </span>
+                        <span class="ml-1">· Anno {{ document.document_year }} · PDF pubblicato il {{ dateIt(document.created_at) }}</span>
                     </p>
                 </div>
             </div>
@@ -75,6 +106,19 @@ function markRead() {
                     </div>
 
                     <aside class="space-y-6">
+                        <section v-if="canManage" class="surface p-5">
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <h3 class="text-base font-semibold text-gray-900">Categoria</h3>
+                                    <p class="mt-1 text-sm text-gray-500">Modifica la categoria del documento.</p>
+                                </div>
+                                <span v-if="savingCategory" class="text-xs font-semibold text-gray-400">Salvataggio...</span>
+                            </div>
+                            <div class="mt-4">
+                                <AppSelect :model-value="selectedCategory" :options="documentCategoryOptions" @update:model-value="updateCategory" />
+                            </div>
+                        </section>
+
                         <section v-if="document.user_is_recipient || document.description" class="surface p-5">
                             <h3 class="text-base font-semibold text-gray-900">{{ document.user_is_recipient ? 'Lettura' : 'Descrizione' }}</h3>
                             <div v-if="document.description" class="mt-2 text-sm leading-6 text-gray-500" v-html="document.description"></div>

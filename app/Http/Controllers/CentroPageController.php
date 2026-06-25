@@ -865,6 +865,23 @@ class CentroPageController extends Controller
         ]);
     }
 
+    public function updateCompanyDocumentCategory(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        DB::table('company_documents')->where('id', $id)->exists() || abort(404);
+
+        $payload = $request->validate([
+            'category' => ['required', Rule::in(array_keys($this->companyDocumentCategories()))],
+        ]);
+
+        DB::table('company_documents')->where('id', $id)->update([
+            'category' => $payload['category'],
+            'updated_at' => now(),
+        ]);
+
+        return back()->with('status', 'Categoria documento aggiornata.');
+    }
+
     public function viewCompanyDocumentFile(Request $request, string $id)
     {
         $document = DB::table('company_documents')->where('id', $id)->first();
