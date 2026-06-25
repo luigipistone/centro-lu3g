@@ -83,7 +83,7 @@ const visibleItems = computed(() => {
             .some((value) => String(value).toLowerCase().includes(q));
 
         return vaultMatch && clientMatch && textMatch;
-    });
+    }).sort((first, second) => String(first.title || first.url || '').localeCompare(String(second.title || second.url || ''), 'it', { sensitivity: 'base' }));
 });
 
 const compromisedItems = computed(() => (props.items || []).filter((item) => item.risk_flags?.length));
@@ -506,15 +506,15 @@ if (props.selectedGroup) {
                         </div>
                     </div>
 
-                    <div v-if="visibleItems.length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        <article v-for="item in visibleItems" :key="item.id" class="surface group/password-card cursor-pointer p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]" @click="openReveal(item)">
+                    <div v-if="visibleItems.length" class="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        <article v-for="item in visibleItems" :key="item.id" class="surface group/password-card flex h-full min-h-[138px] cursor-pointer flex-col justify-between p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]" @click="openReveal(item)">
                             <div class="flex items-start justify-between gap-3">
                                 <div class="flex min-w-0 items-center gap-3">
                                     <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]">
                                         <KeyRound class="h-5 w-5" :stroke-width="1.7" />
                                     </span>
                                     <div class="min-w-0">
-                                        <button type="button" class="truncate text-left text-sm font-semibold text-gray-900 hover:text-[hsl(var(--primary-app))]" @click.stop="openReveal(item)">
+                                        <button type="button" class="line-clamp-2 min-h-10 text-left text-sm font-semibold leading-5 text-gray-900 hover:text-[hsl(var(--primary-app))]" @click.stop="openReveal(item)">
                                             {{ item.title || item.url || 'Password' }}
                                         </button>
                                         <p v-if="item.url" class="truncate text-xs text-gray-500">{{ item.url }}</p>
