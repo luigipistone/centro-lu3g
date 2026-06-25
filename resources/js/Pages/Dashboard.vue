@@ -695,7 +695,7 @@ watch(
                             </div>
                         </div>
 
-                        <div v-if="metaFor(widget).kind === 'password'" class="flex flex-1 min-h-[240px] flex-col gap-3 pr-3">
+                        <div v-if="metaFor(widget).kind === 'password'" class="flex flex-1 flex-col gap-3 pr-3">
                             <div class="space-y-2">
                                 <input v-model="passwordWidgetSearch" class="form-control h-[38px]" placeholder="Cerca per titolo" />
                                 <div class="flex flex-wrap gap-1.5">
@@ -720,7 +720,7 @@ watch(
                                 </div>
                             </div>
 
-                            <div class="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
+                            <div class="max-h-[52px] min-h-[52px] space-y-1 overflow-y-auto pr-1">
                                 <button
                                     v-for="item in filteredPasswordItems"
                                     :key="`dashboard-password-${item.id}`"
