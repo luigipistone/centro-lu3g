@@ -3281,7 +3281,6 @@ class CentroPageController extends Controller
             ->leftJoin('clients', 'clients.id', '=', 'password_items.client_id')
             ->leftJoin('projects', 'projects.id', '=', 'password_items.project_id')
             ->latest('password_items.updated_at')
-            ->limit(500)
             ->get([
                 'password_items.*',
                 'password_vaults.name as vault_name',
