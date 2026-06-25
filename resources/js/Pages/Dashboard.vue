@@ -200,6 +200,7 @@ const visibleWidgets = computed(() => widgets.value.filter((widget) => widget.vi
 const hiddenWidgets = computed(() => widgets.value.filter((widget) => !widget.visible).sort((a, b) => a.position - b.position));
 const filteredPasswordItems = computed(() => {
     const q = passwordWidgetSearch.value.trim().toLowerCase();
+    if (!q) return [];
 
     return (props.passwordItems || [])
         .filter((item) => {
@@ -735,7 +736,8 @@ watch(
                                         <span class="block truncate text-xs text-gray-500">{{ item.vault_name || 'Cassaforte' }}<span v-if="item.client_name"> - {{ item.client_name }}</span></span>
                                     </span>
                                 </button>
-                                <p v-if="!filteredPasswordItems.length" class="py-2 text-sm text-gray-500">Nessuna password trovata.</p>
+                                <p v-if="!passwordWidgetSearch.trim()" class="py-2 text-sm text-gray-500">Cerca una password per titolo.</p>
+                                <p v-else-if="!filteredPasswordItems.length" class="py-2 text-sm text-gray-500">Nessuna password trovata.</p>
                             </div>
                         </div>
 
