@@ -743,6 +743,24 @@ class CentroPageController extends Controller
         ]);
     }
 
+    public function companyDocumentArchive(Request $request, int $year): Response
+    {
+        $currentYear = (int) now('Europe/Rome')->year;
+        abort_if($year >= $currentYear || $year < 2000, 404);
+
+        $canManage = $this->canManageDocuments($request);
+        $userId = (string) $request->user()->id;
+
+        return Inertia::render('Centro/DocumentArchive', [
+            'canManage' => $canManage,
+            'year' => $year,
+            'documents' => $this->companyDocumentRows($canManage ? null : $userId, $canManage, $year),
+            'groups' => $canManage ? $this->documentGroupRows() : [],
+            'users' => $canManage ? $this->userOptions() : [],
+            'documentCategories' => $this->companyDocumentCategories(),
+        ]);
+    }
+
     public function storeCompanyDocument(Request $request): RedirectResponse
     {
         $this->ensureAdmin($request);
@@ -3765,7 +3783,7 @@ class CentroPageController extends Controller
         return $this->companyDocumentRecipientIds($document->id)->contains($request->user()?->id);
     }
 
-    private function companyDocumentRows(?string $userId = null, bool $adminView = false)
+    private function companyDocumentRows(?string $userId = null, bool $adminView = false, ?int $year = null)
     {
         $query = DB::table('company_documents')
             ->leftJoin('users', 'users.id', '=', 'company_documents.created_by')
@@ -3775,6 +3793,18 @@ class CentroPageController extends Controller
         if ($userId) {
             $documentIds = $this->visibleCompanyDocumentIdsForUser($userId);
             $query->whereIn('company_documents.id', $documentIds);
+        }
+
+        if ($year) {
+            $query->where(function ($query) use ($year) {
+                $query
+                    ->where('company_documents.document_year', $year)
+                    ->orWhere(function ($query) use ($year) {
+                        $query
+                            ->whereNull('company_documents.document_year')
+                            ->whereYear('company_documents.created_at', $year);
+                    });
+            });
         }
 
         $documents = $query->limit($adminView ? 300 : 150)->get();

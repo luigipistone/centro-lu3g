@@ -22,7 +22,6 @@ const confirmDeleteText = ref('');
 const currentYearVisibleCount = ref(5);
 const documentDescriptionEditor = ref(null);
 const categoryFilters = ref({});
-const selectedArchiveYear = ref(null);
 const isSuperadmin = computed(() => page.props.auth?.user?.role === 'superadmin');
 
 const documentForm = useForm({
@@ -75,18 +74,6 @@ const previousYearGroups = computed(() => {
         .sort(([yearA], [yearB]) => Number(yearB) - Number(yearA))
         .map(([year, documents]) => ({ year, documents, total: documents.length }));
 });
-const selectedArchiveGroup = computed(() => {
-    const year = selectedArchiveYear.value || previousYearGroups.value[0]?.year || null;
-    if (!year) return null;
-
-    const group = previousYearGroups.value.find((item) => String(item.year) === String(year));
-    if (!group) return null;
-
-    return {
-        ...group,
-        documents: filterDocumentsByCategory(group.documents, group.year),
-    };
-});
 
 function documentYear(document) {
     const year = Number(document.document_year || new Date(document.created_at).getFullYear());
@@ -100,10 +87,6 @@ function categoryFilterFor(year) {
 function setCategoryFilter(year, value) {
     categoryFilters.value = { ...categoryFilters.value, [year]: value };
     if (Number(year) === currentYear) currentYearVisibleCount.value = 5;
-}
-
-function selectArchiveYear(year) {
-    selectedArchiveYear.value = year;
 }
 
 function filterDocumentsByCategory(documents, year) {
@@ -578,83 +561,16 @@ function showMoreCurrentYearDocuments() {
                             </div>
 
                             <div class="flex flex-wrap gap-2">
-                                <button
+                                <Link
                                     v-for="group in previousYearGroups"
                                     :key="group.year"
-                                    type="button"
-                                    :class="[
-                                        'rounded-[var(--radius-sm)] border px-4 py-2 text-left transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(28,42,73,0.08)]',
-                                        String(selectedArchiveGroup?.year) === String(group.year) ? 'border-[hsl(var(--primary-app))] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app-dark))]' : 'border-white bg-white/70 text-gray-700',
-                                    ]"
-                                    @click="selectArchiveYear(group.year)"
+                                    :href="route('documents.archive', group.year)"
+                                    class="rounded-[var(--radius-sm)] border border-white bg-white/70 px-4 py-2 text-left text-gray-700 transition hover:-translate-y-0.5 hover:border-[hsl(var(--primary-app))] hover:bg-[hsl(var(--primary-app)/0.10)] hover:text-[hsl(var(--primary-app-dark))] hover:shadow-[0_12px_28px_rgba(28,42,73,0.08)]"
                                 >
                                     <span class="block text-sm font-semibold">{{ group.year }}</span>
                                     <span class="block text-xs text-gray-500">{{ group.total }} documenti</span>
-                                </button>
+                                </Link>
                             </div>
-
-                            <section v-if="selectedArchiveGroup" class="surface space-y-4 p-5">
-                                <div class="flex flex-wrap items-end justify-between gap-3">
-                                    <div>
-                                        <h4 class="text-base font-semibold text-gray-900">Archivio {{ selectedArchiveGroup.year }}</h4>
-                                        <p class="text-xs text-gray-500">{{ selectedArchiveGroup.documents.length }} di {{ selectedArchiveGroup.total }} documenti</p>
-                                    </div>
-                                    <div class="w-full max-w-[260px]">
-                                        <AppSelect
-                                            :model-value="categoryFilterFor(selectedArchiveGroup.year)"
-                                            :options="categoryOptions"
-                                            @update:model-value="setCategoryFilter(selectedArchiveGroup.year, $event)"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div v-if="selectedArchiveGroup.documents.length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                    <article
-                                        v-for="document in selectedArchiveGroup.documents"
-                                        :key="document.id"
-                                        role="button"
-                                        tabindex="0"
-                                        :class="['surface group cursor-pointer p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]', !canManage && !document.user_read_at ? 'ring-1 ring-amber-100' : '']"
-                                        @click="openDocument(document)"
-                                        @keydown.enter.prevent="openDocument(document)"
-                                        @keydown.space.prevent="openDocument(document)"
-                                    >
-                                        <div class="flex items-start justify-between gap-3">
-                                            <div class="flex min-w-0 items-center gap-3">
-                                                <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]">
-                                                    <FileText class="h-5 w-5" :stroke-width="1.7" />
-                                                </span>
-                                                <div class="min-w-0">
-                                                    <p class="line-clamp-2 text-sm font-semibold text-gray-900 transition group-hover:text-[hsl(var(--primary-app))]">
-                                                        {{ document.title }}
-                                                    </p>
-                                                    <p class="mt-1 text-xs text-gray-500">{{ audienceLabel(document) }} · {{ fileSize(document.file_size) }}</p>
-                                                    <p class="mt-1 inline-flex rounded-full bg-[hsl(var(--primary-app)/0.08)] px-2 py-0.5 text-[11px] font-semibold text-[hsl(var(--primary-app-dark))]">
-                                                        {{ categoryLabel(document.category) }}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <button v-if="canManage" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina documento" @click.stop="removeDocument(document)">
-                                                <Trash2 class="h-4 w-4" :stroke-width="1.7" />
-                                            </button>
-                                        </div>
-
-                                        <div v-if="document.description" class="mt-3 line-clamp-2 text-sm text-gray-500" v-html="document.description"></div>
-
-                                        <div class="mt-4 flex items-center justify-between gap-3 text-xs text-gray-500">
-                                            <span>{{ dateIt(document.created_at) }}</span>
-                                            <span v-if="canManage" class="font-semibold text-gray-700">{{ document.read_count }}/{{ document.recipient_count }} letti</span>
-                                            <span v-else :class="['inline-flex items-center gap-1 rounded-full px-2 py-1 font-semibold', document.user_read_at ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700']">
-                                                <Check v-if="document.user_read_at" class="h-3.5 w-3.5" :stroke-width="1.8" />
-                                                {{ document.user_read_at ? 'Letto' : 'Da leggere' }}
-                                            </span>
-                                        </div>
-                                    </article>
-                                </div>
-                                <div v-else class="surface px-5 py-6 text-center text-sm text-gray-500">
-                                    Nessun documento in questa categoria per il {{ selectedArchiveGroup.year }}.
-                                </div>
-                            </section>
                         </section>
                     </div>
                     <div v-else class="surface px-5 py-12 text-center text-sm text-gray-500">
