@@ -720,7 +720,7 @@ watch(
                                 </div>
                             </div>
 
-                            <div class="max-h-[52px] min-h-[52px] space-y-1 overflow-y-auto pr-1">
+                            <div class="max-h-[92px] min-h-[92px] space-y-1 overflow-y-auto pr-1">
                                 <button
                                     v-for="item in filteredPasswordItems"
                                     :key="`dashboard-password-${item.id}`"
