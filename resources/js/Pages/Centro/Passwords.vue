@@ -502,6 +502,26 @@ if (props.selectedGroup) {
                                 Password
                             </button>
                         </div>
+                        <div class="mt-3 flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                :class="['password-vault-filter-pill', activeVaultId === 'all' ? 'is-active' : '']"
+                                @click="activeVaultId = 'all'"
+                            >
+                                Tutte
+                                <span>{{ items.length }}</span>
+                            </button>
+                            <button
+                                v-for="vault in vaults"
+                                :key="`password-vault-filter-${vault.id}`"
+                                type="button"
+                                :class="['password-vault-filter-pill', activeVaultId === vault.id ? 'is-active' : '']"
+                                @click="activeVaultId = vault.id"
+                            >
+                                {{ vault.name }}
+                                <span>{{ vault.items_count || 0 }}</span>
+                            </button>
+                        </div>
                     </div>
 
                     <div v-if="visibleItems.length" class="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -938,6 +958,54 @@ if (props.selectedGroup) {
 .password-length-slider {
     accent-color: hsl(var(--primary-app));
     cursor: pointer;
+}
+
+.password-vault-filter-pill {
+    display: inline-flex;
+    min-height: 34px;
+    align-items: center;
+    gap: 0.45rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgb(229 231 235 / 0.9);
+    background: rgb(255 255 255 / 0.82);
+    padding: 0.45rem 0.72rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: rgb(75 85 99);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.74), 0 8px 20px rgb(15 23 42 / 0.04);
+    transition: transform 0.18s ease, border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.password-vault-filter-pill:hover {
+    border-color: hsl(var(--primary-app) / 0.28);
+    color: rgb(17 24 39);
+    transform: translateY(-1px);
+}
+
+.password-vault-filter-pill.is-active {
+    border-color: hsl(var(--primary-app) / 0.30);
+    background: hsl(var(--primary-app) / 0.10);
+    color: hsl(var(--primary-app-dark));
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.68), 0 10px 24px hsl(var(--primary-app) / 0.10);
+}
+
+.password-vault-filter-pill span {
+    display: inline-flex;
+    min-width: 1.35rem;
+    height: 1.35rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: rgb(243 244 246 / 0.9);
+    padding: 0 0.35rem;
+    font-size: 0.68rem;
+    font-weight: 800;
+    color: rgb(107 114 128);
+}
+
+.password-vault-filter-pill.is-active span {
+    background: hsl(var(--primary-app) / 0.14);
+    color: hsl(var(--primary-app-dark));
 }
 
 .password-drawer-panel {
