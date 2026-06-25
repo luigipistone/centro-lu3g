@@ -78,9 +78,7 @@ const visibleItems = computed(() => {
     return (props.items || []).filter((item) => {
         const vaultMatch = activeVaultId.value === 'all' || item.password_vault_id === activeVaultId.value;
         const clientMatch = activeClientId.value === 'all' || item.client_id === activeClientId.value;
-        const textMatch = !q || [item.title, item.username, item.url, item.client_name, item.vault_name]
-            .filter(Boolean)
-            .some((value) => String(value).toLowerCase().includes(q));
+        const textMatch = !q || String(item.title || '').toLowerCase().includes(q);
 
         return vaultMatch && clientMatch && textMatch;
     }).sort((first, second) => String(first.title || first.url || '').localeCompare(String(second.title || second.url || ''), 'it', { sensitivity: 'base' }));
