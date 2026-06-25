@@ -209,8 +209,7 @@ const filteredPasswordItems = computed(() => {
 
             return vaultMatch && textMatch;
         })
-        .sort((first, second) => String(first.title || '').localeCompare(String(second.title || ''), 'it', { sensitivity: 'base' }))
-        .slice(0, 8);
+        .sort((first, second) => String(first.title || '').localeCompare(String(second.title || ''), 'it', { sensitivity: 'base' }));
 });
 
 function metaFor(widget) {
