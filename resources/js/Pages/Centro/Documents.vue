@@ -13,6 +13,7 @@ const props = defineProps({
     groups: Array,
     users: Array,
     documentUsers: Array,
+    documentCategories: Object,
 });
 
 const page = usePage();
@@ -20,11 +21,14 @@ const confirmDelete = ref(null);
 const confirmDeleteText = ref('');
 const currentYearVisibleCount = ref(5);
 const documentDescriptionEditor = ref(null);
+const categoryFilters = ref({});
 const isSuperadmin = computed(() => page.props.auth?.user?.role === 'superadmin');
 
 const documentForm = useForm({
     title: '',
     description: '',
+    category: 'documenti_vari',
+    document_year: new Date().getFullYear(),
     audience: 'all',
     file: null,
     user_ids: [],
@@ -46,7 +50,19 @@ const audienceOptions = [
 const visibleDocuments = computed(() => props.documents || []);
 const documentUsers = computed(() => props.documentUsers || []);
 const currentYear = new Date().getFullYear();
-const currentYearDocuments = computed(() => visibleDocuments.value.filter((document) => documentYear(document) === currentYear));
+const categoryOptions = computed(() => [
+    { value: 'all', label: 'Tutte le categorie' },
+    ...Object.entries(props.documentCategories || {}).map(([value, label]) => ({ value, label })),
+]);
+const documentCategoryOptions = computed(() => categoryOptions.value.filter((option) => option.value !== 'all'));
+const documentYearOptions = computed(() => {
+    const year = new Date().getFullYear();
+    return Array.from({ length: 12 }, (_, index) => year + 1 - index).map((value) => ({ value, label: String(value) }));
+});
+const currentYearDocuments = computed(() => filterDocumentsByCategory(
+    visibleDocuments.value.filter((document) => documentYear(document) === currentYear),
+    currentYear,
+));
 const visibleCurrentYearDocuments = computed(() => currentYearDocuments.value.slice(0, currentYearVisibleCount.value));
 const previousYearGroups = computed(() => {
     const groups = visibleDocuments.value
@@ -61,12 +77,32 @@ const previousYearGroups = computed(() => {
 
     return Object.entries(groups)
         .sort(([yearA], [yearB]) => Number(yearB) - Number(yearA))
-        .map(([year, documents]) => ({ year, documents }));
+        .map(([year, documents]) => ({ year, documents: filterDocumentsByCategory(documents, year), total: documents.length }));
 });
 
 function documentYear(document) {
-    const year = new Date(document.created_at).getFullYear();
+    const year = Number(document.document_year || new Date(document.created_at).getFullYear());
     return Number.isFinite(year) ? year : currentYear;
+}
+
+function categoryFilterFor(year) {
+    return categoryFilters.value[year] || 'all';
+}
+
+function setCategoryFilter(year, value) {
+    categoryFilters.value = { ...categoryFilters.value, [year]: value };
+    if (Number(year) === currentYear) currentYearVisibleCount.value = 5;
+}
+
+function filterDocumentsByCategory(documents, year) {
+    const category = categoryFilterFor(year);
+    if (category === 'all') return documents;
+
+    return documents.filter((document) => (document.category || 'documenti_vari') === category);
+}
+
+function categoryLabel(category) {
+    return props.documentCategories?.[category || 'documenti_vari'] || 'Documenti Vari';
 }
 
 function resetDocumentForm() {
@@ -255,6 +291,16 @@ function showMoreCurrentYearDocuments() {
                                 <label class="block text-sm font-medium text-gray-700">Titolo</label>
                                 <input v-model="documentForm.title" class="form-control" required placeholder="Es. Policy ferie 2026" />
                                 <div v-if="documentForm.errors.title" class="mt-1 text-sm text-red-600">{{ documentForm.errors.title }}</div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Categoria</label>
+                                <AppSelect v-model="documentForm.category" :options="documentCategoryOptions" />
+                                <div v-if="documentForm.errors.category" class="mt-1 text-sm text-red-600">{{ documentForm.errors.category }}</div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Anno documento</label>
+                                <AppSelect v-model="documentForm.document_year" :options="documentYearOptions" />
+                                <div v-if="documentForm.errors.document_year" class="mt-1 text-sm text-red-600">{{ documentForm.errors.document_year }}</div>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Destinatari</label>
@@ -455,6 +501,13 @@ function showMoreCurrentYearDocuments() {
                                     <h4 class="text-sm font-semibold text-gray-900">Anno corrente</h4>
                                     <p class="text-xs text-gray-500">{{ currentYearDocuments.length }} documenti del {{ currentYear }}</p>
                                 </div>
+                                <div class="w-full max-w-[260px]">
+                                    <AppSelect
+                                        :model-value="categoryFilterFor(currentYear)"
+                                        :options="categoryOptions"
+                                        @update:model-value="setCategoryFilter(currentYear, $event)"
+                                    />
+                                </div>
                             </div>
 
                             <div v-if="currentYearDocuments.length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -478,6 +531,9 @@ function showMoreCurrentYearDocuments() {
                                                     {{ document.title }}
                                                 </p>
                                                 <p class="mt-1 text-xs text-gray-500">{{ audienceLabel(document) }} · {{ fileSize(document.file_size) }}</p>
+                                                <p class="mt-1 inline-flex rounded-full bg-[hsl(var(--primary-app)/0.08)] px-2 py-0.5 text-[11px] font-semibold text-[hsl(var(--primary-app-dark))]">
+                                                    {{ categoryLabel(document.category) }}
+                                                </p>
                                             </div>
                                         </div>
                                         <button v-if="canManage" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina documento" @click.stop="removeDocument(document)">
@@ -515,13 +571,20 @@ function showMoreCurrentYearDocuments() {
                             </div>
 
                             <div v-for="group in previousYearGroups" :key="group.year" class="space-y-3">
-                                <div class="flex items-center gap-3">
+                                <div class="flex flex-wrap items-center gap-3">
                                     <span class="text-sm font-semibold text-gray-900">{{ group.year }}</span>
-                                    <span class="h-px flex-1 bg-gray-100"></span>
-                                    <span class="text-xs font-semibold text-gray-400">{{ group.documents.length }} documenti</span>
+                                    <span class="h-px min-w-[80px] flex-1 bg-gray-100"></span>
+                                    <span class="text-xs font-semibold text-gray-400">{{ group.documents.length }} di {{ group.total }} documenti</span>
+                                    <div class="w-full max-w-[260px]">
+                                        <AppSelect
+                                            :model-value="categoryFilterFor(group.year)"
+                                            :options="categoryOptions"
+                                            @update:model-value="setCategoryFilter(group.year, $event)"
+                                        />
+                                    </div>
                                 </div>
 
-                                <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                <div v-if="group.documents.length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                                     <article
                                         v-for="document in group.documents"
                                         :key="document.id"
@@ -542,6 +605,9 @@ function showMoreCurrentYearDocuments() {
                                                         {{ document.title }}
                                                     </p>
                                                     <p class="mt-1 text-xs text-gray-500">{{ audienceLabel(document) }} · {{ fileSize(document.file_size) }}</p>
+                                                    <p class="mt-1 inline-flex rounded-full bg-[hsl(var(--primary-app)/0.08)] px-2 py-0.5 text-[11px] font-semibold text-[hsl(var(--primary-app-dark))]">
+                                                        {{ categoryLabel(document.category) }}
+                                                    </p>
                                                 </div>
                                             </div>
                                             <button v-if="canManage" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina documento" @click.stop="removeDocument(document)">
@@ -560,6 +626,9 @@ function showMoreCurrentYearDocuments() {
                                             </span>
                                         </div>
                                     </article>
+                                </div>
+                                <div v-else class="surface px-5 py-6 text-center text-sm text-gray-500">
+                                    Nessun documento in questa categoria per il {{ group.year }}.
                                 </div>
                             </div>
                         </section>

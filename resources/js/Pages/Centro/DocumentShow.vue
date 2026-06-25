@@ -9,9 +9,14 @@ const props = defineProps({
     canManage: Boolean,
     document: Object,
     readers: Array,
+    documentCategories: Object,
 });
 
 const page = usePage();
+
+function categoryLabel(category) {
+    return props.documentCategories?.[category || 'documenti_vari'] || 'Documenti Vari';
+}
 
 function markRead() {
     router.post(route('documents.read', props.document.id), {}, {
@@ -32,7 +37,9 @@ function markRead() {
                 </Link>
                 <div class="flex flex-col gap-1">
                     <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ document.title }}</h2>
-                    <p class="text-sm text-gray-500">PDF pubblicato il {{ dateIt(document.created_at) }}</p>
+                    <p class="text-sm text-gray-500">
+                        {{ categoryLabel(document.category) }} · Anno {{ document.document_year }} · PDF pubblicato il {{ dateIt(document.created_at) }}
+                    </p>
                 </div>
             </div>
         </template>

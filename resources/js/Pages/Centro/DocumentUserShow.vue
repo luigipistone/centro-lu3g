@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { dateIt, dateTimeIt } from '@/utils/formatters';
 import { Head, Link } from '@inertiajs/vue3';
@@ -9,13 +10,22 @@ import { computed, ref } from 'vue';
 const props = defineProps({
     user: Object,
     documents: Array,
+    documentCategories: Object,
 });
 
 const currentYearVisibleCount = ref(5);
+const categoryFilters = ref({});
 const readCount = computed(() => (props.documents || []).filter((document) => document.user_read_at).length);
 const unreadCount = computed(() => Math.max(0, (props.documents || []).length - readCount.value));
 const currentYear = new Date().getFullYear();
-const currentYearDocuments = computed(() => (props.documents || []).filter((document) => documentYear(document) === currentYear));
+const categoryOptions = computed(() => [
+    { value: 'all', label: 'Tutte le categorie' },
+    ...Object.entries(props.documentCategories || {}).map(([value, label]) => ({ value, label })),
+]);
+const currentYearDocuments = computed(() => filterDocumentsByCategory(
+    (props.documents || []).filter((document) => documentYear(document) === currentYear),
+    currentYear,
+));
 const visibleCurrentYearDocuments = computed(() => currentYearDocuments.value.slice(0, currentYearVisibleCount.value));
 const previousYearGroups = computed(() => {
     const groups = (props.documents || [])
@@ -30,12 +40,32 @@ const previousYearGroups = computed(() => {
 
     return Object.entries(groups)
         .sort(([yearA], [yearB]) => Number(yearB) - Number(yearA))
-        .map(([year, documents]) => ({ year, documents }));
+        .map(([year, documents]) => ({ year, documents: filterDocumentsByCategory(documents, year), total: documents.length }));
 });
 
 function documentYear(document) {
-    const year = new Date(document.created_at).getFullYear();
+    const year = Number(document.document_year || new Date(document.created_at).getFullYear());
     return Number.isFinite(year) ? year : currentYear;
+}
+
+function categoryFilterFor(year) {
+    return categoryFilters.value[year] || 'all';
+}
+
+function setCategoryFilter(year, value) {
+    categoryFilters.value = { ...categoryFilters.value, [year]: value };
+    if (Number(year) === currentYear) currentYearVisibleCount.value = 5;
+}
+
+function filterDocumentsByCategory(documents, year) {
+    const category = categoryFilterFor(year);
+    if (category === 'all') return documents;
+
+    return documents.filter((document) => (document.category || 'documenti_vari') === category);
+}
+
+function categoryLabel(category) {
+    return props.documentCategories?.[category || 'documenti_vari'] || 'Documenti Vari';
 }
 
 function audienceLabel(document) {
@@ -94,9 +124,18 @@ function showMoreCurrentYearDocuments() {
 
                     <div v-if="documents.length" class="space-y-6">
                         <section class="space-y-3">
-                            <div>
-                                <h4 class="text-sm font-semibold text-gray-900">Anno corrente</h4>
-                                <p class="text-xs text-gray-500">{{ currentYearDocuments.length }} documenti del {{ currentYear }}</p>
+                            <div class="flex items-end justify-between gap-3">
+                                <div>
+                                    <h4 class="text-sm font-semibold text-gray-900">Anno corrente</h4>
+                                    <p class="text-xs text-gray-500">{{ currentYearDocuments.length }} documenti del {{ currentYear }}</p>
+                                </div>
+                                <div class="w-full max-w-[260px]">
+                                    <AppSelect
+                                        :model-value="categoryFilterFor(currentYear)"
+                                        :options="categoryOptions"
+                                        @update:model-value="setCategoryFilter(currentYear, $event)"
+                                    />
+                                </div>
                             </div>
 
                             <div v-if="currentYearDocuments.length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -117,6 +156,9 @@ function showMoreCurrentYearDocuments() {
                                     </div>
                                     <p class="mt-3 line-clamp-2 text-sm font-semibold text-gray-900">{{ document.title }}</p>
                                     <p class="mt-1 text-xs text-gray-500">{{ audienceLabel(document) }} · {{ dateIt(document.created_at) }}</p>
+                                    <p class="mt-2 inline-flex rounded-full bg-[hsl(var(--primary-app)/0.08)] px-2 py-0.5 text-[11px] font-semibold text-[hsl(var(--primary-app-dark))]">
+                                        {{ categoryLabel(document.category) }}
+                                    </p>
                                     <div class="mt-4 rounded-[var(--radius-sm)] bg-gray-50 px-3 py-2 text-xs text-gray-500">
                                         <p>{{ document.user_opened_at ? `Aperto ${dateTimeIt(document.user_opened_at)}` : 'Non ancora aperto' }}</p>
                                         <p class="mt-1">{{ document.user_read_at ? `Letto ${dateTimeIt(document.user_read_at)}` : 'Conferma lettura mancante' }}</p>
@@ -141,13 +183,20 @@ function showMoreCurrentYearDocuments() {
                             </div>
 
                             <div v-for="group in previousYearGroups" :key="group.year" class="space-y-3">
-                                <div class="flex items-center gap-3">
+                                <div class="flex flex-wrap items-center gap-3">
                                     <span class="text-sm font-semibold text-gray-900">{{ group.year }}</span>
-                                    <span class="h-px flex-1 bg-gray-100"></span>
-                                    <span class="text-xs font-semibold text-gray-400">{{ group.documents.length }} documenti</span>
+                                    <span class="h-px min-w-[80px] flex-1 bg-gray-100"></span>
+                                    <span class="text-xs font-semibold text-gray-400">{{ group.documents.length }} di {{ group.total }} documenti</span>
+                                    <div class="w-full max-w-[260px]">
+                                        <AppSelect
+                                            :model-value="categoryFilterFor(group.year)"
+                                            :options="categoryOptions"
+                                            @update:model-value="setCategoryFilter(group.year, $event)"
+                                        />
+                                    </div>
                                 </div>
 
-                                <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                <div v-if="group.documents.length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                                     <Link
                                         v-for="document in group.documents"
                                         :key="document.id"
@@ -165,11 +214,17 @@ function showMoreCurrentYearDocuments() {
                                         </div>
                                         <p class="mt-3 line-clamp-2 text-sm font-semibold text-gray-900">{{ document.title }}</p>
                                         <p class="mt-1 text-xs text-gray-500">{{ audienceLabel(document) }} · {{ dateIt(document.created_at) }}</p>
+                                        <p class="mt-2 inline-flex rounded-full bg-[hsl(var(--primary-app)/0.08)] px-2 py-0.5 text-[11px] font-semibold text-[hsl(var(--primary-app-dark))]">
+                                            {{ categoryLabel(document.category) }}
+                                        </p>
                                         <div class="mt-4 rounded-[var(--radius-sm)] bg-gray-50 px-3 py-2 text-xs text-gray-500">
                                             <p>{{ document.user_opened_at ? `Aperto ${dateTimeIt(document.user_opened_at)}` : 'Non ancora aperto' }}</p>
                                             <p class="mt-1">{{ document.user_read_at ? `Letto ${dateTimeIt(document.user_read_at)}` : 'Conferma lettura mancante' }}</p>
                                         </div>
                                     </Link>
+                                </div>
+                                <div v-else class="surface px-5 py-6 text-center text-sm text-gray-500">
+                                    Nessun documento in questa categoria per il {{ group.year }}.
                                 </div>
                             </div>
                         </section>

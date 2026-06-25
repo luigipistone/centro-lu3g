@@ -722,6 +722,7 @@ class CentroPageController extends Controller
             'groups' => $canManage ? $this->documentGroupRows() : [],
             'users' => $canManage ? $this->userOptions() : [],
             'documentUsers' => $canManage ? $this->companyDocumentUserRows() : [],
+            'documentCategories' => $this->companyDocumentCategories(),
         ]);
     }
 
@@ -738,6 +739,7 @@ class CentroPageController extends Controller
         return Inertia::render('Centro/DocumentUserShow', [
             'user' => $user,
             'documents' => $this->companyDocumentRows($userId, false),
+            'documentCategories' => $this->companyDocumentCategories(),
         ]);
     }
 
@@ -748,6 +750,8 @@ class CentroPageController extends Controller
         $payload = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:5000'],
+            'category' => ['required', Rule::in(array_keys($this->companyDocumentCategories()))],
+            'document_year' => ['required', 'integer', 'min:2000', 'max:2100'],
             'audience' => ['required', Rule::in(['all', 'users', 'groups'])],
             'file' => ['required', 'file', 'mimes:pdf', 'max:20480'],
             'user_ids' => ['nullable', 'array'],
@@ -775,6 +779,8 @@ class CentroPageController extends Controller
                 'id' => $documentId,
                 'title' => $payload['title'],
                 'description' => $payload['description'] ?? null,
+                'category' => $payload['category'],
+                'document_year' => (int) $payload['document_year'],
                 'audience' => $payload['audience'],
                 'file_path' => $path,
                 'file_name' => $file->getClientOriginalName(),
@@ -837,6 +843,7 @@ class CentroPageController extends Controller
             'canManage' => $canManage,
             'document' => $this->companyDocumentRow($document, $isRecipient ? $userId : null),
             'readers' => $canManage ? $this->companyDocumentReaderRows($id) : [],
+            'documentCategories' => $this->companyDocumentCategories(),
         ]);
     }
 
@@ -3786,6 +3793,8 @@ class CentroPageController extends Controller
         $document->recipient_count = $recipientIds->count();
         $document->read_count = $readRows->filter(fn ($row) => filled($row->read_at))->count();
         $document->opened_count = $readRows->filter(fn ($row) => filled($row->opened_at))->count();
+        $document->category = $document->category ?: 'documenti_vari';
+        $document->document_year = (int) ($document->document_year ?: optional($document->created_at ? \Carbon\Carbon::parse($document->created_at) : null)->year ?: now('Europe/Rome')->year);
         $document->user_is_recipient = $userId ? $recipientIds->contains($userId) : false;
         $document->user_read_at = $userId ? ($readRows[$userId]->read_at ?? null) : null;
         $document->user_opened_at = $userId ? ($readRows[$userId]->opened_at ?? null) : null;
@@ -3793,6 +3802,17 @@ class CentroPageController extends Controller
         $document->group_ids = DB::table('company_document_group')->where('company_document_id', $document->id)->pluck('document_group_id');
 
         return $document;
+    }
+
+    private function companyDocumentCategories(): array
+    {
+        return [
+            'compensi' => 'Compensi',
+            'contratti' => 'Contratti',
+            'corsi_attestati' => 'Corsi e Attestati',
+            'documenti_identita' => "Documenti d'identità",
+            'documenti_vari' => 'Documenti Vari',
+        ];
     }
 
     private function documentGroupRows()
