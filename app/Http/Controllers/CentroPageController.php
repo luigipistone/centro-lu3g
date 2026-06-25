@@ -76,6 +76,8 @@ class CentroPageController extends Controller
             'dashboardWidgets' => $this->dashboardWidgetsFor($request->user()),
             'availableDashboardWidgets' => $this->availableDashboardWidgetsFor($request),
             'dashboardNote' => $this->dashboardNoteFor($request->user()),
+            'passwordVaults' => $this->dashboardPasswordVaultRows($request),
+            'passwordItems' => $this->dashboardPasswordItemRows($request),
         ]);
     }
 
@@ -213,6 +215,7 @@ class CentroPageController extends Controller
             ['widget_type' => 'recent_clients', 'position' => 6, 'col_span' => 1, 'visible' => true],
             ['widget_type' => 'urgent_tasks', 'position' => 7, 'col_span' => 1, 'visible' => true],
             ['widget_type' => 'notes', 'position' => 8, 'col_span' => 2, 'visible' => false],
+            ['widget_type' => 'password_search', 'position' => 9, 'col_span' => 2, 'visible' => false],
         ];
     }
 
@@ -228,6 +231,7 @@ class CentroPageController extends Controller
             ['type' => 'recent_clients', 'label' => 'Clienti recenti', 'description' => 'Ultime anagrafiche inserite'],
             ['type' => 'urgent_tasks', 'label' => 'Task urgenti', 'description' => 'Attivita prioritarie'],
             ['type' => 'notes', 'label' => 'Note', 'description' => 'Scrittura libera con editor completo'],
+            ['type' => 'password_search', 'label' => 'Password', 'description' => 'Ricerca credenziali per cassaforte'],
         ];
     }
 
@@ -239,6 +243,44 @@ class CentroPageController extends Controller
         }
 
         return $widgets->values()->all();
+    }
+
+    private function dashboardPasswordVaultRows(Request $request)
+    {
+        if ($this->isGuest($request)) {
+            return collect();
+        }
+
+        return $this->passwordVaultRows($request)
+            ->map(fn ($vault) => [
+                'id' => $vault->id,
+                'name' => $vault->name,
+                'color' => $vault->color,
+                'items_count' => $vault->items_count,
+            ])
+            ->values();
+    }
+
+    private function dashboardPasswordItemRows(Request $request)
+    {
+        if ($this->isGuest($request)) {
+            return collect();
+        }
+
+        return $this->passwordItemsQuery($request)
+            ->leftJoin('password_vaults', 'password_vaults.id', '=', 'password_items.password_vault_id')
+            ->leftJoin('clients', 'clients.id', '=', 'password_items.client_id')
+            ->orderBy('password_items.title')
+            ->get([
+                'password_items.id',
+                'password_items.title',
+                'password_items.url',
+                'password_items.username',
+                'password_items.password_vault_id',
+                'password_vaults.name as vault_name',
+                'password_vaults.color as vault_color',
+                'clients.name as client_name',
+            ]);
     }
 
     private function dashboardNoteFor(User $user): array
