@@ -22,13 +22,13 @@ const confirmDeleteText = ref('');
 const currentYearVisibleCount = ref(5);
 const documentDescriptionEditor = ref(null);
 const categoryFilters = ref({});
+const selectedArchiveYear = ref(null);
 const isSuperadmin = computed(() => page.props.auth?.user?.role === 'superadmin');
 
 const documentForm = useForm({
     title: '',
     description: '',
     category: 'documenti_vari',
-    document_year: new Date().getFullYear(),
     audience: 'all',
     file: null,
     user_ids: [],
@@ -55,10 +55,6 @@ const categoryOptions = computed(() => [
     ...Object.entries(props.documentCategories || {}).map(([value, label]) => ({ value, label })),
 ]);
 const documentCategoryOptions = computed(() => categoryOptions.value.filter((option) => option.value !== 'all'));
-const documentYearOptions = computed(() => {
-    const year = new Date().getFullYear();
-    return Array.from({ length: 12 }, (_, index) => year + 1 - index).map((value) => ({ value, label: String(value) }));
-});
 const currentYearDocuments = computed(() => filterDocumentsByCategory(
     visibleDocuments.value.filter((document) => documentYear(document) === currentYear),
     currentYear,
@@ -77,7 +73,19 @@ const previousYearGroups = computed(() => {
 
     return Object.entries(groups)
         .sort(([yearA], [yearB]) => Number(yearB) - Number(yearA))
-        .map(([year, documents]) => ({ year, documents: filterDocumentsByCategory(documents, year), total: documents.length }));
+        .map(([year, documents]) => ({ year, documents, total: documents.length }));
+});
+const selectedArchiveGroup = computed(() => {
+    const year = selectedArchiveYear.value || previousYearGroups.value[0]?.year || null;
+    if (!year) return null;
+
+    const group = previousYearGroups.value.find((item) => String(item.year) === String(year));
+    if (!group) return null;
+
+    return {
+        ...group,
+        documents: filterDocumentsByCategory(group.documents, group.year),
+    };
 });
 
 function documentYear(document) {
@@ -92,6 +100,10 @@ function categoryFilterFor(year) {
 function setCategoryFilter(year, value) {
     categoryFilters.value = { ...categoryFilters.value, [year]: value };
     if (Number(year) === currentYear) currentYearVisibleCount.value = 5;
+}
+
+function selectArchiveYear(year) {
+    selectedArchiveYear.value = year;
 }
 
 function filterDocumentsByCategory(documents, year) {
@@ -296,11 +308,6 @@ function showMoreCurrentYearDocuments() {
                                 <label class="block text-sm font-medium text-gray-700">Categoria</label>
                                 <AppSelect v-model="documentForm.category" :options="documentCategoryOptions" />
                                 <div v-if="documentForm.errors.category" class="mt-1 text-sm text-red-600">{{ documentForm.errors.category }}</div>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Anno documento</label>
-                                <AppSelect v-model="documentForm.document_year" :options="documentYearOptions" />
-                                <div v-if="documentForm.errors.document_year" class="mt-1 text-sm text-red-600">{{ documentForm.errors.document_year }}</div>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Destinatari</label>
@@ -567,26 +574,43 @@ function showMoreCurrentYearDocuments() {
                         <section v-if="previousYearGroups.length" class="space-y-4">
                             <div>
                                 <h4 class="text-sm font-semibold text-gray-900">Anni precedenti</h4>
-                                <p class="text-xs text-gray-500">Archivio documenti diviso per anno.</p>
+                                <p class="text-xs text-gray-500">Seleziona un anno per aprire l'archivio relativo.</p>
                             </div>
 
-                            <div v-for="group in previousYearGroups" :key="group.year" class="space-y-3">
-                                <div class="flex flex-wrap items-center gap-3">
-                                    <span class="text-sm font-semibold text-gray-900">{{ group.year }}</span>
-                                    <span class="h-px min-w-[80px] flex-1 bg-gray-100"></span>
-                                    <span class="text-xs font-semibold text-gray-400">{{ group.documents.length }} di {{ group.total }} documenti</span>
+                            <div class="flex flex-wrap gap-2">
+                                <button
+                                    v-for="group in previousYearGroups"
+                                    :key="group.year"
+                                    type="button"
+                                    :class="[
+                                        'rounded-[var(--radius-sm)] border px-4 py-2 text-left transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(28,42,73,0.08)]',
+                                        String(selectedArchiveGroup?.year) === String(group.year) ? 'border-[hsl(var(--primary-app))] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app-dark))]' : 'border-white bg-white/70 text-gray-700',
+                                    ]"
+                                    @click="selectArchiveYear(group.year)"
+                                >
+                                    <span class="block text-sm font-semibold">{{ group.year }}</span>
+                                    <span class="block text-xs text-gray-500">{{ group.total }} documenti</span>
+                                </button>
+                            </div>
+
+                            <section v-if="selectedArchiveGroup" class="surface space-y-4 p-5">
+                                <div class="flex flex-wrap items-end justify-between gap-3">
+                                    <div>
+                                        <h4 class="text-base font-semibold text-gray-900">Archivio {{ selectedArchiveGroup.year }}</h4>
+                                        <p class="text-xs text-gray-500">{{ selectedArchiveGroup.documents.length }} di {{ selectedArchiveGroup.total }} documenti</p>
+                                    </div>
                                     <div class="w-full max-w-[260px]">
                                         <AppSelect
-                                            :model-value="categoryFilterFor(group.year)"
+                                            :model-value="categoryFilterFor(selectedArchiveGroup.year)"
                                             :options="categoryOptions"
-                                            @update:model-value="setCategoryFilter(group.year, $event)"
+                                            @update:model-value="setCategoryFilter(selectedArchiveGroup.year, $event)"
                                         />
                                     </div>
                                 </div>
 
-                                <div v-if="group.documents.length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                <div v-if="selectedArchiveGroup.documents.length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                                     <article
-                                        v-for="document in group.documents"
+                                        v-for="document in selectedArchiveGroup.documents"
                                         :key="document.id"
                                         role="button"
                                         tabindex="0"
@@ -628,9 +652,9 @@ function showMoreCurrentYearDocuments() {
                                     </article>
                                 </div>
                                 <div v-else class="surface px-5 py-6 text-center text-sm text-gray-500">
-                                    Nessun documento in questa categoria per il {{ group.year }}.
+                                    Nessun documento in questa categoria per il {{ selectedArchiveGroup.year }}.
                                 </div>
-                            </div>
+                            </section>
                         </section>
                     </div>
                     <div v-else class="surface px-5 py-12 text-center text-sm text-gray-500">
