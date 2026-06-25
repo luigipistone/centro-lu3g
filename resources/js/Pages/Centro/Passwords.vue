@@ -73,14 +73,19 @@ const itemForm = useForm(defaultItemForm());
 const vaultForm = useForm({ name: '', description: '', color: '#0B6EF3', visibility: 'personal', user_ids: [], group_ids: [] });
 const groupForm = useForm({ name: '', description: '', user_ids: [] });
 
-const visibleItems = computed(() => {
+const baseFilteredItems = computed(() => {
     const q = search.value.trim().toLowerCase();
     return (props.items || []).filter((item) => {
-        const vaultMatch = activeVaultId.value === 'all' || item.password_vault_id === activeVaultId.value;
         const clientMatch = activeClientId.value === 'all' || item.client_id === activeClientId.value;
         const textMatch = !q || String(item.title || '').toLowerCase().includes(q);
 
-        return vaultMatch && clientMatch && textMatch;
+        return clientMatch && textMatch;
+    });
+});
+
+const visibleItems = computed(() => {
+    return baseFilteredItems.value.filter((item) => {
+        return activeVaultId.value === 'all' || item.password_vault_id === activeVaultId.value;
     }).sort((first, second) => String(first.title || first.url || '').localeCompare(String(second.title || second.url || ''), 'it', { sensitivity: 'base' }));
 });
 
@@ -144,6 +149,25 @@ function passwordVaultBadgeStyle(item) {
         borderColor: isLightColor(backgroundColor) ? 'rgba(17, 24, 39, 0.14)' : 'rgba(255, 255, 255, 0.20)',
         color: isLightColor(backgroundColor) ? '#111827' : '#ffffff',
     };
+}
+
+function vaultFilterPillStyle(vault = null) {
+    const backgroundColor = vault ? normalizeHexColor(vault.color, '#0B6EF3') : '#ffffff';
+    const light = vault ? isLightColor(backgroundColor) : true;
+
+    return {
+        backgroundColor,
+        borderColor: vault ? (light ? 'rgba(17, 24, 39, 0.16)' : 'rgba(255, 255, 255, 0.26)') : 'rgba(229, 231, 235, 0.95)',
+        color: light ? '#111827' : '#ffffff',
+    };
+}
+
+function vaultFilterCount(vaultId = 'all') {
+    if (vaultId === 'all') {
+        return baseFilteredItems.value.length;
+    }
+
+    return baseFilteredItems.value.filter((item) => item.password_vault_id === vaultId).length;
 }
 
 function defaultItemForm() {
@@ -483,13 +507,8 @@ if (props.selectedGroup) {
                 <section v-if="currentView === 'items'" class="space-y-5">
                     <div class="surface p-4">
                         <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                            <div class="grid flex-1 items-center gap-3 md:grid-cols-[minmax(0,1fr)_230px_230px]">
+                            <div class="grid flex-1 items-center gap-3 md:grid-cols-[minmax(0,1fr)_230px]">
                                 <input v-model="search" class="form-control h-[38px]" placeholder="Cerca password" />
-                                <AppSelect
-                                    v-model="activeVaultId"
-                                    class="password-filter-control"
-                                    :options="[{ value: 'all', label: 'Tutte le casseforti' }, ...vaults.map((vault) => ({ value: vault.id, label: vault.name }))]"
-                                />
                                 <AppSelect
                                     v-model="activeClientId"
                                     class="password-filter-control"
@@ -502,26 +521,29 @@ if (props.selectedGroup) {
                                 Password
                             </button>
                         </div>
-                        <div class="mt-3 flex flex-wrap gap-2">
-                            <button
-                                type="button"
-                                :class="['password-vault-filter-pill', activeVaultId === 'all' ? 'is-active' : '']"
-                                @click="activeVaultId = 'all'"
-                            >
-                                Tutte
-                                <span>{{ items.length }}</span>
-                            </button>
-                            <button
-                                v-for="vault in vaults"
-                                :key="`password-vault-filter-${vault.id}`"
-                                type="button"
-                                :class="['password-vault-filter-pill', activeVaultId === vault.id ? 'is-active' : '']"
-                                @click="activeVaultId = vault.id"
-                            >
-                                {{ vault.name }}
-                                <span>{{ vault.items_count || 0 }}</span>
-                            </button>
-                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            :class="['password-vault-filter-pill', activeVaultId === 'all' ? 'is-active' : '']"
+                            :style="vaultFilterPillStyle()"
+                            @click="activeVaultId = 'all'"
+                        >
+                            Tutte
+                            <span>{{ vaultFilterCount('all') }}</span>
+                        </button>
+                        <button
+                            v-for="vault in vaults"
+                            :key="`password-vault-filter-${vault.id}`"
+                            type="button"
+                            :class="['password-vault-filter-pill', activeVaultId === vault.id ? 'is-active' : '']"
+                            :style="vaultFilterPillStyle(vault)"
+                            @click="activeVaultId = vault.id"
+                        >
+                            {{ vault.name }}
+                            <span>{{ vaultFilterCount(vault.id) }}</span>
+                        </button>
                     </div>
 
                     <div v-if="visibleItems.length" class="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -967,26 +989,19 @@ if (props.selectedGroup) {
     gap: 0.45rem;
     border-radius: var(--radius-sm);
     border: 1px solid rgb(229 231 235 / 0.9);
-    background: rgb(255 255 255 / 0.82);
     padding: 0.45rem 0.72rem;
     font-size: 0.8rem;
     font-weight: 700;
-    color: rgb(75 85 99);
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.74), 0 8px 20px rgb(15 23 42 / 0.04);
     transition: transform 0.18s ease, border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .password-vault-filter-pill:hover {
-    border-color: hsl(var(--primary-app) / 0.28);
-    color: rgb(17 24 39);
     transform: translateY(-1px);
 }
 
 .password-vault-filter-pill.is-active {
-    border-color: hsl(var(--primary-app) / 0.30);
-    background: hsl(var(--primary-app) / 0.10);
-    color: hsl(var(--primary-app-dark));
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.68), 0 10px 24px hsl(var(--primary-app) / 0.10);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.68), 0 10px 24px hsl(var(--primary-app) / 0.14), 0 0 0 2px hsl(var(--primary-app) / 0.18);
 }
 
 .password-vault-filter-pill span {
@@ -996,16 +1011,12 @@ if (props.selectedGroup) {
     align-items: center;
     justify-content: center;
     border-radius: 999px;
-    background: rgb(243 244 246 / 0.9);
+    background: rgb(255 255 255 / 0.22);
     padding: 0 0.35rem;
     font-size: 0.68rem;
     font-weight: 800;
-    color: rgb(107 114 128);
-}
-
-.password-vault-filter-pill.is-active span {
-    background: hsl(var(--primary-app) / 0.14);
-    color: hsl(var(--primary-app-dark));
+    color: currentColor;
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.22);
 }
 
 .password-drawer-panel {
