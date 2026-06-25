@@ -695,7 +695,7 @@ watch(
                             </div>
                         </div>
 
-                        <div v-if="metaFor(widget).kind === 'password'" class="flex flex-1 flex-col gap-3 pr-3">
+                        <div v-if="metaFor(widget).kind === 'password'" class="flex flex-1 min-h-[240px] flex-col gap-3 pr-3">
                             <div class="space-y-2">
                                 <input v-model="passwordWidgetSearch" class="form-control h-[38px]" placeholder="Cerca per titolo" />
                                 <div class="flex flex-wrap gap-1.5">
@@ -720,7 +720,7 @@ watch(
                                 </div>
                             </div>
 
-                            <div class="space-y-1">
+                            <div class="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
                                 <button
                                     v-for="item in filteredPasswordItems"
                                     :key="`dashboard-password-${item.id}`"
@@ -818,13 +818,13 @@ watch(
 <style scoped>
 .dashboard-password-vault-pill {
     display: inline-flex;
-    min-height: 30px;
+    min-height: 24px;
     align-items: center;
     justify-content: center;
     border-radius: var(--radius-sm);
     border: 1px solid rgb(229 231 235 / 0.9);
-    padding: 0.35rem 0.62rem;
-    font-size: 0.72rem;
+    padding: 0.25rem 0.48rem;
+    font-size: 0.64rem;
     font-weight: 800;
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.42), 0 8px 18px rgb(15 23 42 / 0.04);
     transition: transform 0.18s ease, box-shadow 0.18s ease;
