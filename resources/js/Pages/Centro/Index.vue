@@ -28,6 +28,7 @@ import {
     ChevronRight,
     Clock,
     Copy,
+    CopyPlus,
     DatabaseBackup,
     ExternalLink,
     FileText,
@@ -74,6 +75,7 @@ const props = defineProps({
     services: Array,
     users: Array,
     taskDependencyOptions: Array,
+    projectTemplates: Array,
     billingStats: Object,
     clientStats: Object,
     documentSettings: Object,
@@ -337,6 +339,10 @@ const defaults = computed(() => {
         base.dependency_ids = [];
         base.dependent_ids = [];
     }
+    if (props.section === 'projects') {
+        base.template_id = '';
+        base.template_start_date = new Date().toISOString().slice(0, 10);
+    }
 
     return base;
 });
@@ -563,6 +569,14 @@ function namedOptions(source, emptyOption = null) {
 
     return emptyOption ? [emptyOption, ...options] : options;
 }
+
+const projectTemplateOptions = computed(() => [
+    { value: '', label: 'Nessun modello' },
+    ...(props.projectTemplates || []).map((template) => ({
+        value: template.id,
+        label: template.name,
+    })),
+]);
 
 function taskDependencyLabel(task) {
     return [task.title, task.client_name, task.due_date ? dateIt(task.due_date) : null]
@@ -3148,6 +3162,23 @@ function calendarDayStyle(sectionMonth, cell) {
                 </div>
 
                 <form :class="modalFormClass" @focusin.capture="closeTaskPeopleMenuOnOutside" @pointerdown.capture="closeTaskPeopleMenuOnOutside" @submit.prevent="submit">
+                    <section v-if="section === 'projects' && !editing" class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/80 p-3 md:col-span-3">
+                        <div class="mb-3">
+                            <h4 class="text-sm font-semibold text-gray-900">Crea da modello</h4>
+                            <p class="mt-1 text-xs text-gray-500">Se scegli un modello, il progetto verrà creato con fasi e task già programmate dalla data di avvio.</p>
+                        </div>
+                        <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_170px]">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Modello</label>
+                                <AppSelect v-model="form.template_id" :options="projectTemplateOptions" searchable />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Data avvio</label>
+                                <input v-model="form.template_start_date" type="date" class="form-control cursor-pointer" @click="openFieldPicker($event, { type: 'date' })" />
+                            </div>
+                        </div>
+                    </section>
+
                     <template
                         v-for="field in fields"
                         :key="field.name"
@@ -4416,6 +4447,10 @@ function calendarDayStyle(sectionMonth, cell) {
                         </div>
                     </div>
                     <button type="button" class="btn btn-outline" @click="resetProjectFilters"><RotateCcw class="h-4 w-4" :stroke-width="1.7" />Reset</button>
+                    <Link v-if="canCreate" :href="route('project-templates.index')" class="btn btn-outline">
+                        <CopyPlus class="h-4 w-4" :stroke-width="1.7" />
+                        Modelli
+                    </Link>
                     <button v-if="canCreate" type="button" class="btn btn-primary" @click="openCreate()">
                         <Plus class="h-4 w-4" :stroke-width="1.7" />
                         Nuovo Progetto

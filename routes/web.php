@@ -32,6 +32,10 @@ Route::middleware('auth')->group(function () {
     Route::delete('/clients/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'clients')->name('clients.destroy');
     Route::get('/projects', [CentroPageController::class, 'index'])->defaults('section', 'projects')->name('projects.index');
     Route::post('/projects', [CentroPageController::class, 'store'])->defaults('section', 'projects')->name('projects.store');
+    Route::get('/project-templates', [CentroPageController::class, 'projectTemplates'])->name('project-templates.index');
+    Route::post('/project-templates', [CentroPageController::class, 'storeProjectTemplate'])->name('project-templates.store');
+    Route::put('/project-templates/{id}', [CentroPageController::class, 'updateProjectTemplate'])->name('project-templates.update');
+    Route::delete('/project-templates/{id}', [CentroPageController::class, 'destroyProjectTemplate'])->name('project-templates.destroy');
     Route::get('/projects/{id}', [CentroPageController::class, 'show'])->defaults('section', 'projects')->name('projects.show');
     Route::put('/projects/{id}', [CentroPageController::class, 'update'])->defaults('section', 'projects')->name('projects.update');
     Route::post('/projects/{id}/sections', [CentroPageController::class, 'storeProjectSection'])->name('projects.sections.store');

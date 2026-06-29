@@ -574,7 +574,79 @@ class CentroPageController extends Controller
             'taskDependencyOptions' => in_array($section, ['tasks', 'calendar'], true)
                 ? ($this->isGuest($request) ? collect() : $this->taskDependencyOptions())
                 : [],
+            'projectTemplates' => $section === 'projects' && ! $this->isGuest($request)
+                ? $this->projectTemplateOptions()
+                : [],
         ]);
+    }
+
+    public function projectTemplates(Request $request): Response
+    {
+        $this->ensureAdmin($request);
+        abort_unless(Schema::hasTable('project_templates'), 404);
+
+        return Inertia::render('Centro/ProjectTemplates', [
+            'templates' => $this->projectTemplateRows(),
+        ]);
+    }
+
+    public function storeProjectTemplate(Request $request): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        $payload = $this->validatedProjectTemplatePayload($request);
+        $id = (string) str()->uuid();
+
+        DB::transaction(function () use ($payload, $id, $request) {
+            DB::table('project_templates')->insert([
+                'id' => $id,
+                'name' => $payload['name'],
+                'description' => $payload['description'] ?? null,
+                'color' => $payload['color'] ?? '#2563eb',
+                'active' => (bool) ($payload['active'] ?? true),
+                'created_by' => $request->user()->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $this->syncProjectTemplateStructure($id, $payload['sections'] ?? []);
+        });
+
+        return back()->with('status', 'Modello creato.');
+    }
+
+    public function updateProjectTemplate(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        DB::table('project_templates')->where('id', $id)->exists() || abort(404);
+        $payload = $this->validatedProjectTemplatePayload($request);
+
+        DB::transaction(function () use ($payload, $id) {
+            DB::table('project_templates')
+                ->where('id', $id)
+                ->update([
+                    'name' => $payload['name'],
+                    'description' => $payload['description'] ?? null,
+                    'color' => $payload['color'] ?? '#2563eb',
+                    'active' => (bool) ($payload['active'] ?? true),
+                    'updated_at' => now(),
+                ]);
+
+            DB::table('project_template_tasks')
+                ->whereIn('project_template_section_id', DB::table('project_template_sections')->where('project_template_id', $id)->pluck('id'))
+                ->delete();
+            DB::table('project_template_sections')->where('project_template_id', $id)->delete();
+            $this->syncProjectTemplateStructure($id, $payload['sections'] ?? []);
+        });
+
+        return back()->with('status', 'Modello aggiornato.');
+    }
+
+    public function destroyProjectTemplate(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        DB::table('project_templates')->where('id', $id)->delete();
+
+        return back()->with('status', 'Modello eliminato.');
     }
 
     public function updateAbsenceStatus(Request $request, string $id): RedirectResponse
@@ -1692,6 +1764,8 @@ class CentroPageController extends Controller
         $payload = $this->validatedPayload($request, $section);
         $taskPeople = $section === 'tasks' ? $this->extractTaskPeoplePayload($payload) : null;
         $taskDependencies = $section === 'tasks' ? $this->extractTaskDependencyPayload($payload) : null;
+        $projectFollowers = $section === 'projects' ? $this->extractProjectFollowersPayload($payload) : null;
+        $projectTemplate = $section === 'projects' ? $this->extractProjectTemplatePayload($payload) : null;
 
         if ($taskDependencies) {
             $dependencyIds = collect($taskDependencies['dependencies']);
@@ -1726,6 +1800,21 @@ class CentroPageController extends Controller
         }
 
         DB::table($this->config($section)['table'])->insert($payload);
+
+        if ($section === 'projects') {
+            if ($projectFollowers !== null) {
+                $this->syncProjectFollowersList($payload['id'], $projectFollowers);
+            }
+            if ($projectTemplate && ! empty($projectTemplate['template_id'])) {
+                $this->createProjectTasksFromTemplate(
+                    $payload['id'],
+                    $projectTemplate['template_id'],
+                    $projectTemplate['start_date'] ?: now('Europe/Rome')->toDateString(),
+                    $request->user()->id,
+                    $payload['client_id'] ?? null,
+                );
+            }
+        }
 
         if ($section === 'tasks') {
             $this->syncTaskPeopleLists($payload['id'], $taskPeople['assignees'] ?? [], $taskPeople['followers'] ?? []);
@@ -2453,6 +2542,8 @@ class CentroPageController extends Controller
                 'description' => ['nullable', 'string'],
                 'user_ids' => ['nullable', 'array'],
                 'user_ids.*' => ['uuid', 'exists:users,id'],
+                'template_id' => ['nullable', 'uuid', 'exists:project_templates,id'],
+                'template_start_date' => ['nullable', 'date'],
             ],
             'tasks' => [
                 'title' => ['required', 'string', 'max:255'],
@@ -2501,6 +2592,10 @@ class CentroPageController extends Controller
             default => abort(404),
         };
 
+        if ($section === 'projects' && ! Schema::hasTable('project_templates')) {
+            unset($rules['template_id'], $rules['template_start_date']);
+        }
+
         $payload = $request->validate($rules);
 
         foreach ($payload as $key => $value) {
@@ -2533,6 +2628,25 @@ class CentroPageController extends Controller
         }
 
         return $payload;
+    }
+
+    private function validatedProjectTemplatePayload(Request $request): array
+    {
+        return $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
+            'color' => ['nullable', 'string', 'max:20'],
+            'active' => ['boolean'],
+            'sections' => ['nullable', 'array'],
+            'sections.*.name' => ['required', 'string', 'max:255'],
+            'sections.*.tasks' => ['nullable', 'array'],
+            'sections.*.tasks.*.title' => ['required', 'string', 'max:255'],
+            'sections.*.tasks.*.description' => ['nullable', 'string'],
+            'sections.*.tasks.*.day_offset' => ['nullable', 'integer', 'min:0', 'max:3650'],
+            'sections.*.tasks.*.duration_days' => ['nullable', 'integer', 'min:1', 'max:3650'],
+            'sections.*.tasks.*.priority' => ['nullable', Rule::in(['low', 'medium', 'high', 'urgent'])],
+            'sections.*.tasks.*.task_type' => ['nullable', Rule::in(['task', 'project', 'ongoing', 'meeting'])],
+        ]);
     }
 
     private function extractTaskPeoplePayload(array &$payload): ?array
@@ -2585,6 +2699,22 @@ class CentroPageController extends Controller
         unset($payload['user_ids']);
 
         return $followers;
+    }
+
+    private function extractProjectTemplatePayload(array &$payload): ?array
+    {
+        if (! array_key_exists('template_id', $payload) && ! array_key_exists('template_start_date', $payload)) {
+            return null;
+        }
+
+        $template = [
+            'template_id' => $payload['template_id'] ?? null,
+            'start_date' => $payload['template_start_date'] ?? null,
+        ];
+
+        unset($payload['template_id'], $payload['template_start_date']);
+
+        return $template;
     }
 
     private function syncTaskPeopleLists(string $taskId, array $assigneeIds, array $followerIds): void
@@ -4865,6 +4995,153 @@ class CentroPageController extends Controller
                 'tasks.parent_task_id',
                 'clients.name as client_name',
             ]);
+    }
+
+    private function projectTemplateOptions(): \Illuminate\Support\Collection
+    {
+        if (! Schema::hasTable('project_templates')) {
+            return collect();
+        }
+
+        return DB::table('project_templates')
+            ->where('active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'color']);
+    }
+
+    private function projectTemplateRows(): \Illuminate\Support\Collection
+    {
+        if (! Schema::hasTable('project_templates')) {
+            return collect();
+        }
+
+        $templates = DB::table('project_templates')
+            ->leftJoin('users', 'users.id', '=', 'project_templates.created_by')
+            ->orderBy('project_templates.name')
+            ->get([
+                'project_templates.*',
+                'users.name as created_by_name',
+            ]);
+        $sections = DB::table('project_template_sections')
+            ->orderBy('position')
+            ->orderBy('created_at')
+            ->get()
+            ->groupBy('project_template_id');
+        $tasks = DB::table('project_template_tasks')
+            ->orderBy('position')
+            ->orderBy('created_at')
+            ->get()
+            ->groupBy('project_template_section_id');
+
+        return $templates->map(function ($template) use ($sections, $tasks) {
+            $template->sections = ($sections[$template->id] ?? collect())
+                ->map(function ($section) use ($tasks) {
+                    $section->tasks = ($tasks[$section->id] ?? collect())->values();
+
+                    return $section;
+                })
+                ->values();
+            $template->tasks_count = $template->sections->sum(fn ($section) => $section->tasks->count());
+
+            return $template;
+        });
+    }
+
+    private function syncProjectTemplateStructure(string $templateId, array $sections): void
+    {
+        foreach (array_values($sections) as $sectionIndex => $section) {
+            $sectionId = (string) str()->uuid();
+            DB::table('project_template_sections')->insert([
+                'id' => $sectionId,
+                'project_template_id' => $templateId,
+                'name' => $section['name'],
+                'position' => $sectionIndex,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            foreach (array_values($section['tasks'] ?? []) as $taskIndex => $task) {
+                DB::table('project_template_tasks')->insert([
+                    'id' => (string) str()->uuid(),
+                    'project_template_section_id' => $sectionId,
+                    'title' => $task['title'],
+                    'description' => $task['description'] ?? null,
+                    'day_offset' => (int) ($task['day_offset'] ?? 0),
+                    'duration_days' => max(1, (int) ($task['duration_days'] ?? 1)),
+                    'priority' => $task['priority'] ?? 'medium',
+                    'task_type' => $task['task_type'] ?? 'project',
+                    'position' => $taskIndex,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        }
+    }
+
+    private function createProjectTasksFromTemplate(string $projectId, string $templateId, string $startDate, string $actorId, ?string $clientId): void
+    {
+        $template = DB::table('project_templates')->where('id', $templateId)->where('active', true)->first();
+        if (! $template) {
+            return;
+        }
+
+        $baseDate = \Carbon\Carbon::parse($startDate, 'Europe/Rome')->startOfDay();
+        $templateSections = DB::table('project_template_sections')
+            ->where('project_template_id', $templateId)
+            ->orderBy('position')
+            ->orderBy('created_at')
+            ->get();
+
+        foreach ($templateSections as $templateSection) {
+            $sectionId = (string) str()->uuid();
+            DB::table('project_sections')->insert([
+                'id' => $sectionId,
+                'project_id' => $projectId,
+                'name' => $templateSection->name,
+                'position' => DB::table('project_sections')->where('project_id', $projectId)->count(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $templateTasks = DB::table('project_template_tasks')
+                ->where('project_template_section_id', $templateSection->id)
+                ->orderBy('position')
+                ->orderBy('created_at')
+                ->get();
+
+            foreach ($templateTasks as $templateTask) {
+                $taskStart = $baseDate->copy()->addDays((int) $templateTask->day_offset);
+                $taskDue = $taskStart->copy()->addDays(max(1, (int) $templateTask->duration_days) - 1);
+
+                DB::table('tasks')->insert([
+                    'id' => (string) str()->uuid(),
+                    'title' => $templateTask->title,
+                    'description' => $templateTask->description,
+                    'project_id' => $projectId,
+                    'project_section_id' => $sectionId,
+                    'client_id' => $clientId,
+                    'service_id' => null,
+                    'parent_task_id' => null,
+                    'start_date' => $taskStart->toDateString(),
+                    'due_date' => $taskDue->toDateString(),
+                    'due_time' => null,
+                    'location' => null,
+                    'priority' => $templateTask->priority,
+                    'status' => 'todo',
+                    'task_type' => $templateTask->task_type,
+                    'recurring_enabled' => false,
+                    'recurring_mode' => null,
+                    'recurring_interval_value' => null,
+                    'recurring_interval_unit' => null,
+                    'recurring_weekday' => null,
+                    'recurring_month_day' => null,
+                    'created_by' => $actorId,
+                    'position' => $templateTask->position,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        }
     }
 
     private function projectSections(string $projectId): \Illuminate\Support\Collection
