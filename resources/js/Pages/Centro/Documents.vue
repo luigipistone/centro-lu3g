@@ -365,32 +365,7 @@ function deleteLabel(type) {
                     {{ page.props.flash.status }}
                 </div>
 
-                <section v-if="canManage" class="surface p-2">
-                    <div class="grid gap-2 sm:grid-cols-2">
-                        <button
-                            type="button"
-                            :class="['rounded-[var(--radius-sm)] px-4 py-3 text-left transition', activeAdminSection === 'documents' ? 'bg-[hsl(var(--primary-app))] text-white shadow-[0_12px_28px_rgba(28,42,73,0.16)]' : 'bg-white/70 text-gray-600 hover:bg-[hsl(var(--primary-app)/0.08)] hover:text-[hsl(var(--primary-app-dark))]']"
-                            @click="activeAdminSection = 'documents'"
-                        >
-                            <span class="block text-sm font-semibold">Documenti</span>
-                            <span :class="['mt-0.5 block text-xs', activeAdminSection === 'documents' ? 'text-white/75' : 'text-gray-400']">
-                                {{ visibleDocuments.length }} documenti e letture utenti
-                            </span>
-                        </button>
-                        <button
-                            type="button"
-                            :class="['rounded-[var(--radius-sm)] px-4 py-3 text-left transition', activeAdminSection === 'messages' ? 'bg-[hsl(var(--primary-app))] text-white shadow-[0_12px_28px_rgba(28,42,73,0.16)]' : 'bg-white/70 text-gray-600 hover:bg-[hsl(var(--primary-app)/0.08)] hover:text-[hsl(var(--primary-app-dark))]']"
-                            @click="activeAdminSection = 'messages'"
-                        >
-                            <span class="block text-sm font-semibold">Messaggi</span>
-                            <span :class="['mt-0.5 block text-xs', activeAdminSection === 'messages' ? 'text-white/75' : 'text-gray-400']">
-                                {{ visibleMessages.length }} messaggi e conferme lettura
-                            </span>
-                        </button>
-                    </div>
-                </section>
-
-                <section v-if="canManage && activeAdminSection === 'documents'" class="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+                <section v-if="canManage" class="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
                     <form class="surface space-y-5 p-5" @submit.prevent="submitDocument">
                         <div class="flex items-start justify-between gap-4">
                             <div>
@@ -554,7 +529,7 @@ function deleteLabel(type) {
                     </form>
                 </section>
 
-                <section v-if="canManage && activeAdminSection === 'messages'" class="surface p-5">
+                <section v-if="canManage" class="surface p-5">
                     <form class="space-y-5" @submit.prevent="submitMessage">
                         <div class="flex items-start justify-between gap-4">
                             <div>
@@ -662,6 +637,27 @@ function deleteLabel(type) {
                             Pubblica messaggio
                         </button>
                     </form>
+                </section>
+
+                <section v-if="canManage" class="surface p-2">
+                    <div class="flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            :class="['settings-tab', activeAdminSection === 'documents' ? 'settings-tab-active' : '']"
+                            @click="activeAdminSection = 'documents'"
+                        >
+                            Documenti
+                            <span class="ml-1 text-xs opacity-70">{{ visibleDocuments.length }}</span>
+                        </button>
+                        <button
+                            type="button"
+                            :class="['settings-tab', activeAdminSection === 'messages' ? 'settings-tab-active' : '']"
+                            @click="activeAdminSection = 'messages'"
+                        >
+                            Messaggi
+                            <span class="ml-1 text-xs opacity-70">{{ visibleMessages.length }}</span>
+                        </button>
+                    </div>
                 </section>
 
                 <section v-if="!canManage || activeAdminSection === 'messages'" class="space-y-4">
