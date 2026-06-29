@@ -9,6 +9,7 @@ import { computed, nextTick, ref } from 'vue';
 
 const props = defineProps({
     canManage: Boolean,
+    activeAdminSection: String,
     documents: Array,
     messages: Array,
     groups: Array,
@@ -24,8 +25,8 @@ const currentYearVisibleCount = ref(5);
 const documentDescriptionEditor = ref(null);
 const messageBodyEditor = ref(null);
 const categoryFilters = ref({});
-const activeAdminSection = ref('documents');
 const isSuperadmin = computed(() => page.props.auth?.user?.role === 'superadmin');
+const activeAdminSection = computed(() => props.activeAdminSection || null);
 
 const documentForm = useForm({
     title: '',
@@ -365,7 +366,7 @@ function deleteLabel(type) {
                     {{ page.props.flash.status }}
                 </div>
 
-                <section v-if="canManage" class="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+                <section v-if="canManage && !activeAdminSection" class="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
                     <form class="surface space-y-5 p-5" @submit.prevent="submitDocument">
                         <div class="flex items-start justify-between gap-4">
                             <div>
@@ -529,7 +530,7 @@ function deleteLabel(type) {
                     </form>
                 </section>
 
-                <section v-if="canManage" class="surface p-5">
+                <section v-if="canManage && !activeAdminSection" class="surface p-5">
                     <form class="space-y-5" @submit.prevent="submitMessage">
                         <div class="flex items-start justify-between gap-4">
                             <div>
@@ -639,24 +640,27 @@ function deleteLabel(type) {
                     </form>
                 </section>
 
-                <section v-if="canManage" class="surface p-2">
-                    <div class="flex flex-wrap gap-2">
-                        <button
-                            type="button"
-                            :class="['settings-tab', activeAdminSection === 'documents' ? 'settings-tab-active' : '']"
-                            @click="activeAdminSection = 'documents'"
+                <section v-if="canManage" class="surface p-5">
+                    <div class="flex flex-wrap items-center gap-3">
+                        <Link
+                            :href="route('documents.list')"
+                            :class="['btn', activeAdminSection === 'documents' ? 'btn-primary' : 'btn-outline']"
                         >
-                            Documenti
-                            <span class="ml-1 text-xs opacity-70">{{ visibleDocuments.length }}</span>
-                        </button>
-                        <button
-                            type="button"
-                            :class="['settings-tab', activeAdminSection === 'messages' ? 'settings-tab-active' : '']"
-                            @click="activeAdminSection = 'messages'"
+                            <FileText class="h-4 w-4" :stroke-width="1.7" />
+                            Tutti i documenti
+                            <span class="rounded-full bg-white/20 px-2 py-0.5 text-xs">{{ visibleDocuments.length }}</span>
+                        </Link>
+                        <Link
+                            :href="route('documents.messages')"
+                            :class="['btn', activeAdminSection === 'messages' ? 'btn-primary' : 'btn-outline']"
                         >
-                            Messaggi
-                            <span class="ml-1 text-xs opacity-70">{{ visibleMessages.length }}</span>
-                        </button>
+                            <MessageSquare class="h-4 w-4" :stroke-width="1.7" />
+                            Tutti i messaggi
+                            <span class="rounded-full bg-white/20 px-2 py-0.5 text-xs">{{ visibleMessages.length }}</span>
+                        </Link>
+                        <Link v-if="activeAdminSection" :href="route('documents.index')" class="btn btn-outline">
+                            Torna alla creazione
+                        </Link>
                     </div>
                 </section>
 

@@ -718,6 +718,7 @@ class CentroPageController extends Controller
 
         return Inertia::render('Centro/Documents', [
             'canManage' => $canManage,
+            'activeAdminSection' => $canManage ? $request->route('documentView') : null,
             'documents' => $this->companyDocumentRows($canManage ? null : $userId, $canManage),
             'messages' => $this->companyMessageRows($canManage ? null : $userId, $canManage),
             'groups' => $canManage ? $this->documentGroupRows() : [],
