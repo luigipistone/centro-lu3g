@@ -3,7 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, Bold, Building2, Copy, Italic, KeyRound, List, ListOrdered, Pencil, Plus, Quote, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
+import { ArrowLeft, Bold, Building2, Copy, ExternalLink, Italic, KeyRound, List, ListOrdered, Pencil, Plus, Quote, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -361,6 +361,26 @@ async function copyUsername() {
         await navigator.clipboard?.writeText(revealedUsername.value);
         revealCopied.value = 'Nome utente copiato.';
     }
+}
+
+function websiteUrl(url) {
+    const value = String(url || '').trim();
+    if (!value) return '';
+    const withProtocol = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+
+    try {
+        const parsed = new URL(withProtocol);
+        return ['http:', 'https:'].includes(parsed.protocol) ? parsed.toString() : '';
+    } catch (error) {
+        return '';
+    }
+}
+
+function openWebsite(url) {
+    const target = websiteUrl(url);
+    if (!target) return;
+
+    window.open(target, '_blank', 'noopener,noreferrer');
 }
 
 function openDelete(target, type) {
@@ -950,6 +970,15 @@ if (props.selectedGroup) {
                             <p class="min-w-0 flex-1 break-all font-mono text-sm tracking-[0.12em] text-gray-900">{{ maskedRevealedPassword }}</p>
                             <span class="field-copy-button" title="Copia password">
                                 <Copy class="h-4 w-4" :stroke-width="1.7" />
+                            </span>
+                        </div>
+                    </button>
+                    <button v-if="revealItem.url" type="button" class="password-reveal-row group/reveal-field w-full text-left" @click="openWebsite(revealItem.url)">
+                        <span class="text-xs font-semibold uppercase tracking-wide text-gray-400">Sito web</span>
+                        <div class="mt-1 flex items-center gap-2">
+                            <p class="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{{ revealItem.url }}</p>
+                            <span class="field-copy-button" title="Apri sito web">
+                                <ExternalLink class="h-4 w-4" :stroke-width="1.7" />
                             </span>
                         </div>
                     </button>
