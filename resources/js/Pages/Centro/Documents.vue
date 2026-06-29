@@ -4,7 +4,7 @@ import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { dateIt } from '@/utils/formatters';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { Bold, Check, ChevronLeft, FileText, Heading3, Italic, Link2, List, ListOrdered, MessageSquare, Plus, Quote, Send, Trash2, Underline, Upload, Users } from '@lucide/vue';
+import { Bold, Check, ChevronLeft, Download, FileText, Heading3, Italic, Link2, List, ListOrdered, MessageSquare, Plus, Quote, Send, Table2, Trash2, Underline, Upload, Users } from '@lucide/vue';
 import { computed, nextTick, ref } from 'vue';
 
 const props = defineProps({
@@ -12,6 +12,7 @@ const props = defineProps({
     activeAdminSection: String,
     documents: Array,
     messages: Array,
+    attendanceReport: Object,
     groups: Array,
     users: Array,
     documentUsers: Array,
@@ -27,6 +28,8 @@ const messageBodyEditor = ref(null);
 const categoryFilters = ref({});
 const isSuperadmin = computed(() => page.props.auth?.user?.role === 'superadmin');
 const activeAdminSection = computed(() => props.activeAdminSection || null);
+const reportYear = ref(props.attendanceReport?.year || new Date().getFullYear());
+const reportMonth = ref(props.attendanceReport?.month || (new Date().getMonth() + 1));
 
 const documentForm = useForm({
     title: '',
@@ -62,6 +65,24 @@ const visibleDocuments = computed(() => props.documents || []);
 const visibleMessages = computed(() => props.messages || []);
 const documentUsers = computed(() => props.documentUsers || []);
 const currentYear = new Date().getFullYear();
+const reportYearOptions = computed(() => Array.from({ length: 6 }, (_, index) => {
+    const year = currentYear - 4 + index;
+    return { value: year, label: String(year) };
+}));
+const reportMonthOptions = [
+    { value: 1, label: 'Gennaio' },
+    { value: 2, label: 'Febbraio' },
+    { value: 3, label: 'Marzo' },
+    { value: 4, label: 'Aprile' },
+    { value: 5, label: 'Maggio' },
+    { value: 6, label: 'Giugno' },
+    { value: 7, label: 'Luglio' },
+    { value: 8, label: 'Agosto' },
+    { value: 9, label: 'Settembre' },
+    { value: 10, label: 'Ottobre' },
+    { value: 11, label: 'Novembre' },
+    { value: 12, label: 'Dicembre' },
+];
 const categoryOptions = computed(() => [
     { value: 'all', label: 'Tutte le categorie' },
     ...Object.entries(props.documentCategories || {}).map(([value, label]) => ({ value, label })),
@@ -322,6 +343,23 @@ function showMoreCurrentYearDocuments() {
     currentYearVisibleCount.value += 5;
 }
 
+function loadReport() {
+    router.get(route('documents.reports'), {
+        year: reportYear.value,
+        month: reportMonth.value,
+    }, {
+        preserveScroll: true,
+        preserveState: true,
+    });
+}
+
+function reportExportHref() {
+    return route('documents.reports.export', {
+        year: reportYear.value,
+        month: reportMonth.value,
+    });
+}
+
 function deleteLabel(type) {
     if (type === 'group') return 'il gruppo';
     if (type === 'message') return 'il messaggio';
@@ -387,6 +425,13 @@ function deleteLabel(type) {
                             <MessageSquare class="h-4 w-4" :stroke-width="1.7" />
                             Tutti i messaggi
                             <span class="rounded-full bg-white/20 px-2 py-0.5 text-xs">{{ visibleMessages.length }}</span>
+                        </Link>
+                        <Link
+                            :href="route('documents.reports')"
+                            :class="['btn', activeAdminSection === 'reports' ? 'btn-primary' : 'btn-outline']"
+                        >
+                            <Table2 class="h-4 w-4" :stroke-width="1.7" />
+                            Report e dati
                         </Link>
                     </div>
                 </section>
@@ -715,6 +760,87 @@ function deleteLabel(type) {
                     </div>
                     <div v-else class="surface px-5 py-8 text-center text-sm text-gray-500">
                         Nessun messaggio disponibile.
+                    </div>
+                </section>
+
+                <section v-if="canManage && activeAdminSection === 'reports'" class="space-y-6">
+                    <div class="surface p-5">
+                        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                            <div>
+                                <h3 class="text-base font-semibold text-gray-900">Report e dati</h3>
+                                <p class="mt-1 text-sm text-gray-500">Presenze mensili nel formato del tracciato paghe.</p>
+                            </div>
+                            <div class="grid gap-3 sm:grid-cols-[160px_140px_auto]">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Mese</label>
+                                    <AppSelect v-model="reportMonth" :options="reportMonthOptions" @update:model-value="loadReport" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Anno</label>
+                                    <AppSelect v-model="reportYear" :options="reportYearOptions" @update:model-value="loadReport" />
+                                </div>
+                                <a :href="reportExportHref()" class="btn btn-primary self-end">
+                                    <Download class="h-4 w-4" :stroke-width="1.7" />
+                                    Esporta XLSX
+                                </a>
+                            </div>
+                        </div>
+
+                        <div v-if="attendanceReport" class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                            <div class="rounded-[var(--radius-sm)] bg-white/70 px-4 py-3">
+                                <p class="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">Persone</p>
+                                <p class="mt-1 text-xl font-semibold text-gray-900">{{ attendanceReport.summary.users }}</p>
+                            </div>
+                            <div class="rounded-[var(--radius-sm)] bg-white/70 px-4 py-3">
+                                <p class="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">Ore ordinarie</p>
+                                <p class="mt-1 text-xl font-semibold text-gray-900">{{ attendanceReport.summary.ordinary }}</p>
+                            </div>
+                            <div class="rounded-[var(--radius-sm)] bg-white/70 px-4 py-3">
+                                <p class="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">Ferie</p>
+                                <p class="mt-1 text-xl font-semibold text-gray-900">{{ attendanceReport.summary.vacation }}</p>
+                            </div>
+                            <div class="rounded-[var(--radius-sm)] bg-white/70 px-4 py-3">
+                                <p class="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">Permessi</p>
+                                <p class="mt-1 text-xl font-semibold text-gray-900">{{ attendanceReport.summary.permissions }}</p>
+                            </div>
+                            <div class="rounded-[var(--radius-sm)] bg-white/70 px-4 py-3">
+                                <p class="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">Malattia</p>
+                                <p class="mt-1 text-xl font-semibold text-gray-900">{{ attendanceReport.summary.sickness }}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="attendanceReport" class="surface overflow-hidden">
+                        <div class="border-b border-white/70 px-5 py-4">
+                            <h3 class="text-base font-semibold text-gray-900">{{ attendanceReport.month_label }}</h3>
+                            <p class="mt-1 text-sm text-gray-500">Anteprima sintetica. L'export contiene tutti i giorni del mese e i riepiloghi finali.</p>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-100 text-sm">
+                                <thead class="bg-gray-50/80">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Cognome Nome</th>
+                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Matricola</th>
+                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Ore ordinarie</th>
+                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Ferie</th>
+                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Permessi</th>
+                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Malattia</th>
+                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Altre assenze</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100 bg-white/50">
+                                    <tr v-for="row in attendanceReport.rows" :key="row.user_id" class="hover:bg-gray-50">
+                                        <td class="px-4 py-3 font-semibold text-gray-900">{{ row.name }}</td>
+                                        <td class="px-4 py-3 text-gray-500">{{ row.employee_code }}</td>
+                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.ordinary }}</td>
+                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.vacation }}</td>
+                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.permissions }}</td>
+                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.sickness }}</td>
+                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.other }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </section>
 

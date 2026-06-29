@@ -675,6 +675,7 @@ const userForm = useForm({
     name: props.record.name || '',
     email: props.record.email || '',
     role: props.record.role || 'guest',
+    employee_code: props.record.employee_code || '',
     job_title: props.record.job_title || '',
     phone: props.record.phone || '',
     bio: props.record.bio || '',
@@ -1856,6 +1857,7 @@ function userPayload() {
         name: userForm.name,
         email: userForm.email,
         role: userForm.role,
+        employee_code: userForm.employee_code,
         job_title: userForm.job_title,
         phone: userForm.phone,
         bio: userForm.bio,
@@ -3200,6 +3202,7 @@ watch(
         userForm.name,
         userForm.email,
         userForm.role,
+        userForm.employee_code,
         userForm.job_title,
         userForm.phone,
         userForm.bio,
@@ -4724,6 +4727,11 @@ onUnmounted(() => {
                                 <label class="block text-sm font-medium text-gray-700">Qualifica</label>
                                 <input v-model="userForm.job_title" class="form-control" placeholder="Es. Account manager" />
                                 <div v-if="userForm.errors.job_title" class="mt-1 text-sm text-red-600">{{ userForm.errors.job_title }}</div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Matricola</label>
+                                <input v-model="userForm.employee_code" class="form-control" placeholder="Es. 0001" />
+                                <div v-if="userForm.errors.employee_code" class="mt-1 text-sm text-red-600">{{ userForm.errors.employee_code }}</div>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Telefono</label>

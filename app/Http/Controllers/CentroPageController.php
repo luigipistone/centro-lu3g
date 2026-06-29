@@ -715,12 +715,15 @@ class CentroPageController extends Controller
     {
         $canManage = $this->canManageDocuments($request);
         $userId = (string) $request->user()->id;
+        $reportYear = (int) $request->integer('year', now('Europe/Rome')->year);
+        $reportMonth = (int) $request->integer('month', now('Europe/Rome')->month);
 
         return Inertia::render('Centro/Documents', [
             'canManage' => $canManage,
             'activeAdminSection' => $canManage ? $request->route('documentView') : null,
             'documents' => $this->companyDocumentRows($canManage ? null : $userId, $canManage),
             'messages' => $this->companyMessageRows($canManage ? null : $userId, $canManage),
+            'attendanceReport' => $canManage ? $this->attendanceReportData($reportYear, $reportMonth) : null,
             'groups' => $canManage ? $this->documentGroupRows() : [],
             'users' => $canManage ? $this->userOptions() : [],
             'documentUsers' => $canManage ? $this->companyDocumentUserRows() : [],
@@ -761,6 +764,25 @@ class CentroPageController extends Controller
             'users' => $canManage ? $this->userOptions() : [],
             'documentCategories' => $this->companyDocumentCategories(),
         ]);
+    }
+
+    public function exportAttendanceReport(Request $request)
+    {
+        $this->ensureAdmin($request);
+
+        $payload = $request->validate([
+            'year' => ['nullable', 'integer', 'min:2020', 'max:2100'],
+            'month' => ['nullable', 'integer', 'min:1', 'max:12'],
+        ]);
+
+        $year = (int) ($payload['year'] ?? now('Europe/Rome')->year);
+        $month = (int) ($payload['month'] ?? now('Europe/Rome')->month);
+        $report = $this->attendanceReportData($year, $month);
+        $path = $this->buildAttendanceReportXlsx($report);
+
+        return response()->download($path, $report['file_name'], [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
     }
 
     public function storeCompanyDocument(Request $request): RedirectResponse
@@ -1534,7 +1556,7 @@ class CentroPageController extends Controller
                 ->leftJoin('user_roles', 'user_roles.user_id', '=', 'users.id')
                 ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
                 ->where('users.id', $id)
-                ->select('users.*', 'user_roles.role', 'profiles.avatar_url', 'profiles.job_title', 'profiles.phone', 'profiles.bio', 'profiles.completion_effect', 'profiles.smartworking_day')
+                ->select('users.*', 'user_roles.role', 'profiles.avatar_url', 'profiles.employee_code', 'profiles.job_title', 'profiles.phone', 'profiles.bio', 'profiles.completion_effect', 'profiles.smartworking_day')
                 ->first(),
             'absences' => DB::table('absence_requests')
                 ->leftJoin('users', 'users.id', '=', 'absence_requests.user_id')
@@ -3131,6 +3153,7 @@ class CentroPageController extends Controller
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'role' => ['required', Rule::in(['superadmin', 'admin', 'editor', 'guest'])],
             'password' => ['nullable', 'string', 'min:8'],
+            'employee_code' => ['nullable', 'string', 'max:64'],
             'job_title' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:255'],
             'bio' => ['nullable', 'string'],
@@ -3153,6 +3176,7 @@ class CentroPageController extends Controller
             [
                 'id' => (string) str()->uuid(),
                 'full_name' => $user->name,
+                'employee_code' => $payload['employee_code'] ?? null,
                 'job_title' => $payload['job_title'] ?? null,
                 'phone' => $payload['phone'] ?? null,
                 'bio' => $payload['bio'] ?? null,
@@ -4007,6 +4031,323 @@ class CentroPageController extends Controller
             'documenti_identita' => "Documenti d'identità",
             'documenti_vari' => 'Documenti Vari',
         ];
+    }
+
+    private function attendanceReportData(int $year, int $month): array
+    {
+        $year = max(2020, min(2100, $year));
+        $month = max(1, min(12, $month));
+        $start = \Carbon\Carbon::create($year, $month, 1, 0, 0, 0, 'Europe/Rome')->startOfDay();
+        $end = $start->copy()->endOfMonth()->startOfDay();
+        $days = collect(\Carbon\CarbonPeriod::create($start, $end))->map(fn ($day) => [
+            'iso' => $day->toDateString(),
+            'day' => (int) $day->day,
+            'weekday' => $this->shortItalianWeekday((int) $day->dayOfWeekIso),
+            'label' => $this->shortItalianWeekday((int) $day->dayOfWeekIso).' '.$day->day,
+            'is_weekend' => $day->isWeekend(),
+        ])->values();
+
+        $users = DB::table('users')
+            ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
+            ->leftJoin('user_roles', 'user_roles.user_id', '=', 'users.id')
+            ->where(function ($query) {
+                $query->whereNull('user_roles.role')->orWhere('user_roles.role', '!=', 'guest');
+            })
+            ->orderBy('users.name')
+            ->get([
+                'users.id',
+                'users.name',
+                'profiles.full_name',
+                'profiles.employee_code',
+            ]);
+
+        $absenceRows = DB::table('absence_requests')
+            ->where('status', '!=', 'rejected')
+            ->whereDate('start_date', '<=', $end->toDateString())
+            ->whereRaw('DATE(COALESCE(end_date, start_date)) >= ?', [$start->toDateString()])
+            ->get();
+
+        $rows = $users->map(function ($user, $index) use ($days, $absenceRows, $start, $end) {
+            $dayValues = [];
+            $totals = [
+                'ordinary' => 0,
+                'extra' => 0,
+                'vacation' => 0,
+                'permissions' => 0,
+                'sickness' => 0,
+                'other' => 0,
+                'holiday' => 0,
+            ];
+
+            foreach ($days as $day) {
+                if ($day['is_weekend']) {
+                    $dayValues[$day['iso']] = '';
+                    continue;
+                }
+
+                $workMinutes = 480;
+                $label = null;
+                $dayAbsences = $absenceRows
+                    ->where('user_id', $user->id)
+                    ->filter(function ($absence) use ($day) {
+                        $startDate = \Carbon\Carbon::parse($absence->start_date)->toDateString();
+                        $endDate = \Carbon\Carbon::parse($absence->end_date ?: $absence->start_date)->toDateString();
+
+                        return $startDate <= $day['iso'] && $endDate >= $day['iso'];
+                    });
+
+                foreach ($dayAbsences as $absence) {
+                    $minutes = $this->absenceMinutesForDay($absence, $day['iso']);
+                    $workMinutes = max(0, $workMinutes - $minutes);
+
+                    if ($absence->type === 'vacation') {
+                        $totals['vacation'] += $minutes;
+                        $label = $minutes >= 480 ? 'FER' : $this->formatAttendanceMinutes($workMinutes);
+                    } elseif (in_array($absence->type, ['permission', 'late'], true)) {
+                        $totals['permissions'] += $minutes;
+                        $label = $workMinutes > 0 ? $this->formatAttendanceMinutes($workMinutes) : 'PER';
+                    } elseif ($absence->type === 'sickness') {
+                        $totals['sickness'] += $minutes;
+                        $label = $minutes >= 480 ? 'MAL' : $this->formatAttendanceMinutes($workMinutes);
+                    } else {
+                        $totals['other'] += $minutes;
+                        $label = $workMinutes > 0 ? $this->formatAttendanceMinutes($workMinutes) : 'ASS';
+                    }
+                }
+
+                $totals['ordinary'] += $workMinutes;
+                $dayValues[$day['iso']] = $label ?: $this->formatAttendanceMinutes($workMinutes);
+            }
+
+            return [
+                'user_id' => $user->id,
+                'name' => $user->full_name ?: $user->name,
+                'employee_code' => $user->employee_code ?: str_pad((string) ($index + 1), 4, '0', STR_PAD_LEFT),
+                'days' => $dayValues,
+                'totals' => $totals,
+                'total_labels' => collect($totals)->map(fn ($minutes) => $this->formatAttendanceMinutes($minutes))->all(),
+            ];
+        })->values();
+
+        return [
+            'company' => 'LU3G SRL',
+            'year' => $year,
+            'month' => $month,
+            'month_label' => $this->italianMonthName($month).' '.$year,
+            'file_name' => 'lu3gsrl-presenze-'.strtolower($this->italianMonthName($month)).'-'.$year.'.xlsx',
+            'days' => $days,
+            'rows' => $rows,
+            'summary' => [
+                'users' => $rows->count(),
+                'ordinary' => $this->formatAttendanceMinutes($rows->sum(fn ($row) => $row['totals']['ordinary'])),
+                'vacation' => $this->formatAttendanceMinutes($rows->sum(fn ($row) => $row['totals']['vacation'])),
+                'permissions' => $this->formatAttendanceMinutes($rows->sum(fn ($row) => $row['totals']['permissions'])),
+                'sickness' => $this->formatAttendanceMinutes($rows->sum(fn ($row) => $row['totals']['sickness'])),
+                'other' => $this->formatAttendanceMinutes($rows->sum(fn ($row) => $row['totals']['other'])),
+            ],
+        ];
+    }
+
+    private function absenceMinutesForDay(object $absence, string $dayIso): int
+    {
+        $startDate = \Carbon\Carbon::parse($absence->start_date)->toDateString();
+        $endDate = \Carbon\Carbon::parse($absence->end_date ?: $absence->start_date)->toDateString();
+        if ($startDate === $endDate && $dayIso === $startDate && $absence->start_time && $absence->end_time) {
+            return min(480, max(0, \Carbon\Carbon::parse($absence->start_time)->diffInMinutes(\Carbon\Carbon::parse($absence->end_time))));
+        }
+
+        return 480;
+    }
+
+    private function formatAttendanceMinutes(int|float $minutes): string
+    {
+        $minutes = (int) round($minutes);
+        $hours = intdiv($minutes, 60);
+        $remaining = $minutes % 60;
+
+        return $remaining > 0 ? $hours.'h '.$remaining.'m' : $hours.'h';
+    }
+
+    private function italianMonthName(int $month): string
+    {
+        return [
+            1 => 'Gennaio',
+            2 => 'Febbraio',
+            3 => 'Marzo',
+            4 => 'Aprile',
+            5 => 'Maggio',
+            6 => 'Giugno',
+            7 => 'Luglio',
+            8 => 'Agosto',
+            9 => 'Settembre',
+            10 => 'Ottobre',
+            11 => 'Novembre',
+            12 => 'Dicembre',
+        ][$month] ?? 'Mese';
+    }
+
+    private function shortItalianWeekday(int $dayOfWeekIso): string
+    {
+        return [
+            1 => 'Lun',
+            2 => 'Mar',
+            3 => 'Mer',
+            4 => 'Gio',
+            5 => 'Ven',
+            6 => 'Sab',
+            7 => 'Dom',
+        ][$dayOfWeekIso] ?? '';
+    }
+
+    private function buildAttendanceReportXlsx(array $report): string
+    {
+        $headers = array_merge(
+            ['Cognome Nome', 'Matricola'],
+            collect($report['days'])->pluck('label')->all(),
+            ['Ore ordinarie', 'Lavoro extra', 'Ferie', 'Permessi', 'Malattia', 'Altre assenze', 'Festivo'],
+        );
+        $rows = [
+            ['Azienda: '.$report['company']],
+            [],
+            [$report['month_label']],
+            [],
+            $headers,
+        ];
+
+        foreach ($report['rows'] as $row) {
+            $rows[] = array_merge(
+                [$row['name'], $row['employee_code']],
+                collect($report['days'])->map(fn ($day) => $row['days'][$day['iso']] ?? '')->all(),
+                [
+                    $row['total_labels']['ordinary'],
+                    $row['total_labels']['extra'],
+                    $row['total_labels']['vacation'],
+                    $row['total_labels']['permissions'],
+                    $row['total_labels']['sickness'],
+                    $row['total_labels']['other'],
+                    $row['total_labels']['holiday'],
+                ],
+            );
+        }
+
+        $sheetXml = $this->attendanceSheetXml($rows);
+        $tempPath = tempnam(sys_get_temp_dir(), 'centro-presenze-').'.xlsx';
+        $zip = new \ZipArchive();
+        $zip->open($tempPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
+        $zip->addFromString('[Content_Types].xml', $this->xlsxContentTypesXml());
+        $zip->addFromString('_rels/.rels', $this->xlsxRootRelsXml());
+        $zip->addFromString('xl/workbook.xml', $this->xlsxWorkbookXml($report['month_label']));
+        $zip->addFromString('xl/_rels/workbook.xml.rels', $this->xlsxWorkbookRelsXml());
+        $zip->addFromString('xl/styles.xml', $this->xlsxStylesXml());
+        $zip->addFromString('xl/worksheets/sheet1.xml', $sheetXml);
+        $zip->close();
+
+        return $tempPath;
+    }
+
+    private function attendanceSheetXml(array $rows): string
+    {
+        $xmlRows = [];
+        foreach ($rows as $rowIndex => $row) {
+            $cells = [];
+            foreach ($row as $columnIndex => $value) {
+                if ($value === null) {
+                    continue;
+                }
+
+                $ref = $this->xlsxColumnName($columnIndex + 1).($rowIndex + 1);
+                $style = $rowIndex === 4 ? 1 : ($columnIndex === 0 && $rowIndex >= 5 ? 2 : 0);
+                if ($rowIndex >= 5 && in_array($value, ['FER', 'MAL', 'PER', 'ASS'], true)) {
+                    $style = 3;
+                }
+                $cells[] = '<c r="'.$ref.'" t="inlineStr" s="'.$style.'"><is><t>'.$this->xmlEscape((string) $value).'</t></is></c>';
+            }
+            $xmlRows[] = '<row r="'.($rowIndex + 1).'">'.implode('', $cells).'</row>';
+        }
+
+        $cols = [
+            '<col min="1" max="1" width="25" customWidth="1"/>',
+            '<col min="2" max="2" width="20" customWidth="1"/>',
+            '<col min="3" max="33" width="5" customWidth="1"/>',
+            '<col min="34" max="40" width="14" customWidth="1"/>',
+        ];
+
+        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            .'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            .'<cols>'.implode('', $cols).'</cols>'
+            .'<sheetData>'.implode('', $xmlRows).'</sheetData>'
+            .'</worksheet>';
+    }
+
+    private function xlsxColumnName(int $index): string
+    {
+        $name = '';
+        while ($index > 0) {
+            $index--;
+            $name = chr(65 + ($index % 26)).$name;
+            $index = intdiv($index, 26);
+        }
+
+        return $name;
+    }
+
+    private function xmlEscape(string $value): string
+    {
+        return htmlspecialchars($value, ENT_XML1 | ENT_COMPAT, 'UTF-8');
+    }
+
+    private function xlsxContentTypesXml(): string
+    {
+        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            .'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            .'<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+            .'<Default Extension="xml" ContentType="application/xml"/>'
+            .'<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+            .'<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+            .'<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+            .'</Types>';
+    }
+
+    private function xlsxRootRelsXml(): string
+    {
+        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            .'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            .'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+            .'</Relationships>';
+    }
+
+    private function xlsxWorkbookXml(string $sheetName): string
+    {
+        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            .'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            .'<sheets><sheet name="'.$this->xmlEscape($sheetName).'" sheetId="1" r:id="rId1"/></sheets>'
+            .'</workbook>';
+    }
+
+    private function xlsxWorkbookRelsXml(): string
+    {
+        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            .'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            .'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+            .'<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+            .'</Relationships>';
+    }
+
+    private function xlsxStylesXml(): string
+    {
+        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            .'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            .'<fonts count="4"><font/><font><b/><color rgb="FFFFFFFF"/></font><font><b/></font><font><color rgb="FFED7D31"/></font></fonts>'
+            .'<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF9A9A9A"/></patternFill></fill></fills>'
+            .'<borders count="1"><border/></borders>'
+            .'<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+            .'<cellXfs count="4">'
+            .'<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"><alignment vertical="center"/></xf>'
+            .'<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>'
+            .'<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf>'
+            .'<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>'
+            .'</cellXfs>'
+            .'</styleSheet>';
     }
 
     private function companyMessageRows(?string $userId = null, bool $adminView = false)

@@ -72,6 +72,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/documents', [CentroPageController::class, 'storeCompanyDocument'])->name('documents.store');
     Route::get('/documents/list', [CentroPageController::class, 'companyDocuments'])->defaults('documentView', 'documents')->name('documents.list');
     Route::get('/documents/messages', [CentroPageController::class, 'companyDocuments'])->defaults('documentView', 'messages')->name('documents.messages');
+    Route::get('/documents/reports', [CentroPageController::class, 'companyDocuments'])->defaults('documentView', 'reports')->name('documents.reports');
+    Route::get('/documents/reports/export', [CentroPageController::class, 'exportAttendanceReport'])->name('documents.reports.export');
     Route::get('/documents/users/{userId}', [CentroPageController::class, 'showCompanyDocumentsUser'])->name('documents.users.show');
     Route::get('/documents/archive/{year}', [CentroPageController::class, 'companyDocumentArchive'])->whereNumber('year')->name('documents.archive');
     Route::post('/document-messages', [CentroPageController::class, 'storeCompanyMessage'])->name('document-messages.store');
