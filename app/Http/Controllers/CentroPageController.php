@@ -717,13 +717,16 @@ class CentroPageController extends Controller
         $userId = (string) $request->user()->id;
         $reportYear = (int) $request->integer('year', now('Europe/Rome')->year);
         $reportMonth = (int) $request->integer('month', now('Europe/Rome')->month);
+        $reportUserId = $canManage && $request->filled('user_id') && $request->input('user_id') !== 'all'
+            ? (string) $request->input('user_id')
+            : null;
 
         return Inertia::render('Centro/Documents', [
             'canManage' => $canManage,
             'activeAdminSection' => $canManage ? $request->route('documentView') : null,
             'documents' => $this->companyDocumentRows($canManage ? null : $userId, $canManage),
             'messages' => $this->companyMessageRows($canManage ? null : $userId, $canManage),
-            'attendanceReport' => $canManage ? $this->attendanceReportData($reportYear, $reportMonth) : null,
+            'attendanceReport' => $canManage ? $this->attendanceReportData($reportYear, $reportMonth, $reportUserId) : null,
             'groups' => $canManage ? $this->documentGroupRows() : [],
             'users' => $canManage ? $this->userOptions() : [],
             'documentUsers' => $canManage ? $this->companyDocumentUserRows() : [],
@@ -770,14 +773,19 @@ class CentroPageController extends Controller
     {
         $this->ensureAdmin($request);
 
+        if ($request->input('user_id') === 'all') {
+            $request->merge(['user_id' => null]);
+        }
+
         $payload = $request->validate([
             'year' => ['nullable', 'integer', 'min:2020', 'max:2100'],
             'month' => ['nullable', 'integer', 'min:1', 'max:12'],
+            'user_id' => ['nullable', 'string', Rule::exists('users', 'id')],
         ]);
 
         $year = (int) ($payload['year'] ?? now('Europe/Rome')->year);
         $month = (int) ($payload['month'] ?? now('Europe/Rome')->month);
-        $report = $this->attendanceReportData($year, $month);
+        $report = $this->attendanceReportData($year, $month, $payload['user_id'] ?? null);
         $path = $this->buildAttendanceReportXlsx($report);
 
         return response()->download($path, $report['file_name'], [
@@ -4033,7 +4041,7 @@ class CentroPageController extends Controller
         ];
     }
 
-    private function attendanceReportData(int $year, int $month): array
+    private function attendanceReportData(int $year, int $month, ?string $userId = null): array
     {
         $year = max(2020, min(2100, $year));
         $month = max(1, min(12, $month));
@@ -4053,6 +4061,7 @@ class CentroPageController extends Controller
             ->where(function ($query) {
                 $query->whereNull('user_roles.role')->orWhere('user_roles.role', '!=', 'guest');
             })
+            ->when($userId, fn ($query) => $query->where('users.id', $userId))
             ->orderBy('users.name')
             ->get([
                 'users.id',
@@ -4128,13 +4137,17 @@ class CentroPageController extends Controller
                 'total_labels' => collect($totals)->map(fn ($minutes) => $this->formatAttendanceMinutes($minutes))->all(),
             ];
         })->values();
+        $scopeLabel = $userId && $rows->count() === 1 ? $rows->first()['name'] : 'Tutto il team';
+        $scopeSlug = $userId && $rows->count() === 1 ? '-'.Str::slug($rows->first()['name']) : '';
 
         return [
             'company' => 'LU3G SRL',
             'year' => $year,
             'month' => $month,
+            'selected_user_id' => $userId,
+            'scope_label' => $scopeLabel,
             'month_label' => $this->italianMonthName($month).' '.$year,
-            'file_name' => 'lu3gsrl-presenze-'.strtolower($this->italianMonthName($month)).'-'.$year.'.xlsx',
+            'file_name' => 'lu3gsrl-presenze-'.strtolower($this->italianMonthName($month)).'-'.$year.$scopeSlug.'.xlsx',
             'days' => $days,
             'rows' => $rows,
             'summary' => [

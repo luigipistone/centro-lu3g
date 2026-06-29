@@ -30,6 +30,7 @@ const isSuperadmin = computed(() => page.props.auth?.user?.role === 'superadmin'
 const activeAdminSection = computed(() => props.activeAdminSection || null);
 const reportYear = ref(props.attendanceReport?.year || new Date().getFullYear());
 const reportMonth = ref(props.attendanceReport?.month || (new Date().getMonth() + 1));
+const reportUserId = ref(props.attendanceReport?.selected_user_id || 'all');
 
 const documentForm = useForm({
     title: '',
@@ -83,6 +84,10 @@ const reportMonthOptions = [
     { value: 11, label: 'Novembre' },
     { value: 12, label: 'Dicembre' },
 ];
+const reportUserOptions = computed(() => [
+    { value: 'all', label: 'Tutto il team' },
+    ...(props.users || []).map((user) => ({ value: user.id, label: user.name })),
+]);
 const categoryOptions = computed(() => [
     { value: 'all', label: 'Tutte le categorie' },
     ...Object.entries(props.documentCategories || {}).map(([value, label]) => ({ value, label })),
@@ -344,20 +349,26 @@ function showMoreCurrentYearDocuments() {
 }
 
 function loadReport() {
-    router.get(route('documents.reports'), {
+    const params = {
         year: reportYear.value,
         month: reportMonth.value,
-    }, {
+    };
+    if (reportUserId.value !== 'all') params.user_id = reportUserId.value;
+
+    router.get(route('documents.reports'), params, {
         preserveScroll: true,
         preserveState: true,
     });
 }
 
 function reportExportHref() {
-    return route('documents.reports.export', {
+    const params = {
         year: reportYear.value,
         month: reportMonth.value,
-    });
+    };
+    if (reportUserId.value !== 'all') params.user_id = reportUserId.value;
+
+    return route('documents.reports.export', params);
 }
 
 function deleteLabel(type) {
@@ -770,7 +781,7 @@ function deleteLabel(type) {
                                 <h3 class="text-base font-semibold text-gray-900">Report e dati</h3>
                                 <p class="mt-1 text-sm text-gray-500">Presenze mensili nel formato del tracciato paghe.</p>
                             </div>
-                            <div class="grid gap-3 sm:grid-cols-[160px_140px_auto]">
+                            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-[160px_140px_minmax(220px,1fr)_auto]">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Mese</label>
                                     <AppSelect v-model="reportMonth" :options="reportMonthOptions" @update:model-value="loadReport" />
@@ -779,12 +790,20 @@ function deleteLabel(type) {
                                     <label class="block text-sm font-medium text-gray-700">Anno</label>
                                     <AppSelect v-model="reportYear" :options="reportYearOptions" @update:model-value="loadReport" />
                                 </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Team</label>
+                                    <AppSelect v-model="reportUserId" :options="reportUserOptions" @update:model-value="loadReport" />
+                                </div>
                                 <a :href="reportExportHref()" class="btn btn-primary self-end">
                                     <Download class="h-4 w-4" :stroke-width="1.7" />
                                     Esporta XLSX
                                 </a>
                             </div>
                         </div>
+
+                        <p v-if="attendanceReport?.scope_label" class="mt-4 text-sm font-medium text-gray-500">
+                            Report: <span class="text-gray-900">{{ attendanceReport.scope_label }}</span>
+                        </p>
 
                         <div v-if="attendanceReport" class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                             <div class="rounded-[var(--radius-sm)] bg-white/70 px-4 py-3">
