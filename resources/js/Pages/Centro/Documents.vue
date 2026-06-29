@@ -24,6 +24,7 @@ const currentYearVisibleCount = ref(5);
 const documentDescriptionEditor = ref(null);
 const messageBodyEditor = ref(null);
 const categoryFilters = ref({});
+const activeAdminSection = ref('documents');
 const isSuperadmin = computed(() => page.props.auth?.user?.role === 'superadmin');
 
 const documentForm = useForm({
@@ -364,7 +365,32 @@ function deleteLabel(type) {
                     {{ page.props.flash.status }}
                 </div>
 
-                <section v-if="canManage" class="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+                <section v-if="canManage" class="surface p-2">
+                    <div class="grid gap-2 sm:grid-cols-2">
+                        <button
+                            type="button"
+                            :class="['rounded-[var(--radius-sm)] px-4 py-3 text-left transition', activeAdminSection === 'documents' ? 'bg-[hsl(var(--primary-app))] text-white shadow-[0_12px_28px_rgba(28,42,73,0.16)]' : 'bg-white/70 text-gray-600 hover:bg-[hsl(var(--primary-app)/0.08)] hover:text-[hsl(var(--primary-app-dark))]']"
+                            @click="activeAdminSection = 'documents'"
+                        >
+                            <span class="block text-sm font-semibold">Documenti</span>
+                            <span :class="['mt-0.5 block text-xs', activeAdminSection === 'documents' ? 'text-white/75' : 'text-gray-400']">
+                                {{ visibleDocuments.length }} documenti e letture utenti
+                            </span>
+                        </button>
+                        <button
+                            type="button"
+                            :class="['rounded-[var(--radius-sm)] px-4 py-3 text-left transition', activeAdminSection === 'messages' ? 'bg-[hsl(var(--primary-app))] text-white shadow-[0_12px_28px_rgba(28,42,73,0.16)]' : 'bg-white/70 text-gray-600 hover:bg-[hsl(var(--primary-app)/0.08)] hover:text-[hsl(var(--primary-app-dark))]']"
+                            @click="activeAdminSection = 'messages'"
+                        >
+                            <span class="block text-sm font-semibold">Messaggi</span>
+                            <span :class="['mt-0.5 block text-xs', activeAdminSection === 'messages' ? 'text-white/75' : 'text-gray-400']">
+                                {{ visibleMessages.length }} messaggi e conferme lettura
+                            </span>
+                        </button>
+                    </div>
+                </section>
+
+                <section v-if="canManage && activeAdminSection === 'documents'" class="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
                     <form class="surface space-y-5 p-5" @submit.prevent="submitDocument">
                         <div class="flex items-start justify-between gap-4">
                             <div>
@@ -528,7 +554,7 @@ function deleteLabel(type) {
                     </form>
                 </section>
 
-                <section v-if="canManage" class="surface p-5">
+                <section v-if="canManage && activeAdminSection === 'messages'" class="surface p-5">
                     <form class="space-y-5" @submit.prevent="submitMessage">
                         <div class="flex items-start justify-between gap-4">
                             <div>
@@ -638,10 +664,10 @@ function deleteLabel(type) {
                     </form>
                 </section>
 
-                <section class="space-y-4">
+                <section v-if="!canManage || activeAdminSection === 'messages'" class="space-y-4">
                     <div class="flex items-center justify-between gap-4">
                         <div>
-                            <h3 class="text-base font-semibold text-gray-900">{{ canManage ? 'Messaggi inviati' : 'Messaggi da leggere' }}</h3>
+                            <h3 class="text-base font-semibold text-gray-900">{{ canManage ? 'Tutti i messaggi' : 'Messaggi da leggere' }}</h3>
                             <p class="mt-1 text-sm text-gray-500">Comunicazioni con conferma di lettura.</p>
                         </div>
                     </div>
@@ -691,7 +717,7 @@ function deleteLabel(type) {
                     </div>
                 </section>
 
-                <section v-if="canManage" class="surface p-5">
+                <section v-if="canManage && activeAdminSection === 'documents'" class="surface p-5">
                     <div class="mb-4">
                         <div>
                             <h3 class="text-base font-semibold text-gray-900">Documenti per utente</h3>
@@ -732,7 +758,7 @@ function deleteLabel(type) {
                     <p v-else class="py-6 text-center text-sm text-gray-500">Nessun utente disponibile.</p>
                 </section>
 
-                <section class="space-y-4">
+                <section v-if="!canManage || activeAdminSection === 'documents'" class="space-y-4">
                     <div class="flex items-center justify-between gap-4">
                         <div>
                             <h3 class="text-base font-semibold text-gray-900">{{ canManage ? 'Tutti i documenti' : 'I miei documenti' }}</h3>
