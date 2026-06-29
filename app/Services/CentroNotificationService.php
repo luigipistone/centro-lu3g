@@ -15,7 +15,7 @@ class CentroNotificationService
 {
     public const CATEGORIES = ['tasks', 'projects', 'absences', 'documents', 'system'];
 
-    public function notifyUsers(iterable $userIds, ?string $actorId, string $type, string $message, ?string $taskId = null, ?string $companyDocumentId = null): void
+    public function notifyUsers(iterable $userIds, ?string $actorId, string $type, string $message, ?string $taskId = null, ?string $companyDocumentId = null, ?string $companyMessageId = null): void
     {
         $now = now();
         $category = $this->categoryForType($type);
@@ -31,6 +31,7 @@ class CentroNotificationService
                     $type,
                     $taskId,
                     $companyDocumentId,
+                    $companyMessageId,
                     $this->shouldCoalesceNotification($type, $taskId) ? null : $message,
                 ], JSON_THROW_ON_ERROR)),
                 true,
@@ -47,6 +48,7 @@ class CentroNotificationService
                     ->when($actorId, fn ($query) => $query->where('actor_id', $actorId), fn ($query) => $query->whereNull('actor_id'))
                     ->when($taskId, fn ($query) => $query->where('task_id', $taskId), fn ($query) => $query->whereNull('task_id'))
                     ->when($companyDocumentId, fn ($query) => $query->where('company_document_id', $companyDocumentId), fn ($query) => $query->whereNull('company_document_id'))
+                    ->when($companyMessageId, fn ($query) => $query->where('company_message_id', $companyMessageId), fn ($query) => $query->whereNull('company_message_id'))
                     ->when(! $this->shouldCoalesceNotification($type, $taskId), fn ($query) => $query->where('message', $message))
                     ->latest('created_at')
                     ->first(['id']);
@@ -67,6 +69,7 @@ class CentroNotificationService
                         'actor_id' => $actorId,
                         'task_id' => $taskId,
                         'company_document_id' => $companyDocumentId,
+                        'company_message_id' => $companyMessageId,
                         'type' => $type,
                         'message' => $message,
                         'read' => false,
@@ -77,11 +80,11 @@ class CentroNotificationService
             }
 
             if ($preferences['browser'] && $externalAllowed) {
-                $this->sendBrowserPushNotification($userId, $notificationId, $message, $taskId, $companyDocumentId);
+                $this->sendBrowserPushNotification($userId, $notificationId, $message, $taskId, $companyDocumentId, $companyMessageId);
             }
 
             if ($preferences['mail'] && $externalAllowed) {
-                $this->sendMailNotification($userId, $message, $taskId, $companyDocumentId);
+                $this->sendMailNotification($userId, $message, $taskId, $companyDocumentId, $companyMessageId);
             }
         }
     }
@@ -105,7 +108,7 @@ class CentroNotificationService
         if (Str::startsWith($type, ['task_', 'task'])) return 'tasks';
         if (Str::startsWith($type, ['project_', 'project'])) return 'projects';
         if (Str::startsWith($type, ['absence_', 'absence'])) return 'absences';
-        if (Str::startsWith($type, ['company_document', 'document'])) return 'documents';
+        if (Str::startsWith($type, ['company_document', 'company_message', 'document'])) return 'documents';
 
         return 'system';
     }
@@ -115,7 +118,7 @@ class CentroNotificationService
         return $taskId !== null && in_array($type, ['task_updated'], true);
     }
 
-    private function sendBrowserPushNotification(string $userId, string $notificationId, string $message, ?string $taskId = null, ?string $companyDocumentId = null): void
+    private function sendBrowserPushNotification(string $userId, string $notificationId, string $message, ?string $taskId = null, ?string $companyDocumentId = null, ?string $companyMessageId = null): void
     {
         $publicKey = config('services.webpush.public_key');
         $privateKey = config('services.webpush.private_key');
@@ -145,7 +148,7 @@ class CentroNotificationService
             'title' => 'Il Centro',
             'body' => $message,
             'tag' => $notificationId,
-            'url' => $taskId ? route('tasks.show', $taskId) : ($companyDocumentId ? route('documents.show', $companyDocumentId) : route('notifications.index')),
+            'url' => $taskId ? route('tasks.show', $taskId) : ($companyDocumentId ? route('documents.show', $companyDocumentId) : ($companyMessageId ? route('document-messages.show', $companyMessageId) : route('notifications.index'))),
         ], JSON_THROW_ON_ERROR);
 
         foreach ($subscriptions as $subscription) {
@@ -180,7 +183,7 @@ class CentroNotificationService
         }
     }
 
-    private function sendMailNotification(string $userId, string $message, ?string $taskId = null, ?string $companyDocumentId = null): void
+    private function sendMailNotification(string $userId, string $message, ?string $taskId = null, ?string $companyDocumentId = null, ?string $companyMessageId = null): void
     {
         $settings = DB::table('email_settings')->first();
         if (! $settings || ! $settings->smtp_enabled || ! $settings->smtp_host || ! $settings->smtp_from_email) {
@@ -201,7 +204,7 @@ class CentroNotificationService
         Config::set('mail.from.address', $settings->smtp_from_email);
         Config::set('mail.from.name', $settings->smtp_from_name ?: 'Il Centro');
 
-        $url = $taskId ? route('tasks.show', $taskId) : ($companyDocumentId ? route('documents.show', $companyDocumentId) : route('notifications.index'));
+        $url = $taskId ? route('tasks.show', $taskId) : ($companyDocumentId ? route('documents.show', $companyDocumentId) : ($companyMessageId ? route('document-messages.show', $companyMessageId) : route('notifications.index')));
 
         try {
             Mail::html($this->notificationEmailHtml($message, $url, $user->name ?: null), function ($mail) use ($user, $settings) {

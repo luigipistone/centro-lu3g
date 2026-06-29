@@ -4,12 +4,13 @@ import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { dateIt } from '@/utils/formatters';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { Bold, Check, FileText, Heading3, Italic, Link2, List, ListOrdered, Plus, Quote, Trash2, Underline, Upload, Users } from '@lucide/vue';
+import { Bold, Check, FileText, Heading3, Italic, Link2, List, ListOrdered, MessageSquare, Plus, Quote, Send, Trash2, Underline, Upload, Users } from '@lucide/vue';
 import { computed, nextTick, ref } from 'vue';
 
 const props = defineProps({
     canManage: Boolean,
     documents: Array,
+    messages: Array,
     groups: Array,
     users: Array,
     documentUsers: Array,
@@ -21,6 +22,7 @@ const confirmDelete = ref(null);
 const confirmDeleteText = ref('');
 const currentYearVisibleCount = ref(5);
 const documentDescriptionEditor = ref(null);
+const messageBodyEditor = ref(null);
 const categoryFilters = ref({});
 const isSuperadmin = computed(() => page.props.auth?.user?.role === 'superadmin');
 
@@ -40,6 +42,14 @@ const groupForm = useForm({
     user_ids: [],
 });
 
+const messageForm = useForm({
+    title: '',
+    body: '',
+    audience: 'all',
+    user_ids: [],
+    group_ids: [],
+});
+
 const audienceOptions = [
     { value: 'all', label: 'Tutti' },
     { value: 'users', label: 'Utenti specifici' },
@@ -47,6 +57,7 @@ const audienceOptions = [
 ];
 
 const visibleDocuments = computed(() => props.documents || []);
+const visibleMessages = computed(() => props.messages || []);
 const documentUsers = computed(() => props.documentUsers || []);
 const currentYear = new Date().getFullYear();
 const categoryOptions = computed(() => [
@@ -153,6 +164,41 @@ function submitGroup() {
     });
 }
 
+function resetMessageForm() {
+    messageForm.reset();
+    messageForm.clearErrors();
+    nextTick(() => {
+        if (messageBodyEditor.value) {
+            messageBodyEditor.value.innerHTML = '';
+        }
+    });
+}
+
+function submitMessage() {
+    updateMessageBodyFromEditor();
+    messageForm.post(route('document-messages.store'), {
+        preserveScroll: true,
+        onSuccess: resetMessageForm,
+    });
+}
+
+function updateMessageBodyFromEditor() {
+    messageForm.body = messageBodyEditor.value?.innerHTML || '';
+}
+
+function runMessageEditorCommand(command, value = null) {
+    messageBodyEditor.value?.focus();
+    document.execCommand(command, false, value);
+    updateMessageBodyFromEditor();
+}
+
+function addMessageEditorLink() {
+    const url = window.prompt('URL del link');
+    if (!url) return;
+
+    runMessageEditorCommand('createLink', url);
+}
+
 function toggleDocumentUser(userId) {
     documentForm.user_ids = documentForm.user_ids.includes(userId)
         ? documentForm.user_ids.filter((id) => id !== userId)
@@ -163,6 +209,18 @@ function toggleDocumentGroup(groupId) {
     documentForm.group_ids = documentForm.group_ids.includes(groupId)
         ? documentForm.group_ids.filter((id) => id !== groupId)
         : [...documentForm.group_ids, groupId];
+}
+
+function toggleMessageUser(userId) {
+    messageForm.user_ids = messageForm.user_ids.includes(userId)
+        ? messageForm.user_ids.filter((id) => id !== userId)
+        : [...messageForm.user_ids, userId];
+}
+
+function toggleMessageGroup(groupId) {
+    messageForm.group_ids = messageForm.group_ids.includes(groupId)
+        ? messageForm.group_ids.filter((id) => id !== groupId)
+        : [...messageForm.group_ids, groupId];
 }
 
 function toggleGroupUser(userId) {
@@ -199,6 +257,20 @@ function removeGroup(group) {
     confirmDeleteText.value = '';
 }
 
+function removeMessage(message) {
+    if (isSuperadmin.value) {
+        router.delete(route('document-messages.destroy', message.id), { preserveScroll: true });
+        return;
+    }
+
+    confirmDelete.value = {
+        type: 'message',
+        title: message.title,
+        route: route('document-messages.destroy', message.id),
+    };
+    confirmDeleteText.value = '';
+}
+
 function closeDeleteConfirm() {
     confirmDelete.value = null;
     confirmDeleteText.value = '';
@@ -217,17 +289,21 @@ function openDocument(document) {
     router.visit(route('documents.show', document.id));
 }
 
-function audienceLabel(document) {
-    if (document.audience === 'all') return 'Tutti';
-    if (document.audience === 'groups') {
-        const names = (document.group_ids || [])
+function openMessage(message) {
+    router.visit(route('document-messages.show', message.id));
+}
+
+function audienceLabel(item) {
+    if (item.audience === 'all') return 'Tutti';
+    if (item.audience === 'groups') {
+        const names = (item.group_ids || [])
             .map((id) => (props.groups || []).find((group) => group.id === id)?.name)
             .filter(Boolean);
 
         return names.length ? names.join(', ') : 'Gruppi';
     }
 
-    const names = (document.user_ids || [])
+    const names = (item.user_ids || [])
         .map((id) => (props.users || []).find((user) => user.id === id)?.name)
         .filter(Boolean);
 
@@ -242,6 +318,13 @@ function fileSize(bytes) {
 
 function showMoreCurrentYearDocuments() {
     currentYearVisibleCount.value += 5;
+}
+
+function deleteLabel(type) {
+    if (type === 'group') return 'il gruppo';
+    if (type === 'message') return 'il messaggio';
+
+    return 'il documento';
 }
 </script>
 
@@ -261,7 +344,7 @@ function showMoreCurrentYearDocuments() {
                 <div v-if="confirmDelete" class="fixed inset-0 z-[5100] flex items-center justify-center bg-transparent px-4 py-6" @click.self="closeDeleteConfirm">
                     <div class="w-full max-w-md rounded-[var(--radius)] bg-white p-5 shadow-xl">
                         <h3 class="text-base font-semibold text-gray-900">
-                            Eliminare {{ confirmDelete.type === 'group' ? 'il gruppo' : 'il documento' }}?
+                            Eliminare {{ deleteLabel(confirmDelete.type) }}?
                         </h3>
                         <p class="mt-2 text-sm text-gray-600">
                             Questa azione elimina <span class="font-semibold text-gray-900">{{ confirmDelete.title }}</span>. Digita
@@ -443,6 +526,169 @@ function showMoreCurrentYearDocuments() {
                             </article>
                         </div>
                     </form>
+                </section>
+
+                <section v-if="canManage" class="surface p-5">
+                    <form class="space-y-5" @submit.prevent="submitMessage">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <h3 class="text-base font-semibold text-gray-900">Nuovo messaggio</h3>
+                                <p class="mt-1 text-sm text-gray-500">Invia una comunicazione a tutti, a un gruppo o a persone specifiche.</p>
+                            </div>
+                            <MessageSquare class="h-5 w-5 text-[hsl(var(--primary-app))]" :stroke-width="1.7" />
+                        </div>
+
+                        <div class="grid gap-4 md:grid-cols-2">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Titolo</label>
+                                <input v-model="messageForm.title" class="form-control" required placeholder="Es. Comunicazione interna" />
+                                <div v-if="messageForm.errors.title" class="mt-1 text-sm text-red-600">{{ messageForm.errors.title }}</div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Destinatari</label>
+                                <AppSelect v-model="messageForm.audience" :options="audienceOptions" />
+                                <div v-if="messageForm.errors.audience" class="mt-1 text-sm text-red-600">{{ messageForm.errors.audience }}</div>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700">Messaggio</label>
+                                <div class="mt-1 overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white/90 shadow-inner">
+                                    <div class="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50/80 px-2 py-1.5">
+                                        <button type="button" class="icon-btn h-8 w-8" title="Titolo" @mousedown.prevent @click="runMessageEditorCommand('formatBlock', 'h3')">
+                                            <Heading3 class="h-4 w-4" :stroke-width="1.8" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8 text-xs font-bold" title="Testo normale" @mousedown.prevent @click="runMessageEditorCommand('formatBlock', 'p')">
+                                            P
+                                        </button>
+                                        <span class="mx-1 h-5 w-px bg-gray-200"></span>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Grassetto" @mousedown.prevent @click="runMessageEditorCommand('bold')">
+                                            <Bold class="h-4 w-4" :stroke-width="1.8" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Corsivo" @mousedown.prevent @click="runMessageEditorCommand('italic')">
+                                            <Italic class="h-4 w-4" :stroke-width="1.8" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Sottolineato" @mousedown.prevent @click="runMessageEditorCommand('underline')">
+                                            <Underline class="h-4 w-4" :stroke-width="1.8" />
+                                        </button>
+                                        <span class="mx-1 h-5 w-px bg-gray-200"></span>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Elenco puntato" @mousedown.prevent @click="runMessageEditorCommand('insertUnorderedList')">
+                                            <List class="h-4 w-4" :stroke-width="1.8" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Elenco numerato" @mousedown.prevent @click="runMessageEditorCommand('insertOrderedList')">
+                                            <ListOrdered class="h-4 w-4" :stroke-width="1.8" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Citazione" @mousedown.prevent @click="runMessageEditorCommand('formatBlock', 'blockquote')">
+                                            <Quote class="h-4 w-4" :stroke-width="1.8" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8" title="Link" @mousedown.prevent @click="addMessageEditorLink">
+                                            <Link2 class="h-4 w-4" :stroke-width="1.8" />
+                                        </button>
+                                    </div>
+                                    <div
+                                        ref="messageBodyEditor"
+                                        class="min-h-[130px] px-4 py-3 text-sm leading-6 text-gray-800 outline-none empty:before:text-gray-400 empty:before:content-[attr(data-placeholder)]"
+                                        contenteditable="true"
+                                        data-placeholder="Scrivi il messaggio..."
+                                        @input="updateMessageBodyFromEditor"
+                                        @blur="updateMessageBodyFromEditor"
+                                    ></div>
+                                </div>
+                                <div v-if="messageForm.errors.body" class="mt-1 text-sm text-red-600">{{ messageForm.errors.body }}</div>
+                            </div>
+                        </div>
+
+                        <div v-if="messageForm.audience === 'users'" class="rounded-[var(--radius)] bg-gray-50/80 p-3">
+                            <p class="mb-3 text-sm font-semibold text-gray-700">Seleziona utenti</p>
+                            <div class="flex flex-wrap gap-2">
+                                <button
+                                    v-for="user in users"
+                                    :key="user.id"
+                                    type="button"
+                                    :class="['inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition', messageForm.user_ids.includes(user.id) ? 'border-[hsl(var(--primary-app))] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app-dark))]' : 'border-white bg-white text-gray-600 hover:border-gray-200']"
+                                    @click="toggleMessageUser(user.id)"
+                                >
+                                    <UserAvatar :user="user" size="xs" />
+                                    {{ user.name }}
+                                </button>
+                            </div>
+                            <div v-if="messageForm.errors.message_user_ids" class="mt-2 text-sm text-red-600">{{ messageForm.errors.message_user_ids }}</div>
+                        </div>
+
+                        <div v-if="messageForm.audience === 'groups'" class="rounded-[var(--radius)] bg-gray-50/80 p-3">
+                            <p class="mb-3 text-sm font-semibold text-gray-700">Seleziona gruppi</p>
+                            <div class="flex flex-wrap gap-2">
+                                <button
+                                    v-for="group in groups"
+                                    :key="group.id"
+                                    type="button"
+                                    :class="['inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition', messageForm.group_ids.includes(group.id) ? 'border-[hsl(var(--primary-app))] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app-dark))]' : 'border-white bg-white text-gray-600 hover:border-gray-200']"
+                                    @click="toggleMessageGroup(group.id)"
+                                >
+                                    <Users class="h-4 w-4" :stroke-width="1.7" />
+                                    {{ group.name }}
+                                    <span class="text-xs text-gray-400">{{ group.members_count }}</span>
+                                </button>
+                            </div>
+                            <div v-if="messageForm.errors.message_group_ids" class="mt-2 text-sm text-red-600">{{ messageForm.errors.message_group_ids }}</div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary" :disabled="messageForm.processing">
+                            <Send class="h-4 w-4" :stroke-width="1.7" />
+                            Pubblica messaggio
+                        </button>
+                    </form>
+                </section>
+
+                <section class="space-y-4">
+                    <div class="flex items-center justify-between gap-4">
+                        <div>
+                            <h3 class="text-base font-semibold text-gray-900">{{ canManage ? 'Messaggi inviati' : 'Messaggi da leggere' }}</h3>
+                            <p class="mt-1 text-sm text-gray-500">Comunicazioni con conferma di lettura.</p>
+                        </div>
+                    </div>
+
+                    <div v-if="visibleMessages.length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        <article
+                            v-for="message in visibleMessages"
+                            :key="message.id"
+                            role="button"
+                            tabindex="0"
+                            :class="['surface group cursor-pointer p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]', !canManage && !message.user_read_at ? 'ring-1 ring-amber-100' : '']"
+                            @click="openMessage(message)"
+                            @keydown.enter.prevent="openMessage(message)"
+                            @keydown.space.prevent="openMessage(message)"
+                        >
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="flex min-w-0 items-center gap-3">
+                                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]">
+                                        <MessageSquare class="h-5 w-5" :stroke-width="1.7" />
+                                    </span>
+                                    <div class="min-w-0">
+                                        <p class="line-clamp-2 text-sm font-semibold text-gray-900 transition group-hover:text-[hsl(var(--primary-app))]">
+                                            {{ message.title }}
+                                        </p>
+                                        <p class="mt-1 text-xs text-gray-500">{{ audienceLabel(message) }} · {{ dateIt(message.created_at) }}</p>
+                                    </div>
+                                </div>
+                                <button v-if="canManage" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina messaggio" @click.stop="removeMessage(message)">
+                                    <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                </button>
+                            </div>
+
+                            <div v-if="message.body" class="mt-3 line-clamp-2 text-sm text-gray-500" v-html="message.body"></div>
+
+                            <div class="mt-4 flex items-center justify-between gap-3 text-xs text-gray-500">
+                                <span>{{ message.creator_name || 'Il Centro' }}</span>
+                                <span v-if="canManage" class="font-semibold text-gray-700">{{ message.read_count }}/{{ message.recipient_count }} letti</span>
+                                <span v-else :class="['inline-flex items-center gap-1 rounded-full px-2 py-1 font-semibold', message.user_read_at ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700']">
+                                    <Check v-if="message.user_read_at" class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                    {{ message.user_read_at ? 'Letto' : 'Da leggere' }}
+                                </span>
+                            </div>
+                        </article>
+                    </div>
+                    <div v-else class="surface px-5 py-8 text-center text-sm text-gray-500">
+                        Nessun messaggio disponibile.
+                    </div>
                 </section>
 
                 <section v-if="canManage" class="surface p-5">

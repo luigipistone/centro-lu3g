@@ -72,6 +72,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/documents', [CentroPageController::class, 'storeCompanyDocument'])->name('documents.store');
     Route::get('/documents/users/{userId}', [CentroPageController::class, 'showCompanyDocumentsUser'])->name('documents.users.show');
     Route::get('/documents/archive/{year}', [CentroPageController::class, 'companyDocumentArchive'])->whereNumber('year')->name('documents.archive');
+    Route::post('/document-messages', [CentroPageController::class, 'storeCompanyMessage'])->name('document-messages.store');
+    Route::get('/document-messages/{id}', [CentroPageController::class, 'showCompanyMessage'])->name('document-messages.show');
+    Route::post('/document-messages/{id}/read', [CentroPageController::class, 'markCompanyMessageRead'])->name('document-messages.read');
+    Route::delete('/document-messages/{id}', [CentroPageController::class, 'destroyCompanyMessage'])->name('document-messages.destroy');
     Route::patch('/documents/{id}/category', [CentroPageController::class, 'updateCompanyDocumentCategory'])->name('documents.category.update');
     Route::get('/documents/{id}', [CentroPageController::class, 'showCompanyDocument'])->name('documents.show');
     Route::get('/documents/{id}/file', [CentroPageController::class, 'viewCompanyDocumentFile'])->name('documents.file');

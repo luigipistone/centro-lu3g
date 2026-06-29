@@ -719,6 +719,7 @@ class CentroPageController extends Controller
         return Inertia::render('Centro/Documents', [
             'canManage' => $canManage,
             'documents' => $this->companyDocumentRows($canManage ? null : $userId, $canManage),
+            'messages' => $this->companyMessageRows($canManage ? null : $userId, $canManage),
             'groups' => $canManage ? $this->documentGroupRows() : [],
             'users' => $canManage ? $this->userOptions() : [],
             'documentUsers' => $canManage ? $this->companyDocumentUserRows() : [],
@@ -943,6 +944,141 @@ class CentroPageController extends Controller
         DB::table('company_documents')->where('id', $id)->delete();
 
         return back()->with('status', 'Documento eliminato.');
+    }
+
+    public function storeCompanyMessage(Request $request): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+
+        $payload = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'body' => ['nullable', 'string', 'max:10000'],
+            'audience' => ['required', Rule::in(['all', 'users', 'groups'])],
+            'user_ids' => ['nullable', 'array'],
+            'user_ids.*' => ['uuid', 'exists:users,id'],
+            'group_ids' => ['nullable', 'array'],
+            'group_ids.*' => ['uuid', 'exists:document_groups,id'],
+        ]);
+
+        if ($payload['audience'] === 'users' && empty($payload['user_ids'])) {
+            return back()->withErrors(['message_user_ids' => 'Seleziona almeno un utente.'])->withInput();
+        }
+
+        if ($payload['audience'] === 'groups' && empty($payload['group_ids'])) {
+            return back()->withErrors(['message_group_ids' => 'Seleziona almeno un gruppo.'])->withInput();
+        }
+
+        $messageId = (string) str()->uuid();
+        $now = now();
+
+        DB::transaction(function () use ($payload, $messageId, $request, $now) {
+            DB::table('company_messages')->insert([
+                'id' => $messageId,
+                'title' => $payload['title'],
+                'body' => $payload['body'] ?? null,
+                'audience' => $payload['audience'],
+                'created_by' => $request->user()->id,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+            foreach (collect($payload['user_ids'] ?? [])->unique()->values() as $userId) {
+                DB::table('company_message_user')->insert([
+                    'id' => (string) str()->uuid(),
+                    'company_message_id' => $messageId,
+                    'user_id' => $userId,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+            }
+
+            foreach (collect($payload['group_ids'] ?? [])->unique()->values() as $groupId) {
+                DB::table('company_message_group')->insert([
+                    'id' => (string) str()->uuid(),
+                    'company_message_id' => $messageId,
+                    'document_group_id' => $groupId,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+            }
+        });
+
+        $recipientIds = $this->companyMessageRecipientIds($messageId);
+        $this->ensureCompanyMessageReadRows($messageId, $recipientIds);
+        $this->notifyUsers(
+            $recipientIds,
+            $request->user()->id,
+            'company_message_created',
+            $request->user()->name.' ha pubblicato il messaggio "'.$payload['title'].'".',
+            null,
+            null,
+            $messageId,
+        );
+
+        return redirect()->route('documents.index')->with('status', 'Messaggio pubblicato.');
+    }
+
+    public function showCompanyMessage(Request $request, string $id): Response
+    {
+        $message = DB::table('company_messages')->where('id', $id)->first();
+        abort_if(! $message, 404);
+        abort_unless($this->canAccessCompanyMessage($request, $message), 403);
+
+        $canManage = $this->canManageDocuments($request);
+        $userId = (string) $request->user()->id;
+        $isRecipient = $this->companyMessageRecipientIds($id)->contains($userId);
+        if ($isRecipient) {
+            $this->markCompanyMessageOpened($id, $userId);
+        }
+
+        return Inertia::render('Centro/DocumentMessageShow', [
+            'canManage' => $canManage,
+            'message' => $this->companyMessageRow($message, $isRecipient ? $userId : null),
+            'readers' => $canManage ? $this->companyMessageReaderRows($id) : [],
+            'groups' => $canManage ? $this->documentGroupRows() : [],
+            'users' => $canManage ? $this->userOptions() : [],
+        ]);
+    }
+
+    public function markCompanyMessageRead(Request $request, string $id): RedirectResponse
+    {
+        $message = DB::table('company_messages')->where('id', $id)->first();
+        abort_if(! $message, 404);
+        abort_unless($this->canAccessCompanyMessage($request, $message), 403);
+        abort_unless($this->companyMessageRecipientIds($id)->contains((string) $request->user()->id), 403);
+
+        $row = DB::table('company_message_reads')
+            ->where('company_message_id', $id)
+            ->where('user_id', $request->user()->id)
+            ->first(['id']);
+
+        if ($row) {
+            DB::table('company_message_reads')->where('id', $row->id)->update([
+                'opened_at' => now(),
+                'read_at' => now(),
+                'updated_at' => now(),
+            ]);
+        } else {
+            DB::table('company_message_reads')->insert([
+                'id' => (string) str()->uuid(),
+                'company_message_id' => $id,
+                'user_id' => $request->user()->id,
+                'opened_at' => now(),
+                'read_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        return back()->with('status', 'Messaggio segnato come letto.');
+    }
+
+    public function destroyCompanyMessage(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        DB::table('company_messages')->where('id', $id)->delete();
+
+        return back()->with('status', 'Messaggio eliminato.');
     }
 
     public function storeDocumentGroup(Request $request): RedirectResponse
@@ -1333,6 +1469,7 @@ class CentroPageController extends Controller
                     'notifications.id',
                     'notifications.task_id',
                     'notifications.company_document_id',
+                    'notifications.company_message_id',
                     'notifications.type',
                     'notifications.message',
                     'notifications.read',
@@ -3800,6 +3937,15 @@ class CentroPageController extends Controller
         return $this->companyDocumentRecipientIds($document->id)->contains($request->user()?->id);
     }
 
+    private function canAccessCompanyMessage(Request $request, object $message): bool
+    {
+        if ($this->canManageDocuments($request)) {
+            return true;
+        }
+
+        return $this->companyMessageRecipientIds($message->id)->contains($request->user()?->id);
+    }
+
     private function companyDocumentRows(?string $userId = null, bool $adminView = false, ?int $year = null)
     {
         $query = DB::table('company_documents')
@@ -3860,6 +4006,159 @@ class CentroPageController extends Controller
             'documenti_identita' => "Documenti d'identità",
             'documenti_vari' => 'Documenti Vari',
         ];
+    }
+
+    private function companyMessageRows(?string $userId = null, bool $adminView = false)
+    {
+        $query = DB::table('company_messages')
+            ->leftJoin('users', 'users.id', '=', 'company_messages.created_by')
+            ->select('company_messages.*', 'users.name as creator_name')
+            ->latest('company_messages.created_at');
+
+        if ($userId) {
+            $messageIds = $this->visibleCompanyMessageIdsForUser($userId);
+            $query->whereIn('company_messages.id', $messageIds);
+        }
+
+        return $query
+            ->limit($adminView ? 200 : 100)
+            ->get()
+            ->map(fn ($message) => $this->companyMessageRow($message, $userId));
+    }
+
+    private function companyMessageRow(object $message, ?string $userId = null): object
+    {
+        $recipientIds = $this->companyMessageRecipientIds($message->id);
+        $readRows = DB::table('company_message_reads')
+            ->where('company_message_id', $message->id)
+            ->get(['user_id', 'opened_at', 'read_at'])
+            ->keyBy('user_id');
+
+        $message->recipient_count = $recipientIds->count();
+        $message->read_count = $readRows->filter(fn ($row) => filled($row->read_at))->count();
+        $message->opened_count = $readRows->filter(fn ($row) => filled($row->opened_at))->count();
+        $message->user_is_recipient = $userId ? $recipientIds->contains($userId) : false;
+        $message->user_read_at = $userId ? ($readRows[$userId]->read_at ?? null) : null;
+        $message->user_opened_at = $userId ? ($readRows[$userId]->opened_at ?? null) : null;
+        $message->user_ids = DB::table('company_message_user')->where('company_message_id', $message->id)->pluck('user_id');
+        $message->group_ids = DB::table('company_message_group')->where('company_message_id', $message->id)->pluck('document_group_id');
+
+        return $message;
+    }
+
+    private function companyMessageReaderRows(string $messageId)
+    {
+        $recipientIds = $this->companyMessageRecipientIds($messageId);
+
+        return DB::table('users')
+            ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
+            ->leftJoin('company_message_reads', function ($join) use ($messageId) {
+                $join->on('company_message_reads.user_id', '=', 'users.id')
+                    ->where('company_message_reads.company_message_id', '=', $messageId);
+            })
+            ->whereIn('users.id', $recipientIds)
+            ->orderBy('users.name')
+            ->get([
+                'users.id',
+                'users.name',
+                'users.email',
+                'profiles.avatar_url',
+                'company_message_reads.opened_at',
+                'company_message_reads.read_at',
+            ]);
+    }
+
+    private function visibleCompanyMessageIdsForUser(string $userId): \Illuminate\Support\Collection
+    {
+        $groupIds = DB::table('document_group_user')->where('user_id', $userId)->pluck('document_group_id');
+
+        return DB::table('company_messages')
+            ->where('audience', 'all')
+            ->pluck('id')
+            ->merge(DB::table('company_message_user')->where('user_id', $userId)->pluck('company_message_id'))
+            ->merge(DB::table('company_message_group')->whereIn('document_group_id', $groupIds)->pluck('company_message_id'))
+            ->filter()
+            ->unique()
+            ->values();
+    }
+
+    private function companyMessageRecipientIds(string $messageId): \Illuminate\Support\Collection
+    {
+        $message = DB::table('company_messages')->where('id', $messageId)->first(['audience']);
+        if (! $message) {
+            return collect();
+        }
+
+        if ($message->audience === 'all') {
+            return DB::table('users')->pluck('id');
+        }
+
+        $userIds = DB::table('company_message_user')
+            ->where('company_message_id', $messageId)
+            ->pluck('user_id');
+
+        $groupIds = DB::table('company_message_group')
+            ->where('company_message_id', $messageId)
+            ->pluck('document_group_id');
+
+        return $userIds
+            ->merge(DB::table('document_group_user')->whereIn('document_group_id', $groupIds)->pluck('user_id'))
+            ->filter()
+            ->unique()
+            ->values();
+    }
+
+    private function ensureCompanyMessageReadRows(string $messageId, iterable $userIds): void
+    {
+        foreach (collect($userIds)->filter()->unique()->values() as $userId) {
+            $exists = DB::table('company_message_reads')
+                ->where('company_message_id', $messageId)
+                ->where('user_id', $userId)
+                ->exists();
+
+            if ($exists) {
+                DB::table('company_message_reads')
+                    ->where('company_message_id', $messageId)
+                    ->where('user_id', $userId)
+                    ->update(['updated_at' => now()]);
+
+                continue;
+            }
+
+            DB::table('company_message_reads')->insert([
+                'id' => (string) str()->uuid(),
+                'company_message_id' => $messageId,
+                'user_id' => $userId,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+    }
+
+    private function markCompanyMessageOpened(string $messageId, string $userId): void
+    {
+        $row = DB::table('company_message_reads')
+            ->where('company_message_id', $messageId)
+            ->where('user_id', $userId)
+            ->first(['id', 'opened_at']);
+
+        if ($row) {
+            DB::table('company_message_reads')->where('id', $row->id)->update([
+                'opened_at' => $row->opened_at ?: now(),
+                'updated_at' => now(),
+            ]);
+
+            return;
+        }
+
+        DB::table('company_message_reads')->insert([
+            'id' => (string) str()->uuid(),
+            'company_message_id' => $messageId,
+            'user_id' => $userId,
+            'opened_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     private function documentGroupRows()
@@ -6166,9 +6465,9 @@ class CentroPageController extends Controller
         $this->notifyUsers($userIds, $actorId, $type, $message);
     }
 
-    private function notifyUsers(iterable $userIds, ?string $actorId, string $type, string $message, ?string $taskId = null, ?string $companyDocumentId = null): void
+    private function notifyUsers(iterable $userIds, ?string $actorId, string $type, string $message, ?string $taskId = null, ?string $companyDocumentId = null, ?string $companyMessageId = null): void
     {
-        app(CentroNotificationService::class)->notifyUsers($userIds, $actorId, $type, $message, $taskId, $companyDocumentId);
+        app(CentroNotificationService::class)->notifyUsers($userIds, $actorId, $type, $message, $taskId, $companyDocumentId, $companyMessageId);
     }
 
     private function shouldCoalesceNotification(string $type, ?string $taskId): bool

@@ -183,6 +183,7 @@ async function maybeShowBrowserNotification(notification) {
 function notificationHref(notification) {
     if (notification.task_id) return route('tasks.show', notification.task_id);
     if (notification.company_document_id) return route('documents.show', notification.company_document_id);
+    if (notification.company_message_id) return route('document-messages.show', notification.company_message_id);
 
     return route('notifications.index');
 }
