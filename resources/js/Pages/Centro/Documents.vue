@@ -4,7 +4,7 @@ import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { dateIt } from '@/utils/formatters';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { Bold, Check, FileText, Heading3, Italic, Link2, List, ListOrdered, MessageSquare, Plus, Quote, Send, Trash2, Underline, Upload, Users } from '@lucide/vue';
+import { Bold, Check, ChevronLeft, FileText, Heading3, Italic, Link2, List, ListOrdered, MessageSquare, Plus, Quote, Send, Trash2, Underline, Upload, Users } from '@lucide/vue';
 import { computed, nextTick, ref } from 'vue';
 
 const props = defineProps({
@@ -335,7 +335,11 @@ function deleteLabel(type) {
 
     <AuthenticatedLayout>
         <template #header>
-            <div class="flex flex-col gap-1">
+            <div class="flex flex-col gap-2">
+                <Link v-if="activeAdminSection" :href="route('documents.index')" class="inline-flex items-center gap-1 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]">
+                    <ChevronLeft class="h-4 w-4" :stroke-width="1.7" />
+                    Documenti
+                </Link>
                 <h2 class="text-xl font-semibold leading-tight text-gray-800">Documenti</h2>
                 <p class="text-sm text-gray-500">PDF aziendali, assegnazioni e conferme di lettura.</p>
             </div>
@@ -383,9 +387,6 @@ function deleteLabel(type) {
                             <MessageSquare class="h-4 w-4" :stroke-width="1.7" />
                             Tutti i messaggi
                             <span class="rounded-full bg-white/20 px-2 py-0.5 text-xs">{{ visibleMessages.length }}</span>
-                        </Link>
-                        <Link v-if="activeAdminSection" :href="route('documents.index')" class="btn btn-outline">
-                            Torna alla creazione
                         </Link>
                     </div>
                 </section>
