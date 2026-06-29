@@ -107,7 +107,7 @@ function confirmDeleteAction() {
     <AuthenticatedLayout>
         <template #header>
             <div class="flex flex-col gap-2">
-                <Link :href="route('documents.index')" class="inline-flex items-center gap-1 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]">
+                <Link :href="route('documents.list')" class="inline-flex items-center gap-1 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]">
                     <ChevronLeft class="h-4 w-4" :stroke-width="1.7" />
                     Documenti
                 </Link>
