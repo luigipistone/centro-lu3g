@@ -3162,19 +3162,19 @@ function calendarDayStyle(sectionMonth, cell) {
                 </div>
 
                 <form :class="modalFormClass" @focusin.capture="closeTaskPeopleMenuOnOutside" @pointerdown.capture="closeTaskPeopleMenuOnOutside" @submit.prevent="submit">
-                    <section v-if="section === 'projects' && !editing" class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/80 p-3 md:col-span-3">
+                    <section v-if="section === 'projects' && !editing" class="rounded-[var(--radius)] border border-gray-100 bg-gray-50/80 p-4 md:col-span-3">
                         <div class="mb-3">
                             <h4 class="text-sm font-semibold text-gray-900">Crea da modello</h4>
                             <p class="mt-1 text-xs text-gray-500">Se scegli un modello, il progetto verrà creato con fasi e task già programmate dalla data di avvio.</p>
                         </div>
-                        <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_170px]">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Modello</label>
+                        <div class="grid items-start gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
+                            <div class="flex flex-col gap-1.5">
+                                <label class="block text-sm font-medium leading-5 text-gray-700">Modello</label>
                                 <AppSelect v-model="form.template_id" :options="projectTemplateOptions" searchable />
                             </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Data avvio</label>
-                                <input v-model="form.template_start_date" type="date" class="form-control cursor-pointer" @click="openFieldPicker($event, { type: 'date' })" />
+                            <div class="flex flex-col gap-1.5">
+                                <label class="block text-sm font-medium leading-5 text-gray-700">Data avvio</label>
+                                <input v-model="form.template_start_date" type="date" class="form-control mt-0 h-[38px] min-h-[38px] cursor-pointer" @click="openFieldPicker($event, { type: 'date' })" />
                             </div>
                         </div>
                     </section>

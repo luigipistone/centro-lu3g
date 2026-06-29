@@ -135,30 +135,33 @@ function saveTemplate() {
         <div class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <section class="surface p-5">
-                    <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_180px_140px]">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Nome modello</label>
-                            <input v-model="form.name" class="form-control" placeholder="Es. Sito web standard" />
+                    <div class="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_180px_150px]">
+                        <div class="flex flex-col gap-1.5">
+                            <label class="block text-sm font-medium leading-5 text-gray-700">Nome modello</label>
+                            <input v-model="form.name" class="form-control mt-0 h-[38px] min-h-[38px]" placeholder="Es. Sito web standard" />
                             <div v-if="form.errors.name" class="mt-1 text-sm text-red-600">{{ form.errors.name }}</div>
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Colore</label>
-                            <div class="mt-2 flex items-center gap-2">
-                                <label class="relative inline-flex h-10 w-10 cursor-pointer overflow-hidden rounded-[var(--radius-sm)] border border-white shadow-sm" :style="{ backgroundColor: form.color }">
+                        <div class="flex flex-col gap-1.5">
+                            <label class="block text-sm font-medium leading-5 text-gray-700">Colore</label>
+                            <div class="flex h-[38px] items-center gap-2">
+                                <label class="relative inline-flex h-[38px] w-[38px] cursor-pointer overflow-hidden rounded-[var(--radius-sm)] border border-white shadow-sm" :style="{ backgroundColor: form.color }">
                                     <input v-model="form.color" type="color" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
                                 </label>
-                                <input v-model="form.color" class="form-control mt-0 w-28 font-mono text-xs" />
+                                <input v-model="form.color" class="form-control mt-0 h-[38px] min-h-[38px] w-28 font-mono text-xs" />
                             </div>
                         </div>
-                        <label class="flex items-end gap-2 pb-2 text-sm font-semibold text-gray-700">
-                            <input v-model="form.active" type="checkbox" class="rounded border-gray-300 text-[hsl(var(--primary-app))]" />
-                            Attivo
-                        </label>
+                        <div class="flex flex-col gap-1.5">
+                            <span class="block text-sm font-medium leading-5 text-gray-700">Stato</span>
+                            <label class="form-control mt-0 flex h-[38px] min-h-[38px] cursor-pointer items-center gap-2">
+                                <input v-model="form.active" type="checkbox" class="rounded border-gray-300 text-[hsl(var(--primary-app))]" />
+                                <span class="text-sm font-semibold text-gray-700">Attivo</span>
+                            </label>
+                        </div>
                     </div>
 
-                    <div class="mt-4">
-                        <label class="block text-sm font-medium text-gray-700">Descrizione</label>
-                        <textarea v-model="form.description" rows="3" class="form-control" placeholder="Quando usare questo modello..."></textarea>
+                    <div class="mt-4 flex flex-col gap-1.5">
+                        <label class="block text-sm font-medium leading-5 text-gray-700">Descrizione</label>
+                        <textarea v-model="form.description" rows="3" class="form-control mt-0" placeholder="Quando usare questo modello..."></textarea>
                     </div>
                 </section>
 
@@ -197,27 +200,27 @@ function saveTemplate() {
                                 </div>
 
                                 <div v-for="(task, taskIndex) in section.tasks" :key="`task-${sectionIndex}-${taskIndex}`" class="grid items-start gap-3 px-4 py-3 xl:grid-cols-[minmax(0,1.4fr)_96px_96px_150px_150px_36px]">
-                                    <div>
-                                        <input v-model="task.title" class="form-control mt-0" placeholder="Titolo task" />
+                                    <div class="flex flex-col">
+                                        <input v-model="task.title" class="form-control mt-0 h-[38px] min-h-[38px]" placeholder="Titolo task" />
                                         <textarea v-model="task.description" rows="2" class="form-control mt-2 text-sm" placeholder="Descrizione opzionale"></textarea>
                                     </div>
-                                    <div>
+                                    <div class="flex flex-col gap-1.5">
                                         <label class="block text-xs font-semibold uppercase tracking-wide text-gray-400 xl:hidden">Giorno</label>
-                                        <input v-model.number="task.day_offset" type="number" min="0" class="form-control mt-1 xl:mt-0" />
+                                        <input v-model.number="task.day_offset" type="number" min="0" class="form-control mt-0 h-[38px] min-h-[38px]" />
                                     </div>
-                                    <div>
+                                    <div class="flex flex-col gap-1.5">
                                         <label class="block text-xs font-semibold uppercase tracking-wide text-gray-400 xl:hidden">Durata</label>
-                                        <input v-model.number="task.duration_days" type="number" min="1" class="form-control mt-1 xl:mt-0" />
+                                        <input v-model.number="task.duration_days" type="number" min="1" class="form-control mt-0 h-[38px] min-h-[38px]" />
                                     </div>
-                                    <div>
+                                    <div class="flex flex-col gap-1.5">
                                         <label class="block text-xs font-semibold uppercase tracking-wide text-gray-400 xl:hidden">Priorità</label>
                                         <AppSelect v-model="task.priority" :options="priorityOptions" />
                                     </div>
-                                    <div>
+                                    <div class="flex flex-col gap-1.5">
                                         <label class="block text-xs font-semibold uppercase tracking-wide text-gray-400 xl:hidden">Tipo</label>
                                         <AppSelect v-model="task.task_type" :options="taskTypeOptions" />
                                     </div>
-                                    <button type="button" class="icon-btn xl:mt-0" title="Elimina task" @click="removeTask(section, taskIndex)">
+                                    <button type="button" class="icon-btn self-end xl:self-start" title="Elimina task" @click="removeTask(section, taskIndex)">
                                         <X class="h-4 w-4" :stroke-width="1.7" />
                                     </button>
                                 </div>
