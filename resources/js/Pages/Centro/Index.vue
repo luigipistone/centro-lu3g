@@ -3174,7 +3174,7 @@ function calendarDayStyle(sectionMonth, cell) {
                             </div>
                             <div class="flex flex-col gap-1.5">
                                 <label class="block text-sm font-medium leading-5 text-gray-700">Data avvio</label>
-                                <input v-model="form.template_start_date" type="date" class="form-control mt-0 h-[38px] min-h-[38px] cursor-pointer" @click="openFieldPicker($event, { type: 'date' })" />
+                                <AppDateInput v-model="form.template_start_date" />
                             </div>
                         </div>
                     </section>

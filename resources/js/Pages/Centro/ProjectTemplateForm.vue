@@ -17,7 +17,6 @@ const priorityOptions = [
 ];
 const taskTypeOptions = [
     { value: 'project', label: 'Task' },
-    { value: 'ongoing', label: 'Continuativa' },
     { value: 'meeting', label: 'Meeting' },
 ];
 
@@ -66,7 +65,7 @@ function templatePayload(template) {
                 day_offset: Number(task.day_offset || 0),
                 duration_days: Number(task.duration_days || 1),
                 priority: task.priority || 'medium',
-                task_type: task.task_type || 'project',
+                task_type: task.task_type === 'meeting' ? 'meeting' : 'project',
             })),
         })),
     };
@@ -159,10 +158,6 @@ function saveTemplate() {
                         </div>
                     </div>
 
-                    <div class="mt-4 flex flex-col gap-1.5">
-                        <label class="block text-sm font-medium leading-5 text-gray-700">Descrizione</label>
-                        <textarea v-model="form.description" rows="3" class="form-control mt-0" placeholder="Quando usare questo modello..."></textarea>
-                    </div>
                 </section>
 
                 <section class="surface overflow-hidden">
@@ -177,9 +172,9 @@ function saveTemplate() {
                         </button>
                     </div>
 
-                    <div class="space-y-4 p-5">
-                        <div v-for="(section, sectionIndex) in form.sections" :key="`section-${sectionIndex}`" class="overflow-hidden rounded-[var(--radius)] border border-gray-100 bg-white/58">
-                            <div class="flex items-center gap-2 border-b border-gray-100 px-4 py-3">
+                    <div class="space-y-6 p-5">
+                        <div v-for="(section, sectionIndex) in form.sections" :key="`section-${sectionIndex}`" class="overflow-visible">
+                            <div class="flex items-center gap-2 border-b border-gray-100 py-3">
                                 <input v-model="section.name" class="min-w-0 flex-1 bg-transparent text-sm font-semibold text-gray-900 outline-none" placeholder="Nome fase" />
                                 <button type="button" class="icon-btn" title="Aggiungi task" @click="addTask(section)">
                                     <Plus class="h-4 w-4" :stroke-width="1.7" />
@@ -189,8 +184,8 @@ function saveTemplate() {
                                 </button>
                             </div>
 
-                            <div class="divide-y divide-gray-100">
-                                <div class="hidden gap-3 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400 xl:grid xl:grid-cols-[minmax(0,1.4fr)_96px_96px_150px_150px_36px]">
+                            <div>
+                                <div class="hidden gap-3 border-b border-gray-100 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400 xl:grid xl:grid-cols-[minmax(0,1.4fr)_96px_96px_150px_150px_36px]">
                                     <span>Task</span>
                                     <span>Giorno</span>
                                     <span>Durata</span>
@@ -199,7 +194,7 @@ function saveTemplate() {
                                     <span></span>
                                 </div>
 
-                                <div v-for="(task, taskIndex) in section.tasks" :key="`task-${sectionIndex}-${taskIndex}`" class="grid items-start gap-3 px-4 py-3 xl:grid-cols-[minmax(0,1.4fr)_96px_96px_150px_150px_36px]">
+                                <div v-for="(task, taskIndex) in section.tasks" :key="`task-${sectionIndex}-${taskIndex}`" class="grid items-start gap-3 border-b border-gray-100 py-3 last:border-b-0 xl:grid-cols-[minmax(0,1.4fr)_96px_96px_150px_150px_36px]">
                                     <div class="flex flex-col">
                                         <input v-model="task.title" class="form-control mt-0 h-[38px] min-h-[38px]" placeholder="Titolo task" />
                                         <textarea v-model="task.description" rows="2" class="form-control mt-2 text-sm" placeholder="Descrizione opzionale"></textarea>
