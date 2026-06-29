@@ -33,7 +33,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/projects', [CentroPageController::class, 'index'])->defaults('section', 'projects')->name('projects.index');
     Route::post('/projects', [CentroPageController::class, 'store'])->defaults('section', 'projects')->name('projects.store');
     Route::get('/project-templates', [CentroPageController::class, 'projectTemplates'])->name('project-templates.index');
+    Route::get('/project-templates/create', [CentroPageController::class, 'createProjectTemplate'])->name('project-templates.create');
     Route::post('/project-templates', [CentroPageController::class, 'storeProjectTemplate'])->name('project-templates.store');
+    Route::get('/project-templates/{id}', [CentroPageController::class, 'showProjectTemplate'])->name('project-templates.show');
     Route::put('/project-templates/{id}', [CentroPageController::class, 'updateProjectTemplate'])->name('project-templates.update');
     Route::delete('/project-templates/{id}', [CentroPageController::class, 'destroyProjectTemplate'])->name('project-templates.destroy');
     Route::get('/projects/{id}', [CentroPageController::class, 'show'])->defaults('section', 'projects')->name('projects.show');

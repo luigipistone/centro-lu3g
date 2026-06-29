@@ -590,6 +590,28 @@ class CentroPageController extends Controller
         ]);
     }
 
+    public function createProjectTemplate(Request $request): Response
+    {
+        $this->ensureAdmin($request);
+        abort_unless(Schema::hasTable('project_templates'), 404);
+
+        return Inertia::render('Centro/ProjectTemplateForm', [
+            'template' => null,
+        ]);
+    }
+
+    public function showProjectTemplate(Request $request, string $id): Response
+    {
+        $this->ensureAdmin($request);
+        abort_unless(Schema::hasTable('project_templates'), 404);
+        $template = $this->projectTemplateRows()->firstWhere('id', $id);
+        abort_if(! $template, 404);
+
+        return Inertia::render('Centro/ProjectTemplateForm', [
+            'template' => $template,
+        ]);
+    }
+
     public function storeProjectTemplate(Request $request): RedirectResponse
     {
         $this->ensureAdmin($request);
@@ -611,7 +633,7 @@ class CentroPageController extends Controller
             $this->syncProjectTemplateStructure($id, $payload['sections'] ?? []);
         });
 
-        return back()->with('status', 'Modello creato.');
+        return redirect()->route('project-templates.show', $id)->with('status', 'Modello creato.');
     }
 
     public function updateProjectTemplate(Request $request, string $id): RedirectResponse

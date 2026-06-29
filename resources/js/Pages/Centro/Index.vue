@@ -4393,7 +4393,7 @@ function calendarDayStyle(sectionMonth, cell) {
 
         <div v-else-if="section === 'projects'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
-                <div class="grid gap-3 lg:grid-cols-[1fr_190px_240px_auto_auto]">
+                <div class="grid gap-3 lg:grid-cols-[minmax(220px,0.82fr)_165px_215px_auto_auto_auto]">
                     <input v-model="projectSearch" class="form-control mt-0" placeholder="Cerca per progetto, cliente o descrizione..." />
                     <AppSelect v-model="projectStatus" :options="projectStatusOptions" />
                     <div ref="projectPeopleMenu" class="relative z-30">
