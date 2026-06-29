@@ -151,7 +151,7 @@ function saveTemplate() {
                         </div>
                         <div class="flex flex-col gap-1.5">
                             <span class="block text-sm font-medium leading-5 text-gray-700">Stato</span>
-                            <label class="form-control mt-0 flex h-[38px] min-h-[38px] cursor-pointer items-center gap-2">
+                            <label class="mt-0 flex h-[38px] min-h-[38px] cursor-pointer items-center gap-2 px-1">
                                 <input v-model="form.active" type="checkbox" class="rounded border-gray-300 text-[hsl(var(--primary-app))]" />
                                 <span class="text-sm font-semibold text-gray-700">Attivo</span>
                             </label>
@@ -174,7 +174,7 @@ function saveTemplate() {
 
                     <div class="space-y-6 p-5">
                         <div v-for="(section, sectionIndex) in form.sections" :key="`section-${sectionIndex}`" class="overflow-visible">
-                            <div class="flex items-center gap-2 border-b border-gray-100 py-3">
+                            <div class="mb-4 flex items-center gap-2 border-b border-gray-100 py-3">
                                 <input v-model="section.name" class="min-w-0 flex-1 bg-transparent text-sm font-semibold text-gray-900 outline-none" placeholder="Nome fase" />
                                 <button type="button" class="icon-btn" title="Aggiungi task" @click="addTask(section)">
                                     <Plus class="h-4 w-4" :stroke-width="1.7" />
@@ -197,7 +197,6 @@ function saveTemplate() {
                                 <div v-for="(task, taskIndex) in section.tasks" :key="`task-${sectionIndex}-${taskIndex}`" class="grid items-start gap-3 border-b border-gray-100 py-3 last:border-b-0 xl:grid-cols-[minmax(0,1.4fr)_96px_96px_150px_150px_36px]">
                                     <div class="flex flex-col">
                                         <input v-model="task.title" class="form-control mt-0 h-[38px] min-h-[38px]" placeholder="Titolo task" />
-                                        <textarea v-model="task.description" rows="2" class="form-control mt-2 text-sm" placeholder="Descrizione opzionale"></textarea>
                                     </div>
                                     <div class="flex flex-col gap-1.5">
                                         <label class="block text-xs font-semibold uppercase tracking-wide text-gray-400 xl:hidden">Giorno</label>
