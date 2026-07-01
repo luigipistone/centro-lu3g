@@ -4968,6 +4968,60 @@ class CentroPageController extends Controller
         });
     }
 
+    private function hydrateTaskRow(object $task): object
+    {
+        $taskIds = collect([$task->id]);
+        $assigneeIds = DB::table('task_assignees')
+            ->where('task_id', $task->id)
+            ->pluck('user_id')
+            ->values();
+        $followerIds = DB::table('task_followers')
+            ->where('task_id', $task->id)
+            ->pluck('user_id')
+            ->values();
+        $comments = DB::table('task_comments')
+            ->leftJoin('users', 'users.id', '=', 'task_comments.user_id')
+            ->where('task_comments.task_id', $task->id)
+            ->latest('task_comments.created_at')
+            ->get(['task_comments.*', 'users.name as user_name'])
+            ->take(30)
+            ->values();
+        $activity = ($this->taskActivityRows($taskIds)[$task->id] ?? collect())->values();
+        $dependencies = $this->taskDependencyRows($taskIds);
+
+        $task->assignee_ids = $assigneeIds;
+        $task->follower_ids = $followerIds;
+        $task->comments = $comments;
+        $task->activity = $activity;
+        $task->dependencies = ($dependencies[$task->id]['dependencies'] ?? collect())->values();
+        $task->dependents = ($dependencies[$task->id]['dependents'] ?? collect())->values();
+        $task->blocked_dependencies_count = ($task->dependencies ?? collect())->where('status', '!=', 'done')->count();
+        $task->subtasks = $task->parent_task_id ? collect() : $this->taskSubtaskRows($task->id);
+        $task->subtask_count = $task->subtasks->count();
+
+        return $task;
+    }
+
+    public function taskSnapshot(Request $request, string $id)
+    {
+        $task = DB::table('tasks')
+            ->leftJoin('projects', 'projects.id', '=', 'tasks.project_id')
+            ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
+            ->leftJoin('services', 'services.id', '=', 'tasks.service_id')
+            ->where('tasks.id', $id)
+            ->select('tasks.*', 'projects.name as project_name', 'projects.color as project_color', 'clients.name as client_name', 'services.name as service_name', 'services.color as service_color')
+            ->first();
+
+        abort_if(! $task, 404);
+
+        if ($this->isGuest($request)) {
+            $rootTaskId = $task->parent_task_id ?: $task->id;
+            abort_unless($this->visibleTaskIdsForUser($request->user()->id)->contains($rootTaskId), 403);
+        }
+
+        return response()->json($this->hydrateTaskRow($task));
+    }
+
     private function taskDependencyRows($taskIds): \Illuminate\Support\Collection
     {
         $ids = collect($taskIds)->filter()->unique()->values();

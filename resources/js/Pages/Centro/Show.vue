@@ -2303,6 +2303,21 @@ function refreshProjectTaskDrawerTask() {
     }
 }
 
+async function refreshProjectTaskDrawerFromServer(taskId = projectTaskDrawerTask.value?.id) {
+    if (!taskId) return;
+
+    const response = await fetch(route('tasks.snapshot', taskId), {
+        headers: {
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+    });
+
+    if (!response.ok) return;
+
+    projectTaskDrawerTask.value = normalizeProjectDrawerTask(await response.json());
+}
+
 function projectDrawerSubtasks() {
     if (!projectTaskDrawerTask.value?.id) return [];
 
@@ -2668,7 +2683,7 @@ function addProjectDrawerSubtask() {
         preserveState: true,
         only: ['related', 'errors', 'flash'],
         onSuccess: () => {
-            nextTick(() => refreshProjectTaskDrawerTask());
+            refreshProjectTaskDrawerFromServer(projectTaskDrawerTask.value.id);
             projectDrawerSubtaskForm.reset();
         },
     });

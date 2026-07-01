@@ -2267,6 +2267,21 @@ function refreshCalendarTaskPanelFromRows(rows = props.rows) {
     hydrateCalendarTaskRelated(calendarTaskPanel.value);
 }
 
+async function refreshCalendarTaskPanelFromServer(taskId = calendarTaskPanel.value?.id || calendarTaskForm.id) {
+    if (!taskId) return;
+
+    const response = await fetch(route('tasks.snapshot', taskId), {
+        headers: {
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+    });
+
+    if (!response.ok) return;
+
+    openCalendarTask(await response.json(), { preserveStack: true });
+}
+
 function openCalendarTaskCreate(type, date) {
     const taskType = type === 'task' ? 'project' : type;
     calendarCreateDate.value = null;
@@ -2599,7 +2614,7 @@ function addCalendarSubtask() {
         preserveState: true,
         only: ['rows', 'errors', 'flash'],
         onSuccess: () => {
-            nextTick(() => refreshCalendarTaskPanelFromRows());
+            refreshCalendarTaskPanelFromServer(parentTaskId);
             calendarSubtaskForm.reset();
             calendarSubtaskCreateAssigneeMenuOpen.value = false;
         },

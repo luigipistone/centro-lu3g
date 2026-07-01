@@ -53,6 +53,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/projects/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'projects')->name('projects.destroy');
     Route::get('/tasks', [CentroPageController::class, 'index'])->defaults('section', 'tasks')->name('tasks.index');
     Route::post('/tasks', [CentroPageController::class, 'store'])->defaults('section', 'tasks')->name('tasks.store');
+    Route::get('/tasks/{id}/snapshot', [CentroPageController::class, 'taskSnapshot'])->name('tasks.snapshot');
     Route::get('/tasks/{id}', [CentroPageController::class, 'show'])->defaults('section', 'tasks')->name('tasks.show');
     Route::put('/tasks/{id}', [CentroPageController::class, 'update'])->defaults('section', 'tasks')->name('tasks.update');
     Route::post('/tasks/{id}/comments', [CentroPageController::class, 'storeTaskComment'])->name('tasks.comments.store');
