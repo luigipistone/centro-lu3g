@@ -4230,7 +4230,6 @@ onUnmounted(() => {
                                         @blur="saveProjectSectionName(sectionRow)"
                                         @keydown.enter.prevent="$event.target.blur()"
                                     />
-                                    <span class="text-xs font-medium text-gray-400">{{ projectTasksForSection(sectionRow).length }}</span>
                                     <div v-if="!sectionRow.virtual && canEditProject" class="relative shrink-0" data-project-section-menu>
                                         <button
                                             type="button"

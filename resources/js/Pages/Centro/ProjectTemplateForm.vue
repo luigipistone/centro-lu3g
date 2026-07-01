@@ -624,7 +624,6 @@ onUnmounted(() => {
                                     class="min-w-0 flex-1 cursor-pointer rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-semibold outline-none transition hover:border-gray-200 hover:bg-white focus:cursor-text focus:border-indigo-200 focus:bg-white focus:shadow-sm"
                                     placeholder="Nome fase"
                                 />
-                                <span class="text-xs font-medium text-gray-400">{{ sectionRow.tasks.length }}</span>
                                 <div class="relative shrink-0" data-template-section-menu>
                                     <button
                                         type="button"
