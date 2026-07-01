@@ -2237,6 +2237,35 @@ function openCalendarTask(task, options = {}) {
     refreshCalendarTaskDescriptionEditor();
 }
 
+function findCalendarTaskInRows(taskId, rows = props.rows) {
+    if (!taskId) return null;
+
+    for (const row of rows || []) {
+        if (row.id === taskId) return row;
+
+        const subtask = (row.subtasks || []).find((item) => item.id === taskId);
+        if (subtask) {
+            return {
+                ...subtask,
+                parent_task_id: subtask.parent_task_id || row.id,
+                parent_title: row.title,
+            };
+        }
+    }
+
+    return null;
+}
+
+function refreshCalendarTaskPanelFromRows(rows = props.rows) {
+    if (!calendarTaskPanelOpen.value || !calendarTaskForm.id) return;
+
+    const freshTask = findCalendarTaskInRows(calendarTaskForm.id, rows);
+    if (!freshTask) return;
+
+    calendarTaskPanel.value = freshTask;
+    hydrateCalendarTaskRelated(freshTask);
+}
+
 function openCalendarTaskCreate(type, date) {
     const taskType = type === 'task' ? 'project' : type;
     calendarCreateDate.value = null;
@@ -2525,6 +2554,7 @@ function addCalendarSubtask() {
         preserveState: true,
         only: ['rows', 'errors', 'flash'],
         onSuccess: () => {
+            refreshCalendarTaskPanelFromRows();
             calendarSubtaskForm.reset();
             calendarSubtaskCreateAssigneeMenuOpen.value = false;
         },
@@ -2862,12 +2892,7 @@ function closeCalendarCreateMenuOnOutside(event) {
 watch(
     () => props.rows,
     (rows) => {
-        if (!calendarTaskPanelOpen.value || !calendarTaskForm.id) return;
-        const freshTask = (rows || []).find((row) => row.id === calendarTaskForm.id);
-        if (!freshTask) return;
-
-        calendarTaskPanel.value = freshTask;
-        hydrateCalendarTaskRelated(freshTask);
+        refreshCalendarTaskPanelFromRows(rows);
     },
 );
 
