@@ -4,7 +4,7 @@ import AppSelect from '@/Components/AppSelect.vue';
 import AppTimeInput from '@/Components/AppTimeInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ChevronDown, ChevronLeft, Copy, CopyPlus, GripVertical, MoreHorizontal, Plus, Save, Trash2, X } from '@lucide/vue';
+import { ChevronDown, ChevronLeft, Copy, CopyPlus, GitBranch, GripVertical, MoreHorizontal, Plus, Save, Trash2, X } from '@lucide/vue';
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 
 const props = defineProps({
@@ -58,6 +58,7 @@ const draggedTaskKey = ref(null);
 const taskDropTargetKey = ref(null);
 const taskDropPlacement = ref(null);
 const taskDropSectionIndex = ref(null);
+const dependencyMenuTaskKey = ref(null);
 
 const form = useForm(templatePayload(props.template));
 const totalTasks = computed(() => form.sections.reduce((sum, section) => sum + section.tasks.length, 0));
@@ -348,6 +349,13 @@ function dependencyModeLabel(task) {
     return count ? `${prefix} · ${count}` : prefix;
 }
 
+function dependencyPreviewLabel(task) {
+    const count = (task.dependency_task_keys || []).length;
+    if (!task || task.dependency_mode === 'none' || !count) return '';
+    const label = task.dependency_mode === 'blocks' ? 'Bloccante' : 'Bloccata';
+    return `${label}: ${count} task`;
+}
+
 function toggleDependencyTask(task, taskKey) {
     const values = [...(task.dependency_task_keys || [])];
     const index = values.indexOf(taskKey);
@@ -359,7 +367,18 @@ function toggleDependencyTask(task, taskKey) {
 function handleDependencyModeChange(task) {
     if (task.dependency_mode === 'none') {
         task.dependency_task_keys = [];
+        dependencyMenuTaskKey.value = null;
+        return;
     }
+
+    if (dependencyTaskOptions(task).length) {
+        dependencyMenuTaskKey.value = task.template_key;
+    }
+}
+
+function toggleDependencyMenu(task) {
+    if (task.dependency_mode === 'none') return;
+    dependencyMenuTaskKey.value = dependencyMenuTaskKey.value === task.template_key ? null : task.template_key;
 }
 
 function handleReferenceChange(task) {
@@ -440,9 +459,13 @@ function personAvatarClass(selected) {
 }
 
 function closeSectionActionMenuOnOutside(event) {
-    if (sectionActionMenuOpen.value === null) return;
-    if (event.target instanceof Element && event.target.closest('[data-template-section-menu]')) return;
-    sectionActionMenuOpen.value = null;
+    if (sectionActionMenuOpen.value !== null && !(event.target instanceof Element && event.target.closest('[data-template-section-menu]'))) {
+        sectionActionMenuOpen.value = null;
+    }
+
+    if (dependencyMenuTaskKey.value !== null && !(event.target instanceof Element && event.target.closest('[data-template-dependency-menu]'))) {
+        dependencyMenuTaskKey.value = null;
+    }
 }
 
 function normalizeTemplatePayload() {
@@ -632,7 +655,16 @@ onUnmounted(() => {
                                     </span>
                                     <button type="button" class="min-w-0 text-left font-medium text-indigo-700" @click="openTaskDrawer(task)">
                                         <span :class="['block truncate', task.status === 'done' ? 'line-through' : '']">{{ task.title || 'Task senza titolo' }}</span>
-                                        <span class="mt-1 block truncate text-xs font-normal text-gray-500">{{ selectedServiceLabel(task) }} · {{ optionLabel(taskTypeOptions, task.task_type, 'Task') }}</span>
+                                        <span class="mt-1 flex min-w-0 items-center gap-2 text-xs font-normal text-gray-500">
+                                            <span class="truncate">{{ selectedServiceLabel(task) }} · {{ optionLabel(taskTypeOptions, task.task_type, 'Task') }}</span>
+                                            <span
+                                                v-if="dependencyPreviewLabel(task)"
+                                                class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-100"
+                                                :title="dependencyPreviewLabel(task)"
+                                            >
+                                                <GitBranch class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                            </span>
+                                        </span>
                                     </button>
                                     <div class="flex min-w-0 items-center gap-2 text-xs text-gray-600">
                                         <span v-if="selectedAssignees(task).length" class="flex -space-x-2">
@@ -746,29 +778,48 @@ onUnmounted(() => {
                                     <h4 class="text-sm font-semibold text-gray-900">Dipendenze</h4>
                                     <p class="mt-1 text-xs text-gray-500">Imposta se questa task blocca o viene bloccata da altre task del modello.</p>
                                 </div>
-                                <div class="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
+                                <div class="grid items-start gap-4 md:grid-cols-2">
                                     <div class="flex flex-col gap-1.5">
                                         <label class="block text-sm font-medium leading-5 text-gray-700">Tipo</label>
                                         <AppSelect v-model="drawerTask.dependency_mode" :options="dependencyModeOptions" @change="handleDependencyModeChange(drawerTask)" />
                                     </div>
-                                    <div class="flex flex-col gap-1.5">
-                                        <label class="block text-sm font-medium leading-5 text-gray-700">{{ dependencyModeLabel(drawerTask) }}</label>
-                                        <div v-if="drawerTask.dependency_mode !== 'none'" class="people-avatar-picker max-h-44 gap-2 p-2">
-                                            <button
-                                                v-for="option in dependencyTaskOptions(drawerTask)"
-                                                :key="`dependency-option-${drawerTask.template_key}-${option.value}`"
-                                                type="button"
-                                                :class="[
-                                                    'rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm font-semibold transition',
-                                                    (drawerTask.dependency_task_keys || []).includes(option.value) ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-gray-700 ring-1 ring-gray-200 hover:bg-indigo-50 hover:text-indigo-700',
-                                                ]"
-                                                @click="toggleDependencyTask(drawerTask, option.value)"
-                                            >
-                                                {{ option.label }}
-                                            </button>
-                                        </div>
-                                        <div v-else class="flex h-[38px] items-center rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50 px-3 text-sm text-gray-400">
-                                            Nessuna task collegata
+                                    <div class="relative flex flex-col gap-1.5" data-template-dependency-menu>
+                                        <label class="block text-sm font-medium leading-5 text-gray-700">Task collegate</label>
+                                        <button
+                                            type="button"
+                                            :class="[
+                                                'form-control mt-0 flex h-[38px] items-center justify-between gap-3 text-left',
+                                                drawerTask.dependency_mode === 'none' ? 'cursor-not-allowed bg-gray-50 text-gray-400' : '',
+                                                dependencyMenuTaskKey === drawerTask.template_key ? 'border-indigo-300 ring-4 ring-indigo-500/10' : '',
+                                            ]"
+                                            :disabled="drawerTask.dependency_mode === 'none'"
+                                            :aria-expanded="dependencyMenuTaskKey === drawerTask.template_key"
+                                            @click.stop="toggleDependencyMenu(drawerTask)"
+                                        >
+                                            <span :class="['truncate', (drawerTask.dependency_task_keys || []).length ? 'text-gray-800' : 'text-gray-400']">{{ dependencyModeLabel(drawerTask) }}</span>
+                                            <ChevronDown :class="['h-4 w-4 shrink-0 text-gray-400 transition', dependencyMenuTaskKey === drawerTask.template_key ? 'rotate-180 text-indigo-500' : '']" :stroke-width="1.7" />
+                                        </button>
+                                        <div
+                                            v-if="dependencyMenuTaskKey === drawerTask.template_key"
+                                            class="app-popover field-dropdown-menu absolute left-0 right-0 top-full z-[7600] mt-2 p-3"
+                                            @click.stop
+                                        >
+                                            <div class="max-h-56 overflow-y-auto pr-1">
+                                                <button
+                                                    v-for="option in dependencyTaskOptions(drawerTask)"
+                                                    :key="`dependency-option-${drawerTask.template_key}-${option.value}`"
+                                                    type="button"
+                                                    :class="[
+                                                        'field-dropdown-option flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition hover:bg-indigo-50',
+                                                        (drawerTask.dependency_task_keys || []).includes(option.value) ? 'bg-indigo-50 font-semibold text-indigo-700' : 'text-gray-700',
+                                                    ]"
+                                                    @click="toggleDependencyTask(drawerTask, option.value)"
+                                                >
+                                                    <span class="truncate">{{ option.label }}</span>
+                                                    <span v-if="(drawerTask.dependency_task_keys || []).includes(option.value)" class="h-2 w-2 shrink-0 rounded-full bg-indigo-500"></span>
+                                                </button>
+                                                <p v-if="!dependencyTaskOptions(drawerTask).length" class="px-3 py-2 text-sm text-gray-500">Nessun'altra task nel modello</p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -814,7 +865,7 @@ onUnmounted(() => {
                                         :aria-label="`${(drawerTask.assignee_ids || []).includes(user.id) ? 'Rimuovi' : 'Assegna'} ${user.name || user.email}`"
                                         @click="toggleAssignee(drawerTask, user.id)"
                                     >
-                                        <UserAvatar :user="user" size="sm" />
+                                        <UserAvatar :user="user" size="md" />
                                     </button>
                                 </div>
                             </section>
