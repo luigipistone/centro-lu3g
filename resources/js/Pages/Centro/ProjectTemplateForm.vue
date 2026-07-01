@@ -59,6 +59,7 @@ const taskDropTargetKey = ref(null);
 const taskDropPlacement = ref(null);
 const taskDropSectionIndex = ref(null);
 const dependencyMenuTaskKey = ref(null);
+const dependencyMenuStyle = ref({});
 
 const form = useForm(templatePayload(props.template));
 const totalTasks = computed(() => form.sections.reduce((sum, section) => sum + section.tasks.length, 0));
@@ -368,17 +369,38 @@ function handleDependencyModeChange(task) {
     if (task.dependency_mode === 'none') {
         task.dependency_task_keys = [];
         dependencyMenuTaskKey.value = null;
-        return;
-    }
-
-    if (dependencyTaskOptions(task).length) {
-        dependencyMenuTaskKey.value = task.template_key;
     }
 }
 
-function toggleDependencyMenu(task) {
+function updateDependencyMenuPosition(event) {
+    const rect = event?.currentTarget?.getBoundingClientRect?.();
+    if (!rect) return;
+
+    const viewportPadding = 12;
+    const width = Math.min(Math.max(rect.width, 260), window.innerWidth - (viewportPadding * 2));
+    const menuHeight = 260;
+    const left = Math.min(Math.max(viewportPadding, rect.right - width), window.innerWidth - width - viewportPadding);
+    const hasSpaceBelow = rect.bottom + 8 + menuHeight <= window.innerHeight - viewportPadding;
+    const top = hasSpaceBelow
+        ? rect.bottom + 8
+        : Math.max(viewportPadding, rect.top - menuHeight - 8);
+
+    dependencyMenuStyle.value = {
+        left: `${left}px`,
+        top: `${top}px`,
+        width: `${width}px`,
+    };
+}
+
+function toggleDependencyMenu(task, event = null) {
     if (task.dependency_mode === 'none') return;
-    dependencyMenuTaskKey.value = dependencyMenuTaskKey.value === task.template_key ? null : task.template_key;
+    if (dependencyMenuTaskKey.value === task.template_key) {
+        dependencyMenuTaskKey.value = null;
+        return;
+    }
+
+    updateDependencyMenuPosition(event);
+    dependencyMenuTaskKey.value = task.template_key;
 }
 
 function handleReferenceChange(task) {
@@ -453,8 +475,10 @@ function toggleAssignee(task, userId) {
 
 function personAvatarClass(selected) {
     return [
-        'rounded-full p-0.5 transition hover:-translate-y-0.5 hover:ring-2 hover:ring-indigo-200',
-        selected ? 'bg-indigo-100 ring-2 ring-indigo-400' : 'bg-white/70 ring-1 ring-gray-200',
+        'group/person relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300',
+        selected
+            ? 'bg-indigo-50 ring-2 ring-indigo-500 ring-offset-2 ring-offset-white'
+            : 'bg-white/70 ring-1 ring-gray-200 hover:-translate-y-0.5 hover:ring-indigo-200 hover:shadow-[0_10px_24px_rgba(79,70,229,0.10)]',
     ];
 }
 
@@ -794,33 +818,37 @@ onUnmounted(() => {
                                             ]"
                                             :disabled="drawerTask.dependency_mode === 'none'"
                                             :aria-expanded="dependencyMenuTaskKey === drawerTask.template_key"
-                                            @click.stop="toggleDependencyMenu(drawerTask)"
+                                            @click.stop="toggleDependencyMenu(drawerTask, $event)"
                                         >
                                             <span :class="['truncate', (drawerTask.dependency_task_keys || []).length ? 'text-gray-800' : 'text-gray-400']">{{ dependencyModeLabel(drawerTask) }}</span>
                                             <ChevronDown :class="['h-4 w-4 shrink-0 text-gray-400 transition', dependencyMenuTaskKey === drawerTask.template_key ? 'rotate-180 text-indigo-500' : '']" :stroke-width="1.7" />
                                         </button>
-                                        <div
-                                            v-if="dependencyMenuTaskKey === drawerTask.template_key"
-                                            class="app-popover field-dropdown-menu absolute left-0 right-0 top-full z-[7600] mt-2 p-3"
-                                            @click.stop
-                                        >
-                                            <div class="max-h-56 overflow-y-auto pr-1">
-                                                <button
-                                                    v-for="option in dependencyTaskOptions(drawerTask)"
-                                                    :key="`dependency-option-${drawerTask.template_key}-${option.value}`"
-                                                    type="button"
-                                                    :class="[
-                                                        'field-dropdown-option flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition hover:bg-indigo-50',
-                                                        (drawerTask.dependency_task_keys || []).includes(option.value) ? 'bg-indigo-50 font-semibold text-indigo-700' : 'text-gray-700',
-                                                    ]"
-                                                    @click="toggleDependencyTask(drawerTask, option.value)"
-                                                >
-                                                    <span class="truncate">{{ option.label }}</span>
-                                                    <span v-if="(drawerTask.dependency_task_keys || []).includes(option.value)" class="h-2 w-2 shrink-0 rounded-full bg-indigo-500"></span>
-                                                </button>
-                                                <p v-if="!dependencyTaskOptions(drawerTask).length" class="px-3 py-2 text-sm text-gray-500">Nessun'altra task nel modello</p>
+                                        <Teleport to="body">
+                                            <div
+                                                v-if="dependencyMenuTaskKey === drawerTask.template_key"
+                                                class="app-popover field-dropdown-menu fixed z-[9000] p-3"
+                                                :style="dependencyMenuStyle"
+                                                data-template-dependency-menu
+                                                @click.stop
+                                            >
+                                                <div class="max-h-56 overflow-y-auto pr-1">
+                                                    <button
+                                                        v-for="option in dependencyTaskOptions(drawerTask)"
+                                                        :key="`dependency-option-${drawerTask.template_key}-${option.value}`"
+                                                        type="button"
+                                                        :class="[
+                                                            'field-dropdown-option flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition hover:bg-indigo-50',
+                                                            (drawerTask.dependency_task_keys || []).includes(option.value) ? 'bg-indigo-50 font-semibold text-indigo-700' : 'text-gray-700',
+                                                        ]"
+                                                        @click="toggleDependencyTask(drawerTask, option.value)"
+                                                    >
+                                                        <span class="truncate">{{ option.label }}</span>
+                                                        <span v-if="(drawerTask.dependency_task_keys || []).includes(option.value)" class="h-2 w-2 shrink-0 rounded-full bg-indigo-500"></span>
+                                                    </button>
+                                                    <p v-if="!dependencyTaskOptions(drawerTask).length" class="px-3 py-2 text-sm text-gray-500">Nessun'altra task nel modello</p>
+                                                </div>
                                             </div>
-                                        </div>
+                                        </Teleport>
                                     </div>
                                 </div>
                             </section>
