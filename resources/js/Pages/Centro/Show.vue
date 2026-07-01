@@ -2281,10 +2281,16 @@ function findProjectTaskInRelated(taskId) {
     if (!taskId) return null;
 
     for (const task of props.related.tasks || []) {
-        if (task.id === taskId) return task;
+        if (task.id === taskId) return normalizeProjectDrawerTask(task);
 
         const subtask = (task.subtasks || []).find((row) => row.id === taskId);
-        if (subtask) return subtask;
+        if (subtask) {
+            return normalizeProjectDrawerTask({
+                ...subtask,
+                parent_task_id: subtask.parent_task_id || task.id,
+                parent_title: task.title,
+            });
+        }
     }
 
     return null;
@@ -2293,8 +2299,46 @@ function findProjectTaskInRelated(taskId) {
 function refreshProjectTaskDrawerTask() {
     const refreshed = findProjectTaskInRelated(projectTaskDrawerTask.value?.id);
     if (refreshed) {
-        projectTaskDrawerTask.value = refreshed;
+        projectTaskDrawerTask.value = normalizeProjectDrawerTask(refreshed);
     }
+}
+
+function projectDrawerSubtasks() {
+    if (!projectTaskDrawerTask.value?.id) return [];
+
+    return (projectTaskDrawerTask.value.subtasks || [])
+        .filter((subtask) => !subtask.parent_task_id || subtask.parent_task_id === projectTaskDrawerTask.value.id)
+        .map((subtask) => normalizeProjectDrawerTask({
+            ...subtask,
+            parent_task_id: subtask.parent_task_id || projectTaskDrawerTask.value.id,
+            parent_title: subtask.parent_title || projectTaskDrawerTask.value.title,
+        }));
+}
+
+function normalizeProjectDrawerTask(task) {
+    return {
+        ...(task || {}),
+        assignee_ids: [...(task?.assignee_ids || [])],
+        follower_ids: [...(task?.follower_ids || [])],
+        dependencies: [...(task?.dependencies || [])],
+        dependents: [...(task?.dependents || [])],
+        comments: [...(task?.comments || [])],
+        activity: [...(task?.activity || [])],
+        subtasks: (task?.subtasks || [])
+            .filter((subtask) => !subtask.parent_task_id || subtask.parent_task_id === task.id)
+            .map((subtask) => ({
+                ...subtask,
+                assignee_ids: [...(subtask.assignee_ids || [])],
+                follower_ids: [...(subtask.follower_ids || [])],
+                dependencies: [...(subtask.dependencies || [])],
+                dependents: [...(subtask.dependents || [])],
+                comments: [...(subtask.comments || [])],
+                activity: [...(subtask.activity || [])],
+                subtasks: [],
+                parent_task_id: subtask.parent_task_id || task.id,
+                parent_title: subtask.parent_title || task.title,
+            })),
+    };
 }
 
 function toggleProjectSection(sectionId) {
@@ -2411,35 +2455,36 @@ function projectTaskDrawerPayload() {
 }
 
 function openProjectTaskDrawer(task, options = {}) {
+    const normalizedTask = normalizeProjectDrawerTask(task);
     if (options.pushCurrent && projectTaskDrawerTask.value) {
         projectTaskParentStack.value = [...projectTaskParentStack.value, projectTaskDrawerTask.value];
     } else if (!options.keepStack) {
         projectTaskParentStack.value = [];
     }
-    projectTaskDrawerTask.value = task;
+    projectTaskDrawerTask.value = normalizedTask;
     projectTaskDrawerForm.defaults({
-        title: task.title || '',
-        description: task.description || '',
-        project_id: task.project_id || props.record.id,
-        client_id: task.client_id || projectForm.client_id || '',
-        service_id: task.service_id || '',
-        task_type: task.task_type || 'project',
-        status: task.status || 'todo',
-        priority: task.priority || 'medium',
-        start_date: task.start_date || '',
-        due_date: task.due_date || '',
-        due_time: task.due_time ? String(task.due_time).slice(0, 5) : '',
-        location: task.location || '',
-        recurring_enabled: Boolean(task.recurring_enabled),
-        recurring_interval_value: task.recurring_interval_value || 1,
-        recurring_interval_unit: task.recurring_interval_unit || 'week',
-        recurring_mode: task.recurring_mode || 'fixed',
-        recurring_weekday: task.recurring_weekday || 1,
-        recurring_month_day: task.recurring_month_day || 1,
-        assignee_ids: [...(task.assignee_ids || [])],
-        follower_ids: [...(task.follower_ids || [])],
-        dependency_ids: (task.dependencies || []).map((dependency) => dependency.id),
-        dependent_ids: (task.dependents || []).map((dependent) => dependent.id),
+        title: normalizedTask.title || '',
+        description: normalizedTask.description || '',
+        project_id: normalizedTask.project_id || props.record.id,
+        client_id: normalizedTask.client_id || projectForm.client_id || '',
+        service_id: normalizedTask.service_id || '',
+        task_type: normalizedTask.task_type || 'project',
+        status: normalizedTask.status || 'todo',
+        priority: normalizedTask.priority || 'medium',
+        start_date: normalizedTask.start_date || '',
+        due_date: normalizedTask.due_date || '',
+        due_time: normalizedTask.due_time ? String(normalizedTask.due_time).slice(0, 5) : '',
+        location: normalizedTask.location || '',
+        recurring_enabled: Boolean(normalizedTask.recurring_enabled),
+        recurring_interval_value: normalizedTask.recurring_interval_value || 1,
+        recurring_interval_unit: normalizedTask.recurring_interval_unit || 'week',
+        recurring_mode: normalizedTask.recurring_mode || 'fixed',
+        recurring_weekday: normalizedTask.recurring_weekday || 1,
+        recurring_month_day: normalizedTask.recurring_month_day || 1,
+        assignee_ids: [...(normalizedTask.assignee_ids || [])],
+        follower_ids: [...(normalizedTask.follower_ids || [])],
+        dependency_ids: (normalizedTask.dependencies || []).map((dependency) => dependency.id),
+        dependent_ids: (normalizedTask.dependents || []).map((dependent) => dependent.id),
     });
     projectTaskDrawerForm.reset();
     projectTaskDrawerFeedTab.value = 'comments';
@@ -2623,7 +2668,7 @@ function addProjectDrawerSubtask() {
         preserveState: true,
         only: ['related', 'errors', 'flash'],
         onSuccess: () => {
-            refreshProjectTaskDrawerTask();
+            nextTick(() => refreshProjectTaskDrawerTask());
             projectDrawerSubtaskForm.reset();
         },
     });
@@ -5840,7 +5885,7 @@ onUnmounted(() => {
                             <section class="content-card rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
                                 <div class="mb-3 flex items-center justify-between gap-3">
                                     <h4 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Sottoattività</h4>
-                                    <span class="text-xs text-gray-500">{{ projectTaskDrawerTask.subtasks?.length || 0 }}</span>
+                                    <span class="text-xs text-gray-500">{{ projectDrawerSubtasks().length }}</span>
                                 </div>
                                 <form class="mb-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_80px_auto]" @submit.prevent="addProjectDrawerSubtask">
                                     <input v-model="projectDrawerSubtaskForm.title" class="subtask-line-control font-medium" placeholder="Nuova sottoattività..." />
@@ -5848,7 +5893,7 @@ onUnmounted(() => {
                                     <button type="submit" class="btn btn-outline px-3 py-1.5 text-xs">Aggiungi</button>
                                 </form>
                                 <div class="space-y-1">
-                                    <div v-for="subtask in projectTaskDrawerTask.subtasks || []" :key="`project-drawer-subtask-${subtask.id}`" class="flex items-center gap-3 border-t border-gray-100 py-2 text-sm">
+                                    <div v-for="subtask in projectDrawerSubtasks()" :key="`project-drawer-subtask-${subtask.id}`" class="flex items-center gap-3 border-t border-gray-100 py-2 text-sm">
                                         <span :class="['h-2 w-2 rounded-full', subtask.status === 'done' ? 'bg-emerald-400' : 'bg-gray-300']"></span>
                                         <span class="min-w-0 flex-1 truncate font-medium text-gray-800">{{ subtask.title }}</span>
                                         <span class="text-xs text-gray-500">{{ subtask.due_date ? shortDateIt(subtask.due_date) : '' }}</span>
@@ -5856,7 +5901,7 @@ onUnmounted(() => {
                                             <ExternalLink class="h-4 w-4" :stroke-width="1.7" />
                                         </button>
                                     </div>
-                                    <p v-if="!projectTaskDrawerTask.subtasks?.length" class="text-sm text-gray-500">Nessuna sottoattività.</p>
+                                    <p v-if="!projectDrawerSubtasks().length" class="text-sm text-gray-500">Nessuna sottoattività.</p>
                                 </div>
                             </section>
                             <section class="content-card rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">

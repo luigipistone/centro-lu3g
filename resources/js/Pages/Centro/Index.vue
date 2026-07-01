@@ -869,7 +869,7 @@ function dropCalendarSubtask(targetSubtask) {
     calendarSubtaskDropPlacement.value = null;
     if (!fromId || fromId === targetSubtask.id || !calendarTaskPanel.value) return;
 
-    const current = [...(calendarTaskPanel.value.subtasks || [])];
+    const current = calendarPanelSubtasks();
     const fromIndex = current.findIndex((subtask) => subtask.id === fromId);
     let toIndex = current.findIndex((subtask) => subtask.id === targetSubtask.id);
     if (fromIndex < 0 || toIndex < 0) return;
@@ -883,7 +883,7 @@ function dropCalendarSubtask(targetSubtask) {
         subtasks: current,
     };
 
-    router.put(route('tasks.subtasks.reorder', calendarTaskForm.id), {
+    router.put(route('tasks.subtasks.reorder', calendarTaskPanel.value.id), {
         ids: current.map((subtask) => subtask.id),
     }, {
         preserveScroll: true,
@@ -2193,13 +2193,14 @@ function calendarTaskTypeButtonClass(type) {
 }
 
 function openCalendarTask(task, options = {}) {
+    const normalizedTask = normalizeCalendarTask(task);
     if (!options.preserveStack) {
         calendarTaskParentStack.value = [];
     }
     calendarShowAllComments.value = false;
     calendarShowAllActivity.value = false;
     calendarTaskActionMenuOpen.value = false;
-    calendarTaskPanel.value = task;
+    calendarTaskPanel.value = normalizedTask;
     calendarTaskPanelMode.value = 'edit';
     calendarTaskPanelClosedByUser.value = false;
     calendarTaskPanelOpen.value = true;
@@ -2207,33 +2208,33 @@ function openCalendarTask(task, options = {}) {
     calendarTaskAutosaveError.value = '';
     window.clearTimeout(calendarTaskAutosaveTimer);
     calendarTaskForm.defaults({
-        id: task.id,
-        title: task.title || '',
-        description: task.description || '',
-        project_id: task.project_id || '',
-        client_id: task.client_id || '',
-        service_id: task.service_id || '',
-        task_type: task.task_type || 'project',
-        status: task.status || 'todo',
-        priority: task.priority || 'medium',
-        start_date: task.start_date || '',
-        due_date: task.due_date || '',
-        due_time: task.due_time ? String(task.due_time).slice(0, 5) : '',
-        location: task.location || '',
-        recurring_enabled: Boolean(task.recurring_enabled),
-        recurring_interval_value: task.recurring_interval_value || 1,
-        recurring_interval_unit: task.recurring_interval_unit || 'week',
-        recurring_mode: task.recurring_mode || 'fixed',
-        recurring_weekday: task.recurring_weekday || 1,
-        recurring_month_day: task.recurring_month_day || 1,
-        assignee_ids: [...(task.assignee_ids || [])],
-        follower_ids: [...(task.follower_ids || [])],
-        dependency_ids: (task.dependencies || []).map((dependency) => dependency.id),
-        dependent_ids: (task.dependents || []).map((dependent) => dependent.id),
+        id: normalizedTask.id,
+        title: normalizedTask.title || '',
+        description: normalizedTask.description || '',
+        project_id: normalizedTask.project_id || '',
+        client_id: normalizedTask.client_id || '',
+        service_id: normalizedTask.service_id || '',
+        task_type: normalizedTask.task_type || 'project',
+        status: normalizedTask.status || 'todo',
+        priority: normalizedTask.priority || 'medium',
+        start_date: normalizedTask.start_date || '',
+        due_date: normalizedTask.due_date || '',
+        due_time: normalizedTask.due_time ? String(normalizedTask.due_time).slice(0, 5) : '',
+        location: normalizedTask.location || '',
+        recurring_enabled: Boolean(normalizedTask.recurring_enabled),
+        recurring_interval_value: normalizedTask.recurring_interval_value || 1,
+        recurring_interval_unit: normalizedTask.recurring_interval_unit || 'week',
+        recurring_mode: normalizedTask.recurring_mode || 'fixed',
+        recurring_weekday: normalizedTask.recurring_weekday || 1,
+        recurring_month_day: normalizedTask.recurring_month_day || 1,
+        assignee_ids: [...(normalizedTask.assignee_ids || [])],
+        follower_ids: [...(normalizedTask.follower_ids || [])],
+        dependency_ids: (normalizedTask.dependencies || []).map((dependency) => dependency.id),
+        dependent_ids: (normalizedTask.dependents || []).map((dependent) => dependent.id),
     });
     calendarTaskForm.reset();
     calendarTaskForm.clearErrors();
-    hydrateCalendarTaskRelated(task);
+    hydrateCalendarTaskRelated(normalizedTask);
     refreshCalendarTaskDescriptionEditor();
 }
 
@@ -2241,15 +2242,15 @@ function findCalendarTaskInRows(taskId, rows = props.rows) {
     if (!taskId) return null;
 
     for (const row of rows || []) {
-        if (row.id === taskId) return row;
+        if (row.id === taskId) return normalizeCalendarTask(row);
 
         const subtask = (row.subtasks || []).find((item) => item.id === taskId);
         if (subtask) {
-            return {
+            return normalizeCalendarTask({
                 ...subtask,
                 parent_task_id: subtask.parent_task_id || row.id,
                 parent_title: row.title,
-            };
+            });
         }
     }
 
@@ -2262,8 +2263,8 @@ function refreshCalendarTaskPanelFromRows(rows = props.rows) {
     const freshTask = findCalendarTaskInRows(calendarTaskForm.id, rows);
     if (!freshTask) return;
 
-    calendarTaskPanel.value = freshTask;
-    hydrateCalendarTaskRelated(freshTask);
+    calendarTaskPanel.value = normalizeCalendarTask(freshTask);
+    hydrateCalendarTaskRelated(calendarTaskPanel.value);
 }
 
 function openCalendarTaskCreate(type, date) {
@@ -2345,7 +2346,7 @@ function openCalendarSubtask(subtask) {
     openCalendarTask({
         ...subtask,
         task_type: subtask.task_type || 'task',
-        subtasks: subtask.subtasks || [],
+        subtasks: filteredCalendarSubtasks(subtask),
         comments: subtask.comments || [],
         activity: subtask.activity || [],
         assignee_ids: subtask.assignee_ids || [],
@@ -2375,7 +2376,7 @@ function scrollCalendarTaskDrawerTop() {
 }
 
 function hydrateCalendarTaskRelated(task) {
-    const subtasks = task?.subtasks || [];
+    const subtasks = filteredCalendarSubtasks(task);
     const comments = task?.comments || [];
     const nextSubtasks = {};
     const nextComments = {};
@@ -2410,7 +2411,50 @@ function hydrateCalendarTaskRelated(task) {
 }
 
 function calendarPanelSubtasks() {
-    return calendarTaskPanel.value?.subtasks || [];
+    return filteredCalendarSubtasks(calendarTaskPanel.value);
+}
+
+function filteredCalendarSubtasks(task) {
+    if (!task?.id) return [];
+
+    return (task.subtasks || [])
+        .filter((subtask) => !subtask.parent_task_id || subtask.parent_task_id === task.id)
+        .map((subtask) => normalizeCalendarTask({
+            ...subtask,
+            parent_task_id: subtask.parent_task_id || task.id,
+            parent_title: subtask.parent_title || task.title,
+        }));
+}
+
+function normalizeCalendarTask(task, overrides = {}) {
+    const normalized = {
+        ...(task || {}),
+        ...overrides,
+    };
+
+    return {
+        ...normalized,
+        assignee_ids: [...(normalized.assignee_ids || [])],
+        follower_ids: [...(normalized.follower_ids || [])],
+        dependencies: [...(normalized.dependencies || [])],
+        dependents: [...(normalized.dependents || [])],
+        comments: [...(normalized.comments || [])],
+        activity: [...(normalized.activity || [])],
+        subtasks: (normalized.subtasks || [])
+            .filter((subtask) => !subtask.parent_task_id || subtask.parent_task_id === normalized.id)
+            .map((subtask) => ({
+                ...subtask,
+                assignee_ids: [...(subtask.assignee_ids || [])],
+                follower_ids: [...(subtask.follower_ids || [])],
+                dependencies: [...(subtask.dependencies || [])],
+                dependents: [...(subtask.dependents || [])],
+                comments: [...(subtask.comments || [])],
+                activity: [...(subtask.activity || [])],
+                subtasks: [],
+                parent_task_id: subtask.parent_task_id || normalized.id,
+                parent_title: subtask.parent_title || normalized.title,
+            })),
+    };
 }
 
 function isCalendarSubtaskPanel() {
@@ -2547,14 +2591,15 @@ function setCalendarSubtaskStatus(subtask, done) {
 }
 
 function addCalendarSubtask() {
-    if (!calendarTaskForm.id) return;
+    const parentTaskId = calendarTaskPanel.value?.id || calendarTaskForm.id;
+    if (!parentTaskId) return;
 
-    calendarSubtaskForm.post(route('tasks.subtasks.store', calendarTaskForm.id), {
+    calendarSubtaskForm.post(route('tasks.subtasks.store', parentTaskId), {
         preserveScroll: true,
         preserveState: true,
         only: ['rows', 'errors', 'flash'],
         onSuccess: () => {
-            refreshCalendarTaskPanelFromRows();
+            nextTick(() => refreshCalendarTaskPanelFromRows());
             calendarSubtaskForm.reset();
             calendarSubtaskCreateAssigneeMenuOpen.value = false;
         },
@@ -3114,7 +3159,7 @@ function tasksForDay(date) {
 
             return calendarUserIds.value.some((userId) => people.includes(userId));
         })
-        .map((row) => ({ ...row, spanRole: taskSpanRole(row, date) }))
+        .map((row) => normalizeCalendarTask(row, { spanRole: taskSpanRole(row, date) }))
         .sort((a, b) => `${a.due_time || '99:99'}${a.title}`.localeCompare(`${b.due_time || '99:99'}${b.title}`));
 }
 
