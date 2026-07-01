@@ -25,6 +25,7 @@ import {
     Download,
     ExternalLink,
     FileText,
+    GitBranch,
     GripVertical,
     Heading3,
     Italic,
@@ -303,6 +304,22 @@ function blockedDependencyCount(task = null) {
     const dependencies = task?.dependencies || selectedTaskDependencies();
 
     return dependencies.filter((dependency) => dependency.status !== 'done').length;
+}
+
+function projectTaskDependencyPreviewLabel(task) {
+    const dependenciesCount = (task?.dependencies || []).length;
+    const dependentsCount = (task?.dependents || []).length;
+    const parts = [];
+
+    if (dependenciesCount) {
+        parts.push(`Bloccata da ${dependenciesCount} task`);
+    }
+
+    if (dependentsCount) {
+        parts.push(`Bloccante per ${dependentsCount} task`);
+    }
+
+    return parts.join(' · ');
 }
 
 function syncTaskDependencies() {
@@ -4278,6 +4295,14 @@ onUnmounted(() => {
                                         </span>
                                         <button type="button" class="min-w-0 text-left font-medium text-indigo-700" @click="openProjectTaskDrawer(task)">
                                             <span :class="['block truncate', task.status === 'done' ? 'line-through' : '']">{{ task.title }}</span>
+                                            <span v-if="projectTaskDependencyPreviewLabel(task)" class="mt-1 inline-flex items-center gap-2 text-xs font-normal text-gray-500">
+                                                <span
+                                                    class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-100"
+                                                    :title="projectTaskDependencyPreviewLabel(task)"
+                                                >
+                                                    <GitBranch class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                                </span>
+                                            </span>
                                         </button>
                                         <div class="flex min-w-0 items-center gap-2 text-xs text-gray-600">
                                             <span v-if="task.assignees?.length" class="flex -space-x-2">
