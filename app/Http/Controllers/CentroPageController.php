@@ -598,6 +598,7 @@ class CentroPageController extends Controller
         return Inertia::render('Centro/ProjectTemplateForm', [
             'template' => null,
             'services' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name', 'color']),
+            'users' => $this->userOptions(),
         ]);
     }
 
@@ -611,6 +612,7 @@ class CentroPageController extends Controller
         return Inertia::render('Centro/ProjectTemplateForm', [
             'template' => $template,
             'services' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name', 'color']),
+            'users' => $this->userOptions(),
         ]);
     }
 
@@ -2664,10 +2666,16 @@ class CentroPageController extends Controller
             'sections' => ['nullable', 'array'],
             'sections.*.name' => ['required', 'string', 'max:255'],
             'sections.*.tasks' => ['nullable', 'array'],
+            'sections.*.tasks.*.template_key' => ['nullable', 'string', 'max:80'],
             'sections.*.tasks.*.title' => ['required', 'string', 'max:255'],
             'sections.*.tasks.*.description' => ['nullable', 'string'],
             'sections.*.tasks.*.service_id' => ['nullable', 'uuid', 'exists:services,id'],
+            'sections.*.tasks.*.assignee_ids' => ['nullable', 'array'],
+            'sections.*.tasks.*.assignee_ids.*' => ['uuid', 'exists:users,id'],
             'sections.*.tasks.*.day_offset' => ['nullable', 'integer', 'min:0', 'max:3650'],
+            'sections.*.tasks.*.date_offset_direction' => ['nullable', Rule::in(['before', 'after'])],
+            'sections.*.tasks.*.date_reference_type' => ['nullable', Rule::in(['project_start', 'task'])],
+            'sections.*.tasks.*.date_reference_task_key' => ['nullable', 'string', 'max:80'],
             'sections.*.tasks.*.duration_days' => ['nullable', 'integer', 'min:1', 'max:3650'],
             'sections.*.tasks.*.due_time' => ['nullable', 'date_format:H:i'],
             'sections.*.tasks.*.location' => ['nullable', 'string', 'max:255'],
@@ -5091,11 +5099,16 @@ class CentroPageController extends Controller
             foreach (array_values($section['tasks'] ?? []) as $taskIndex => $task) {
                 DB::table('project_template_tasks')->insert([
                     'id' => (string) str()->uuid(),
+                    'template_key' => $task['template_key'] ?? (string) str()->uuid(),
                     'project_template_section_id' => $sectionId,
                     'title' => $task['title'],
                     'description' => $task['description'] ?? null,
                     'service_id' => $task['service_id'] ?? null,
+                    'assignee_ids' => json_encode(array_values(array_unique($task['assignee_ids'] ?? []))),
                     'day_offset' => (int) ($task['day_offset'] ?? 0),
+                    'date_offset_direction' => $task['date_offset_direction'] ?? 'after',
+                    'date_reference_type' => ($task['date_reference_type'] ?? 'project_start') === 'task' ? 'task' : 'project_start',
+                    'date_reference_task_key' => ($task['date_reference_type'] ?? 'project_start') === 'task' ? ($task['date_reference_task_key'] ?? null) : null,
                     'duration_days' => max(1, (int) ($task['duration_days'] ?? 1)),
                     'due_time' => ($task['task_type'] ?? 'project') === 'meeting' ? ($task['due_time'] ?? null) : null,
                     'location' => ($task['task_type'] ?? 'project') === 'meeting' ? ($task['location'] ?? null) : null,
@@ -5123,6 +5136,45 @@ class CentroPageController extends Controller
             ->orderBy('position')
             ->orderBy('created_at')
             ->get();
+        $templateTasksBySection = DB::table('project_template_tasks')
+            ->whereIn('project_template_section_id', $templateSections->pluck('id'))
+            ->orderBy('position')
+            ->orderBy('created_at')
+            ->get()
+            ->groupBy('project_template_section_id');
+        $templateTaskLookup = $templateTasksBySection
+            ->flatMap(fn ($rows) => $rows)
+            ->keyBy(fn ($task) => $task->template_key ?: $task->id);
+        $resolvedStarts = [];
+        $resolving = [];
+        $resolveStart = function ($templateTask) use (&$resolveStart, &$resolvedStarts, &$resolving, $templateTaskLookup, $baseDate) {
+            $key = $templateTask->template_key ?: $templateTask->id;
+            if (isset($resolvedStarts[$key])) {
+                return $resolvedStarts[$key]->copy();
+            }
+            if (isset($resolving[$key])) {
+                return $baseDate->copy();
+            }
+
+            $resolving[$key] = true;
+            $referenceDate = $baseDate->copy();
+            if (($templateTask->date_reference_type ?? 'project_start') === 'task' && ! empty($templateTask->date_reference_task_key)) {
+                $referenceTask = $templateTaskLookup[$templateTask->date_reference_task_key] ?? null;
+                if ($referenceTask) {
+                    $referenceDate = $resolveStart($referenceTask);
+                }
+            }
+
+            $days = (int) ($templateTask->day_offset ?? 0);
+            $start = ($templateTask->date_offset_direction ?? 'after') === 'before'
+                ? $referenceDate->subDays($days)
+                : $referenceDate->addDays($days);
+
+            unset($resolving[$key]);
+            $resolvedStarts[$key] = $start->copy();
+
+            return $start;
+        };
 
         foreach ($templateSections as $templateSection) {
             $sectionId = (string) str()->uuid();
@@ -5135,18 +5187,15 @@ class CentroPageController extends Controller
                 'updated_at' => now(),
             ]);
 
-            $templateTasks = DB::table('project_template_tasks')
-                ->where('project_template_section_id', $templateSection->id)
-                ->orderBy('position')
-                ->orderBy('created_at')
-                ->get();
+            $templateTasks = $templateTasksBySection[$templateSection->id] ?? collect();
 
             foreach ($templateTasks as $templateTask) {
-                $taskStart = $baseDate->copy()->addDays((int) $templateTask->day_offset);
+                $taskStart = $resolveStart($templateTask);
                 $taskDue = $taskStart->copy()->addDays(max(1, (int) $templateTask->duration_days) - 1);
+                $taskId = (string) str()->uuid();
 
                 DB::table('tasks')->insert([
-                    'id' => (string) str()->uuid(),
+                    'id' => $taskId,
                     'title' => $templateTask->title,
                     'description' => $templateTask->description,
                     'project_id' => $projectId,
@@ -5172,6 +5221,20 @@ class CentroPageController extends Controller
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
+
+                $assigneeIds = collect(json_decode($templateTask->assignee_ids ?: '[]', true) ?: [])
+                    ->filter()
+                    ->unique()
+                    ->values();
+                if ($assigneeIds->isNotEmpty()) {
+                    DB::table('task_assignees')->insert($assigneeIds->map(fn ($userId) => [
+                        'id' => (string) str()->uuid(),
+                        'task_id' => $taskId,
+                        'user_id' => $userId,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ])->all());
+                }
             }
         }
     }
