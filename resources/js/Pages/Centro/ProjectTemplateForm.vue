@@ -1,12 +1,17 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppSelect from '@/Components/AppSelect.vue';
+import AppTimeInput from '@/Components/AppTimeInput.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ChevronLeft, CopyPlus, Plus, Save, Trash2, X } from '@lucide/vue';
 import { computed } from 'vue';
 
 const props = defineProps({
     template: Object,
+    services: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 const priorityOptions = [
@@ -19,19 +24,33 @@ const taskTypeOptions = [
     { value: 'project', label: 'Task' },
     { value: 'meeting', label: 'Meeting' },
 ];
+const statusOptions = [
+    { value: 'todo', label: 'Da fare' },
+    { value: 'in_progress', label: 'In corso' },
+    { value: 'in_review', label: 'In revisione' },
+    { value: 'done', label: 'Fatta' },
+];
 
 const editing = computed(() => Boolean(props.template?.id));
 
 const form = useForm(templatePayload(props.template));
 const totalTasks = computed(() => form.sections.reduce((sum, section) => sum + section.tasks.length, 0));
+const serviceOptions = computed(() => [
+    { value: '', label: 'Nessun servizio' },
+    ...props.services.map((service) => ({ value: service.id, label: service.name })),
+]);
 
 function blankTask(title = '', dayOffset = 0) {
     return {
         title,
         description: '',
+        service_id: '',
         day_offset: dayOffset,
         duration_days: 1,
+        due_time: '',
+        location: '',
         priority: 'medium',
+        status: 'todo',
         task_type: 'project',
     };
 }
@@ -62,9 +81,13 @@ function templatePayload(template) {
             tasks: (section.tasks || []).map((task) => ({
                 title: task.title || '',
                 description: task.description || '',
+                service_id: task.service_id || '',
                 day_offset: Number(task.day_offset || 0),
                 duration_days: Number(task.duration_days || 1),
+                due_time: task.due_time || '',
+                location: task.location || '',
                 priority: task.priority || 'medium',
+                status: task.status || 'todo',
                 task_type: task.task_type === 'meeting' ? 'meeting' : 'project',
             })),
         })),
@@ -90,6 +113,13 @@ function addTask(section) {
 
 function removeTask(section, index) {
     section.tasks.splice(index, 1);
+}
+
+function handleTaskTypeChange(task) {
+    if (task.task_type !== 'meeting') {
+        task.due_time = '';
+        task.location = '';
+    }
 }
 
 function saveTemplate() {
@@ -185,18 +215,28 @@ function saveTemplate() {
                             </div>
 
                             <div>
-                                <div class="hidden gap-3 border-b border-gray-100 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400 xl:grid xl:grid-cols-[minmax(0,1.4fr)_96px_96px_150px_150px_36px]">
+                                <div class="hidden gap-3 border-b border-gray-100 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400 xl:grid xl:grid-cols-[minmax(0,1.25fr)_132px_96px_96px_132px_132px_132px_36px]">
                                     <span>Task</span>
+                                    <span>Servizio</span>
                                     <span>Giorno</span>
                                     <span>Durata</span>
+                                    <span>Stato</span>
                                     <span>Priorità</span>
                                     <span>Tipo</span>
                                     <span></span>
                                 </div>
 
-                                <div v-for="(task, taskIndex) in section.tasks" :key="`task-${sectionIndex}-${taskIndex}`" class="grid items-start gap-3 border-b border-gray-100 py-3 last:border-b-0 xl:grid-cols-[minmax(0,1.4fr)_96px_96px_150px_150px_36px]">
+                                <div v-for="(task, taskIndex) in section.tasks" :key="`task-${sectionIndex}-${taskIndex}`" class="grid items-start gap-3 border-b border-gray-100 py-3 last:border-b-0 xl:grid-cols-[minmax(0,1.25fr)_132px_96px_96px_132px_132px_132px_36px]">
                                     <div class="flex flex-col">
                                         <input v-model="task.title" class="form-control mt-0 h-[38px] min-h-[38px]" placeholder="Titolo task" />
+                                        <div v-if="task.task_type === 'meeting'" class="mt-2 grid gap-2 sm:grid-cols-[132px_minmax(0,1fr)]">
+                                            <AppTimeInput v-model="task.due_time" placeholder="Ora" />
+                                            <input v-model="task.location" class="form-control mt-0 h-[38px] min-h-[38px]" placeholder="Luogo meeting" />
+                                        </div>
+                                    </div>
+                                    <div class="flex flex-col gap-1.5">
+                                        <label class="block text-xs font-semibold uppercase tracking-wide text-gray-400 xl:hidden">Servizio</label>
+                                        <AppSelect v-model="task.service_id" :options="serviceOptions" searchable />
                                     </div>
                                     <div class="flex flex-col gap-1.5">
                                         <label class="block text-xs font-semibold uppercase tracking-wide text-gray-400 xl:hidden">Giorno</label>
@@ -207,12 +247,16 @@ function saveTemplate() {
                                         <input v-model.number="task.duration_days" type="number" min="1" class="form-control mt-0 h-[38px] min-h-[38px]" />
                                     </div>
                                     <div class="flex flex-col gap-1.5">
+                                        <label class="block text-xs font-semibold uppercase tracking-wide text-gray-400 xl:hidden">Stato</label>
+                                        <AppSelect v-model="task.status" :options="statusOptions" />
+                                    </div>
+                                    <div class="flex flex-col gap-1.5">
                                         <label class="block text-xs font-semibold uppercase tracking-wide text-gray-400 xl:hidden">Priorità</label>
                                         <AppSelect v-model="task.priority" :options="priorityOptions" />
                                     </div>
                                     <div class="flex flex-col gap-1.5">
                                         <label class="block text-xs font-semibold uppercase tracking-wide text-gray-400 xl:hidden">Tipo</label>
-                                        <AppSelect v-model="task.task_type" :options="taskTypeOptions" />
+                                        <AppSelect v-model="task.task_type" :options="taskTypeOptions" @change="handleTaskTypeChange(task)" />
                                     </div>
                                     <button type="button" class="icon-btn self-end xl:self-start" title="Elimina task" @click="removeTask(section, taskIndex)">
                                         <X class="h-4 w-4" :stroke-width="1.7" />

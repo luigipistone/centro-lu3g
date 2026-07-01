@@ -597,6 +597,7 @@ class CentroPageController extends Controller
 
         return Inertia::render('Centro/ProjectTemplateForm', [
             'template' => null,
+            'services' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name', 'color']),
         ]);
     }
 
@@ -609,6 +610,7 @@ class CentroPageController extends Controller
 
         return Inertia::render('Centro/ProjectTemplateForm', [
             'template' => $template,
+            'services' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name', 'color']),
         ]);
     }
 
@@ -2664,10 +2666,14 @@ class CentroPageController extends Controller
             'sections.*.tasks' => ['nullable', 'array'],
             'sections.*.tasks.*.title' => ['required', 'string', 'max:255'],
             'sections.*.tasks.*.description' => ['nullable', 'string'],
+            'sections.*.tasks.*.service_id' => ['nullable', 'uuid', 'exists:services,id'],
             'sections.*.tasks.*.day_offset' => ['nullable', 'integer', 'min:0', 'max:3650'],
             'sections.*.tasks.*.duration_days' => ['nullable', 'integer', 'min:1', 'max:3650'],
+            'sections.*.tasks.*.due_time' => ['nullable', 'date_format:H:i'],
+            'sections.*.tasks.*.location' => ['nullable', 'string', 'max:255'],
             'sections.*.tasks.*.priority' => ['nullable', Rule::in(['low', 'medium', 'high', 'urgent'])],
-            'sections.*.tasks.*.task_type' => ['nullable', Rule::in(['task', 'project', 'ongoing', 'meeting'])],
+            'sections.*.tasks.*.status' => ['nullable', Rule::in(['todo', 'in_progress', 'in_review', 'done'])],
+            'sections.*.tasks.*.task_type' => ['nullable', Rule::in(['task', 'project', 'meeting'])],
         ]);
     }
 
@@ -5088,10 +5094,14 @@ class CentroPageController extends Controller
                     'project_template_section_id' => $sectionId,
                     'title' => $task['title'],
                     'description' => $task['description'] ?? null,
+                    'service_id' => $task['service_id'] ?? null,
                     'day_offset' => (int) ($task['day_offset'] ?? 0),
                     'duration_days' => max(1, (int) ($task['duration_days'] ?? 1)),
+                    'due_time' => ($task['task_type'] ?? 'project') === 'meeting' ? ($task['due_time'] ?? null) : null,
+                    'location' => ($task['task_type'] ?? 'project') === 'meeting' ? ($task['location'] ?? null) : null,
                     'priority' => $task['priority'] ?? 'medium',
-                    'task_type' => $task['task_type'] ?? 'project',
+                    'task_type' => ($task['task_type'] ?? 'project') === 'meeting' ? 'meeting' : 'project',
+                    'status' => $task['status'] ?? 'todo',
                     'position' => $taskIndex,
                     'created_at' => now(),
                     'updated_at' => now(),
@@ -5142,14 +5152,14 @@ class CentroPageController extends Controller
                     'project_id' => $projectId,
                     'project_section_id' => $sectionId,
                     'client_id' => $clientId,
-                    'service_id' => null,
+                    'service_id' => $templateTask->service_id ?? null,
                     'parent_task_id' => null,
                     'start_date' => $taskStart->toDateString(),
                     'due_date' => $taskDue->toDateString(),
-                    'due_time' => null,
-                    'location' => null,
+                    'due_time' => ($templateTask->task_type === 'meeting') ? $templateTask->due_time : null,
+                    'location' => ($templateTask->task_type === 'meeting') ? $templateTask->location : null,
                     'priority' => $templateTask->priority,
-                    'status' => 'todo',
+                    'status' => $templateTask->status ?: 'todo',
                     'task_type' => $templateTask->task_type,
                     'recurring_enabled' => false,
                     'recurring_mode' => null,
