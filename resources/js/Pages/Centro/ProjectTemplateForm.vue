@@ -682,10 +682,12 @@ onUnmounted(() => {
                                             <span class="truncate">{{ selectedServiceLabel(task) }} · {{ optionLabel(taskTypeOptions, task.task_type, 'Task') }}</span>
                                             <span
                                                 v-if="dependencyPreviewLabel(task)"
-                                                class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-100"
-                                                :title="dependencyPreviewLabel(task)"
+                                                class="group/dependency relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-100"
                                             >
                                                 <GitBranch class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                                <span class="pointer-events-none absolute bottom-full left-1/2 z-[7800] mb-2 hidden w-max max-w-[220px] -translate-x-1/2 rounded-[var(--radius-sm)] bg-gray-950 px-2.5 py-1.5 text-xs font-semibold leading-4 text-white shadow-lg group-hover/dependency:block">
+                                                    {{ dependencyPreviewLabel(task) }}
+                                                </span>
                                             </span>
                                         </span>
                                     </button>

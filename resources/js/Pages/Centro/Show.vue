@@ -2277,6 +2277,26 @@ function projectTasksForSection(section) {
     });
 }
 
+function findProjectTaskInRelated(taskId) {
+    if (!taskId) return null;
+
+    for (const task of props.related.tasks || []) {
+        if (task.id === taskId) return task;
+
+        const subtask = (task.subtasks || []).find((row) => row.id === taskId);
+        if (subtask) return subtask;
+    }
+
+    return null;
+}
+
+function refreshProjectTaskDrawerTask() {
+    const refreshed = findProjectTaskInRelated(projectTaskDrawerTask.value?.id);
+    if (refreshed) {
+        projectTaskDrawerTask.value = refreshed;
+    }
+}
+
 function toggleProjectSection(sectionId) {
     projectSectionCollapsed.value = {
         ...projectSectionCollapsed.value,
@@ -2602,7 +2622,10 @@ function addProjectDrawerSubtask() {
         preserveScroll: true,
         preserveState: true,
         only: ['related', 'errors', 'flash'],
-        onSuccess: () => projectDrawerSubtaskForm.reset(),
+        onSuccess: () => {
+            refreshProjectTaskDrawerTask();
+            projectDrawerSubtaskForm.reset();
+        },
     });
 }
 
@@ -4297,10 +4320,12 @@ onUnmounted(() => {
                                             <span :class="['block truncate', task.status === 'done' ? 'line-through' : '']">{{ task.title }}</span>
                                             <span v-if="projectTaskDependencyPreviewLabel(task)" class="mt-1 inline-flex items-center gap-2 text-xs font-normal text-gray-500">
                                                 <span
-                                                    class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-100"
-                                                    :title="projectTaskDependencyPreviewLabel(task)"
+                                                    class="group/dependency relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-100"
                                                 >
                                                     <GitBranch class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                                    <span class="pointer-events-none absolute bottom-full left-1/2 z-[7800] mb-2 hidden w-max max-w-[240px] -translate-x-1/2 rounded-[var(--radius-sm)] bg-gray-950 px-2.5 py-1.5 text-xs font-semibold leading-4 text-white shadow-lg group-hover/dependency:block">
+                                                        {{ projectTaskDependencyPreviewLabel(task) }}
+                                                    </span>
                                                 </span>
                                             </span>
                                         </button>
