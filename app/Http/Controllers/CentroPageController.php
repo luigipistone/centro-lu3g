@@ -2676,6 +2676,9 @@ class CentroPageController extends Controller
             'sections.*.tasks.*.date_offset_direction' => ['nullable', Rule::in(['before', 'after'])],
             'sections.*.tasks.*.date_reference_type' => ['nullable', Rule::in(['project_start', 'task'])],
             'sections.*.tasks.*.date_reference_task_key' => ['nullable', 'string', 'max:80'],
+            'sections.*.tasks.*.dependency_mode' => ['nullable', Rule::in(['none', 'blocked_by', 'blocks'])],
+            'sections.*.tasks.*.dependency_task_keys' => ['nullable', 'array'],
+            'sections.*.tasks.*.dependency_task_keys.*' => ['string', 'max:80'],
             'sections.*.tasks.*.duration_days' => ['nullable', 'integer', 'min:1', 'max:3650'],
             'sections.*.tasks.*.due_time' => ['nullable', 'date_format:H:i'],
             'sections.*.tasks.*.location' => ['nullable', 'string', 'max:255'],
@@ -5109,6 +5112,8 @@ class CentroPageController extends Controller
                     'date_offset_direction' => $task['date_offset_direction'] ?? 'after',
                     'date_reference_type' => ($task['date_reference_type'] ?? 'project_start') === 'task' ? 'task' : 'project_start',
                     'date_reference_task_key' => ($task['date_reference_type'] ?? 'project_start') === 'task' ? ($task['date_reference_task_key'] ?? null) : null,
+                    'dependency_mode' => in_array($task['dependency_mode'] ?? 'none', ['blocked_by', 'blocks'], true) ? $task['dependency_mode'] : 'none',
+                    'dependency_task_keys' => json_encode(array_values(array_unique($task['dependency_task_keys'] ?? []))),
                     'duration_days' => max(1, (int) ($task['duration_days'] ?? 1)),
                     'due_time' => ($task['task_type'] ?? 'project') === 'meeting' ? ($task['due_time'] ?? null) : null,
                     'location' => ($task['task_type'] ?? 'project') === 'meeting' ? ($task['location'] ?? null) : null,
@@ -5145,6 +5150,7 @@ class CentroPageController extends Controller
         $templateTaskLookup = $templateTasksBySection
             ->flatMap(fn ($rows) => $rows)
             ->keyBy(fn ($task) => $task->template_key ?: $task->id);
+        $createdTaskIdsByTemplateKey = [];
         $resolvedStarts = [];
         $resolving = [];
         $resolveStart = function ($templateTask) use (&$resolveStart, &$resolvedStarts, &$resolving, $templateTaskLookup, $baseDate) {
@@ -5222,6 +5228,8 @@ class CentroPageController extends Controller
                     'updated_at' => now(),
                 ]);
 
+                $createdTaskIdsByTemplateKey[$templateTask->template_key ?: $templateTask->id] = $taskId;
+
                 $assigneeIds = collect(json_decode($templateTask->assignee_ids ?: '[]', true) ?: [])
                     ->filter()
                     ->unique()
@@ -5236,6 +5244,50 @@ class CentroPageController extends Controller
                     ])->all());
                 }
             }
+        }
+
+        $dependencyRows = [];
+        $existingDependencyKeys = [];
+        $templateTasksBySection->flatMap(fn ($rows) => $rows)->each(function ($templateTask) use (&$dependencyRows, &$existingDependencyKeys, $createdTaskIdsByTemplateKey) {
+            $sourceKey = $templateTask->template_key ?: $templateTask->id;
+            $sourceTaskId = $createdTaskIdsByTemplateKey[$sourceKey] ?? null;
+            $mode = in_array($templateTask->dependency_mode ?? 'none', ['blocked_by', 'blocks'], true) ? $templateTask->dependency_mode : 'none';
+            $targetKeys = collect(json_decode($templateTask->dependency_task_keys ?: '[]', true) ?: [])
+                ->filter()
+                ->unique()
+                ->values();
+
+            if (! $sourceTaskId || $mode === 'none' || $targetKeys->isEmpty()) {
+                return;
+            }
+
+            foreach ($targetKeys as $targetKey) {
+                $targetTaskId = $createdTaskIdsByTemplateKey[$targetKey] ?? null;
+                if (! $targetTaskId || $targetTaskId === $sourceTaskId) {
+                    continue;
+                }
+
+                $taskId = $mode === 'blocks' ? $targetTaskId : $sourceTaskId;
+                $dependsOnTaskId = $mode === 'blocks' ? $sourceTaskId : $targetTaskId;
+                $uniqueKey = "{$taskId}:{$dependsOnTaskId}";
+
+                if (isset($existingDependencyKeys[$uniqueKey])) {
+                    continue;
+                }
+
+                $existingDependencyKeys[$uniqueKey] = true;
+                $dependencyRows[] = [
+                    'id' => (string) str()->uuid(),
+                    'task_id' => $taskId,
+                    'depends_on_task_id' => $dependsOnTaskId,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
+        });
+
+        if ($dependencyRows) {
+            DB::table('task_dependencies')->insert($dependencyRows);
         }
     }
 

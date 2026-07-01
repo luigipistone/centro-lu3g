@@ -39,6 +39,11 @@ const directionOptions = [
     { value: 'after', label: 'dopo' },
     { value: 'before', label: 'prima' },
 ];
+const dependencyModeOptions = [
+    { value: 'none', label: 'Nessuna dipendenza' },
+    { value: 'blocked_by', label: 'Bloccata da' },
+    { value: 'blocks', label: 'Bloccante per' },
+];
 
 const editing = computed(() => Boolean(props.template?.id));
 const taskDrawerKey = ref(null);
@@ -83,6 +88,8 @@ function blankTask(title = '', dayOffset = 0) {
         date_reference_type: 'project_start',
         date_reference_task_key: '',
         date_reference_value: 'project_start',
+        dependency_mode: 'none',
+        dependency_task_keys: [],
         duration_days: 1,
         due_time: '',
         location: '',
@@ -126,6 +133,8 @@ function templatePayload(template) {
                 date_reference_type: task.date_reference_type === 'task' ? 'task' : 'project_start',
                 date_reference_task_key: task.date_reference_task_key || '',
                 date_reference_value: task.date_reference_type === 'task' && task.date_reference_task_key ? `task:${task.date_reference_task_key}` : 'project_start',
+                dependency_mode: ['blocked_by', 'blocks'].includes(task.dependency_mode) ? task.dependency_mode : 'none',
+                dependency_task_keys: Array.isArray(task.dependency_task_keys) ? task.dependency_task_keys : JSON.parse(task.dependency_task_keys || '[]'),
                 duration_days: Number(task.duration_days || 1),
                 due_time: task.due_time || '',
                 location: task.location || '',
@@ -172,6 +181,8 @@ function duplicateSection(section) {
             date_reference_task_key: '',
             date_reference_value: 'project_start',
             date_reference_type: 'project_start',
+            dependency_mode: 'none',
+            dependency_task_keys: [],
         })),
     };
     form.sections.splice(form.sections.indexOf(section) + 1, 0, clone);
@@ -212,10 +223,28 @@ function addTask(section, sectionIndex) {
 }
 
 function removeTask(section, index) {
-    section.tasks.splice(index, 1);
+    const removed = section.tasks.splice(index, 1)[0];
+    if (removed?.template_key) {
+        allTemplateTasks().forEach((task) => {
+            task.dependency_task_keys = (task.dependency_task_keys || []).filter((key) => key !== removed.template_key);
+            if (!(task.dependency_task_keys || []).length) {
+                task.dependency_mode = 'none';
+            }
+            if (task.date_reference_task_key === removed.template_key) {
+                task.date_reference_type = 'project_start';
+                task.date_reference_task_key = '';
+                task.date_reference_value = 'project_start';
+            }
+        });
+    }
     if (!drawerTask.value) {
         taskDrawerKey.value = null;
     }
+}
+
+function removeTaskByKey(section, taskKey) {
+    const index = section.tasks.findIndex((task) => task.template_key === taskKey);
+    if (index >= 0) removeTask(section, index);
 }
 
 function allTemplateTasks() {
@@ -301,6 +330,36 @@ function referenceOptions(task) {
                 label: item.title || 'Task senza titolo',
             })),
     ];
+}
+
+function dependencyTaskOptions(task) {
+    return allTemplateTasks()
+        .filter((item) => item.template_key !== task.template_key)
+        .map((item) => ({
+            value: item.template_key,
+            label: item.title || 'Task senza titolo',
+        }));
+}
+
+function dependencyModeLabel(task) {
+    if (!task || task.dependency_mode === 'none') return 'Nessuna dipendenza';
+    const count = (task.dependency_task_keys || []).length;
+    const prefix = optionLabel(dependencyModeOptions, task.dependency_mode, 'Dipendenza');
+    return count ? `${prefix} · ${count}` : prefix;
+}
+
+function toggleDependencyTask(task, taskKey) {
+    const values = [...(task.dependency_task_keys || [])];
+    const index = values.indexOf(taskKey);
+    if (index >= 0) values.splice(index, 1);
+    else values.push(taskKey);
+    task.dependency_task_keys = values;
+}
+
+function handleDependencyModeChange(task) {
+    if (task.dependency_mode === 'none') {
+        task.dependency_task_keys = [];
+    }
 }
 
 function handleReferenceChange(task) {
@@ -390,6 +449,12 @@ function normalizeTemplatePayload() {
     form.sections.forEach((section) => {
         section.tasks.forEach((task) => {
             handleReferenceChange(task);
+            task.dependency_mode = ['blocked_by', 'blocks'].includes(task.dependency_mode) ? task.dependency_mode : 'none';
+            if (task.dependency_mode === 'none') {
+                task.dependency_task_keys = [];
+            } else {
+                task.dependency_task_keys = [...new Set((task.dependency_task_keys || []).filter((key) => key && key !== task.template_key))];
+            }
             if (task.task_type !== 'meeting') {
                 task.due_time = '';
                 task.location = '';
@@ -485,13 +550,14 @@ onUnmounted(() => {
                     </div>
 
                     <div class="overflow-visible px-5 pb-5 pt-4">
-                        <div class="hidden grid-cols-[24px_minmax(0,1.7fr)_minmax(140px,0.7fr)_170px_120px_120px] border-y border-gray-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400 md:grid">
+                        <div class="hidden grid-cols-[24px_minmax(0,1.7fr)_minmax(140px,0.7fr)_170px_120px_120px_36px] border-y border-gray-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400 md:grid">
                             <span></span>
                             <span>Nome</span>
                             <span>Incaricato</span>
                             <span>Quando</span>
                             <span>Stato</span>
                             <span>Priorità</span>
+                            <span></span>
                         </div>
 
                         <div
@@ -551,7 +617,7 @@ onUnmounted(() => {
                                     :key="task.template_key"
                                     draggable="true"
                                     :class="[
-                                        'group/project-task relative grid w-full gap-3 border-t border-gray-100 px-3 py-2.5 text-left text-sm transition hover:bg-indigo-50/40 md:grid-cols-[24px_minmax(0,1.7fr)_minmax(140px,0.7fr)_170px_120px_120px] md:items-center',
+                                        'group/project-task relative grid w-full gap-3 border-t border-gray-100 px-3 py-2.5 text-left text-sm transition hover:bg-indigo-50/40 md:grid-cols-[24px_minmax(0,1.7fr)_minmax(140px,0.7fr)_170px_120px_120px_36px] md:items-center',
                                         task.status === 'done' ? 'opacity-60' : '',
                                         draggedTaskKey && draggedTaskKey !== task.template_key ? 'outline-offset-[-1px]' : '',
                                         taskDropTargetKey === task.template_key ? (taskDropPlacement === 'before' ? 'before:absolute before:left-3 before:right-3 before:top-0 before:h-1 before:rounded-full before:bg-indigo-500 before:shadow-[0_0_0_4px_rgba(99,102,241,0.12)]' : 'after:absolute after:bottom-0 after:left-3 after:right-3 after:h-1 after:rounded-full after:bg-indigo-500 after:shadow-[0_0_0_4px_rgba(99,102,241,0.12)]') : '',
@@ -581,6 +647,14 @@ onUnmounted(() => {
                                     <span>
                                         <span :class="['rounded-full px-2 py-1 text-xs font-semibold', task.priority === 'urgent' ? 'bg-red-50 text-red-700' : task.priority === 'high' ? 'bg-orange-50 text-orange-700' : task.priority === 'low' ? 'bg-emerald-50 text-emerald-700' : 'bg-yellow-50 text-yellow-700']">{{ optionLabel(priorityOptions, task.priority, 'Media') }}</span>
                                     </span>
+                                    <button
+                                        type="button"
+                                        class="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover/project-task:opacity-100 focus:opacity-100"
+                                        aria-label="Elimina attività"
+                                        @click.stop="removeTaskByKey(sectionRow, task.template_key)"
+                                    >
+                                        <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                    </button>
                                 </div>
                                 <form
                                     :class="['border-t border-gray-100 px-3 py-2.5 transition', draggedTaskKey && taskDropSectionIndex === sectionIndex && !taskDropTargetKey ? 'bg-indigo-50/70 ring-1 ring-inset ring-indigo-200' : '']"
@@ -663,6 +737,39 @@ onUnmounted(() => {
                                     <div class="flex flex-col gap-1.5">
                                         <label class="block text-sm font-medium leading-5 text-gray-700">Servizio</label>
                                         <AppSelect v-model="drawerTask.service_id" :options="serviceOptions" searchable />
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section class="app-card p-4">
+                                <div class="mb-3">
+                                    <h4 class="text-sm font-semibold text-gray-900">Dipendenze</h4>
+                                    <p class="mt-1 text-xs text-gray-500">Imposta se questa task blocca o viene bloccata da altre task del modello.</p>
+                                </div>
+                                <div class="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
+                                    <div class="flex flex-col gap-1.5">
+                                        <label class="block text-sm font-medium leading-5 text-gray-700">Tipo</label>
+                                        <AppSelect v-model="drawerTask.dependency_mode" :options="dependencyModeOptions" @change="handleDependencyModeChange(drawerTask)" />
+                                    </div>
+                                    <div class="flex flex-col gap-1.5">
+                                        <label class="block text-sm font-medium leading-5 text-gray-700">{{ dependencyModeLabel(drawerTask) }}</label>
+                                        <div v-if="drawerTask.dependency_mode !== 'none'" class="people-avatar-picker max-h-44 gap-2 p-2">
+                                            <button
+                                                v-for="option in dependencyTaskOptions(drawerTask)"
+                                                :key="`dependency-option-${drawerTask.template_key}-${option.value}`"
+                                                type="button"
+                                                :class="[
+                                                    'rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm font-semibold transition',
+                                                    (drawerTask.dependency_task_keys || []).includes(option.value) ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-gray-700 ring-1 ring-gray-200 hover:bg-indigo-50 hover:text-indigo-700',
+                                                ]"
+                                                @click="toggleDependencyTask(drawerTask, option.value)"
+                                            >
+                                                {{ option.label }}
+                                            </button>
+                                        </div>
+                                        <div v-else class="flex h-[38px] items-center rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50 px-3 text-sm text-gray-400">
+                                            Nessuna task collegata
+                                        </div>
                                     </div>
                                 </div>
                             </section>
