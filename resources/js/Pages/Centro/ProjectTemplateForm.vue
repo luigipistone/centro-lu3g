@@ -4,8 +4,8 @@ import AppSelect from '@/Components/AppSelect.vue';
 import AppTimeInput from '@/Components/AppTimeInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ChevronLeft, CopyPlus, Plus, Save, Trash2, X } from '@lucide/vue';
-import { computed, ref } from 'vue';
+import { ChevronDown, ChevronLeft, Copy, CopyPlus, GripVertical, MoreHorizontal, Plus, Save, Trash2, X } from '@lucide/vue';
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 
 const props = defineProps({
     template: Object,
@@ -42,6 +42,17 @@ const directionOptions = [
 
 const editing = computed(() => Boolean(props.template?.id));
 const taskDrawerKey = ref(null);
+const sectionCollapsed = ref({});
+const sectionActionMenuOpen = ref(null);
+const sectionActionMenuPlacement = ref('down');
+const taskDrafts = ref({});
+const newSectionOpen = ref(false);
+const newSectionName = ref('');
+const newSectionInput = ref(null);
+const draggedTaskKey = ref(null);
+const taskDropTargetKey = ref(null);
+const taskDropPlacement = ref(null);
+const taskDropSectionIndex = ref(null);
 
 const form = useForm(templatePayload(props.template));
 const totalTasks = computed(() => form.sections.reduce((sum, section) => sum + section.tasks.length, 0));
@@ -126,23 +137,78 @@ function templatePayload(template) {
     };
 }
 
-function addSection() {
+function showSectionInput() {
+    newSectionOpen.value = true;
+    nextTick(() => newSectionInput.value?.focus());
+}
+
+function pushSection(name = '') {
     form.sections.push({
-        name: `Nuova fase ${form.sections.length + 1}`,
+        name: name || `Nuova fase ${form.sections.length + 1}`,
         tasks: [],
     });
 }
 
-function removeSection(index) {
-    form.sections.splice(index, 1);
-    if (!form.sections.length) addSection();
+function addSection() {
+    const name = newSectionName.value.trim();
+    if (!name) return;
+    pushSection(name);
+    newSectionName.value = '';
+    newSectionOpen.value = false;
 }
 
-function addTask(section) {
+function removeSection(index) {
+    form.sections.splice(index, 1);
+    if (!form.sections.length) pushSection('Fase preliminare');
+}
+
+function duplicateSection(section) {
+    sectionActionMenuOpen.value = null;
+    const clone = {
+        name: `${section.name || 'Fase'} copia`,
+        tasks: (section.tasks || []).map((task) => ({
+            ...task,
+            template_key: newTemplateTaskKey(),
+            date_reference_task_key: '',
+            date_reference_value: 'project_start',
+            date_reference_type: 'project_start',
+        })),
+    };
+    form.sections.splice(form.sections.indexOf(section) + 1, 0, clone);
+}
+
+function toggleSection(index) {
+    sectionCollapsed.value = {
+        ...sectionCollapsed.value,
+        [index]: !sectionCollapsed.value[index],
+    };
+}
+
+function toggleSectionActionMenu(index, event = null) {
+    const rect = event?.currentTarget?.getBoundingClientRect?.();
+    sectionActionMenuPlacement.value = rect && window.innerHeight - rect.bottom < 170 ? 'up' : 'down';
+    sectionActionMenuOpen.value = sectionActionMenuOpen.value === index ? null : index;
+}
+
+function collapseSectionFromMenu(index) {
+    sectionActionMenuOpen.value = null;
+    toggleSection(index);
+}
+
+function setTaskDraft(sectionIndex, value) {
+    taskDrafts.value = {
+        ...taskDrafts.value,
+        [sectionIndex]: value,
+    };
+}
+
+function addTask(section, sectionIndex) {
+    const title = String(taskDrafts.value[sectionIndex] || '').trim();
+    if (!title) return;
     const previous = section.tasks.at(-1);
-    const task = blankTask('', previous ? Number(previous.day_offset || 0) + 1 : 0);
+    const task = blankTask(title, previous ? Number(previous.day_offset || 0) + 1 : 0);
     section.tasks.push(task);
-    openTaskDrawer(task);
+    setTaskDraft(sectionIndex, '');
 }
 
 function removeTask(section, index) {
@@ -157,6 +223,73 @@ function allTemplateTasks() {
 }
 
 const drawerTask = computed(() => allTemplateTasks().find((task) => task.template_key === taskDrawerKey.value) || null);
+
+function startTaskDrag(task) {
+    draggedTaskKey.value = task.template_key;
+}
+
+function dragOverSection(sectionIndex, clearTaskTarget = false) {
+    if (!draggedTaskKey.value) return;
+    taskDropSectionIndex.value = sectionIndex;
+    if (clearTaskTarget) {
+        taskDropTargetKey.value = null;
+    }
+    if (!taskDropTargetKey.value) {
+        taskDropPlacement.value = 'after';
+    }
+}
+
+function leaveTaskSection(sectionIndex, event) {
+    if (!draggedTaskKey.value) return;
+    if (event.currentTarget?.contains?.(event.relatedTarget)) return;
+    if (taskDropSectionIndex.value === sectionIndex) {
+        taskDropSectionIndex.value = null;
+    }
+}
+
+function dragOverTask(task, event) {
+    if (!draggedTaskKey.value || draggedTaskKey.value === task.template_key) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    taskDropTargetKey.value = task.template_key;
+    taskDropPlacement.value = event.clientY < rect.top + (rect.height / 2) ? 'before' : 'after';
+}
+
+function dropTask(section, sectionIndex, targetTask = null) {
+    const fromKey = draggedTaskKey.value;
+    const placement = taskDropPlacement.value || 'after';
+    draggedTaskKey.value = null;
+    taskDropTargetKey.value = null;
+    taskDropPlacement.value = null;
+    taskDropSectionIndex.value = null;
+    if (!fromKey) return;
+
+    let moved = null;
+    form.sections.forEach((row) => {
+        const index = row.tasks.findIndex((task) => task.template_key === fromKey);
+        if (index >= 0) {
+            moved = row.tasks.splice(index, 1)[0];
+        }
+    });
+    if (!moved) return;
+
+    const current = section.tasks;
+    if (!targetTask) {
+        current.push(moved);
+        return;
+    }
+
+    let targetIndex = current.findIndex((task) => task.template_key === targetTask.template_key);
+    if (targetIndex < 0) targetIndex = current.length;
+    if (placement === 'after') targetIndex += 1;
+    current.splice(targetIndex, 0, moved);
+}
+
+function endTaskDrag() {
+    draggedTaskKey.value = null;
+    taskDropTargetKey.value = null;
+    taskDropPlacement.value = null;
+    taskDropSectionIndex.value = null;
+}
 
 function referenceOptions(task) {
     return [
@@ -197,6 +330,18 @@ function closeTaskDrawer() {
     taskDrawerKey.value = null;
 }
 
+function removeDrawerTask() {
+    const task = drawerTask.value;
+    if (!task) return;
+    form.sections.forEach((section) => {
+        const index = section.tasks.findIndex((row) => row.template_key === task.template_key);
+        if (index >= 0) {
+            section.tasks.splice(index, 1);
+        }
+    });
+    closeTaskDrawer();
+}
+
 function optionLabel(options, value, fallback = '') {
     return options.find((option) => String(option.value) === String(value))?.label || fallback;
 }
@@ -235,6 +380,12 @@ function personAvatarClass(selected) {
     ];
 }
 
+function closeSectionActionMenuOnOutside(event) {
+    if (sectionActionMenuOpen.value === null) return;
+    if (event.target instanceof Element && event.target.closest('[data-template-section-menu]')) return;
+    sectionActionMenuOpen.value = null;
+}
+
 function normalizeTemplatePayload() {
     form.sections.forEach((section) => {
         section.tasks.forEach((task) => {
@@ -262,6 +413,14 @@ function saveTemplate() {
 
     form.post(route('project-templates.store'), options);
 }
+
+onMounted(() => {
+    document.addEventListener('pointerdown', closeSectionActionMenuOnOutside, true);
+});
+
+onUnmounted(() => {
+    document.removeEventListener('pointerdown', closeSectionActionMenuOnOutside, true);
+});
 </script>
 
 <template>
@@ -317,63 +476,150 @@ function saveTemplate() {
 
                 </section>
 
-                <section class="surface overflow-hidden">
+                <section class="surface overflow-visible">
                     <div class="flex items-center justify-between gap-3 border-b border-white/60 px-5 py-4">
                         <div>
                             <h3 class="text-base font-semibold text-gray-900">Cronoprogramma</h3>
                             <p class="mt-1 text-sm text-gray-500">I giorni sono relativi alla data di avvio scelta quando crei il progetto.</p>
                         </div>
-                        <button type="button" class="btn btn-outline" @click="addSection">
-                            <Plus class="h-4 w-4" :stroke-width="1.7" />
-                            Aggiungi fase
-                        </button>
                     </div>
 
-                    <div class="space-y-6 p-5">
-                        <div v-for="(section, sectionIndex) in form.sections" :key="`section-${sectionIndex}`" class="overflow-visible">
-                            <div class="mb-4 flex items-center gap-2 border-b border-gray-100 py-3">
-                                <input v-model="section.name" class="min-w-0 flex-1 bg-transparent text-sm font-semibold text-gray-900 outline-none" placeholder="Nome fase" />
-                                <button type="button" class="icon-btn" title="Aggiungi task" @click="addTask(section)">
-                                    <Plus class="h-4 w-4" :stroke-width="1.7" />
-                                </button>
-                                <button type="button" class="icon-btn" title="Elimina fase" @click="removeSection(sectionIndex)">
-                                    <Trash2 class="h-4 w-4" :stroke-width="1.7" />
-                                </button>
-                            </div>
+                    <div class="overflow-visible px-5 pb-5 pt-4">
+                        <div class="hidden grid-cols-[24px_minmax(0,1.7fr)_minmax(140px,0.7fr)_170px_120px_120px] border-y border-gray-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400 md:grid">
+                            <span></span>
+                            <span>Nome</span>
+                            <span>Incaricato</span>
+                            <span>Quando</span>
+                            <span>Stato</span>
+                            <span>Priorità</span>
+                        </div>
 
-                            <div>
-                                <div class="hidden gap-3 border-b border-gray-100 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400 lg:grid lg:grid-cols-[minmax(220px,1fr)_132px_minmax(220px,1fr)_120px_116px_36px]">
-                                    <span>Task</span>
-                                    <span>Assegnatari</span>
-                                    <span>Quando</span>
-                                    <span>Stato</span>
-                                    <span>Tipo</span>
-                                    <span></span>
-                                </div>
-
-                                <div v-for="(task, taskIndex) in section.tasks" :key="`task-${sectionIndex}-${taskIndex}`" class="grid cursor-pointer items-center gap-3 border-b border-gray-100 py-3 transition hover:bg-white/50 last:border-b-0 lg:grid-cols-[minmax(220px,1fr)_132px_minmax(220px,1fr)_120px_116px_36px]" @click="openTaskDrawer(task)">
-                                    <div class="min-w-0">
-                                        <p class="truncate text-sm font-semibold text-gray-900">{{ task.title || 'Task senza titolo' }}</p>
-                                        <p class="mt-1 truncate text-xs text-gray-500">{{ selectedServiceLabel(task) }} · {{ optionLabel(priorityOptions, task.priority, 'Media') }}</p>
-                                    </div>
-                                    <div>
-                                        <span v-if="selectedAssignees(task).length" class="-space-x-2 whitespace-nowrap">
-                                            <UserAvatar v-for="user in selectedAssignees(task).slice(0, 4)" :key="`template-row-assignee-${task.template_key}-${user.id}`" :user="user" size="xs" class="ring-2 ring-white" />
-                                        </span>
-                                        <span v-else class="text-xs font-medium text-gray-400">Nessuno</span>
-                                    </div>
-                                    <p class="min-w-0 truncate text-sm text-gray-600">{{ dateRuleLabel(task) }}</p>
-                                    <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">{{ optionLabel(statusOptions, task.status, 'Da fare') }}</span>
-                                    <span class="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">{{ optionLabel(taskTypeOptions, task.task_type, 'Task') }}</span>
-                                    <button type="button" class="icon-btn" title="Elimina task" @click.stop="removeTask(section, taskIndex)">
-                                        <X class="h-4 w-4" :stroke-width="1.7" />
+                        <div
+                            v-for="(sectionRow, sectionIndex) in form.sections"
+                            :key="`section-${sectionIndex}`"
+                            :class="['border-b border-gray-100 transition last:border-b-0', draggedTaskKey && taskDropSectionIndex === sectionIndex ? 'bg-indigo-50/35 ring-1 ring-inset ring-indigo-200' : '']"
+                            @dragover.prevent="dragOverSection(sectionIndex)"
+                            @dragleave="leaveTaskSection(sectionIndex, $event)"
+                            @drop.prevent="dropTask(sectionRow, sectionIndex)"
+                        >
+                            <div class="group/project-section flex w-full items-center gap-2 px-3 py-3 text-left text-sm font-semibold text-gray-800">
+                                <button type="button" class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 transition hover:bg-gray-50 hover:text-gray-700" :aria-expanded="!sectionCollapsed[sectionIndex]" @click="toggleSection(sectionIndex)">
+                                    <ChevronDown :class="['h-4 w-4 transition-transform', sectionCollapsed[sectionIndex] ? '-rotate-90' : '']" :stroke-width="1.8" />
+                                </button>
+                                <input
+                                    v-model="sectionRow.name"
+                                    class="min-w-0 flex-1 cursor-pointer rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-semibold outline-none transition hover:border-gray-200 hover:bg-white focus:cursor-text focus:border-indigo-200 focus:bg-white focus:shadow-sm"
+                                    placeholder="Nome fase"
+                                />
+                                <span class="text-xs font-medium text-gray-400">{{ sectionRow.tasks.length }}</span>
+                                <div class="relative shrink-0" data-template-section-menu>
+                                    <button
+                                        type="button"
+                                        class="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 opacity-0 transition hover:bg-gray-50 hover:text-gray-800 group-hover/project-section:opacity-100 focus:opacity-100"
+                                        aria-label="Azioni sezione"
+                                        @click.stop="toggleSectionActionMenu(sectionIndex, $event)"
+                                    >
+                                        <MoreHorizontal class="h-4 w-4" :stroke-width="1.8" />
                                     </button>
+                                    <div
+                                        v-if="sectionActionMenuOpen === sectionIndex"
+                                        :class="[
+                                            'app-popover field-dropdown-menu absolute right-0 z-[7600] w-56 p-2',
+                                            sectionActionMenuPlacement === 'up' ? 'bottom-full mb-2' : 'top-full mt-2',
+                                        ]"
+                                        @click.stop
+                                    >
+                                        <button type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50" @click="duplicateSection(sectionRow)">
+                                            <Copy class="h-4 w-4" :stroke-width="1.7" />
+                                            Duplica sezione
+                                        </button>
+                                        <button type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50" @click="collapseSectionFromMenu(sectionIndex)">
+                                            <ChevronDown :class="['h-4 w-4 transition-transform', sectionCollapsed[sectionIndex] ? '-rotate-90' : '']" :stroke-width="1.7" />
+                                            {{ sectionCollapsed[sectionIndex] ? 'Espandi' : 'Comprimi' }}
+                                        </button>
+                                        <button type="button" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50" @click="sectionActionMenuOpen = null; removeSection(sectionIndex)">
+                                            <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                            Elimina sezione
+                                        </button>
+                                    </div>
                                 </div>
-
-                                <button v-if="!section.tasks.length" type="button" class="w-full px-4 py-4 text-left text-sm font-semibold text-gray-400 transition hover:text-[hsl(var(--primary-app))]" @click="addTask(section)">
-                                    + Aggiungi task
-                                </button>
                             </div>
+
+                            <div v-show="!sectionCollapsed[sectionIndex]">
+                                <div
+                                    v-for="task in sectionRow.tasks"
+                                    :key="task.template_key"
+                                    draggable="true"
+                                    :class="[
+                                        'group/project-task relative grid w-full gap-3 border-t border-gray-100 px-3 py-2.5 text-left text-sm transition hover:bg-indigo-50/40 md:grid-cols-[24px_minmax(0,1.7fr)_minmax(140px,0.7fr)_170px_120px_120px] md:items-center',
+                                        task.status === 'done' ? 'opacity-60' : '',
+                                        draggedTaskKey && draggedTaskKey !== task.template_key ? 'outline-offset-[-1px]' : '',
+                                        taskDropTargetKey === task.template_key ? (taskDropPlacement === 'before' ? 'before:absolute before:left-3 before:right-3 before:top-0 before:h-1 before:rounded-full before:bg-indigo-500 before:shadow-[0_0_0_4px_rgba(99,102,241,0.12)]' : 'after:absolute after:bottom-0 after:left-3 after:right-3 after:h-1 after:rounded-full after:bg-indigo-500 after:shadow-[0_0_0_4px_rgba(99,102,241,0.12)]') : '',
+                                    ]"
+                                    @dragstart="startTaskDrag(task)"
+                                    @dragover.prevent="dragOverTask(task, $event)"
+                                    @drop.prevent.stop="dropTask(sectionRow, sectionIndex, task)"
+                                    @dragend="endTaskDrag"
+                                >
+                                    <span class="hidden cursor-grab text-gray-300 transition group-hover/project-task:text-gray-500 md:inline-flex">
+                                        <GripVertical class="h-4 w-4" :stroke-width="1.7" />
+                                    </span>
+                                    <button type="button" class="min-w-0 text-left font-medium text-indigo-700" @click="openTaskDrawer(task)">
+                                        <span :class="['block truncate', task.status === 'done' ? 'line-through' : '']">{{ task.title || 'Task senza titolo' }}</span>
+                                        <span class="mt-1 block truncate text-xs font-normal text-gray-500">{{ selectedServiceLabel(task) }} · {{ optionLabel(taskTypeOptions, task.task_type, 'Task') }}</span>
+                                    </button>
+                                    <div class="flex min-w-0 items-center gap-2 text-xs text-gray-600">
+                                        <span v-if="selectedAssignees(task).length" class="flex -space-x-2">
+                                            <UserAvatar v-for="user in selectedAssignees(task).slice(0, 3)" :key="`template-row-assignee-${task.template_key}-${user.id}`" :user="user" size="xs" class="ring-2 ring-white" />
+                                        </span>
+                                        <span class="truncate">{{ selectedAssignees(task)[0]?.name || selectedAssignees(task)[0]?.email || 'Non assegnata' }}</span>
+                                    </div>
+                                    <span class="truncate text-xs font-medium text-gray-500">{{ dateRuleLabel(task) }}</span>
+                                    <span>
+                                        <span :class="['rounded-full px-2 py-1 text-xs font-semibold', task.status === 'done' ? 'bg-emerald-50 text-emerald-700' : task.status === 'in_progress' ? 'bg-sky-50 text-sky-700' : task.status === 'in_review' ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-600']">{{ optionLabel(statusOptions, task.status, 'Da fare') }}</span>
+                                    </span>
+                                    <span>
+                                        <span :class="['rounded-full px-2 py-1 text-xs font-semibold', task.priority === 'urgent' ? 'bg-red-50 text-red-700' : task.priority === 'high' ? 'bg-orange-50 text-orange-700' : task.priority === 'low' ? 'bg-emerald-50 text-emerald-700' : 'bg-yellow-50 text-yellow-700']">{{ optionLabel(priorityOptions, task.priority, 'Media') }}</span>
+                                    </span>
+                                </div>
+                                <form
+                                    :class="['border-t border-gray-100 px-3 py-2.5 transition', draggedTaskKey && taskDropSectionIndex === sectionIndex && !taskDropTargetKey ? 'bg-indigo-50/70 ring-1 ring-inset ring-indigo-200' : '']"
+                                    @submit.prevent="addTask(sectionRow, sectionIndex)"
+                                    @dragover.prevent="dragOverSection(sectionIndex, true)"
+                                    @drop.prevent.stop="dropTask(sectionRow, sectionIndex)"
+                                >
+                                    <input
+                                        :value="taskDrafts[sectionIndex] || ''"
+                                        class="subtask-line-control font-medium"
+                                        placeholder="Aggiungi attività..."
+                                        @input="setTaskDraft(sectionIndex, $event.target.value)"
+                                        @keydown.enter.prevent="addTask(sectionRow, sectionIndex)"
+                                        @blur="addTask(sectionRow, sectionIndex)"
+                                    />
+                                </form>
+                            </div>
+                        </div>
+
+                        <div class="group/add-section px-3 py-3">
+                            <form v-if="newSectionOpen" class="mb-2 flex max-w-lg items-center gap-2 rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 px-3 py-2" @submit.prevent="addSection">
+                                <Plus class="h-4 w-4 shrink-0 text-gray-400" :stroke-width="1.7" />
+                                <input
+                                    ref="newSectionInput"
+                                    v-model="newSectionName"
+                                    class="subtask-line-control font-medium"
+                                    placeholder="Nome sezione"
+                                    @keydown.enter.prevent="addSection"
+                                    @blur="addSection"
+                                />
+                            </form>
+                            <button
+                                type="button"
+                                class="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-semibold text-gray-400 opacity-80 transition hover:bg-gray-50 hover:text-indigo-600 group-hover/add-section:opacity-100"
+                                @click="showSectionInput"
+                            >
+                                <Plus class="h-4 w-4" :stroke-width="1.7" />
+                                Aggiungi sezione
+                            </button>
                         </div>
                     </div>
                 </section>
@@ -484,7 +730,11 @@ function saveTemplate() {
                         </div>
                     </div>
 
-                    <div class="flex justify-end border-t border-gray-100 px-5 py-4">
+                    <div class="flex items-center justify-between border-t border-gray-100 px-5 py-4">
+                        <button type="button" class="btn border border-red-200 bg-red-50 text-red-700 hover:bg-red-100" @click="removeDrawerTask">
+                            <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                            Elimina attività
+                        </button>
                         <button type="button" class="btn btn-outline" @click="closeTaskDrawer">Chiudi</button>
                     </div>
                 </aside>
