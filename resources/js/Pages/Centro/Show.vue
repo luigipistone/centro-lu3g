@@ -678,6 +678,7 @@ const projectDrawerDependencyToAdd = ref('');
 const projectDrawerShowAllComments = ref(false);
 const projectDrawerShowAllActivity = ref(false);
 const projectDrawerSubtaskForm = useForm({ title: '', priority: 'medium', due_date: '', assignee_ids: [] });
+const projectDrawerCreateSubtaskAssigneeIds = ref([]);
 const projectDrawerCommentForm = useForm({ content: '' });
 const projectDrawerCommentEditor = ref(null);
 const projectTaskActionMenuOpen = ref(false);
@@ -2150,7 +2151,7 @@ function subtaskAssignees(subtaskId) {
 }
 
 function projectDrawerCreateSubtaskAssignees() {
-    return peopleSelected(projectDrawerSubtaskForm.assignee_ids || [], props.related.users || []);
+    return peopleSelected(projectDrawerCreateSubtaskAssigneeIds.value, props.related.users || []);
 }
 
 function toggleProjectDrawerCreateSubtaskAssigneeMenu(event = null) {
@@ -2159,14 +2160,14 @@ function toggleProjectDrawerCreateSubtaskAssigneeMenu(event = null) {
 }
 
 function toggleProjectDrawerCreateSubtaskAssignee(userId) {
-    const values = [...(projectDrawerSubtaskForm.assignee_ids || [])];
+    const values = [...projectDrawerCreateSubtaskAssigneeIds.value];
     const index = values.indexOf(userId);
     if (index >= 0) {
         values.splice(index, 1);
     } else {
         values.push(userId);
     }
-    projectDrawerSubtaskForm.assignee_ids = values;
+    projectDrawerCreateSubtaskAssigneeIds.value = values;
 }
 
 function createSubtaskAssignees() {
@@ -2729,7 +2730,7 @@ function addProjectDrawerSubtask() {
         title: projectDrawerSubtaskForm.title,
         priority: projectDrawerSubtaskForm.priority || 'medium',
         due_date: projectDrawerSubtaskForm.due_date || '',
-        assignee_ids: [...(projectDrawerSubtaskForm.assignee_ids || [])],
+        assignee_ids: [...projectDrawerCreateSubtaskAssigneeIds.value],
     };
 
     router.post(route('tasks.subtasks.store', projectTaskDrawerTask.value.id), payload, {
@@ -2739,6 +2740,7 @@ function addProjectDrawerSubtask() {
         onSuccess: () => {
             refreshProjectTaskDrawerFromServer(projectTaskDrawerTask.value.id);
             projectDrawerSubtaskForm.reset();
+            projectDrawerCreateSubtaskAssigneeIds.value = [];
             subtaskCreateAssigneeMenuOpen.value = false;
         },
     });
@@ -6006,9 +6008,9 @@ onUnmounted(() => {
                                                             v-for="user in related.users"
                                                             :key="`project-drawer-new-subtask-person-${user.id}`"
                                                             type="button"
-                                                            :class="personAvatarClass((projectDrawerSubtaskForm.assignee_ids || []).includes(user.id))"
-                                                            :aria-pressed="(projectDrawerSubtaskForm.assignee_ids || []).includes(user.id)"
-                                                            :aria-label="`${(projectDrawerSubtaskForm.assignee_ids || []).includes(user.id) ? 'Rimuovi' : 'Assegna'} ${user.name || user.email}`"
+                                                            :class="personAvatarClass(projectDrawerCreateSubtaskAssigneeIds.includes(user.id))"
+                                                            :aria-pressed="projectDrawerCreateSubtaskAssigneeIds.includes(user.id)"
+                                                            :aria-label="`${projectDrawerCreateSubtaskAssigneeIds.includes(user.id) ? 'Rimuovi' : 'Assegna'} ${user.name || user.email}`"
                                                             @click="toggleProjectDrawerCreateSubtaskAssignee(user.id)"
                                                         >
                                                             <UserAvatar :user="user" size="md" />

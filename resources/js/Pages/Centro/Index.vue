@@ -384,6 +384,7 @@ const calendarSubtaskForm = useForm({
     due_date: '',
     assignee_ids: [],
 });
+const calendarCreateSubtaskAssigneeIds = ref([]);
 const calendarSubtaskAssigneeMenuOpen = ref(null);
 const calendarSubtaskAssigneeMenuStyle = ref({});
 const calendarSubtaskCreateAssigneeMenuOpen = ref(false);
@@ -819,7 +820,7 @@ function calendarSubtaskAssignees(subtaskId) {
 }
 
 function calendarCreateSubtaskAssignees() {
-    return (props.users || []).filter((user) => (calendarSubtaskForm.assignee_ids || []).includes(user.id));
+    return (props.users || []).filter((user) => calendarCreateSubtaskAssigneeIds.value.includes(user.id));
 }
 
 function toggleCalendarCreateSubtaskAssigneeMenu(event = null) {
@@ -828,14 +829,14 @@ function toggleCalendarCreateSubtaskAssigneeMenu(event = null) {
 }
 
 function toggleCalendarCreateSubtaskAssignee(userId) {
-    const values = [...(calendarSubtaskForm.assignee_ids || [])];
+    const values = [...calendarCreateSubtaskAssigneeIds.value];
     const index = values.indexOf(userId);
     if (index >= 0) {
         values.splice(index, 1);
     } else {
         values.push(userId);
     }
-    calendarSubtaskForm.assignee_ids = values;
+    calendarCreateSubtaskAssigneeIds.value = values;
 }
 
 function openInlineDatePicker(event) {
@@ -2634,7 +2635,7 @@ function addCalendarSubtask() {
         title: calendarSubtaskForm.title,
         priority: calendarSubtaskForm.priority || 'medium',
         due_date: calendarSubtaskForm.due_date || '',
-        assignee_ids: [...(calendarSubtaskForm.assignee_ids || [])],
+        assignee_ids: [...calendarCreateSubtaskAssigneeIds.value],
     };
 
     router.post(route('tasks.subtasks.store', parentTaskId), payload, {
@@ -2644,6 +2645,7 @@ function addCalendarSubtask() {
         onSuccess: () => {
             refreshCalendarTaskPanelFromServer(parentTaskId);
             calendarSubtaskForm.reset();
+            calendarCreateSubtaskAssigneeIds.value = [];
             calendarSubtaskCreateAssigneeMenuOpen.value = false;
         },
     });
@@ -4249,9 +4251,9 @@ function calendarDayStyle(sectionMonth, cell) {
                                                             v-for="user in users"
                                                             :key="`calendar-new-subtask-person-${user.id}`"
                                                             type="button"
-                                                            :class="personAvatarClass((calendarSubtaskForm.assignee_ids || []).includes(user.id))"
-                                                            :aria-pressed="(calendarSubtaskForm.assignee_ids || []).includes(user.id)"
-                                                            :aria-label="`${(calendarSubtaskForm.assignee_ids || []).includes(user.id) ? 'Rimuovi' : 'Assegna'} ${user.name || user.email}`"
+                                                            :class="personAvatarClass(calendarCreateSubtaskAssigneeIds.includes(user.id))"
+                                                            :aria-pressed="calendarCreateSubtaskAssigneeIds.includes(user.id)"
+                                                            :aria-label="`${calendarCreateSubtaskAssigneeIds.includes(user.id) ? 'Rimuovi' : 'Assegna'} ${user.name || user.email}`"
                                                             @click="toggleCalendarCreateSubtaskAssignee(user.id)"
                                                         >
                                                             <UserAvatar :user="user" size="md" />
