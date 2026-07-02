@@ -136,6 +136,7 @@ const calendarDropDate = ref(null);
 const expandedCalendarDays = ref([]);
 const calendarTaskPanelOpen = ref(false);
 const calendarTaskPanel = ref(null);
+const calendarRowOverrides = ref({});
 const calendarTaskParentStack = ref([]);
 const calendarTaskPanelMode = ref('edit');
 const calendarTaskPanelClosedByUser = ref(false);
@@ -2238,7 +2239,24 @@ function openCalendarTask(task, options = {}) {
     refreshCalendarTaskDescriptionEditor();
 }
 
-function findCalendarTaskInRows(taskId, rows = props.rows) {
+function calendarRowsWithOverrides(rows = props.rows) {
+    return (rows || []).map((row) => {
+        const override = calendarRowOverrides.value[row.id];
+
+        return override ? normalizeCalendarTask({ ...row, ...override }) : row;
+    });
+}
+
+function rememberCalendarRowOverride(task) {
+    if (!task?.id || task.parent_task_id) return;
+
+    calendarRowOverrides.value = {
+        ...calendarRowOverrides.value,
+        [task.id]: normalizeCalendarTask(task),
+    };
+}
+
+function findCalendarTaskInRows(taskId, rows = calendarRowsWithOverrides()) {
     if (!taskId) return null;
 
     for (const row of rows || []) {
@@ -2257,7 +2275,7 @@ function findCalendarTaskInRows(taskId, rows = props.rows) {
     return null;
 }
 
-function refreshCalendarTaskPanelFromRows(rows = props.rows) {
+function refreshCalendarTaskPanelFromRows(rows = calendarRowsWithOverrides()) {
     if (!calendarTaskPanelOpen.value || !calendarTaskForm.id) return;
 
     const freshTask = findCalendarTaskInRows(calendarTaskForm.id, rows);
@@ -2279,7 +2297,10 @@ async function refreshCalendarTaskPanelFromServer(taskId = calendarTaskPanel.val
 
     if (!response.ok) return;
 
-    openCalendarTask(await response.json(), { preserveStack: true });
+    const freshTask = normalizeCalendarTask(await response.json());
+    rememberCalendarRowOverride(freshTask);
+    openCalendarTask(freshTask, { preserveStack: true });
+    return freshTask;
 }
 
 function openCalendarTaskCreate(type, date) {
@@ -2615,11 +2636,6 @@ function addCalendarSubtask() {
         only: ['rows', 'errors', 'flash'],
         onSuccess: () => {
             refreshCalendarTaskPanelFromServer(parentTaskId);
-            router.reload({
-                only: ['rows'],
-                preserveScroll: true,
-                preserveState: true,
-            });
             calendarSubtaskForm.reset();
             calendarSubtaskCreateAssigneeMenuOpen.value = false;
         },
@@ -2957,7 +2973,7 @@ function closeCalendarCreateMenuOnOutside(event) {
 watch(
     () => props.rows,
     (rows) => {
-        refreshCalendarTaskPanelFromRows(rows);
+        refreshCalendarTaskPanelFromRows(calendarRowsWithOverrides(rows));
     },
 );
 
@@ -3164,7 +3180,7 @@ function taskTypeClass(type) {
 }
 
 function tasksForDay(date) {
-    return props.rows
+    return calendarRowsWithOverrides()
         .filter((row) => row.parent_task_id === null || row.parent_task_id === undefined || row.parent_task_id === '')
         .filter((row) => taskSpansDate(row, date))
         .filter((row) => {
