@@ -322,6 +322,32 @@ function projectTaskDependencyPreviewLabel(task) {
     return parts.join(' · ');
 }
 
+function projectTaskDependencyBadges(task) {
+    const dependenciesCount = (task?.dependencies || []).length;
+    const dependentsCount = (task?.dependents || []).length;
+    const badges = [];
+
+    if (dependenciesCount) {
+        badges.push({
+            key: 'blocked',
+            icon: AlertTriangle,
+            label: `Bloccata da ${dependenciesCount} task`,
+            class: 'bg-amber-50 text-amber-700 ring-amber-100',
+        });
+    }
+
+    if (dependentsCount) {
+        badges.push({
+            key: 'blocks',
+            icon: GitBranch,
+            label: `Bloccante per ${dependentsCount} task`,
+            class: 'bg-indigo-50 text-indigo-700 ring-indigo-100',
+        });
+    }
+
+    return badges;
+}
+
 function syncTaskDependencies() {
     router.put(route('tasks.dependencies.sync', props.record.id), {
         dependency_ids: taskForm.dependency_ids || [],
@@ -4551,13 +4577,15 @@ onUnmounted(() => {
                                         </span>
                                         <button type="button" class="block w-full min-w-0 max-w-full text-left font-medium text-indigo-700" @click.stop="openProjectTaskDrawer(task)">
                                             <span :class="['block truncate', task.status === 'done' ? 'line-through' : '']">{{ task.title }}</span>
-                                            <span v-if="projectTaskDependencyPreviewLabel(task)" class="mt-1 inline-flex items-center gap-2 text-xs font-normal text-gray-500">
+                                            <span v-if="projectTaskDependencyBadges(task).length" class="mt-1 inline-flex items-center gap-1.5 text-xs font-normal text-gray-500">
                                                 <span
-                                                    class="group/dependency relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-100"
+                                                    v-for="badge in projectTaskDependencyBadges(task)"
+                                                    :key="`project-task-dependency-${task.id}-${badge.key}`"
+                                                    :class="['group/dependency relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full ring-1', badge.class]"
                                                 >
-                                                    <GitBranch class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                                    <component :is="badge.icon" class="h-3.5 w-3.5" :stroke-width="1.8" />
                                                     <span class="pointer-events-none absolute bottom-full left-1/2 z-[7800] mb-2 hidden w-max max-w-[240px] -translate-x-1/2 rounded-[var(--radius-sm)] bg-gray-950 px-2.5 py-1.5 text-xs font-semibold leading-4 text-white shadow-lg group-hover/dependency:block">
-                                                        {{ projectTaskDependencyPreviewLabel(task) }}
+                                                        {{ badge.label }}
                                                     </span>
                                                 </span>
                                             </span>

@@ -4,7 +4,7 @@ import AppSelect from '@/Components/AppSelect.vue';
 import AppTimeInput from '@/Components/AppTimeInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ChevronDown, ChevronLeft, Copy, CopyPlus, GitBranch, GripVertical, MoreHorizontal, Plus, Save, Trash2, X } from '@lucide/vue';
+import { AlertTriangle, ChevronDown, ChevronLeft, Copy, CopyPlus, GitBranch, GripVertical, MoreHorizontal, Plus, Save, Trash2, X } from '@lucide/vue';
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 
 const props = defineProps({
@@ -359,6 +359,25 @@ function dependencyPreviewLabel(task) {
     return `${label}: ${count} task`;
 }
 
+function dependencyPreviewBadge(task) {
+    const count = (task?.dependency_task_keys || []).length;
+    if (!task || task.dependency_mode === 'none' || !count) return null;
+
+    if (task.dependency_mode === 'blocks') {
+        return {
+            icon: GitBranch,
+            label: `Bloccante per ${count} task`,
+            class: 'bg-indigo-50 text-indigo-700 ring-indigo-100',
+        };
+    }
+
+    return {
+        icon: AlertTriangle,
+        label: `Bloccata da ${count} task`,
+        class: 'bg-amber-50 text-amber-700 ring-amber-100',
+    };
+}
+
 function toggleDependencyTask(task, taskKey) {
     const values = [...(task.dependency_task_keys || [])];
     const index = values.indexOf(taskKey);
@@ -696,11 +715,11 @@ onUnmounted(() => {
                                             <span class="truncate">{{ selectedServiceLabel(task) }} · {{ optionLabel(taskTypeOptions, task.task_type, 'Task') }}</span>
                                             <span
                                                 v-if="dependencyPreviewLabel(task)"
-                                                class="group/dependency relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-100"
+                                                :class="['group/dependency relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full ring-1', dependencyPreviewBadge(task)?.class]"
                                             >
-                                                <GitBranch class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                                <component :is="dependencyPreviewBadge(task)?.icon" class="h-3.5 w-3.5" :stroke-width="1.8" />
                                                 <span class="pointer-events-none absolute bottom-full left-1/2 z-[7800] mb-2 hidden w-max max-w-[220px] -translate-x-1/2 rounded-[var(--radius-sm)] bg-gray-950 px-2.5 py-1.5 text-xs font-semibold leading-4 text-white shadow-lg group-hover/dependency:block">
-                                                    {{ dependencyPreviewLabel(task) }}
+                                                    {{ dependencyPreviewBadge(task)?.label }}
                                                 </span>
                                             </span>
                                         </span>
