@@ -3902,21 +3902,19 @@ function calendarDayStyle(sectionMonth, cell) {
                                                         <span class="h-2 w-2 shrink-0 rounded-full" :style="{ backgroundColor: priorityColor(task.priority) }"></span>
                                                         <span v-if="(task.task_type || 'task') === 'meeting' && task.due_time" class="shrink-0 text-[10px] text-gray-500">{{ String(task.due_time).slice(0, 5) }}</span>
                                                         <span :class="['truncate font-medium', task.status === 'done' ? 'line-through opacity-60' : '']">{{ task.title }}</span>
-                                                        <span
-                                                            v-if="blockedDependencyCount(task)"
-                                                            class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rose-50 text-rose-700 ring-1 ring-rose-100"
-                                                            :title="`Task bloccata da ${blockedDependencyCount(task)} dipendenze`"
-                                                        >
-                                                            <GitBranch class="h-3.5 w-3.5" :stroke-width="1.8" />
-                                                        </span>
                                                     </div>
                                                     <div class="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-gray-500">
                                                         <span class="truncate">{{ task.client_name || task.project_name || task.service_name || taskTypeLabel(task.task_type) }}</span>
-                                                        <span v-if="task.subtask_count" class="inline-flex shrink-0 items-center gap-1 font-semibold text-gray-500">
-                                                            <span>{{ task.subtask_count }}</span>
-                                                            <svg class="h-3 w-3 fill-current" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                                                                <path :d="subtaskIconPath" />
-                                                            </svg>
+                                                        <span class="inline-flex shrink-0 items-center gap-1 font-semibold text-gray-500">
+                                                            <span v-if="blockedDependencyCount(task)" class="inline-flex h-3 w-3 items-center justify-center text-rose-700" :title="`Task bloccata da ${blockedDependencyCount(task)} dipendenze`">
+                                                                <GitBranch class="h-3 w-3" :stroke-width="2" />
+                                                            </span>
+                                                            <span v-if="task.subtask_count" class="inline-flex items-center gap-1">
+                                                                <span>{{ task.subtask_count }}</span>
+                                                                <svg class="h-3 w-3 fill-current" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                                                    <path :d="subtaskIconPath" />
+                                                                </svg>
+                                                            </span>
                                                         </span>
                                                     </div>
                                                 </div>
@@ -5200,13 +5198,6 @@ function calendarDayStyle(sectionMonth, cell) {
                                         </div>
                                         <div class="mt-3 flex flex-wrap items-center gap-1.5">
                                             <span
-                                                v-if="blockedDependencyCount(task)"
-                                                class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-rose-50 text-rose-700 ring-1 ring-rose-100"
-                                                :title="`Task bloccata da ${blockedDependencyCount(task)} dipendenze`"
-                                            >
-                                                <GitBranch class="h-3.5 w-3.5" :stroke-width="1.8" />
-                                            </span>
-                                            <span
                                                 class="rounded-full px-2 py-0.5 text-[10px] font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.28)]"
                                                 :style="{ backgroundColor: priorityColor(task.priority), color: priorityTextColor(task.priority) }"
                                             >
@@ -5216,6 +5207,13 @@ function calendarDayStyle(sectionMonth, cell) {
                                         </div>
                                         <div class="mt-4 flex items-center justify-between gap-3 text-[11px] leading-none text-gray-500">
                                             <div class="inline-flex min-w-0 items-center gap-2.5">
+                                                <span
+                                                    v-if="blockedDependencyCount(task)"
+                                                    class="inline-flex items-center text-rose-700"
+                                                    :title="`Task bloccata da ${blockedDependencyCount(task)} dipendenze`"
+                                                >
+                                                    <GitBranch class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                                </span>
                                                 <span v-if="task.subtask_count" class="inline-flex items-center gap-1 font-semibold text-gray-500">
                                                     <span>{{ task.subtask_count }}</span>
                                                     <svg class="h-3.5 w-3.5 fill-current" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
