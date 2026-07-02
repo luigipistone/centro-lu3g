@@ -1,0 +1,1 @@
+import{p as e}from"./AuthenticatedLayout-BE2v0VQe.js";var t=e(`check`,[[`path`,{d:`M20 6 9 17l-5-5`,key:`1gmf2c`}]]);export{t};

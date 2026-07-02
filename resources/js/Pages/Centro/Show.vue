@@ -15,7 +15,6 @@ import {
 } from '@/utils/formatters';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import {
-    AlertTriangle,
     Bold,
     CalendarDays,
     Check,
@@ -324,7 +323,6 @@ function projectTaskDependencyPreviewLabel(task) {
 
 function projectTaskDependencyBadges(task) {
     const dependenciesCount = (task?.dependencies || []).length;
-    const dependentsCount = (task?.dependents || []).length;
     const badges = [];
 
     if (dependenciesCount) {
@@ -333,15 +331,6 @@ function projectTaskDependencyBadges(task) {
             icon: GitBranch,
             label: `Bloccata da ${dependenciesCount} task`,
             class: 'bg-rose-50 text-rose-700 ring-rose-100',
-        });
-    }
-
-    if (dependentsCount) {
-        badges.push({
-            key: 'blocks',
-            icon: GitBranch,
-            label: `Bloccante per ${dependentsCount} task`,
-            class: 'bg-indigo-50 text-indigo-700 ring-indigo-100',
         });
     }
 
@@ -4850,9 +4839,12 @@ onUnmounted(() => {
                                     <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Dipendenze</h3>
                                     <p class="mt-1 text-xs text-gray-500">La task resta bloccata finché le task selezionate non sono completate.</p>
                                 </div>
-                                <span v-if="blockedDependencyCount()" class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">
-                                    <AlertTriangle class="h-3.5 w-3.5" :stroke-width="1.8" />
-                                    Bloccata
+                                <span
+                                    v-if="blockedDependencyCount()"
+                                    class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-rose-50 text-rose-700 ring-1 ring-rose-100"
+                                    title="Task bloccata"
+                                >
+                                    <GitBranch class="h-4 w-4" :stroke-width="1.8" />
                                 </span>
                             </div>
                             <div class="grid gap-2 md:grid-cols-[170px_minmax(0,1fr)]">
@@ -6031,9 +6023,12 @@ onUnmounted(() => {
                                         <h4 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Dipendenze</h4>
                                         <p class="mt-1 text-xs text-gray-500">Questa task resta bloccata finché le dipendenze non sono completate.</p>
                                     </div>
-                                    <span v-if="blockedDependencyCount(projectTaskDrawerTask)" class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">
-                                        <AlertTriangle class="h-3.5 w-3.5" :stroke-width="1.8" />
-                                        Bloccata
+                                    <span
+                                        v-if="blockedDependencyCount(projectTaskDrawerTask)"
+                                        class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-rose-50 text-rose-700 ring-1 ring-rose-100"
+                                        title="Task bloccata"
+                                    >
+                                        <GitBranch class="h-4 w-4" :stroke-width="1.8" />
                                     </span>
                                 </div>
                                 <div class="grid gap-2 md:grid-cols-[170px_minmax(0,1fr)]">

@@ -4,7 +4,7 @@ import AppSelect from '@/Components/AppSelect.vue';
 import AppTimeInput from '@/Components/AppTimeInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { AlertTriangle, ChevronDown, ChevronLeft, Copy, CopyPlus, GitBranch, GripVertical, MoreHorizontal, Plus, Save, Trash2, X } from '@lucide/vue';
+import { ChevronDown, ChevronLeft, Copy, CopyPlus, GitBranch, GripVertical, MoreHorizontal, Plus, Save, Trash2, X } from '@lucide/vue';
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 
 const props = defineProps({
@@ -354,22 +354,13 @@ function dependencyModeLabel(task) {
 
 function dependencyPreviewLabel(task) {
     const count = (task.dependency_task_keys || []).length;
-    if (!task || task.dependency_mode === 'none' || !count) return '';
-    const label = task.dependency_mode === 'blocks' ? 'Bloccante' : 'Bloccata';
-    return `${label}: ${count} task`;
+    if (!task || task.dependency_mode !== 'blocked_by' || !count) return '';
+    return `Bloccata da ${count} task`;
 }
 
 function dependencyPreviewBadge(task) {
     const count = (task?.dependency_task_keys || []).length;
-    if (!task || task.dependency_mode === 'none' || !count) return null;
-
-    if (task.dependency_mode === 'blocks') {
-        return {
-            icon: GitBranch,
-            label: `Bloccante per ${count} task`,
-            class: 'bg-indigo-50 text-indigo-700 ring-indigo-100',
-        };
-    }
+    if (!task || task.dependency_mode !== 'blocked_by' || !count) return null;
 
     return {
         icon: GitBranch,
