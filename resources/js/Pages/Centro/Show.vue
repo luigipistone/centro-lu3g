@@ -2619,13 +2619,12 @@ function openProjectDrawerSubtask(subtask) {
     });
 }
 
-async function returnToProjectDrawerParentTask() {
+function returnToProjectDrawerParentTask() {
     const parent = projectTaskParentStack.value.at(-1);
     if (!parent) return;
 
     projectTaskParentStack.value = projectTaskParentStack.value.slice(0, -1);
-    const freshParent = await projectDrawerTaskSnapshot(parent.id);
-    openProjectTaskDrawer(freshParent || findProjectTaskInRelated(parent.id) || parent, { keepStack: true });
+    openProjectTaskDrawer(findProjectTaskInRelated(parent.id) || parent, { keepStack: true });
     nextTick(() => {
         const drawerBody = document.querySelector('[data-project-task-drawer-body]');
         drawerBody?.scrollTo({ top: 0, behavior: 'smooth' });
