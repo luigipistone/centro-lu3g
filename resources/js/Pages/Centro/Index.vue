@@ -2433,6 +2433,8 @@ function hydrateCalendarTaskRelated(task) {
             due_time: subtask.due_time ? String(subtask.due_time).slice(0, 5) : '',
             location: subtask.location || '',
             description: subtask.description || '',
+            assignee_ids: [...(subtask.assignee_ids || [])],
+            follower_ids: [...(subtask.follower_ids || [])],
         };
     }
 
