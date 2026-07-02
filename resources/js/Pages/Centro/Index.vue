@@ -3,6 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppDateInput from '@/Components/AppDateInput.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import AppTimeInput from '@/Components/AppTimeInput.vue';
+import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import {
     activityText as formatActivityText,
@@ -3528,10 +3529,9 @@ function calendarDayStyle(sectionMonth, cell) {
                                     class="app-popover field-dropdown-menu absolute left-0 right-0 top-full z-[5300] mt-2 p-3"
                                     @click.stop
                                 >
-                                    <input
+                                    <ClearableSearchInput
                                         v-model="taskSearchSelectQueries[field.name]"
-                                        type="search"
-                                        class="form-control mt-0"
+                                        input-class="mt-0"
                                         :placeholder="`Cerca ${field.label.toLowerCase()}...`"
                                         autocomplete="off"
                                     />
@@ -4562,8 +4562,8 @@ function calendarDayStyle(sectionMonth, cell) {
 
         <div v-else-if="section === 'projects'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
-                <div class="grid gap-3 lg:grid-cols-[minmax(220px,0.82fr)_165px_215px_auto_auto_auto]">
-                    <input v-model="projectSearch" class="form-control mt-0" placeholder="Cerca per progetto, cliente o descrizione..." />
+                <div class="grid gap-3 lg:grid-cols-[minmax(220px,0.82fr)_165px_215px_auto_auto]">
+                    <ClearableSearchInput v-model="projectSearch" input-class="mt-0" placeholder="Cerca per progetto, cliente o descrizione..." />
                     <AppSelect v-model="projectStatus" :options="projectStatusOptions" />
                     <div ref="projectPeopleMenu" class="relative z-30">
                         <button
@@ -4615,7 +4615,6 @@ function calendarDayStyle(sectionMonth, cell) {
                             </div>
                         </div>
                     </div>
-                    <button type="button" class="btn btn-outline" @click="resetProjectFilters"><RotateCcw class="h-4 w-4" :stroke-width="1.7" />Reset</button>
                     <Link v-if="canCreate" :href="route('project-templates.index')" class="btn btn-outline">
                         <CopyPlus class="h-4 w-4" :stroke-width="1.7" />
                         Modelli
@@ -4913,14 +4912,13 @@ function calendarDayStyle(sectionMonth, cell) {
 
         <div v-else-if="section === 'clients'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
-                <div class="grid gap-3 md:grid-cols-[1fr_220px_auto_auto]">
-                    <input v-model="clientSearch" class="form-control mt-0" placeholder="Cerca per nome, ragione sociale, email, P.IVA o citta..." />
+                <div class="grid gap-3 md:grid-cols-[1fr_220px_auto]">
+                    <ClearableSearchInput v-model="clientSearch" input-class="mt-0" placeholder="Cerca per nome, ragione sociale, email, P.IVA o citta..." />
                     <AppSelect
                         v-model="clientService"
                         :options="namedOptions(services, { value: 'all', label: 'Tutti i servizi' })"
                         searchable
                     />
-                    <button type="button" class="btn btn-outline" @click="clientSearch = ''; clientService = 'all'"><RotateCcw class="h-4 w-4" :stroke-width="1.7" />Reset</button>
                     <button v-if="canCreate" type="button" class="btn btn-primary" @click="openCreate()"><Plus class="h-4 w-4" :stroke-width="1.7" />Nuovo Cliente</button>
                 </div>
 
@@ -5055,12 +5053,11 @@ function calendarDayStyle(sectionMonth, cell) {
                         </button>
                     </div>
                 </div>
-                <div class="grid gap-3 md:grid-cols-[1fr_150px_150px_150px_auto_auto_auto_auto]">
-                    <input v-model="taskSearch" class="form-control mt-0" placeholder="Cerca task, cliente, progetto o servizio..." />
+                <div class="grid gap-3 md:grid-cols-[1fr_150px_150px_150px_auto_auto_auto]">
+                    <ClearableSearchInput v-model="taskSearch" input-class="mt-0" placeholder="Cerca task, cliente, progetto o servizio..." />
                     <AppSelect v-model="taskStatus" :options="taskStatusOptions" />
                     <AppSelect v-model="taskPriority" :options="taskPriorityOptions" />
                     <AppSelect v-model="taskType" :options="taskTypeOptions" />
-                    <button type="button" class="btn btn-outline" @click="taskSearch = ''; taskStatus = 'all'; taskPriority = 'all'; taskType = 'all'"><RotateCcw class="h-4 w-4" :stroke-width="1.7" />Reset</button>
                     <button v-if="canCreate" type="button" class="btn btn-primary" @click="openCreate({ task_type: 'project' })"><Briefcase class="h-4 w-4" :stroke-width="1.7" />Task</button>
                     <button v-if="canCreate" type="button" class="btn border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100" @click="openCreate({ task_type: 'ongoing' })"><RefreshCw class="h-4 w-4" :stroke-width="1.7" />Continuativa</button>
                     <button v-if="canCreate" type="button" class="btn border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100" @click="openCreate({ task_type: 'meeting', due_time: '09:00' })"><CalendarClock class="h-4 w-4" :stroke-width="1.7" />Meeting</button>
@@ -5701,15 +5698,14 @@ function calendarDayStyle(sectionMonth, cell) {
                 </div>
 
                 <section class="app-card">
-                    <div class="mb-4 grid gap-3 md:grid-cols-[1fr_170px_170px_auto_auto]">
-                        <input
+                    <div class="mb-4 grid gap-3 md:grid-cols-[1fr_170px_170px_auto]">
+                        <ClearableSearchInput
                             v-model="billingSearch"
-                            class="form-control mt-0"
+                            input-class="mt-0"
                             placeholder="Cerca per numero, cliente o note..."
                         />
                         <AppSelect v-model="billingType" :options="objectOptions(documentTypeLabels, { value: 'all', label: 'Tutti i tipi' })" />
                         <AppSelect v-model="billingStatus" :options="objectOptions(documentStatusLabels, { value: 'all', label: 'Tutti gli stati' })" />
-                        <button type="button" class="btn btn-outline" @click="billingSearch = ''; billingType = 'all'; billingStatus = 'all'"><RotateCcw class="h-4 w-4" :stroke-width="1.7" />Reset</button>
                         <button v-if="canCreate" type="button" class="btn btn-primary" @click="openCreate()"><Plus class="h-4 w-4" :stroke-width="1.7" />Nuovo documento</button>
                     </div>
 

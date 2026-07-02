@@ -1,6 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppSelect from '@/Components/AppSelect.vue';
+import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { ArrowLeft, Bold, Building2, Copy, ExternalLink, Italic, KeyRound, List, ListOrdered, Pencil, Plus, Quote, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
@@ -569,7 +570,7 @@ if (props.selectedGroup) {
                     <div class="surface p-4">
                         <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                             <div class="grid flex-1 items-center gap-3 md:grid-cols-[minmax(0,1fr)_230px]">
-                                <input v-model="search" class="form-control h-[38px]" placeholder="Cerca password" />
+                                <ClearableSearchInput v-model="search" input-class="h-[38px]" placeholder="Cerca password" />
                                 <AppSelect
                                     v-model="activeClientId"
                                     class="password-filter-control"

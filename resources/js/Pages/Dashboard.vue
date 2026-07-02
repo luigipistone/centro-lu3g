@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import { APP_TIME_ZONE } from '@/utils/formatters';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
@@ -780,7 +781,7 @@ watch(
 
                         <div v-if="metaFor(widget).kind === 'password'" class="flex flex-1 flex-col gap-3 pr-3">
                             <div class="space-y-2">
-                                <input v-model="passwordWidgetSearch" class="form-control h-[38px]" placeholder="Cerca per titolo" />
+                                <ClearableSearchInput v-model="passwordWidgetSearch" input-class="h-[38px]" placeholder="Cerca per titolo" />
                             </div>
 
                             <div class="max-h-[136px] min-h-[136px] space-y-1 overflow-y-auto pr-1">

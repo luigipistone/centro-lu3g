@@ -1,4 +1,5 @@
 <script setup>
+import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import { Check, ChevronDown } from '@lucide/vue';
 import { computed, nextTick, onMounted, onUnmounted, ref, useAttrs } from 'vue';
 
@@ -159,10 +160,9 @@ onUnmounted(() => {
                 @click.stop
             >
                 <div v-if="canSearch">
-                    <input
+                    <ClearableSearchInput
                         v-model="query"
-                        type="search"
-                        class="form-control mt-0"
+                        input-class="mt-0"
                         :placeholder="`Cerca...`"
                         autocomplete="off"
                     />
