@@ -2630,10 +2630,14 @@ function addCalendarSubtask() {
     const parentTaskId = calendarTaskPanel.value?.id || calendarTaskForm.id;
     if (!parentTaskId) return;
 
-    calendarSubtaskForm.transform((data) => ({
-        ...data,
+    const payload = {
+        title: calendarSubtaskForm.title,
+        priority: calendarSubtaskForm.priority || 'medium',
+        due_date: calendarSubtaskForm.due_date || '',
         assignee_ids: [...(calendarSubtaskForm.assignee_ids || [])],
-    })).post(route('tasks.subtasks.store', parentTaskId), {
+    };
+
+    router.post(route('tasks.subtasks.store', parentTaskId), payload, {
         preserveScroll: true,
         preserveState: true,
         only: ['rows', 'errors', 'flash'],
@@ -2641,9 +2645,7 @@ function addCalendarSubtask() {
             refreshCalendarTaskPanelFromServer(parentTaskId);
             calendarSubtaskForm.reset();
             calendarSubtaskCreateAssigneeMenuOpen.value = false;
-            calendarSubtaskForm.transform((data) => data);
         },
-        onFinish: () => calendarSubtaskForm.transform((data) => data),
     });
 }
 

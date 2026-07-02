@@ -2724,10 +2724,15 @@ function toggleProjectTaskComplete() {
 
 function addProjectDrawerSubtask() {
     if (!projectTaskDrawerTask.value?.id || !projectDrawerSubtaskForm.title) return;
-    projectDrawerSubtaskForm.transform((data) => ({
-        ...data,
+
+    const payload = {
+        title: projectDrawerSubtaskForm.title,
+        priority: projectDrawerSubtaskForm.priority || 'medium',
+        due_date: projectDrawerSubtaskForm.due_date || '',
         assignee_ids: [...(projectDrawerSubtaskForm.assignee_ids || [])],
-    })).post(route('tasks.subtasks.store', projectTaskDrawerTask.value.id), {
+    };
+
+    router.post(route('tasks.subtasks.store', projectTaskDrawerTask.value.id), payload, {
         preserveScroll: true,
         preserveState: true,
         only: ['related', 'errors', 'flash'],
@@ -2735,9 +2740,7 @@ function addProjectDrawerSubtask() {
             refreshProjectTaskDrawerFromServer(projectTaskDrawerTask.value.id);
             projectDrawerSubtaskForm.reset();
             subtaskCreateAssigneeMenuOpen.value = false;
-            projectDrawerSubtaskForm.transform((data) => data);
         },
-        onFinish: () => projectDrawerSubtaskForm.transform((data) => data),
     });
 }
 
