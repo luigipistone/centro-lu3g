@@ -2341,6 +2341,21 @@ async function refreshProjectTaskDrawerFromServer(taskId = projectTaskDrawerTask
     hydrateProjectDrawerSubtaskDrafts(projectTaskDrawerTask.value);
 }
 
+async function projectDrawerTaskSnapshot(taskId) {
+    if (!taskId) return null;
+
+    const response = await fetch(route('tasks.snapshot', taskId), {
+        headers: {
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+    });
+
+    if (!response.ok) return null;
+
+    return normalizeProjectDrawerTask(await response.json());
+}
+
 function hydrateProjectDrawerSubtaskDrafts(task) {
     const nextDrafts = { ...subtaskDrafts.value };
     for (const subtask of task?.subtasks || []) {
@@ -2517,8 +2532,9 @@ function projectTaskDrawerPayload() {
 
 function openProjectTaskDrawer(task, options = {}) {
     const normalizedTask = normalizeProjectDrawerTask(task);
+    closeProjectDrawerFloatingMenus();
     if (options.pushCurrent && projectTaskDrawerTask.value) {
-        projectTaskParentStack.value = [...projectTaskParentStack.value, projectTaskDrawerTask.value];
+        projectTaskParentStack.value = [...projectTaskParentStack.value, normalizeProjectDrawerTask(projectTaskDrawerTask.value)];
     } else if (!options.keepStack) {
         projectTaskParentStack.value = [];
     }
@@ -2568,6 +2584,14 @@ function openProjectTaskDrawer(task, options = {}) {
     document.body.classList.add('overflow-hidden');
 }
 
+function closeProjectDrawerFloatingMenus() {
+    projectTaskActionMenuOpen.value = false;
+    projectSectionActionMenuOpen.value = null;
+    subtaskCreateAssigneeMenuOpen.value = false;
+    subtaskAssigneeMenuOpen.value = null;
+    projectDrawerDependencyToAdd.value = '';
+}
+
 function closeProjectTaskDrawer() {
     projectTaskDrawerOpen.value = false;
     projectTaskDrawerTask.value = null;
@@ -2585,12 +2609,13 @@ function openProjectDrawerSubtask(subtask) {
     });
 }
 
-function returnToProjectDrawerParentTask() {
+async function returnToProjectDrawerParentTask() {
     const parent = projectTaskParentStack.value.at(-1);
     if (!parent) return;
 
     projectTaskParentStack.value = projectTaskParentStack.value.slice(0, -1);
-    openProjectTaskDrawer(parent, { keepStack: true });
+    const freshParent = await projectDrawerTaskSnapshot(parent.id);
+    openProjectTaskDrawer(freshParent || findProjectTaskInRelated(parent.id) || parent, { keepStack: true });
     nextTick(() => {
         const drawerBody = document.querySelector('[data-project-task-drawer-body]');
         drawerBody?.scrollTo({ top: 0, behavior: 'smooth' });
