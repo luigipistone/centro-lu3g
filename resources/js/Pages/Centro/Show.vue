@@ -1319,7 +1319,7 @@ function subtaskDraftPayload(subtaskId) {
 }
 
 function saveSubtaskInline(subtask, delay = AUTOSAVE_IDLE_DELAY) {
-    if (props.section !== 'tasks') return;
+    if (props.section !== 'tasks' && !projectTaskDrawerOpen.value) return;
 
     const payload = subtaskDraftPayload(subtask.id);
     if (!String(payload.title).trim()) {
@@ -2149,6 +2149,26 @@ function subtaskAssignees(subtaskId) {
     return peopleSelected(selected, props.related.users || []);
 }
 
+function projectDrawerCreateSubtaskAssignees() {
+    return peopleSelected(projectDrawerSubtaskForm.assignee_ids || [], props.related.users || []);
+}
+
+function toggleProjectDrawerCreateSubtaskAssigneeMenu(event = null) {
+    subtaskCreateAssigneeMenuStyle.value = floatingMenuStyleFromEvent(event);
+    subtaskCreateAssigneeMenuOpen.value = !subtaskCreateAssigneeMenuOpen.value;
+}
+
+function toggleProjectDrawerCreateSubtaskAssignee(userId) {
+    const values = [...(projectDrawerSubtaskForm.assignee_ids || [])];
+    const index = values.indexOf(userId);
+    if (index >= 0) {
+        values.splice(index, 1);
+    } else {
+        values.push(userId);
+    }
+    projectDrawerSubtaskForm.assignee_ids = values;
+}
+
 function createSubtaskAssignees() {
     return peopleSelected(subtaskForm.assignee_ids || [], props.related.users || []);
 }
@@ -2300,6 +2320,7 @@ function refreshProjectTaskDrawerTask() {
     const refreshed = findProjectTaskInRelated(projectTaskDrawerTask.value?.id);
     if (refreshed) {
         projectTaskDrawerTask.value = normalizeProjectDrawerTask(refreshed);
+        hydrateProjectDrawerSubtaskDrafts(projectTaskDrawerTask.value);
     }
 }
 
@@ -2316,6 +2337,30 @@ async function refreshProjectTaskDrawerFromServer(taskId = projectTaskDrawerTask
     if (!response.ok) return;
 
     projectTaskDrawerTask.value = normalizeProjectDrawerTask(await response.json());
+    hydrateProjectDrawerSubtaskDrafts(projectTaskDrawerTask.value);
+}
+
+function hydrateProjectDrawerSubtaskDrafts(task) {
+    const nextDrafts = { ...subtaskDrafts.value };
+    for (const subtask of task?.subtasks || []) {
+        nextDrafts[subtask.id] = {
+            ...(nextDrafts[subtask.id] || {}),
+            title: subtask.title || '',
+            task_type: subtask.task_type || 'task',
+            status: subtask.status || 'todo',
+            priority: subtask.priority || 'medium',
+            project_id: subtask.project_id || task?.project_id || '',
+            client_id: subtask.client_id || task?.client_id || '',
+            service_id: subtask.service_id || task?.service_id || '',
+            start_date: subtask.start_date || '',
+            due_date: subtask.due_date || '',
+            due_time: subtask.due_time ? String(subtask.due_time).slice(0, 5) : '',
+            location: subtask.location || '',
+            description: subtask.description || '',
+            assignee_ids: [...(subtask.assignee_ids || [])],
+        };
+    }
+    subtaskDrafts.value = nextDrafts;
 }
 
 function projectDrawerSubtasks() {
@@ -2477,6 +2522,7 @@ function openProjectTaskDrawer(task, options = {}) {
         projectTaskParentStack.value = [];
     }
     projectTaskDrawerTask.value = normalizedTask;
+    hydrateProjectDrawerSubtaskDrafts(normalizedTask);
     projectTaskDrawerForm.defaults({
         title: normalizedTask.title || '',
         description: normalizedTask.description || '',
@@ -2678,14 +2724,48 @@ function toggleProjectTaskComplete() {
 
 function addProjectDrawerSubtask() {
     if (!projectTaskDrawerTask.value?.id || !projectDrawerSubtaskForm.title) return;
-    projectDrawerSubtaskForm.post(route('tasks.subtasks.store', projectTaskDrawerTask.value.id), {
+    projectDrawerSubtaskForm.transform((data) => ({
+        ...data,
+        assignee_ids: [...(projectDrawerSubtaskForm.assignee_ids || [])],
+    })).post(route('tasks.subtasks.store', projectTaskDrawerTask.value.id), {
         preserveScroll: true,
         preserveState: true,
         only: ['related', 'errors', 'flash'],
         onSuccess: () => {
             refreshProjectTaskDrawerFromServer(projectTaskDrawerTask.value.id);
             projectDrawerSubtaskForm.reset();
+            subtaskCreateAssigneeMenuOpen.value = false;
+            projectDrawerSubtaskForm.transform((data) => data);
         },
+        onFinish: () => projectDrawerSubtaskForm.transform((data) => data),
+    });
+}
+
+function removeProjectDrawerSubtask(subtask) {
+    if (!canDeleteTaskRecord(subtask)) return;
+    const parentTaskId = projectTaskDrawerTask.value?.id;
+    openConfirm({
+        title: 'Eliminare questa sottoattività?',
+        description: subtask.title || 'Sottoattività',
+        keyword: 'ELIMINA',
+        button: 'Elimina',
+        danger: true,
+        action: () => router.delete(route('tasks.destroy', subtask.id), {
+            data: { stay: true },
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                if (projectTaskDrawerTask.value) {
+                    projectTaskDrawerTask.value = normalizeProjectDrawerTask({
+                        ...projectTaskDrawerTask.value,
+                        subtasks: projectDrawerSubtasks().filter((item) => item.id !== subtask.id),
+                    });
+                    hydrateProjectDrawerSubtaskDrafts(projectTaskDrawerTask.value);
+                }
+                refreshProjectTaskDrawerFromServer(parentTaskId);
+            },
+            onFinish: closeConfirm,
+        }),
     });
 }
 
@@ -5903,19 +5983,128 @@ onUnmounted(() => {
                                     <h4 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Sottoattività</h4>
                                     <span class="text-xs text-gray-500">{{ projectDrawerSubtasks().length }}</span>
                                 </div>
-                                <form class="mb-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_80px_auto]" @submit.prevent="addProjectDrawerSubtask">
-                                    <input v-model="projectDrawerSubtaskForm.title" class="subtask-line-control font-medium" placeholder="Nuova sottoattività..." />
-                                    <AppDateInput v-model="projectDrawerSubtaskForm.due_date" variant="token" :label="shortDateIt(projectDrawerSubtaskForm.due_date)" placeholder="Data" />
-                                    <button type="submit" class="btn btn-outline px-3 py-1.5 text-xs">Aggiungi</button>
-                                </form>
-                                <div class="space-y-1">
-                                    <div v-for="subtask in projectDrawerSubtasks()" :key="`project-drawer-subtask-${subtask.id}`" class="flex items-center gap-3 border-t border-gray-100 py-2 text-sm">
-                                        <span :class="['h-2 w-2 rounded-full', subtask.status === 'done' ? 'bg-emerald-400' : 'bg-gray-300']"></span>
-                                        <span class="min-w-0 flex-1 truncate font-medium text-gray-800">{{ subtask.title }}</span>
-                                        <span class="text-xs text-gray-500">{{ subtask.due_date ? shortDateIt(subtask.due_date) : '' }}</span>
-                                        <button type="button" class="icon-btn h-8 w-8" title="Apri sottoattività" @click="openProjectDrawerSubtask(subtask)">
-                                            <ExternalLink class="h-4 w-4" :stroke-width="1.7" />
+                                <form class="mb-4 grid items-center gap-x-2 gap-y-2 md:grid-cols-[minmax(0,1fr)_48px_72px_auto]" @submit.prevent="addProjectDrawerSubtask">
+                                    <input v-model="projectDrawerSubtaskForm.title" class="subtask-line-control font-medium" placeholder="Nuova sottoattività..." required />
+                                    <div class="relative" data-subtask-create-assignees>
+                                        <button type="button" class="subtask-line-people justify-end" @click.stop="toggleProjectDrawerCreateSubtaskAssigneeMenu($event)">
+                                            <span v-if="projectDrawerCreateSubtaskAssignees().length" class="flex min-w-0 items-center -space-x-2">
+                                                <UserAvatar v-for="user in projectDrawerCreateSubtaskAssignees().slice(0, 4)" :key="`project-drawer-new-subtask-assignee-${user.id}`" :user="user" size="xs" class="ring-2 ring-white" />
+                                                <span v-if="projectDrawerCreateSubtaskAssignees().length > 4" class="ml-3 text-xs font-semibold text-gray-500">+{{ projectDrawerCreateSubtaskAssignees().length - 4 }}</span>
+                                            </span>
+                                            <span v-else class="subtask-line-token">
+                                                <UserRound class="h-4 w-4" :stroke-width="1.7" />
+                                            </span>
                                         </button>
+                                        <Teleport to="body">
+                                            <div v-if="subtaskCreateAssigneeMenuOpen" class="fixed inset-0 z-[7600] bg-transparent" data-subtask-create-assignees @click.self="subtaskCreateAssigneeMenuOpen = false">
+                                                <div class="app-popover field-dropdown-menu fixed w-72 p-3" :style="subtaskCreateAssigneeMenuStyle" @click.stop>
+                                                    <div class="people-avatar-picker max-h-56">
+                                                        <button
+                                                            v-for="user in related.users"
+                                                            :key="`project-drawer-new-subtask-person-${user.id}`"
+                                                            type="button"
+                                                            :class="personAvatarClass((projectDrawerSubtaskForm.assignee_ids || []).includes(user.id))"
+                                                            :aria-pressed="(projectDrawerSubtaskForm.assignee_ids || []).includes(user.id)"
+                                                            :aria-label="`${(projectDrawerSubtaskForm.assignee_ids || []).includes(user.id) ? 'Rimuovi' : 'Assegna'} ${user.name || user.email}`"
+                                                            @click="toggleProjectDrawerCreateSubtaskAssignee(user.id)"
+                                                        >
+                                                            <UserAvatar :user="user" size="md" />
+                                                        </button>
+                                                    </div>
+                                                    <p v-if="!related.users?.length" class="text-sm text-gray-500">Nessun utente disponibile.</p>
+                                                </div>
+                                            </div>
+                                        </Teleport>
+                                    </div>
+                                    <div class="relative flex items-center justify-end">
+                                        <AppDateInput v-model="projectDrawerSubtaskForm.due_date" variant="token" :label="shortDateIt(projectDrawerSubtaskForm.due_date)" placeholder="Scadenza" />
+                                    </div>
+                                    <button type="submit" class="btn btn-primary justify-center px-4" :disabled="projectDrawerSubtaskForm.processing">
+                                        <Plus class="h-4 w-4" :stroke-width="1.7" />
+                                    </button>
+                                </form>
+                                <div class="space-y-2">
+                                    <div
+                                        v-for="subtask in projectDrawerSubtasks()"
+                                        :key="`project-drawer-subtask-${subtask.id}`"
+                                        :class="['subtask-line md:grid-cols-[68px_minmax(0,1fr)_96px_72px_auto]', subtaskAssigneeMenuOpen === subtask.id ? 'z-[6600]' : 'z-0']"
+                                    >
+                                        <div class="flex items-center gap-1">
+                                            <span class="inline-flex h-9 w-6 items-center justify-center text-gray-300">
+                                                <GripVertical class="h-4 w-4" :stroke-width="1.7" />
+                                            </span>
+                                            <button
+                                                type="button"
+                                                :class="['icon-btn status-action-button h-9 w-9', subtaskStatusPulse === subtask.id ? 'status-action-pulse' : '']"
+                                                :title="(subtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'Riapri sottoattività' : 'Completa sottoattività'"
+                                                @click="setSubtaskStatus(subtask, (subtaskDrafts[subtask.id]?.status || subtask.status) !== 'done')"
+                                            >
+                                                <RotateCcw v-if="(subtaskDrafts[subtask.id]?.status || subtask.status) === 'done'" class="h-4 w-4" :stroke-width="1.7" />
+                                                <Check v-else class="h-4 w-4" :stroke-width="1.7" />
+                                            </button>
+                                        </div>
+                                        <div class="min-w-0">
+                                            <input
+                                                v-if="subtaskDrafts[subtask.id]"
+                                                v-model="subtaskDrafts[subtask.id].title"
+                                                :class="['subtask-line-control font-medium', (subtaskDrafts[subtask.id]?.status || subtask.status) === 'done' ? 'text-gray-400 line-through' : '']"
+                                                placeholder="Titolo sottoattività"
+                                                @input="saveSubtaskInline(subtask)"
+                                            />
+                                        </div>
+                                        <div v-if="subtaskDrafts[subtask.id]" class="relative" :data-subtask-assignees="subtask.id">
+                                            <button type="button" class="subtask-line-people justify-end" @click.stop="toggleSubtaskAssigneeMenu(subtask.id, $event)">
+                                                <span v-if="subtaskAssignees(subtask.id).length" class="flex min-w-0 items-center -space-x-2">
+                                                    <UserAvatar v-for="user in subtaskAssignees(subtask.id).slice(0, 4)" :key="`project-drawer-subtask-assignee-${subtask.id}-${user.id}`" :user="user" size="xs" class="ring-2 ring-white" />
+                                                    <span v-if="subtaskAssignees(subtask.id).length > 4" class="ml-3 text-xs font-semibold text-gray-500">+{{ subtaskAssignees(subtask.id).length - 4 }}</span>
+                                                </span>
+                                                <span v-else class="subtask-line-token">
+                                                    <UserRound class="h-4 w-4" :stroke-width="1.7" />
+                                                </span>
+                                            </button>
+                                            <Teleport to="body">
+                                                <div
+                                                    v-if="subtaskAssigneeMenuOpen === subtask.id"
+                                                    class="fixed inset-0 z-[7600] bg-transparent"
+                                                    :data-subtask-assignees="subtask.id"
+                                                    @click.self="subtaskAssigneeMenuOpen = null"
+                                                >
+                                                    <div class="app-popover field-dropdown-menu fixed w-72 p-3" :style="subtaskAssigneeMenuStyle" @click.stop>
+                                                        <div class="people-avatar-picker max-h-56">
+                                                            <button
+                                                                v-for="user in related.users"
+                                                                :key="`project-drawer-subtask-person-${subtask.id}-${user.id}`"
+                                                                type="button"
+                                                                :class="personAvatarClass((subtaskDrafts[subtask.id].assignee_ids || []).includes(user.id))"
+                                                                :aria-pressed="(subtaskDrafts[subtask.id].assignee_ids || []).includes(user.id)"
+                                                                :aria-label="`${(subtaskDrafts[subtask.id].assignee_ids || []).includes(user.id) ? 'Rimuovi' : 'Assegna'} ${user.name || user.email}`"
+                                                                @click="toggleSubtaskAssignee(subtask, user.id)"
+                                                            >
+                                                                <UserAvatar :user="user" size="md" />
+                                                            </button>
+                                                        </div>
+                                                        <p v-if="!related.users?.length" class="text-sm text-gray-500">Nessun utente disponibile.</p>
+                                                    </div>
+                                                </div>
+                                            </Teleport>
+                                        </div>
+                                        <div v-if="subtaskDrafts[subtask.id]" class="relative flex items-center justify-end">
+                                            <AppDateInput
+                                                v-model="subtaskDrafts[subtask.id].due_date"
+                                                variant="token"
+                                                :label="shortDateIt(subtaskDrafts[subtask.id].due_date)"
+                                                placeholder="Scadenza"
+                                                @change="saveSubtaskInline(subtask, 0)"
+                                            />
+                                        </div>
+                                        <div class="subtask-actions">
+                                            <button type="button" class="icon-btn h-9 w-9" title="Apri sottoattività" @click="openProjectDrawerSubtask(subtask)">
+                                                <ExternalLink class="h-4 w-4" :stroke-width="1.7" />
+                                            </button>
+                                            <button v-if="canDeleteTaskRecord(subtask)" type="button" class="icon-btn h-9 w-9 text-red-600 hover:bg-red-50" title="Elimina sottoattività" @click="removeProjectDrawerSubtask(subtask)">
+                                                <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                            </button>
+                                        </div>
                                     </div>
                                     <p v-if="!projectDrawerSubtasks().length" class="text-sm text-gray-500">Nessuna sottoattività.</p>
                                 </div>

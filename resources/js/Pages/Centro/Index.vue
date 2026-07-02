@@ -2630,7 +2630,10 @@ function addCalendarSubtask() {
     const parentTaskId = calendarTaskPanel.value?.id || calendarTaskForm.id;
     if (!parentTaskId) return;
 
-    calendarSubtaskForm.post(route('tasks.subtasks.store', parentTaskId), {
+    calendarSubtaskForm.transform((data) => ({
+        ...data,
+        assignee_ids: [...(calendarSubtaskForm.assignee_ids || [])],
+    })).post(route('tasks.subtasks.store', parentTaskId), {
         preserveScroll: true,
         preserveState: true,
         only: ['rows', 'errors', 'flash'],
@@ -2638,17 +2641,32 @@ function addCalendarSubtask() {
             refreshCalendarTaskPanelFromServer(parentTaskId);
             calendarSubtaskForm.reset();
             calendarSubtaskCreateAssigneeMenuOpen.value = false;
+            calendarSubtaskForm.transform((data) => data);
         },
+        onFinish: () => calendarSubtaskForm.transform((data) => data),
     });
 }
 
 function removeCalendarSubtask(subtask) {
+    const parentTaskId = calendarTaskPanel.value?.id || calendarTaskForm.id;
     remove(subtask, () => {
         router.delete(route('tasks.destroy', subtask.id), {
             data: { stay: true },
             preserveScroll: true,
             preserveState: true,
             only: ['rows', 'errors', 'flash'],
+            onSuccess: () => {
+                if (calendarTaskPanel.value) {
+                    const nextTask = normalizeCalendarTask({
+                        ...calendarTaskPanel.value,
+                        subtasks: filteredCalendarSubtasks(calendarTaskPanel.value).filter((item) => item.id !== subtask.id),
+                    });
+                    calendarTaskPanel.value = nextTask;
+                    rememberCalendarRowOverride(nextTask);
+                    hydrateCalendarTaskRelated(nextTask);
+                }
+                refreshCalendarTaskPanelFromServer(parentTaskId);
+            },
             onFinish: cancelDelete,
         });
     });
