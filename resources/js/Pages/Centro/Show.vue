@@ -2805,6 +2805,7 @@ function toggleProjectTaskComplete() {
 
 function addProjectDrawerSubtask() {
     if (!projectTaskDrawerTask.value?.id || !projectDrawerSubtaskForm.title) return;
+    if (projectTaskDrawerTask.value?.parent_task_id) return;
 
     const payload = {
         title: projectDrawerSubtaskForm.title,
@@ -6069,7 +6070,7 @@ onUnmounted(() => {
                                     ></div>
                                 </div>
                             </div>
-                            <section class="content-card rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
+                            <section v-if="!projectTaskDrawerTask.parent_task_id" class="content-card rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
                                 <div class="mb-3 flex items-center justify-between gap-3">
                                     <h4 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Sottoattività</h4>
                                     <span class="text-xs text-gray-500">{{ projectDrawerSubtasks().length }}</span>
