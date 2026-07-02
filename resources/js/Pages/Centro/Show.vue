@@ -4367,7 +4367,8 @@ onUnmounted(() => {
                                         v-for="task in projectTasksForSection(sectionRow)"
                                         :key="task.id"
                                         draggable="true"
-                                        :class="['group/project-task relative grid w-full gap-3 border-t border-gray-100 px-3 py-2.5 text-left text-sm transition hover:bg-indigo-50/40 md:grid-cols-[24px_minmax(0,1.7fr)_minmax(140px,0.7fr)_140px_120px_120px] md:items-center', task.status === 'done' ? 'opacity-60' : '', draggedProjectTaskId && draggedProjectTaskId !== task.id ? 'outline-offset-[-1px]' : '', projectTaskDropTarget === task.id ? (projectTaskDropPlacement === 'before' ? 'before:absolute before:left-3 before:right-3 before:top-0 before:h-1 before:rounded-full before:bg-indigo-500 before:shadow-[0_0_0_4px_rgba(99,102,241,0.12)]' : 'after:absolute after:bottom-0 after:left-3 after:right-3 after:h-1 after:rounded-full after:bg-indigo-500 after:shadow-[0_0_0_4px_rgba(99,102,241,0.12)]') : '']"
+                                        :class="['group/project-task relative grid w-full cursor-pointer gap-3 border-t border-gray-100 px-3 py-2.5 text-left text-sm transition hover:bg-indigo-50/40 md:grid-cols-[24px_minmax(0,1.7fr)_minmax(140px,0.7fr)_140px_120px_120px] md:items-center', task.status === 'done' ? 'opacity-60' : '', draggedProjectTaskId && draggedProjectTaskId !== task.id ? 'outline-offset-[-1px]' : '', projectTaskDropTarget === task.id ? (projectTaskDropPlacement === 'before' ? 'before:absolute before:left-3 before:right-3 before:top-0 before:h-1 before:rounded-full before:bg-indigo-500 before:shadow-[0_0_0_4px_rgba(99,102,241,0.12)]' : 'after:absolute after:bottom-0 after:left-3 after:right-3 after:h-1 after:rounded-full after:bg-indigo-500 after:shadow-[0_0_0_4px_rgba(99,102,241,0.12)]') : '']"
+                                        @click="openProjectTaskDrawer(task)"
                                         @dragstart="startProjectTaskDrag(task)"
                                         @dragover.prevent="dragOverProjectTask(task, $event)"
                                         @drop.prevent.stop="dropProjectTask(sectionRow, task)"
@@ -4376,7 +4377,7 @@ onUnmounted(() => {
                                         <span class="hidden cursor-grab text-gray-300 transition group-hover/project-task:text-gray-500 md:inline-flex">
                                             <GripVertical class="h-4 w-4" :stroke-width="1.7" />
                                         </span>
-                                        <button type="button" class="block w-full min-w-0 max-w-full text-left font-medium text-indigo-700" @click="openProjectTaskDrawer(task)">
+                                        <button type="button" class="block w-full min-w-0 max-w-full text-left font-medium text-indigo-700" @click.stop="openProjectTaskDrawer(task)">
                                             <span :class="['block truncate', task.status === 'done' ? 'line-through' : '']">{{ task.title }}</span>
                                             <span v-if="projectTaskDependencyPreviewLabel(task)" class="mt-1 inline-flex items-center gap-2 text-xs font-normal text-gray-500">
                                                 <span
