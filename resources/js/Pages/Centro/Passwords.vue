@@ -4,7 +4,7 @@ import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { ArrowLeft, Bold, Building2, Copy, ExternalLink, Italic, KeyRound, List, ListOrdered, Pencil, Plus, Quote, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps({
     view: String,
@@ -48,6 +48,10 @@ const generator = ref({
     numbers: true,
     symbols: true,
 });
+const PASSWORD_BATCH_SIZE = 60;
+const visibleItemLimit = ref(PASSWORD_BATCH_SIZE);
+const passwordListSentinel = ref(null);
+let passwordListObserver = null;
 
 const maskedRevealedPassword = computed(() => revealedPassword.value ? '•'.repeat(Math.min(Math.max(revealedPassword.value.length, 8), 24)) : '');
 
@@ -89,8 +93,45 @@ const visibleItems = computed(() => {
     }).sort((first, second) => String(first.title || first.url || '').localeCompare(String(second.title || second.url || ''), 'it', { sensitivity: 'base' }));
 });
 
+const pagedVisibleItems = computed(() => visibleItems.value.slice(0, visibleItemLimit.value));
+const hiddenVisibleItemsCount = computed(() => Math.max(visibleItems.value.length - pagedVisibleItems.value.length, 0));
+const hasMoreVisibleItems = computed(() => hiddenVisibleItemsCount.value > 0);
+const nextVisibleItemsCount = computed(() => Math.min(PASSWORD_BATCH_SIZE, hiddenVisibleItemsCount.value));
 const compromisedItems = computed(() => (props.items || []).filter((item) => item.risk_flags?.length));
 const itemFormErrorMessages = computed(() => Object.values(itemForm.errors || {}).filter(Boolean));
+
+function resetVisibleItemLimit() {
+    visibleItemLimit.value = PASSWORD_BATCH_SIZE;
+}
+
+function loadMorePasswordItems() {
+    if (!hasMoreVisibleItems.value) return;
+
+    visibleItemLimit.value = Math.min(visibleItemLimit.value + PASSWORD_BATCH_SIZE, visibleItems.value.length);
+}
+
+watch([search, activeClientId, activeVaultId], resetVisibleItemLimit);
+watch(passwordListSentinel, (element, previousElement) => {
+    if (!passwordListObserver) return;
+    if (previousElement) passwordListObserver.unobserve(previousElement);
+    if (element) passwordListObserver.observe(element);
+});
+
+onMounted(() => {
+    if (typeof IntersectionObserver === 'undefined') return;
+
+    passwordListObserver = new IntersectionObserver(([entry]) => {
+        if (entry?.isIntersecting) loadMorePasswordItems();
+    }, { rootMargin: '420px 0px' });
+
+    if (passwordListSentinel.value) {
+        passwordListObserver.observe(passwordListSentinel.value);
+    }
+});
+
+onUnmounted(() => {
+    passwordListObserver?.disconnect();
+});
 
 function normalizeHexColor(value, fallback = '#0B6EF3') {
     if (!value) return fallback;
@@ -567,7 +608,7 @@ if (props.selectedGroup) {
                     </div>
 
                     <div v-if="visibleItems.length" class="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        <article v-for="item in visibleItems" :key="item.id" class="surface group/password-card flex h-full min-h-[138px] cursor-pointer flex-col justify-between p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]" @click="openReveal(item)">
+                        <article v-for="item in pagedVisibleItems" :key="item.id" class="surface group/password-card flex h-full min-h-[138px] cursor-pointer flex-col justify-between p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]" @click="openReveal(item)">
                             <div class="flex items-start justify-between gap-3">
                                 <div class="flex min-w-0 items-center gap-3">
                                     <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]">
@@ -600,6 +641,11 @@ if (props.selectedGroup) {
                                 </span>
                             </div>
                         </article>
+                    </div>
+                    <div v-if="visibleItems.length" ref="passwordListSentinel" class="flex justify-center py-2">
+                        <button v-if="hasMoreVisibleItems" type="button" class="btn btn-outline h-[36px] text-xs" @click="loadMorePasswordItems">
+                            Carica altre {{ nextVisibleItemsCount }} password
+                        </button>
                     </div>
                     <div v-else class="surface px-6 py-12 text-center text-sm text-gray-500">Nessuna password disponibile.</div>
                 </section>
