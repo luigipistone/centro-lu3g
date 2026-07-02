@@ -2357,7 +2357,6 @@ async function projectDrawerTaskSnapshot(taskId) {
 }
 
 function hydrateProjectDrawerSubtaskDrafts(task) {
-    const nextDrafts = { ...subtaskDrafts.value };
     const subtasks = (task?.subtasks || [])
         .filter((subtask) => !subtask.parent_task_id || subtask.parent_task_id === task.id)
         .map((subtask) => normalizeProjectDrawerTask({
@@ -2366,39 +2365,66 @@ function hydrateProjectDrawerSubtaskDrafts(task) {
             parent_title: subtask.parent_title || task.title,
         }));
 
-    for (const subtask of subtasks) {
+    seedProjectDrawerSubtaskDrafts(subtasks, task, true);
+}
+
+function projectDrawerSubtaskDraft(subtask, task) {
+    return {
+        title: subtask.title || '',
+        task_type: subtask.task_type || 'task',
+        status: subtask.status || 'todo',
+        priority: subtask.priority || 'medium',
+        project_id: subtask.project_id || task?.project_id || '',
+        client_id: subtask.client_id || task?.client_id || '',
+        service_id: subtask.service_id || task?.service_id || '',
+        start_date: subtask.start_date || '',
+        due_date: subtask.due_date || '',
+        due_time: subtask.due_time ? String(subtask.due_time).slice(0, 5) : '',
+        location: subtask.location || '',
+        description: subtask.description || '',
+        assignee_ids: [...(subtask.assignee_ids || [])],
+        follower_ids: [...(subtask.follower_ids || [])],
+    };
+}
+
+function seedProjectDrawerSubtaskDrafts(subtasks, task, overwrite = false) {
+    const nextDrafts = { ...subtaskDrafts.value };
+    let changed = false;
+
+    for (const subtask of subtasks || []) {
         if (!subtask.id) continue;
 
-        nextDrafts[subtask.id] = {
-            title: subtask.title || '',
-            task_type: subtask.task_type || 'task',
-            status: subtask.status || 'todo',
-            priority: subtask.priority || 'medium',
-            project_id: subtask.project_id || task?.project_id || '',
-            client_id: subtask.client_id || task?.client_id || '',
-            service_id: subtask.service_id || task?.service_id || '',
-            start_date: subtask.start_date || '',
-            due_date: subtask.due_date || '',
-            due_time: subtask.due_time ? String(subtask.due_time).slice(0, 5) : '',
-            location: subtask.location || '',
-            description: subtask.description || '',
-            assignee_ids: [...(subtask.assignee_ids || [])],
-            follower_ids: [...(subtask.follower_ids || [])],
-        };
+        const current = nextDrafts[subtask.id];
+        if (
+            overwrite
+            || !current
+            || (!String(current.title || '').trim() && String(subtask.title || '').trim())
+            || (!(current.assignee_ids || []).length && (subtask.assignee_ids || []).length)
+        ) {
+            nextDrafts[subtask.id] = projectDrawerSubtaskDraft(subtask, task);
+            changed = true;
+        }
     }
-    subtaskDrafts.value = nextDrafts;
+
+    if (changed) {
+        subtaskDrafts.value = nextDrafts;
+    }
 }
 
 function projectDrawerSubtasks() {
     if (!projectTaskDrawerTask.value?.id) return [];
 
-    return (projectTaskDrawerTask.value.subtasks || [])
+    const subtasks = (projectTaskDrawerTask.value.subtasks || [])
         .filter((subtask) => !subtask.parent_task_id || subtask.parent_task_id === projectTaskDrawerTask.value.id)
         .map((subtask) => normalizeProjectDrawerTask({
             ...subtask,
             parent_task_id: subtask.parent_task_id || projectTaskDrawerTask.value.id,
             parent_title: subtask.parent_title || projectTaskDrawerTask.value.title,
         }));
+
+    seedProjectDrawerSubtaskDrafts(subtasks, projectTaskDrawerTask.value);
+
+    return subtasks;
 }
 
 function normalizeProjectDrawerTask(task) {
