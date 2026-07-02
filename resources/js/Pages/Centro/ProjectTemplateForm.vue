@@ -372,9 +372,9 @@ function dependencyPreviewBadge(task) {
     }
 
     return {
-        icon: AlertTriangle,
+        icon: GitBranch,
         label: `Bloccata da ${count} task`,
-        class: 'bg-amber-50 text-amber-700 ring-amber-100',
+        class: 'bg-rose-50 text-rose-700 ring-rose-100',
     };
 }
 

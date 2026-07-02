@@ -330,9 +330,9 @@ function projectTaskDependencyBadges(task) {
     if (dependenciesCount) {
         badges.push({
             key: 'blocked',
-            icon: AlertTriangle,
+            icon: GitBranch,
             label: `Bloccata da ${dependenciesCount} task`,
-            class: 'bg-amber-50 text-amber-700 ring-amber-100',
+            class: 'bg-rose-50 text-rose-700 ring-rose-100',
         });
     }
 
