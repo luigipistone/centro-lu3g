@@ -5438,7 +5438,7 @@ onUnmounted(() => {
                         <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Sottoattività</h3>
                         <span class="text-xs text-gray-500">{{ related.subtasks?.length || 0 }} elementi</span>
                     </div>
-                    <form class="mb-4 grid items-center gap-x-2 gap-y-2 md:grid-cols-[minmax(0,1fr)_48px_72px_auto]" @submit.prevent="addSubtask">
+                                <form class="mb-4 grid items-center gap-x-2 gap-y-2 md:grid-cols-[minmax(0,1fr)_48px_72px_auto]" data-subtask-create-assignees @submit.prevent="addSubtask">
                         <input v-model="subtaskForm.title" class="subtask-line-control font-medium" placeholder="Nuova sottoattività..." required />
                         <div class="relative" data-subtask-create-assignees>
                             <button type="button" class="subtask-line-people justify-end" @click.stop="toggleCreateSubtaskAssigneeMenu($event)">
@@ -5988,7 +5988,7 @@ onUnmounted(() => {
                                     <h4 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Sottoattività</h4>
                                     <span class="text-xs text-gray-500">{{ projectDrawerSubtasks().length }}</span>
                                 </div>
-                                <form class="mb-4 grid items-center gap-x-2 gap-y-2 md:grid-cols-[minmax(0,1fr)_48px_72px_auto]" @submit.prevent="addProjectDrawerSubtask">
+                                <form class="mb-4 grid items-center gap-x-2 gap-y-2 md:grid-cols-[minmax(0,1fr)_48px_72px_auto]" data-subtask-create-assignees @submit.prevent="addProjectDrawerSubtask">
                                     <input v-model="projectDrawerSubtaskForm.title" class="subtask-line-control font-medium" placeholder="Nuova sottoattività..." required />
                                     <div class="relative" data-subtask-create-assignees>
                                         <button type="button" class="subtask-line-people justify-end" @click.stop="toggleProjectDrawerCreateSubtaskAssigneeMenu($event)">
