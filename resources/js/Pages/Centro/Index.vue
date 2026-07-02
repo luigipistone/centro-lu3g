@@ -4244,8 +4244,8 @@ function calendarDayStyle(sectionMonth, cell) {
                                             </span>
                                         </button>
                                         <Teleport to="body">
-                                            <div v-if="calendarSubtaskCreateAssigneeMenuOpen" class="fixed inset-0 z-[7600] bg-transparent" data-calendar-subtask-create-assignees @click.self="calendarSubtaskCreateAssigneeMenuOpen = false">
-                                                <div class="app-popover field-dropdown-menu fixed w-72 p-3" :style="calendarSubtaskCreateAssigneeMenuStyle" @click.stop>
+                                            <div v-if="calendarSubtaskCreateAssigneeMenuOpen" class="pointer-events-none fixed inset-0 z-[7600] bg-transparent" data-calendar-subtask-create-assignees>
+                                                <div class="app-popover field-dropdown-menu pointer-events-auto fixed w-72 p-3" :style="calendarSubtaskCreateAssigneeMenuStyle" @click.stop>
                                                     <div class="people-avatar-picker max-h-56">
                                                         <button
                                                             v-for="user in users"

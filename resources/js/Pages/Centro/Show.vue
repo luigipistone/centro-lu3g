@@ -5451,8 +5451,8 @@ onUnmounted(() => {
                                 </span>
                             </button>
                             <Teleport to="body">
-                                <div v-if="subtaskCreateAssigneeMenuOpen" class="fixed inset-0 z-[7600] bg-transparent" data-subtask-create-assignees @click.self="subtaskCreateAssigneeMenuOpen = false">
-                                    <div class="app-popover field-dropdown-menu fixed w-72 p-3" :style="subtaskCreateAssigneeMenuStyle" @click.stop>
+                                    <div v-if="subtaskCreateAssigneeMenuOpen" class="pointer-events-none fixed inset-0 z-[7600] bg-transparent" data-subtask-create-assignees>
+                                        <div class="app-popover field-dropdown-menu pointer-events-auto fixed w-72 p-3" :style="subtaskCreateAssigneeMenuStyle" @click.stop>
                                         <div class="people-avatar-picker max-h-56">
                                             <button
                                                 v-for="user in related.users"
@@ -6001,8 +6001,8 @@ onUnmounted(() => {
                                             </span>
                                         </button>
                                         <Teleport to="body">
-                                            <div v-if="subtaskCreateAssigneeMenuOpen" class="fixed inset-0 z-[7600] bg-transparent" data-subtask-create-assignees @click.self="subtaskCreateAssigneeMenuOpen = false">
-                                                <div class="app-popover field-dropdown-menu fixed w-72 p-3" :style="subtaskCreateAssigneeMenuStyle" @click.stop>
+                                            <div v-if="subtaskCreateAssigneeMenuOpen" class="pointer-events-none fixed inset-0 z-[7600] bg-transparent" data-subtask-create-assignees>
+                                                <div class="app-popover field-dropdown-menu pointer-events-auto fixed w-72 p-3" :style="subtaskCreateAssigneeMenuStyle" @click.stop>
                                                     <div class="people-avatar-picker max-h-56">
                                                         <button
                                                             v-for="user in related.users"
