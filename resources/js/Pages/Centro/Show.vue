@@ -2358,9 +2358,18 @@ async function projectDrawerTaskSnapshot(taskId) {
 
 function hydrateProjectDrawerSubtaskDrafts(task) {
     const nextDrafts = { ...subtaskDrafts.value };
-    for (const subtask of task?.subtasks || []) {
+    const subtasks = (task?.subtasks || [])
+        .filter((subtask) => !subtask.parent_task_id || subtask.parent_task_id === task.id)
+        .map((subtask) => normalizeProjectDrawerTask({
+            ...subtask,
+            parent_task_id: subtask.parent_task_id || task.id,
+            parent_title: subtask.parent_title || task.title,
+        }));
+
+    for (const subtask of subtasks) {
+        if (!subtask.id) continue;
+
         nextDrafts[subtask.id] = {
-            ...(nextDrafts[subtask.id] || {}),
             title: subtask.title || '',
             task_type: subtask.task_type || 'task',
             status: subtask.status || 'todo',
@@ -2374,6 +2383,7 @@ function hydrateProjectDrawerSubtaskDrafts(task) {
             location: subtask.location || '',
             description: subtask.description || '',
             assignee_ids: [...(subtask.assignee_ids || [])],
+            follower_ids: [...(subtask.follower_ids || [])],
         };
     }
     subtaskDrafts.value = nextDrafts;
