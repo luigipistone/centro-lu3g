@@ -4376,7 +4376,7 @@ onUnmounted(() => {
                                         <span class="hidden cursor-grab text-gray-300 transition group-hover/project-task:text-gray-500 md:inline-flex">
                                             <GripVertical class="h-4 w-4" :stroke-width="1.7" />
                                         </span>
-                                        <button type="button" class="min-w-0 text-left font-medium text-indigo-700" @click="openProjectTaskDrawer(task)">
+                                        <button type="button" class="block w-full min-w-0 max-w-full text-left font-medium text-indigo-700" @click="openProjectTaskDrawer(task)">
                                             <span :class="['block truncate', task.status === 'done' ? 'line-through' : '']">{{ task.title }}</span>
                                             <span v-if="projectTaskDependencyPreviewLabel(task)" class="mt-1 inline-flex items-center gap-2 text-xs font-normal text-gray-500">
                                                 <span

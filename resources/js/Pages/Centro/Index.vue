@@ -2615,6 +2615,11 @@ function addCalendarSubtask() {
         only: ['rows', 'errors', 'flash'],
         onSuccess: () => {
             refreshCalendarTaskPanelFromServer(parentTaskId);
+            router.reload({
+                only: ['rows'],
+                preserveScroll: true,
+                preserveState: true,
+            });
             calendarSubtaskForm.reset();
             calendarSubtaskCreateAssigneeMenuOpen.value = false;
         },
