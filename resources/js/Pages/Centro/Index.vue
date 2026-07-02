@@ -750,7 +750,9 @@ function filteredTaskSearchOptions(field) {
 }
 
 function toggleTaskSearchSelect(field) {
-    taskSearchSelectOpen.value = taskSearchSelectOpen.value === field.name ? null : field.name;
+    const nextOpen = taskSearchSelectOpen.value === field.name ? null : field.name;
+    if (nextOpen) requestFloatingUiClose();
+    taskSearchSelectOpen.value = nextOpen;
     taskSearchSelectQueries.value[field.name] = '';
 }
 
@@ -824,8 +826,10 @@ function calendarCreateSubtaskAssignees() {
 }
 
 function toggleCalendarCreateSubtaskAssigneeMenu(event = null) {
+    const nextOpen = !calendarSubtaskCreateAssigneeMenuOpen.value;
+    if (nextOpen) requestFloatingUiClose();
     calendarSubtaskCreateAssigneeMenuStyle.value = floatingMenuStyleFromEvent(event);
-    calendarSubtaskCreateAssigneeMenuOpen.value = !calendarSubtaskCreateAssigneeMenuOpen.value;
+    calendarSubtaskCreateAssigneeMenuOpen.value = nextOpen;
 }
 
 function toggleCalendarCreateSubtaskAssignee(userId) {
@@ -925,6 +929,21 @@ function dropdownMenuStyleFromEvent(event, width = 220) {
     };
 }
 
+function requestFloatingUiClose() {
+    window.dispatchEvent(new CustomEvent('centro:close-floating-ui'));
+}
+
+function closeCentroIndexFloatingUi() {
+    calendarCreateDate.value = null;
+    calendarTaskActionMenuOpen.value = false;
+    calendarSubtaskCreateAssigneeMenuOpen.value = false;
+    calendarSubtaskAssigneeMenuOpen.value = null;
+    calendarPeopleMenuOpen.value = false;
+    projectPeopleMenuOpen.value = false;
+    taskPeopleMenuOpen.value = null;
+    taskSearchSelectOpen.value = null;
+}
+
 function calendarTaskPeopleLabel(field) {
     const selected = selectedCalendarTaskUsers(field);
     if (!selected.length) return field === 'assignee_ids' ? 'Nessuna persona' : 'Nessun follower';
@@ -946,8 +965,10 @@ function toggleCalendarTaskPerson(field, userId) {
 }
 
 function toggleCalendarSubtaskAssigneeMenu(subtaskId, event = null) {
+    const nextOpen = calendarSubtaskAssigneeMenuOpen.value === subtaskId ? null : subtaskId;
+    if (nextOpen) requestFloatingUiClose();
     calendarSubtaskAssigneeMenuStyle.value = floatingMenuStyleFromEvent(event);
-    calendarSubtaskAssigneeMenuOpen.value = calendarSubtaskAssigneeMenuOpen.value === subtaskId ? null : subtaskId;
+    calendarSubtaskAssigneeMenuOpen.value = nextOpen;
 }
 
 function closeCalendarSubtaskAssigneeMenuOnOutside(event) {
@@ -1000,8 +1021,10 @@ function toggleCalendarSubtaskAssignee(subtask, userId) {
 }
 
 function toggleTaskPeopleMenu(field) {
+    const nextOpen = taskPeopleMenuOpen.value === field ? null : field;
+    if (nextOpen) requestFloatingUiClose();
     taskSearchSelectOpen.value = null;
-    taskPeopleMenuOpen.value = taskPeopleMenuOpen.value === field ? null : field;
+    taskPeopleMenuOpen.value = nextOpen;
 }
 
 function closeTaskPeopleMenuOnOutside(event) {
@@ -1656,6 +1679,12 @@ function toggleProjectUserFilter(userId) {
     projectUserIds.value = current;
 }
 
+function toggleProjectPeopleMenu() {
+    const nextOpen = !projectPeopleMenuOpen.value;
+    if (nextOpen) requestFloatingUiClose();
+    projectPeopleMenuOpen.value = nextOpen;
+}
+
 function resetProjectFilters() {
     projectSearch.value = '';
     projectStatus.value = 'all';
@@ -1692,8 +1721,10 @@ function toggleCalendarUserFilter(userId) {
 }
 
 function toggleCalendarPeopleMenu(event = null) {
+    const nextOpen = !calendarPeopleMenuOpen.value;
+    if (nextOpen) requestFloatingUiClose();
     calendarPeopleMenuStyle.value = dropdownMenuStyleFromEvent(event, 320);
-    calendarPeopleMenuOpen.value = !calendarPeopleMenuOpen.value;
+    calendarPeopleMenuOpen.value = nextOpen;
 }
 
 function closeCalendarPeopleMenuOnOutside(event) {
@@ -2720,8 +2751,10 @@ function printCalendarTask() {
 }
 
 function toggleCalendarTaskActionMenu(event = null) {
+    const nextOpen = !calendarTaskActionMenuOpen.value;
+    if (nextOpen) requestFloatingUiClose();
     calendarTaskActionMenuStyle.value = dropdownMenuStyleFromEvent(event, 220);
-    calendarTaskActionMenuOpen.value = !calendarTaskActionMenuOpen.value;
+    calendarTaskActionMenuOpen.value = nextOpen;
 }
 
 function calendarCommentPayload(commentId) {
@@ -2985,7 +3018,9 @@ function setCalendarTaskStatusFromSelect(value) {
 }
 
 function openCalendarCreateMenu(date) {
-    calendarCreateDate.value = calendarCreateDate.value === date ? null : date;
+    const nextDate = calendarCreateDate.value === date ? null : date;
+    if (nextDate) requestFloatingUiClose();
+    calendarCreateDate.value = nextDate;
 }
 
 function closeCalendarCreateMenuOnOutside(event) {
@@ -3023,6 +3058,7 @@ onMounted(() => {
     document.addEventListener('pointerdown', closeProjectPeopleMenuOnOutside, true);
     document.addEventListener('pointerdown', closeTaskPeopleMenuOnOutside, true);
     document.addEventListener('pointerdown', closeTaskSearchSelectOnOutside, true);
+    window.addEventListener('centro:close-floating-ui', closeCentroIndexFloatingUi);
     if (props.section === 'calendar') {
         centerCalendarScroll();
     }
@@ -3059,6 +3095,7 @@ onUnmounted(() => {
     document.removeEventListener('pointerdown', closeProjectPeopleMenuOnOutside, true);
     document.removeEventListener('pointerdown', closeTaskPeopleMenuOnOutside, true);
     document.removeEventListener('pointerdown', closeTaskSearchSelectOnOutside, true);
+    window.removeEventListener('centro:close-floating-ui', closeCentroIndexFloatingUi);
     window.clearTimeout(calendarScrollTimer);
     cancelClientServicesDrag();
 });
@@ -4534,7 +4571,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                 projectPeopleMenuOpen ? 'border-indigo-300 ring-4 ring-indigo-500/10' : '',
                             ]"
                             :aria-expanded="projectPeopleMenuOpen"
-                            @click.stop="projectPeopleMenuOpen = !projectPeopleMenuOpen"
+                            @click.stop="toggleProjectPeopleMenu"
                         >
                             <span class="flex min-w-0 items-center gap-2">
                                 <Users class="h-4 w-4 shrink-0 text-gray-400" :stroke-width="1.7" />

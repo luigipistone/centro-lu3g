@@ -22,8 +22,29 @@ const closeOnEscape = (e) => {
     }
 };
 
-onMounted(() => document.addEventListener('keydown', closeOnEscape));
-onUnmounted(() => document.removeEventListener('keydown', closeOnEscape));
+function requestFloatingUiClose() {
+    window.dispatchEvent(new CustomEvent('centro:close-floating-ui'));
+}
+
+function toggleOpen() {
+    const nextOpen = !open.value;
+    if (nextOpen) requestFloatingUiClose();
+    open.value = nextOpen;
+}
+
+function closeFromFloatingUiEvent() {
+    open.value = false;
+}
+
+onMounted(() => {
+    document.addEventListener('keydown', closeOnEscape);
+    window.addEventListener('centro:close-floating-ui', closeFromFloatingUiEvent);
+});
+
+onUnmounted(() => {
+    document.removeEventListener('keydown', closeOnEscape);
+    window.removeEventListener('centro:close-floating-ui', closeFromFloatingUiEvent);
+});
 
 const widthClass = computed(() => {
     return {
@@ -46,7 +67,7 @@ const open = ref(false);
 
 <template>
     <div class="relative">
-        <div @click="open = !open">
+        <div @click="toggleOpen">
             <slot name="trigger" />
         </div>
 

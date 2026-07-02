@@ -1225,8 +1225,10 @@ function deleteTaskFromDetail() {
 }
 
 function toggleTaskActionMenu(event = null) {
+    const nextOpen = !taskActionMenuOpen.value;
+    if (nextOpen) requestFloatingUiClose();
     taskActionMenuStyle.value = dropdownMenuStyleFromEvent(event, 220);
-    taskActionMenuOpen.value = !taskActionMenuOpen.value;
+    taskActionMenuOpen.value = nextOpen;
 }
 
 function closeTaskActionMenuOnOutside(event) {
@@ -2155,8 +2157,10 @@ function projectDrawerCreateSubtaskAssignees() {
 }
 
 function toggleProjectDrawerCreateSubtaskAssigneeMenu(event = null) {
+    const nextOpen = !subtaskCreateAssigneeMenuOpen.value;
+    if (nextOpen) requestFloatingUiClose();
     subtaskCreateAssigneeMenuStyle.value = floatingMenuStyleFromEvent(event);
-    subtaskCreateAssigneeMenuOpen.value = !subtaskCreateAssigneeMenuOpen.value;
+    subtaskCreateAssigneeMenuOpen.value = nextOpen;
 }
 
 function toggleProjectDrawerCreateSubtaskAssignee(userId) {
@@ -2175,8 +2179,10 @@ function createSubtaskAssignees() {
 }
 
 function toggleCreateSubtaskAssigneeMenu(event = null) {
+    const nextOpen = !subtaskCreateAssigneeMenuOpen.value;
+    if (nextOpen) requestFloatingUiClose();
     subtaskCreateAssigneeMenuStyle.value = floatingMenuStyleFromEvent(event);
-    subtaskCreateAssigneeMenuOpen.value = !subtaskCreateAssigneeMenuOpen.value;
+    subtaskCreateAssigneeMenuOpen.value = nextOpen;
 }
 
 function toggleCreateSubtaskAssignee(userId) {
@@ -2275,6 +2281,18 @@ function dropdownMenuStyleFromEvent(event, width = 220) {
         left: `${left}px`,
         top: `${top}px`,
     };
+}
+
+function requestFloatingUiClose() {
+    window.dispatchEvent(new CustomEvent('centro:close-floating-ui'));
+}
+
+function closeCentroShowFloatingUi() {
+    taskActionMenuOpen.value = false;
+    projectTaskActionMenuOpen.value = false;
+    projectSectionActionMenuOpen.value = null;
+    subtaskCreateAssigneeMenuOpen.value = false;
+    subtaskAssigneeMenuOpen.value = null;
 }
 
 function parentTaskRows(tasks = []) {
@@ -2494,9 +2512,11 @@ function saveProjectSectionName(section) {
 
 function toggleProjectSectionActionMenu(section, event = null) {
     if (section.virtual || isGuest.value) return;
+    const nextOpen = projectSectionActionMenuOpen.value === section.id ? null : section.id;
+    if (nextOpen) requestFloatingUiClose();
     const rect = event?.currentTarget?.getBoundingClientRect?.();
     projectSectionActionMenuPlacement.value = rect && window.innerHeight - rect.bottom < 170 ? 'up' : 'down';
-    projectSectionActionMenuOpen.value = projectSectionActionMenuOpen.value === section.id ? null : section.id;
+    projectSectionActionMenuOpen.value = nextOpen;
 }
 
 function closeProjectSectionActionMenu() {
@@ -2854,8 +2874,10 @@ function addProjectDrawerComment() {
 }
 
 function toggleProjectTaskActionMenu(event = null) {
+    const nextOpen = !projectTaskActionMenuOpen.value;
+    if (nextOpen) requestFloatingUiClose();
     projectTaskActionMenuStyle.value = dropdownMenuStyleFromEvent(event, 220);
-    projectTaskActionMenuOpen.value = !projectTaskActionMenuOpen.value;
+    projectTaskActionMenuOpen.value = nextOpen;
 }
 
 async function copyProjectDrawerTaskLink() {
@@ -3074,8 +3096,10 @@ function personAvatarClass(selected) {
 }
 
 function toggleSubtaskAssigneeMenu(subtaskId, event = null) {
+    const nextOpen = subtaskAssigneeMenuOpen.value === subtaskId ? null : subtaskId;
+    if (nextOpen) requestFloatingUiClose();
     subtaskAssigneeMenuStyle.value = floatingMenuStyleFromEvent(event);
-    subtaskAssigneeMenuOpen.value = subtaskAssigneeMenuOpen.value === subtaskId ? null : subtaskId;
+    subtaskAssigneeMenuOpen.value = nextOpen;
 }
 
 function closeSubtaskAssigneeMenuOnOutside(event) {
@@ -3458,11 +3482,13 @@ watch(
 
 onMounted(() => {
     document.addEventListener('pointerdown', closeSubtaskAssigneeMenuOnOutside, true);
+    window.addEventListener('centro:close-floating-ui', closeCentroShowFloatingUi);
     refreshProjectDescriptionEditor();
 });
 
 onUnmounted(() => {
     document.removeEventListener('pointerdown', closeSubtaskAssigneeMenuOnOutside, true);
+    window.removeEventListener('centro:close-floating-ui', closeCentroShowFloatingUi);
     document.body.classList.remove('overflow-hidden');
 });
 </script>

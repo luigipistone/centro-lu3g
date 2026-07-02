@@ -571,12 +571,30 @@ function closeWidgetMenuOnOutside(event) {
     widgetMenuOpen.value = false;
 }
 
+function requestFloatingUiClose() {
+    window.dispatchEvent(new CustomEvent('centro:close-floating-ui'));
+}
+
+function toggleWidgetMenu() {
+    const nextOpen = !widgetMenuOpen.value;
+    if (nextOpen) requestFloatingUiClose();
+    widgetMenuOpen.value = nextOpen;
+}
+
+function closeDashboardFloatingUi() {
+    widgetMenuOpen.value = false;
+}
+
 onMounted(() => {
     nextTick(initializeNoteEditor);
     document.addEventListener('click', closeWidgetMenuOnOutside);
+    window.addEventListener('centro:close-floating-ui', closeDashboardFloatingUi);
 });
 
-onUnmounted(() => document.removeEventListener('click', closeWidgetMenuOnOutside));
+onUnmounted(() => {
+    document.removeEventListener('click', closeWidgetMenuOnOutside);
+    window.removeEventListener('centro:close-floating-ui', closeDashboardFloatingUi);
+});
 
 watch(
     () => visibleWidgets.value.some((widget) => widget.widget_type === 'notes'),
@@ -599,7 +617,7 @@ watch(
 
                 <div ref="widgetMenu" class="relative flex items-center gap-2">
                     <span v-if="saving" class="text-xs font-medium text-gray-400">Salvataggio...</span>
-                    <button type="button" class="btn btn-outline" @click="widgetMenuOpen = !widgetMenuOpen">
+                    <button type="button" class="btn btn-outline" @click="toggleWidgetMenu">
                         <Plus class="h-4 w-4" :stroke-width="1.8" />
                         Aggiungi widget
                     </button>

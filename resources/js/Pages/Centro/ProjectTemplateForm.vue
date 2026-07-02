@@ -198,9 +198,11 @@ function toggleSection(index) {
 }
 
 function toggleSectionActionMenu(index, event = null) {
+    const nextOpen = sectionActionMenuOpen.value === index ? null : index;
+    if (nextOpen !== null) requestFloatingUiClose();
     const rect = event?.currentTarget?.getBoundingClientRect?.();
     sectionActionMenuPlacement.value = rect && window.innerHeight - rect.bottom < 170 ? 'up' : 'down';
-    sectionActionMenuOpen.value = sectionActionMenuOpen.value === index ? null : index;
+    sectionActionMenuOpen.value = nextOpen;
 }
 
 function collapseSectionFromMenu(index) {
@@ -399,6 +401,7 @@ function toggleDependencyMenu(task, event = null) {
         return;
     }
 
+    requestFloatingUiClose();
     updateDependencyMenuPosition(event);
     dependencyMenuTaskKey.value = task.template_key;
 }
@@ -492,6 +495,15 @@ function closeSectionActionMenuOnOutside(event) {
     }
 }
 
+function requestFloatingUiClose() {
+    window.dispatchEvent(new CustomEvent('centro:close-floating-ui'));
+}
+
+function closeTemplateFloatingUi() {
+    sectionActionMenuOpen.value = null;
+    dependencyMenuTaskKey.value = null;
+}
+
 function normalizeTemplatePayload() {
     form.sections.forEach((section) => {
         section.tasks.forEach((task) => {
@@ -528,10 +540,12 @@ function saveTemplate() {
 
 onMounted(() => {
     document.addEventListener('pointerdown', closeSectionActionMenuOnOutside, true);
+    window.addEventListener('centro:close-floating-ui', closeTemplateFloatingUi);
 });
 
 onUnmounted(() => {
     document.removeEventListener('pointerdown', closeSectionActionMenuOnOutside, true);
+    window.removeEventListener('centro:close-floating-ui', closeTemplateFloatingUi);
 });
 </script>
 

@@ -35,6 +35,7 @@ const open = ref(false);
 const menuStyle = ref({});
 const viewDate = ref(props.modelValue ? new Date(`${props.modelValue}T00:00:00`) : new Date());
 const weekdays = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+const floatingUiCloseEvent = 'centro:close-floating-ui';
 
 const selectedLabel = computed(() => {
     if (!props.modelValue) return props.placeholder;
@@ -72,7 +73,9 @@ function formatDate(date) {
 
 function toggle() {
     if (props.disabled) return;
-    open.value = !open.value;
+    const nextOpen = !open.value;
+    if (nextOpen) window.dispatchEvent(new CustomEvent(floatingUiCloseEvent));
+    open.value = nextOpen;
     if (open.value) updateMenuPosition();
 }
 
@@ -115,18 +118,24 @@ function closeOnOutside(event) {
     open.value = false;
 }
 
+function closeFromFloatingUiEvent() {
+    open.value = false;
+}
+
 watch(() => props.modelValue, (value) => {
     if (value) viewDate.value = new Date(`${value}T00:00:00`);
 });
 
 onMounted(() => {
     document.addEventListener('pointerdown', closeOnOutside, true);
+    window.addEventListener(floatingUiCloseEvent, closeFromFloatingUiEvent);
     window.addEventListener('resize', updateMenuPosition);
     window.addEventListener('scroll', updateMenuPosition, true);
 });
 
 onUnmounted(() => {
     document.removeEventListener('pointerdown', closeOnOutside, true);
+    window.removeEventListener(floatingUiCloseEvent, closeFromFloatingUiEvent);
     window.removeEventListener('resize', updateMenuPosition);
     window.removeEventListener('scroll', updateMenuPosition, true);
 });

@@ -119,6 +119,20 @@ function toggleDarkMode() {
     applyTheme(!darkMode.value);
 }
 
+function requestFloatingUiClose() {
+    window.dispatchEvent(new CustomEvent('centro:close-floating-ui'));
+}
+
+function toggleNotificationMenu() {
+    const nextOpen = !notificationMenuOpen.value;
+    if (nextOpen) requestFloatingUiClose();
+    notificationMenuOpen.value = nextOpen;
+}
+
+function closeLayoutFloatingUi() {
+    notificationMenuOpen.value = false;
+}
+
 function playCompletionEffect(event = null) {
     const effect = event?.detail?.effect || page.props.auth?.user?.completion_effect || 'balloons';
     completionEffect.value = effect;
@@ -223,6 +237,7 @@ onMounted(() => {
     rememberLatestNotification();
     window.addEventListener('centro:task-completed', playCompletionEffect);
     window.addEventListener('centro:browser-notification-permission', handleBrowserPermissionEvent);
+    window.addEventListener('centro:close-floating-ui', closeLayoutFloatingUi);
     notificationPoller = window.setInterval(() => {
         router.reload({ only: ['notifications'], preserveScroll: true, preserveState: true });
     }, 15000);
@@ -233,6 +248,7 @@ onUnmounted(() => {
     window.clearTimeout(completionEffectTimer);
     window.removeEventListener('centro:task-completed', playCompletionEffect);
     window.removeEventListener('centro:browser-notification-permission', handleBrowserPermissionEvent);
+    window.removeEventListener('centro:close-floating-ui', closeLayoutFloatingUi);
 });
 
 const groups = computed(() => {
@@ -344,7 +360,7 @@ const groups = computed(() => {
                             class="relative inline-flex h-9 w-9 items-center justify-center rounded-2xl text-gray-500 transition hover:bg-white/70 hover:text-[hsl(var(--primary-app))] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]"
                             :aria-expanded="notificationMenuOpen"
                             aria-label="Apri notifiche"
-                            @click="notificationMenuOpen = !notificationMenuOpen"
+                            @click="toggleNotificationMenu"
                         >
                             <Bell class="h-[18px] w-[18px]" :stroke-width="1.6" />
                             <span

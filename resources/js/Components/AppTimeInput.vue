@@ -36,6 +36,7 @@ const menuStyle = ref({});
 const selectedHour = ref('09');
 const selectedMinute = ref('00');
 const minutes = ['00', '30'];
+const floatingUiCloseEvent = 'centro:close-floating-ui';
 
 const hours = computed(() => Array.from({ length: props.endHour - props.startHour + 1 }, (_, index) => String(props.startHour + index).padStart(2, '0')));
 const selectedLabel = computed(() => props.modelValue || props.placeholder);
@@ -48,7 +49,9 @@ function syncFromValue(value) {
 
 function toggle() {
     if (props.disabled) return;
-    open.value = !open.value;
+    const nextOpen = !open.value;
+    if (nextOpen) window.dispatchEvent(new CustomEvent(floatingUiCloseEvent));
+    open.value = nextOpen;
     if (open.value) {
         syncFromValue(props.modelValue);
         updateMenuPosition();
@@ -95,16 +98,22 @@ function closeOnOutside(event) {
     open.value = false;
 }
 
+function closeFromFloatingUiEvent() {
+    open.value = false;
+}
+
 watch(() => props.modelValue, syncFromValue, { immediate: true });
 
 onMounted(() => {
     document.addEventListener('pointerdown', closeOnOutside, true);
+    window.addEventListener(floatingUiCloseEvent, closeFromFloatingUiEvent);
     window.addEventListener('resize', updateMenuPosition);
     window.addEventListener('scroll', updateMenuPosition, true);
 });
 
 onUnmounted(() => {
     document.removeEventListener('pointerdown', closeOnOutside, true);
+    window.removeEventListener(floatingUiCloseEvent, closeFromFloatingUiEvent);
     window.removeEventListener('resize', updateMenuPosition);
     window.removeEventListener('scroll', updateMenuPosition, true);
 });

@@ -38,6 +38,7 @@ const menu = ref(null);
 const open = ref(false);
 const query = ref('');
 const menuStyle = ref({});
+const floatingUiCloseEvent = 'centro:close-floating-ui';
 
 const normalizedOptions = computed(() => props.options.map((option) => {
     if (typeof option === 'object' && option !== null) {
@@ -64,7 +65,9 @@ const filteredOptions = computed(() => {
 function toggle() {
     if (props.disabled) return;
 
-    open.value = !open.value;
+    const nextOpen = !open.value;
+    if (nextOpen) window.dispatchEvent(new CustomEvent(floatingUiCloseEvent));
+    open.value = nextOpen;
     if (open.value) {
         query.value = '';
         updateMenuPosition();
@@ -85,6 +88,10 @@ function closeOnOutside(event) {
     if (root.value?.contains(event.target)) return;
     if (menu.value?.contains(event.target)) return;
 
+    open.value = false;
+}
+
+function closeFromFloatingUiEvent() {
     open.value = false;
 }
 
@@ -117,11 +124,13 @@ function closeOnViewportChange() {
 
 onMounted(() => {
     document.addEventListener('pointerdown', closeOnOutside, true);
+    window.addEventListener(floatingUiCloseEvent, closeFromFloatingUiEvent);
     window.addEventListener('resize', closeOnViewportChange);
     window.addEventListener('scroll', closeOnViewportChange, true);
 });
 onUnmounted(() => {
     document.removeEventListener('pointerdown', closeOnOutside, true);
+    window.removeEventListener(floatingUiCloseEvent, closeFromFloatingUiEvent);
     window.removeEventListener('resize', closeOnViewportChange);
     window.removeEventListener('scroll', closeOnViewportChange, true);
 });
