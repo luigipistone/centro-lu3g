@@ -5027,7 +5027,7 @@ onUnmounted(() => {
                     </div>
                 </section>
 
-                <section v-if="section === 'users'" class="space-y-6">
+                <section v-if="section === 'users'" class="space-y-6 lg:col-span-2">
                     <section class="surface rounded-md p-5">
                         <div class="flex flex-wrap items-center gap-4 rounded-md border border-gray-100 bg-gray-50 p-4">
                             <UserAvatar :user="userPreview()" size="lg" />
@@ -5160,7 +5160,7 @@ onUnmounted(() => {
                             </div>
                         </div>
 
-                        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
                             <div
                                 v-for="kpi in userPerformance.kpis"
                                 :key="kpi.label"
@@ -5206,7 +5206,7 @@ onUnmounted(() => {
                             </div>
                         </div>
 
-                        <div class="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+                        <div class="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(260px,0.65fr)_minmax(260px,0.75fr)]">
                             <div class="rounded-[var(--radius-sm)] border border-gray-100 bg-white/70 p-4">
                                 <h4 class="text-sm font-semibold text-gray-900">Prossime scadenze</h4>
                                 <div v-if="userPerformance.upcomingTasks.length" class="mt-3 divide-y divide-gray-100">
@@ -5242,21 +5242,22 @@ onUnmounted(() => {
                                         <dd class="font-semibold text-gray-900">{{ userPerformance.absence.pendingRequests || 0 }}</dd>
                                     </div>
                                 </dl>
-                                <div class="mt-5 border-t border-gray-100 pt-4">
-                                    <h5 class="text-xs font-semibold uppercase tracking-wide text-gray-400">Ultime completate</h5>
-                                    <div v-if="userPerformance.recentCompletedTasks.length" class="mt-2 space-y-2">
-                                        <Link
-                                            v-for="task in userPerformance.recentCompletedTasks"
-                                            :key="task.id"
-                                            :href="route('tasks.show', task.id)"
-                                            class="block rounded-[var(--radius-sm)] bg-gray-50 px-3 py-2 text-xs transition hover:bg-[hsl(var(--primary-app)/0.08)]"
-                                        >
-                                            <span class="block truncate font-semibold text-gray-900">{{ task.title }}</span>
-                                            <span class="mt-0.5 block truncate text-gray-500">{{ [task.client_name, dateIt(task.updated_at)].filter(Boolean).join(' - ') }}</span>
-                                        </Link>
-                                    </div>
-                                    <p v-else class="mt-2 text-xs text-gray-500">Nessuna task completata di recente.</p>
+                            </div>
+
+                            <div class="rounded-[var(--radius-sm)] border border-gray-100 bg-white/70 p-4">
+                                <h4 class="text-sm font-semibold text-gray-900">Ultime completate</h4>
+                                <div v-if="userPerformance.recentCompletedTasks.length" class="mt-3 space-y-2">
+                                    <Link
+                                        v-for="task in userPerformance.recentCompletedTasks"
+                                        :key="task.id"
+                                        :href="route('tasks.show', task.id)"
+                                        class="block rounded-[var(--radius-sm)] bg-gray-50 px-3 py-2 text-xs transition hover:bg-[hsl(var(--primary-app)/0.08)]"
+                                    >
+                                        <span class="block truncate font-semibold text-gray-900">{{ task.title }}</span>
+                                        <span class="mt-0.5 block truncate text-gray-500">{{ [task.client_name, dateIt(task.updated_at)].filter(Boolean).join(' - ') }}</span>
+                                    </Link>
                                 </div>
+                                <p v-else class="mt-3 text-xs text-gray-500">Nessuna task completata di recente.</p>
                             </div>
                         </div>
                     </section>
