@@ -5027,7 +5027,7 @@ onUnmounted(() => {
                     </div>
                 </section>
 
-                <section v-if="section === 'users'" class="space-y-6 lg:col-span-2">
+                <section v-if="section === 'users'" class="space-y-6 lg:order-1">
                     <section class="surface rounded-md p-5">
                         <div class="flex flex-wrap items-center gap-4 rounded-md border border-gray-100 bg-gray-50 p-4">
                             <UserAvatar :user="userPreview()" size="lg" />
@@ -5147,8 +5147,9 @@ onUnmounted(() => {
                             </div>
                         </div>
                     </section>
+                </section>
 
-                    <section class="surface rounded-md p-5">
+                <section v-if="section === 'users'" class="surface rounded-md p-5 lg:order-3 lg:col-span-2">
                         <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
                             <div>
                                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Andamento persona</h3>
@@ -5260,7 +5261,6 @@ onUnmounted(() => {
                                 <p v-else class="mt-3 text-xs text-gray-500">Nessuna task completata di recente.</p>
                             </div>
                         </div>
-                    </section>
                 </section>
 
                 <section v-if="section === 'absences'" class="grid gap-6 lg:col-span-2 xl:grid-cols-[minmax(0,1fr)_300px]">
@@ -5425,7 +5425,7 @@ onUnmounted(() => {
                     </dl>
                 </section>
 
-                <aside class="space-y-6">
+                <aside :class="['space-y-6', section === 'users' ? 'lg:order-2' : '']">
                     <section v-if="section === 'clients'" class="surface rounded-md p-5">
                         <div class="flex items-start justify-between gap-3">
                             <div>
