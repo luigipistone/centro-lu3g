@@ -322,7 +322,7 @@ const routeBase = computed(() => {
 
 const defaults = computed(() => {
     const base = Object.fromEntries(props.fields.map((field) => {
-        if (field.type === 'checkbox') return [field.name, field.name === 'recurring_enabled' ? false : true];
+        if (field.type === 'checkbox') return [field.name, !['recurring_enabled', 'is_pa'].includes(field.name)];
         if (field.name === 'status' && props.section === 'projects') return [field.name, 'active'];
         if (field.name === 'status' && props.section === 'tasks') return [field.name, 'todo'];
         if (field.name === 'priority') return [field.name, 'medium'];

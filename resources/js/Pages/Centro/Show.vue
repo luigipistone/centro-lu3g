@@ -218,6 +218,7 @@ const smartworkingDayOptions = [
     { value: 'thursday', label: 'Giovedì' },
     { value: 'friday', label: 'Venerdì' },
 ];
+const smartworkingWeekdayOptions = smartworkingDayOptions.filter((option) => option.value !== 'none');
 const completionEffectValues = completionEffectOptions.map((option) => option.value);
 
 function clientOptionLabel(field, value) {
@@ -572,6 +573,7 @@ const subscriptionDefaults = {
     notes: '',
 };
 const subscriptionForm = useForm({ ...subscriptionDefaults });
+const subscriptionsOpen = ref(false);
 const editingSubscription = ref(null);
 const confirmAction = ref(null);
 const confirmText = ref('');
@@ -1938,6 +1940,21 @@ function saveUserInline(delay = AUTOSAVE_IDLE_DELAY) {
     }, autosaveDelay(delay));
 }
 
+function selectSmartworkingDay(day) {
+    userForm.smartworking_day = userForm.smartworking_day === day ? 'none' : day;
+    saveUserInline(0);
+}
+
+function smartworkingDayShortLabel(day) {
+    return {
+        monday: 'Lu',
+        tuesday: 'Ma',
+        wednesday: 'Me',
+        thursday: 'Gi',
+        friday: 'Ve',
+    }[day] || '';
+}
+
 function userPreview() {
     return {
         ...props.record,
@@ -2024,6 +2041,7 @@ function resetSubscriptionForm() {
 
 function editSubscription(subscription) {
     if (!canEditClient.value) return;
+    subscriptionsOpen.value = true;
     editingSubscription.value = subscription;
     subscriptionForm.clearErrors();
     Object.keys(subscriptionDefaults).forEach((key) => {
@@ -4231,11 +4249,23 @@ onUnmounted(() => {
                                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Abbonamenti</h3>
                                 <p class="mt-1 text-sm text-gray-500">{{ related.subscriptions?.length || 0 }} ricorrenze collegate al cliente</p>
                             </div>
-                            <button v-if="canEditClient && editingSubscription" type="button" class="text-sm font-medium text-gray-500 hover:text-gray-800" @click="resetSubscriptionForm">
-                                Annulla modifica
-                            </button>
+                            <div class="flex items-center gap-2">
+                                <button v-if="canEditClient && editingSubscription" type="button" class="text-sm font-medium text-gray-500 hover:text-gray-800" @click="resetSubscriptionForm">
+                                    Annulla modifica
+                                </button>
+                                <button
+                                    type="button"
+                                    class="icon-btn h-9 w-9"
+                                    :aria-expanded="subscriptionsOpen"
+                                    :aria-label="subscriptionsOpen ? 'Comprimi abbonamenti' : 'Espandi abbonamenti'"
+                                    @click="subscriptionsOpen = !subscriptionsOpen"
+                                >
+                                    <ChevronDown :class="['h-4 w-4 transition-transform', subscriptionsOpen ? 'rotate-180' : '']" :stroke-width="1.8" />
+                                </button>
+                            </div>
                         </div>
 
+                        <div v-show="subscriptionsOpen" class="space-y-5">
                         <form v-if="canEditClient" class="grid gap-3 rounded-md border border-gray-100 bg-gray-50 p-4 md:grid-cols-4" @submit.prevent="saveSubscription">
                             <div class="md:col-span-2">
                                 <label class="block text-sm font-medium text-gray-700">Nome *</label>
@@ -4302,7 +4332,7 @@ onUnmounted(() => {
                             </div>
                         </form>
 
-                        <div class="mt-5 space-y-3">
+                        <div class="space-y-3">
                             <article
                                 v-for="subscription in related.subscriptions || []"
                                 :key="subscription.id"
@@ -4341,6 +4371,7 @@ onUnmounted(() => {
                             <p v-if="!(related.subscriptions || []).length" class="rounded-md border border-dashed border-gray-300 bg-white px-4 py-8 text-center text-sm text-gray-500">
                                 Nessun abbonamento ricorrente per questo cliente.
                             </p>
+                        </div>
                         </div>
                     </section>
                 </section>
@@ -5047,7 +5078,36 @@ onUnmounted(() => {
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Giorno smart working</label>
-                                <AppSelect v-model="userForm.smartworking_day" :options="smartworkingDayOptions" @change="saveUserInline(0)" />
+                                <div class="mt-2 flex flex-wrap items-center gap-2">
+                                    <button
+                                        v-for="day in smartworkingWeekdayOptions"
+                                        :key="`smartworking-day-${day.value}`"
+                                        type="button"
+                                        :class="[
+                                            'inline-flex h-10 w-10 items-center justify-center rounded-full border text-xs font-bold transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary-app)/0.24)]',
+                                            userForm.smartworking_day === day.value
+                                                ? 'border-[hsl(var(--primary-app))] bg-[hsl(var(--primary-app))] text-white shadow-[0_10px_24px_rgba(37,99,235,0.22)]'
+                                                : 'border-gray-200 bg-white text-gray-500 hover:border-[hsl(var(--primary-app)/0.45)] hover:text-[hsl(var(--primary-app))]',
+                                        ]"
+                                        :aria-pressed="userForm.smartworking_day === day.value"
+                                        :title="day.label"
+                                        @click="selectSmartworkingDay(day.value)"
+                                    >
+                                        {{ smartworkingDayShortLabel(day.value) }}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        :class="[
+                                            'ml-1 inline-flex h-10 items-center rounded-full border px-3 text-xs font-semibold transition hover:-translate-y-0.5',
+                                            userForm.smartworking_day === 'none'
+                                                ? 'border-gray-300 bg-gray-100 text-gray-700'
+                                                : 'border-gray-200 bg-white text-gray-400 hover:text-gray-700',
+                                        ]"
+                                        @click="selectSmartworkingDay('none')"
+                                    >
+                                        Nessuno
+                                    </button>
+                                </div>
                                 <div v-if="userForm.errors.smartworking_day" class="mt-1 text-sm text-red-600">{{ userForm.errors.smartworking_day }}</div>
                             </div>
                             <div>
