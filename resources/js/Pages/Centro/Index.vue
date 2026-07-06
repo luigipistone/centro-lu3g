@@ -6061,29 +6061,30 @@ function calendarDayStyle(sectionMonth, cell) {
 }
 
 .project-client-pulse::after {
+    animation: project-client-soft-ring 2.8s ease-in-out infinite;
     border-radius: inherit;
     content: '';
     inset: -2px;
-    opacity: 0;
+    opacity: 0.72;
     pointer-events: none;
     position: absolute;
-    transition: opacity 180ms ease;
+    transition: opacity 180ms ease, inset 180ms ease;
 }
 
 .project-preview-card:hover .project-client-pulse::after {
-    animation: project-client-soft-ring 1.8s ease-in-out infinite;
     opacity: 1;
+    inset: -3px;
 }
 
 @keyframes project-client-soft-ring {
     0% {
-        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.18);
+        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.12);
     }
     50% {
-        box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.26);
+        box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.24);
     }
     100% {
-        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.18);
+        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.12);
     }
 }
 </style>
