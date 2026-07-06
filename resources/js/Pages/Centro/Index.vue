@@ -2015,7 +2015,15 @@ const taskRows = computed(() => props.rows.filter((row) => {
 }));
 
 function tasksByStatus(status) {
-    return taskRows.value.filter((row) => row.status === status);
+    return taskRows.value
+        .filter((row) => row.status === status)
+        .sort((first, second) => {
+            const firstDate = first.due_date || '9999-12-31';
+            const secondDate = second.due_date || '9999-12-31';
+            return firstDate.localeCompare(secondDate)
+                || String(first.due_time || '').localeCompare(String(second.due_time || ''))
+                || String(first.title || '').localeCompare(String(second.title || ''), 'it', { sensitivity: 'base' });
+        });
 }
 
 const clientRows = computed(() => props.rows.filter((row) => {
@@ -4655,7 +4663,7 @@ function calendarDayStyle(sectionMonth, cell) {
                             </div>
 
                             <div class="mt-auto flex items-end justify-between gap-3 pt-5">
-                                <span v-if="project.client_name" class="project-preview-chip min-w-0 truncate border px-2 py-0.5 text-xs" :style="projectCardChipStyle(project)">{{ project.client_name }}</span>
+                                <span v-if="project.client_name" class="project-preview-chip project-client-pulse min-w-0 truncate border px-2 py-0.5 text-xs" :style="projectCardChipStyle(project)">{{ project.client_name }}</span>
                                 <span v-else class="text-xs" :style="projectCardMutedStyle(project)">Nessun cliente</span>
                                 <span class="project-preview-chip ml-auto shrink-0 border px-2 py-0.5 text-right text-xs font-medium" :style="projectCardChipStyle(project)">
                                     {{ displayValue(project.status) }}
@@ -5200,7 +5208,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                             >
                                                 {{ displayValue(task.priority) }}
                                             </span>
-                                            <span v-if="task.client_name" class="min-w-0 max-w-full truncate rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">{{ task.client_name }}</span>
+                                            <span v-if="task.client_name" class="min-w-0 max-w-full truncate rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.28)]">{{ task.client_name }}</span>
                                         </div>
                                         <div class="mt-4 flex items-center justify-between gap-3 text-[11px] leading-none text-gray-500">
                                             <div class="inline-flex min-w-0 items-center gap-2.5">
@@ -6046,3 +6054,36 @@ function calendarDayStyle(sectionMonth, cell) {
         </div>
     </AuthenticatedLayout>
 </template>
+
+<style scoped>
+.project-client-pulse {
+    position: relative;
+}
+
+.project-client-pulse::after {
+    border-radius: inherit;
+    content: '';
+    inset: -2px;
+    opacity: 0;
+    pointer-events: none;
+    position: absolute;
+    transition: opacity 180ms ease;
+}
+
+.project-preview-card:hover .project-client-pulse::after {
+    animation: project-client-soft-ring 1.8s ease-in-out infinite;
+    opacity: 1;
+}
+
+@keyframes project-client-soft-ring {
+    0% {
+        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.18);
+    }
+    50% {
+        box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.26);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.18);
+    }
+}
+</style>

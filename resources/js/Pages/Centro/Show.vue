@@ -414,6 +414,52 @@ function relatedItemMeta(name, item) {
     return item.status ? displayValue(item.status) : (item.created_at ? dateIt(item.created_at) : '-');
 }
 
+function contrastColor(value, light = '#111827', dark = '#ffffff') {
+    const color = normalizeHexColor(value || '#ffffff', '#ffffff');
+    const red = parseInt(color.slice(1, 3), 16);
+    const green = parseInt(color.slice(3, 5), 16);
+    const blue = parseInt(color.slice(5, 7), 16);
+    const luminance = ((0.2126 * red) + (0.7152 * green) + (0.0722 * blue)) / 255;
+
+    return luminance > 0.62 ? light : dark;
+}
+
+function relatedProjectStyle(project) {
+    const backgroundColor = normalizeHexColor(project?.color, '#2563eb');
+
+    return {
+        backgroundColor,
+        color: contrastColor(backgroundColor),
+        borderColor: contrastColor(backgroundColor, 'rgba(17,24,39,0.14)', 'rgba(255,255,255,0.22)'),
+    };
+}
+
+function relatedProjectMetaStyle(project) {
+    return {
+        color: contrastColor(project?.color, 'rgba(17,24,39,0.64)', 'rgba(255,255,255,0.78)'),
+    };
+}
+
+function relatedTasksSorted() {
+    return (props.related.tasks || [])
+        .filter((task) => task.status !== 'done' && !task.parent_task_id)
+        .sort((first, second) => {
+            const firstDate = first.due_date || '9999-12-31';
+            const secondDate = second.due_date || '9999-12-31';
+            return firstDate.localeCompare(secondDate) || String(first.title || '').localeCompare(String(second.title || ''), 'it', { sensitivity: 'base' });
+        });
+}
+
+function relatedItemsFor(name) {
+    if (name !== 'tasks') return props.related[name] || [];
+
+    return relatedTasksSorted().slice(0, clientRelatedTasksExpanded.value ? 6 : 3);
+}
+
+function hiddenRelatedTaskCount() {
+    return Math.max(relatedTasksSorted().slice(0, 6).length - relatedItemsFor('tasks').length, 0);
+}
+
 function userKpiClass(tone) {
     return {
         blue: 'border-sky-100 bg-sky-50/80 text-sky-700',
@@ -463,6 +509,7 @@ const showAllTaskComments = ref(false);
 const showAllTaskActivity = ref(false);
 const taskActionMenuOpen = ref(false);
 const taskActionMenuStyle = ref({});
+const clientRelatedTasksExpanded = ref(false);
 const lineForm = useForm({
     description: '',
     quantity: 1,
@@ -4148,11 +4195,11 @@ onUnmounted(() => {
                             <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
                         </form>
 
-                        <div v-if="related.contacts?.length" class="grid gap-3 md:grid-cols-2">
-                            <article v-for="contact in related.contacts" :key="contact.id" class="rounded-md border border-gray-100 bg-gray-50 p-4 transition hover:border-indigo-100 hover:bg-white">
-                                <div class="flex items-start justify-between gap-3">
-                                    <div class="min-w-0 flex-1 space-y-3">
-                                        <div v-if="canEditClient" class="grid gap-2 sm:grid-cols-2">
+                        <div v-if="related.contacts?.length" class="divide-y divide-gray-100">
+                            <article v-for="contact in related.contacts" :key="contact.id" class="py-3 first:pt-0 last:pb-0">
+                                <div class="grid items-center gap-2 md:grid-cols-[minmax(150px,1fr)_minmax(120px,0.8fr)_minmax(150px,1fr)_minmax(110px,0.7fr)_minmax(160px,1fr)_40px]">
+                                    <template v-if="canEditClient">
+                                        <div class="grid min-w-0 gap-2 sm:grid-cols-2">
                                             <input
                                                 v-if="contactDrafts[contact.id]"
                                                 v-model="contactDrafts[contact.id].first_name"
@@ -4168,49 +4215,13 @@ onUnmounted(() => {
                                                 @input="saveContactInline(contact)"
                                             />
                                         </div>
-                                        <div v-if="canEditClient" class="grid gap-2 sm:grid-cols-2">
-                                            <input
-                                                v-if="contactDrafts[contact.id]"
-                                                v-model="contactDrafts[contact.id].role"
-                                                class="form-control mt-0"
-                                                placeholder="Ruolo"
-                                                @input="saveContactInline(contact)"
-                                            />
-                                            <input
-                                                v-if="contactDrafts[contact.id]"
-                                                v-model="contactDrafts[contact.id].phone"
-                                                class="form-control mt-0"
-                                                placeholder="Telefono"
-                                                @input="saveContactInline(contact)"
-                                            />
-                                        </div>
                                         <input
-                                            v-if="canEditClient && contactDrafts[contact.id]"
-                                            v-model="contactDrafts[contact.id].email"
+                                            v-if="contactDrafts[contact.id]"
+                                            v-model="contactDrafts[contact.id].role"
                                             class="form-control mt-0"
-                                            type="email"
-                                            placeholder="Email"
+                                            placeholder="Ruolo"
                                             @input="saveContactInline(contact)"
                                         />
-                                        <textarea
-                                            v-if="canEditClient && contactDrafts[contact.id]"
-                                            v-model="contactDrafts[contact.id].notes"
-                                            rows="2"
-                                            class="form-control mt-0"
-                                            placeholder="Note"
-                                            @input="saveContactInline(contact)"
-                                        ></textarea>
-                                        <div v-if="!canEditClient" class="space-y-1 text-sm">
-                                            <div class="font-semibold text-gray-900">{{ [contact.first_name, contact.last_name].filter(Boolean).join(' ') || 'Referente' }}</div>
-                                            <div v-if="contact.role" class="text-gray-600">{{ contact.role }}</div>
-                                            <div v-if="contact.email" class="text-gray-600">{{ contact.email }}</div>
-                                            <div v-if="contact.phone" class="text-gray-600">{{ contact.phone }}</div>
-                                            <div v-if="contact.notes" class="text-gray-500">{{ contact.notes }}</div>
-                                        </div>
-                                        <div v-if="canEditClient && contactAutosaveStates[contact.id] && contactAutosaveStates[contact.id] !== 'idle'" :class="['text-[11px] font-medium', contactAutosaveStates[contact.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
-                                            {{ autosaveLabel(contactAutosaveStates[contact.id], contactAutosaveErrors[contact.id]) }}
-                                        </div>
-                                        <template v-if="false">
                                         <input
                                             v-if="contactDrafts[contact.id]"
                                             v-model="contactDrafts[contact.id].email"
@@ -4219,22 +4230,34 @@ onUnmounted(() => {
                                             placeholder="Email"
                                             @input="saveContactInline(contact)"
                                         />
-                                        <textarea
+                                        <input
+                                            v-if="contactDrafts[contact.id]"
+                                            v-model="contactDrafts[contact.id].phone"
+                                            class="form-control mt-0"
+                                            placeholder="Telefono"
+                                            @input="saveContactInline(contact)"
+                                        />
+                                        <input
                                             v-if="contactDrafts[contact.id]"
                                             v-model="contactDrafts[contact.id].notes"
-                                            rows="2"
                                             class="form-control mt-0"
                                             placeholder="Note"
                                             @input="saveContactInline(contact)"
-                                        ></textarea>
-                                        <div v-if="contactAutosaveStates[contact.id] && contactAutosaveStates[contact.id] !== 'idle'" :class="['text-[11px] font-medium', contactAutosaveStates[contact.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
+                                        />
+                                        <button v-if="canEditClient" type="button" class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-red-600 transition hover:bg-red-50 hover:text-red-700" aria-label="Elimina referente" @click="removeContact(contact)">
+                                            <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                        </button>
+                                        <div v-if="contactAutosaveStates[contact.id] && contactAutosaveStates[contact.id] !== 'idle'" :class="['md:col-span-6 text-[11px] font-medium', contactAutosaveStates[contact.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
                                             {{ autosaveLabel(contactAutosaveStates[contact.id], contactAutosaveErrors[contact.id]) }}
                                         </div>
-                                        </template>
-                                    </div>
-                                    <button v-if="canEditClient" type="button" class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-red-600 transition hover:bg-red-50 hover:text-red-700" aria-label="Elimina referente" @click="removeContact(contact)">
-                                        <Trash2 class="h-4 w-4" :stroke-width="1.7" />
-                                    </button>
+                                    </template>
+                                    <template v-else>
+                                        <div class="min-w-0 truncate text-sm font-semibold text-gray-900">{{ [contact.first_name, contact.last_name].filter(Boolean).join(' ') || 'Referente' }}</div>
+                                        <div class="min-w-0 truncate text-sm text-gray-600">{{ contact.role || '-' }}</div>
+                                        <div class="min-w-0 truncate text-sm text-gray-600">{{ contact.email || '-' }}</div>
+                                        <div class="min-w-0 truncate text-sm text-gray-600">{{ contact.phone || '-' }}</div>
+                                        <div class="min-w-0 truncate text-sm text-gray-500">{{ contact.notes || '-' }}</div>
+                                    </template>
                                 </div>
                             </article>
                         </div>
@@ -4244,24 +4267,26 @@ onUnmounted(() => {
                     </section>
 
                     <section class="surface rounded-md p-5">
-                        <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+                        <div
+                            class="mb-5 flex cursor-pointer flex-wrap items-center justify-between gap-3 rounded-[var(--radius-sm)] px-1 py-1 transition hover:bg-gray-50"
+                            role="button"
+                            tabindex="0"
+                            :aria-expanded="subscriptionsOpen"
+                            @click="subscriptionsOpen = !subscriptionsOpen"
+                            @keydown.enter.prevent="subscriptionsOpen = !subscriptionsOpen"
+                            @keydown.space.prevent="subscriptionsOpen = !subscriptionsOpen"
+                        >
                             <div>
                                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Abbonamenti</h3>
                                 <p class="mt-1 text-sm text-gray-500">{{ related.subscriptions?.length || 0 }} ricorrenze collegate al cliente</p>
                             </div>
                             <div class="flex items-center gap-2">
-                                <button v-if="canEditClient && editingSubscription" type="button" class="text-sm font-medium text-gray-500 hover:text-gray-800" @click="resetSubscriptionForm">
+                                <button v-if="canEditClient && editingSubscription" type="button" class="text-sm font-medium text-gray-500 hover:text-gray-800" @click.stop="resetSubscriptionForm">
                                     Annulla modifica
                                 </button>
-                                <button
-                                    type="button"
-                                    class="icon-btn h-9 w-9"
-                                    :aria-expanded="subscriptionsOpen"
-                                    :aria-label="subscriptionsOpen ? 'Comprimi abbonamenti' : 'Espandi abbonamenti'"
-                                    @click="subscriptionsOpen = !subscriptionsOpen"
-                                >
+                                <span class="icon-btn pointer-events-none h-9 w-9">
                                     <ChevronDown :class="['h-4 w-4 transition-transform', subscriptionsOpen ? 'rotate-180' : '']" :stroke-width="1.8" />
-                                </button>
+                                </span>
                             </div>
                         </div>
 
@@ -4490,7 +4515,7 @@ onUnmounted(() => {
                                     @blur="saveProjectInline(0)"
                                 ></div>
                             </div>
-                            <aside class="rounded-md border border-gray-100 bg-gray-50/70 p-4">
+                            <aside class="rounded-[var(--radius)] border border-gray-100 bg-gray-50/70 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
                                 <div class="mb-3 flex items-center justify-between gap-3">
                                     <div>
                                         <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Risorse progetto</h3>
@@ -4503,7 +4528,7 @@ onUnmounted(() => {
                                     <input ref="projectResourceInput" type="file" class="hidden" @change="uploadProjectFileFromInput($event, 'resource')" />
                                 </div>
                                 <div class="space-y-2">
-                                    <div v-for="file in related.resources || []" :key="file.id" class="group flex items-center gap-3 rounded-md bg-white px-3 py-2 text-sm shadow-sm ring-1 ring-gray-100 transition hover:ring-indigo-100">
+                                    <div v-for="file in related.resources || []" :key="file.id" class="group flex items-center gap-3 rounded-[var(--radius-sm)] bg-white px-3 py-2 text-sm shadow-sm ring-1 ring-gray-100 transition hover:ring-indigo-100">
                                         <FileText class="h-4 w-4 shrink-0 text-gray-400" :stroke-width="1.7" />
                                         <a :href="route('projects.files.download', [record.id, file.id])" class="min-w-0 flex-1 truncate font-medium text-gray-800 hover:text-indigo-700">
                                             {{ file.original_name }}
@@ -4512,7 +4537,7 @@ onUnmounted(() => {
                                             <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                         </button>
                                     </div>
-                                    <p v-if="!(related.resources || []).length" class="rounded-md border border-dashed border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500">
+                                    <p v-if="!(related.resources || []).length" class="rounded-[var(--radius-sm)] border border-dashed border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500">
                                         Nessuna risorsa allegata.
                                     </p>
                                 </div>
@@ -4778,7 +4803,7 @@ onUnmounted(() => {
                                     'rounded-[var(--radius-sm)] border px-3 py-2 text-left text-sm font-semibold transition',
                                     taskForm.task_type === 'project' || taskForm.task_type === 'task'
                                         ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm'
-                                        : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50',
+                                        : 'border-gray-200 bg-white text-gray-700 opacity-45 hover:bg-gray-50 hover:opacity-80',
                                 ]"
                                 @click="setTaskType('project')"
                             >
@@ -4791,7 +4816,7 @@ onUnmounted(() => {
                                     'rounded-[var(--radius-sm)] border px-3 py-2 text-left text-sm font-semibold transition',
                                     taskForm.task_type === 'ongoing'
                                         ? 'border-amber-500 bg-amber-50 text-amber-800 shadow-sm'
-                                        : 'border-amber-200 bg-white text-amber-700 hover:bg-amber-50',
+                                        : 'border-amber-200 bg-white text-amber-700 opacity-45 hover:bg-amber-50 hover:opacity-80',
                                 ]"
                                 @click="setTaskType('ongoing')"
                             >
@@ -4804,7 +4829,7 @@ onUnmounted(() => {
                                     'rounded-[var(--radius-sm)] border px-3 py-2 text-left text-sm font-semibold transition',
                                     taskForm.task_type === 'meeting'
                                         ? 'border-violet-500 bg-violet-50 text-violet-800 shadow-sm'
-                                        : 'border-violet-200 bg-white text-violet-700 hover:bg-violet-50',
+                                        : 'border-violet-200 bg-white text-violet-700 opacity-45 hover:bg-violet-50 hover:opacity-80',
                                 ]"
                                 @click="setTaskType('meeting')"
                             >
@@ -4911,7 +4936,7 @@ onUnmounted(() => {
                                     <span
                                         v-for="dependent in selectedTaskDependents()"
                                         :key="`dependent-${dependent.id}`"
-                                        :class="['inline-flex max-w-full items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold', dependent.status === 'done' ? 'bg-emerald-50 text-emerald-700' : 'bg-white text-gray-600']"
+                                        :class="['inline-flex max-w-full items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ring-inset', dependent.status === 'done' ? 'bg-emerald-50 text-emerald-700 ring-emerald-100' : 'bg-gray-100 text-gray-700 ring-gray-200']"
                                     >
                                         <span class="truncate">{{ dependent.title }}</span>
                                         <button type="button" class="text-current opacity-60 transition hover:opacity-100" title="Rimuovi relazione" @click="removeTaskDependent(dependent.id)">
@@ -5576,26 +5601,35 @@ onUnmounted(() => {
                         <div v-else class="mt-2 text-sm font-medium text-gray-700">{{ related.project.name }}</div>
                     </section>
 
-                    <section v-for="name in (section === 'projects' ? ['documents'] : ['projects', 'tasks', 'documents'])" :key="name" v-show="related[name]?.length" class="surface rounded-md p-5">
+                    <section v-for="name in (section === 'projects' ? ['documents'] : ['projects', 'tasks', 'documents'])" :key="name" v-show="relatedItemsFor(name).length" class="surface rounded-md p-5">
                         <h3 class="mb-3 text-sm font-semibold text-gray-900">{{ relatedSectionLabel(name) }}</h3>
                         <div class="space-y-2">
                             <component
-                                v-for="item in related[name]"
+                                v-for="item in relatedItemsFor(name)"
                                 :key="item.id"
                                 :is="canOpenRelatedItem(name) ? Link : 'div'"
                                 :href="canOpenRelatedItem(name) ? relatedItemHref(name, item) : undefined"
+                                :style="name === 'projects' ? relatedProjectStyle(item) : undefined"
                                 :class="[
                                     'group/item block rounded-md border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm transition duration-200',
                                     canOpenRelatedItem(name) ? 'hover:-translate-y-0.5 hover:border-indigo-100 hover:bg-white hover:shadow-[0_12px_28px_rgba(28,42,73,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200' : '',
                                 ]"
                             >
-                                <span :class="['block truncate font-semibold text-gray-900 transition', canOpenRelatedItem(name) ? 'group-hover/item:text-indigo-600' : '']">
+                                <span :class="['block truncate font-semibold transition', name !== 'projects' ? 'text-gray-900' : '', canOpenRelatedItem(name) && name !== 'projects' ? 'group-hover/item:text-indigo-600' : '']">
                                     {{ relatedItemTitle(name, item) }}
                                 </span>
-                                <span class="mt-1 block truncate text-xs text-gray-500">
+                                <span class="mt-1 block truncate text-xs" :class="name !== 'projects' ? 'text-gray-500' : ''" :style="name === 'projects' ? relatedProjectMetaStyle(item) : undefined">
                                     {{ relatedItemMeta(name, item) }}
                                 </span>
                             </component>
+                            <button
+                                v-if="name === 'tasks' && hiddenRelatedTaskCount()"
+                                type="button"
+                                class="mt-1 inline-flex rounded-full px-2 py-1 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-50 hover:text-indigo-700"
+                                @click="clientRelatedTasksExpanded = true"
+                            >
+                                +{{ hiddenRelatedTaskCount() }} task
+                            </button>
                         </div>
                     </section>
                 </aside>

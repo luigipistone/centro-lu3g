@@ -30,6 +30,8 @@ class CentroPageController extends Controller
     public function dashboard(Request $request): Response
     {
         $guestTaskIds = $this->isGuest($request) ? $this->visibleTaskIdsForUser($request->user()->id) : null;
+        $currentWeekStart = now('Europe/Rome')->startOfWeek()->toDateString();
+        $currentWeekEnd = now('Europe/Rome')->endOfWeek()->toDateString();
         $taskScope = fn ($query) => $query
             ->where(fn ($query) => $query->whereNull('tasks.parent_task_id')->orWhere('tasks.parent_task_id', ''))
             ->when($guestTaskIds !== null, fn ($query) => $query->whereIn('tasks.id', $guestTaskIds));
@@ -46,6 +48,7 @@ class CentroPageController extends Controller
                 ->where($taskScope)
                 ->where('tasks.status', '!=', 'done')
                 ->whereNotNull('tasks.due_date')
+                ->whereBetween('tasks.due_date', [$currentWeekStart, $currentWeekEnd])
                 ->orderBy('tasks.due_date')
                 ->limit(6)
                 ->get(['tasks.id', 'tasks.title', 'tasks.status', 'tasks.priority', 'tasks.due_date', 'clients.name as client_name']),

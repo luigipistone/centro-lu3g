@@ -784,12 +784,12 @@ watch(
                                 <ClearableSearchInput v-model="passwordWidgetSearch" input-class="h-[38px]" placeholder="Cerca per titolo" />
                             </div>
 
-                            <div class="max-h-[136px] min-h-[136px] space-y-1 overflow-y-auto pr-1">
+                            <div class="max-h-[136px] min-h-[136px] space-y-1 overflow-y-auto px-1">
                                 <button
                                     v-for="item in filteredPasswordItems"
                                     :key="`dashboard-password-${item.id}`"
                                     type="button"
-                                    class="group/item flex w-full items-center gap-3 rounded-2xl px-2 py-2 text-left transition hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_12px_28px_rgba(28,42,73,0.10)] hover:ring-1 hover:ring-indigo-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                                    class="group/item flex w-full items-center gap-3 rounded-2xl px-2 py-2 text-left transition hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_8px_18px_rgba(28,42,73,0.08)] hover:ring-1 hover:ring-indigo-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
                                     @click="openPasswordReveal(item)"
                                 >
                                     <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)]" :style="passwordVaultBadgeStyle(item)">
