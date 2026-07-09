@@ -29,6 +29,7 @@ const folderForm = useForm({
 
 const moduleForm = useForm({
     admin_module_folder_id: '',
+    parent_module_id: '',
     name: '',
     category: 'Decisione',
     version: '1.0',
@@ -61,6 +62,16 @@ const moduleDependencyOptions = computed(() => (props.modules || [])
         value: module.id,
         label: `${module.name}${module.folder_name ? ` · ${module.folder_name}` : ''}`,
     })));
+
+const moduleParentOptions = computed(() => [
+    { value: '', label: 'Nessun modulo padre' },
+    ...(props.modules || [])
+        .filter((module) => module.id !== editingModule.value?.id)
+        .map((module) => ({
+            value: module.id,
+            label: `${module.name}${module.folder_name ? ` · ${module.folder_name}` : ''}`,
+        })),
+]);
 
 const selectedFolder = computed(() => (props.folders || []).find((folder) => folder.id === selectedFolderId.value) || null);
 const filteredModules = computed(() => {
@@ -169,6 +180,7 @@ function openModuleDrawer(module = null) {
 
     moduleForm.defaults({
         admin_module_folder_id: module?.admin_module_folder_id || fallbackFolderId,
+        parent_module_id: module?.parent_module_id || '',
         name: module?.name || '',
         category: module?.category || 'Decisione',
         version: module?.version || '1.0',
@@ -346,6 +358,7 @@ function confirmDelete() {
                                         <div class="mt-3 flex flex-wrap items-center gap-2">
                                             <span v-if="module.category" class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">{{ module.category }}</span>
                                             <span class="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{{ statusLabel(module.status) }}</span>
+                                            <span v-if="module.parent_module" class="rounded-full bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700">Figlio</span>
                                         </div>
                                     </div>
                                     <button type="button" class="icon-btn h-8 w-8 shrink-0 text-red-600 hover:bg-red-50" title="Elimina" @click.stop="requestDelete('module', module)">
@@ -355,7 +368,9 @@ function confirmDelete() {
                                 <div class="flex items-center justify-between gap-3 text-xs font-semibold text-gray-400">
                                     <span v-if="module.version">Versione {{ module.version }}</span>
                                     <span v-else>Versione 1.0</span>
-                                    <span v-if="module.dependency_modules?.length">{{ module.dependency_modules.length }} dipendenze</span>
+                                    <span v-if="module.parent_module" class="truncate">Figlio di {{ module.parent_module.name }}</span>
+                                    <span v-else-if="module.children_count">{{ module.children_count }} figli</span>
+                                    <span v-else-if="module.dependency_modules?.length">{{ module.dependency_modules.length }} dipendenze</span>
                                     <span v-else>Nessuna dipendenza</span>
                                 </div>
                             </div>
@@ -434,6 +449,11 @@ function confirmDelete() {
                             <label class="block text-sm font-medium text-gray-700">Cartella</label>
                             <AppSelect v-model="moduleForm.admin_module_folder_id" :options="folderOptions" placeholder="Seleziona cartella" />
                             <div v-if="moduleForm.errors.admin_module_folder_id" class="mt-1 text-sm text-red-600">{{ moduleForm.errors.admin_module_folder_id }}</div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Modulo padre</label>
+                            <AppSelect v-model="moduleForm.parent_module_id" :options="moduleParentOptions" searchable placeholder="Nessun modulo padre" />
+                            <div v-if="moduleForm.errors.parent_module_id" class="mt-1 text-sm text-red-600">{{ moduleForm.errors.parent_module_id }}</div>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Categoria</label>

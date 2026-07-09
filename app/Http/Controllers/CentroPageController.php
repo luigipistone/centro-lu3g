@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -1701,6 +1702,7 @@ class CentroPageController extends Controller
             ->reject(fn ($moduleId) => $moduleId === $id)
             ->values()
             ->all();
+        $this->ensureModuleParentIsValid($payload['parent_module_id'] ?? null, $id);
 
         DB::table('admin_modules')->where('id', $id)->update([
             ...$this->moduleItemDatabasePayload($payload),
@@ -3792,6 +3794,7 @@ class CentroPageController extends Controller
     {
         return $request->validate([
             'admin_module_folder_id' => ['required', 'uuid', Rule::exists('admin_module_folders', 'id')],
+            'parent_module_id' => ['nullable', 'uuid', Rule::exists('admin_modules', 'id')],
             'name' => ['required', 'string', 'max:255'],
             'category' => ['nullable', 'string', 'max:120'],
             'version' => ['nullable', 'string', 'max:40'],
@@ -3813,6 +3816,7 @@ class CentroPageController extends Controller
     {
         return [
             'admin_module_folder_id' => $payload['admin_module_folder_id'],
+            'parent_module_id' => $payload['parent_module_id'] ?? null,
             'name' => $payload['name'],
             'category' => $payload['category'] ?? null,
             'version' => ($payload['version'] ?? null) ?: '1.0',
@@ -3882,10 +3886,17 @@ class CentroPageController extends Controller
                 'folder_name' => $module->folder_name,
             ],
         ]);
+        $childCounts = $modules
+            ->filter(fn ($module) => filled($module->parent_module_id ?? null))
+            ->countBy('parent_module_id');
 
         return $modules
-            ->map(function ($module) use ($moduleLookup) {
+            ->map(function ($module) use ($moduleLookup, $childCounts) {
                 $module->required_inputs = $this->decodeJsonArray($module->required_inputs);
+                $module->parent_module = $module->parent_module_id
+                    ? ($moduleLookup[$module->parent_module_id] ?? null)
+                    : null;
+                $module->children_count = (int) ($childCounts[$module->id] ?? 0);
                 $module->dependency_module_ids = $this->decodeJsonArray($module->dependency_module_ids ?? null);
                 $module->dependency_modules = collect($module->dependency_module_ids)
                     ->map(fn ($moduleId) => $moduleLookup[$moduleId] ?? null)
@@ -3898,6 +3909,32 @@ class CentroPageController extends Controller
 
                 return $module;
             });
+    }
+
+    private function ensureModuleParentIsValid(?string $parentModuleId, string $moduleId): void
+    {
+        if (! $parentModuleId) {
+            return;
+        }
+
+        if ($parentModuleId === $moduleId) {
+            throw ValidationException::withMessages([
+                'parent_module_id' => 'Un modulo non puo\' essere figlio di se stesso.',
+            ]);
+        }
+
+        $parents = DB::table('admin_modules')->pluck('parent_module_id', 'id');
+        $current = $parentModuleId;
+
+        while ($current) {
+            if ($current === $moduleId) {
+                throw ValidationException::withMessages([
+                    'parent_module_id' => 'Questa scelta creerebbe un ciclo nella gerarchia dei moduli.',
+                ]);
+            }
+
+            $current = $parents[$current] ?? null;
+        }
     }
 
     private function adminModuleStatusOptions(): array
