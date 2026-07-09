@@ -345,63 +345,32 @@ function confirmDelete() {
                         </button>
                     </div>
 
-                    <div v-if="filteredModules.length" class="grid gap-4 xl:grid-cols-2">
+                    <div v-if="filteredModules.length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                         <article
                             v-for="module in filteredModules"
                             :key="module.id"
-                            class="content-card group relative overflow-hidden p-5 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+                            class="content-card group relative min-h-36 cursor-pointer overflow-hidden p-5 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+                            @click="openModuleDrawer(module)"
                         >
-                            <div class="flex items-start justify-between gap-4">
-                                <div class="min-w-0">
+                            <div class="flex h-full flex-col justify-between gap-5">
+                                <div class="min-w-0 pr-10">
                                     <div class="flex flex-wrap items-center gap-2">
-                                        <span class="rounded-full px-2.5 py-1 text-xs font-semibold" :style="folderStyle({ color: module.folder_color || '#2563eb' })">
-                                            {{ module.folder_name }}
-                                        </span>
                                         <span v-if="module.category" class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">{{ module.category }}</span>
                                         <span class="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{{ statusLabel(module.status) }}</span>
-                                        <span v-if="module.version" class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">v{{ module.version }}</span>
-                                        <span v-if="!module.active" class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">Disattivo</span>
                                     </div>
-                                    <h3 class="mt-3 text-lg font-semibold text-gray-900">{{ module.name }}</h3>
-                                    <p v-if="module.description" class="mt-2 line-clamp-2 text-sm leading-6 text-gray-500">{{ module.description }}</p>
+                                    <h3 class="mt-3 line-clamp-2 text-base font-semibold leading-6 text-gray-900">{{ module.name }}</h3>
                                 </div>
-                                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.08)] text-[hsl(var(--primary-app))]">
-                                    <PackageOpen class="h-5 w-5" :stroke-width="1.7" />
-                                </span>
-                            </div>
-
-                            <div class="mt-4 grid gap-3 md:grid-cols-3">
-                                <div class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50 p-3">
-                                    <div class="text-xs font-semibold uppercase tracking-wide text-gray-400">Input richiesti</div>
-                                    <div v-if="module.required_inputs?.length" class="mt-2 flex flex-wrap gap-1.5">
-                                        <span v-for="input in module.required_inputs" :key="input" class="rounded-full bg-white px-2 py-1 text-xs font-semibold text-gray-600">{{ input }}</span>
-                                    </div>
-                                    <p v-else class="mt-2 text-xs text-gray-500">Nessun input specifico.</p>
-                                </div>
-                                <div class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50 p-3">
-                                    <div class="text-xs font-semibold uppercase tracking-wide text-gray-400">Agenti</div>
-                                    <div v-if="module.allowed_agents?.length" class="mt-2 flex flex-wrap gap-1.5">
-                                        <span v-for="agent in module.allowed_agents" :key="agent" class="rounded-full bg-white px-2 py-1 text-xs font-semibold text-gray-600">{{ agent }}</span>
-                                    </div>
-                                    <p v-else class="mt-2 text-xs text-gray-500">Nessun agente assegnato.</p>
-                                </div>
-                                <div class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50 p-3">
-                                    <div class="text-xs font-semibold uppercase tracking-wide text-gray-400">Dipendenze</div>
-                                    <div v-if="module.dependency_modules?.length" class="mt-2 flex flex-wrap gap-1.5">
-                                        <span v-for="dependency in module.dependency_modules" :key="dependency.id" class="rounded-full bg-white px-2 py-1 text-xs font-semibold text-gray-600">{{ dependency.name }}</span>
-                                    </div>
-                                    <p v-else class="mt-2 text-xs text-gray-500">Nessuna dipendenza.</p>
+                                <div class="flex items-center justify-between gap-3 text-xs font-semibold text-gray-400">
+                                    <span v-if="module.version">Versione {{ module.version }}</span>
+                                    <span v-else>Versione 1.0</span>
+                                    <span v-if="module.dependency_modules?.length">{{ module.dependency_modules.length }} dipendenze</span>
+                                    <span v-else>Nessuna dipendenza</span>
                                 </div>
                             </div>
 
-                            <div class="mt-4 flex justify-end gap-1">
-                                <button type="button" class="icon-btn h-9 w-9" title="Modifica" @click="openModuleDrawer(module)">
-                                    <Pencil class="h-4 w-4" :stroke-width="1.7" />
-                                </button>
-                                <button type="button" class="icon-btn h-9 w-9 text-red-600 hover:bg-red-50" title="Elimina" @click="requestDelete('module', module)">
+                            <button type="button" class="icon-btn absolute right-4 top-4 h-8 w-8 text-red-600 opacity-0 transition hover:bg-red-50 group-hover:opacity-100" title="Elimina" @click.stop="requestDelete('module', module)">
                                     <Trash2 class="h-4 w-4" :stroke-width="1.7" />
-                                </button>
-                            </div>
+                            </button>
                         </article>
                     </div>
 
