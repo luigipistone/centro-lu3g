@@ -339,17 +339,13 @@ function confirmDelete() {
                             </h3>
                             <p class="mt-1 text-sm text-gray-500">{{ filteredModules.length }} moduli in questa cartella.</p>
                         </div>
-                        <button type="button" class="btn btn-primary" :disabled="!folders?.length" @click="openModuleDrawer()">
-                            <Plus class="h-4 w-4" :stroke-width="1.7" />
-                            Nuovo modulo
-                        </button>
                     </div>
 
                     <div v-if="filteredModules.length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                         <article
                             v-for="module in filteredModules"
                             :key="module.id"
-                            class="content-card group relative min-h-32 cursor-pointer p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+                            class="content-card group relative min-h-32 cursor-pointer rounded-[var(--radius)] p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg"
                             @click="openModuleDrawer(module)"
                         >
                             <div class="flex h-full flex-col justify-between gap-4">
