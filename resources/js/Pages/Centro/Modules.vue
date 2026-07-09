@@ -336,7 +336,7 @@ function confirmDelete() {
                         <article
                             v-for="module in filteredModules"
                             :key="module.id"
-                            class="content-card group relative min-h-32 cursor-pointer rounded-[var(--radius)] p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+                            class="content-card group relative min-h-32 cursor-pointer rounded-[var(--radius)] border border-gray-200 p-4 transition duration-200 hover:-translate-y-0.5 hover:border-[hsl(var(--primary-app)/0.28)] hover:shadow-lg"
                             @click="openModuleDrawer(module)"
                         >
                             <div class="flex h-full flex-col justify-between gap-4">
