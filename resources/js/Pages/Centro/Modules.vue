@@ -3,7 +3,7 @@ import AppSelect from '@/Components/AppSelect.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
-import { Check, Folder, PackageOpen, Pencil, Plus, Trash2, X } from '@lucide/vue';
+import { Check, ChevronLeft, Folder, PackageOpen, Pencil, Plus, Trash2, X } from '@lucide/vue';
 
 const props = defineProps({
     folders: Array,
@@ -11,7 +11,7 @@ const props = defineProps({
     agentOptions: Array,
 });
 
-const selectedFolderId = ref(props.folders?.[0]?.id || 'all');
+const selectedFolderId = ref(null);
 const folderModalOpen = ref(false);
 const moduleDrawerOpen = ref(false);
 const editingFolder = ref(null);
@@ -53,21 +53,16 @@ const folderOptions = computed(() => (props.folders || []).map((folder) => ({
 
 const selectedFolder = computed(() => (props.folders || []).find((folder) => folder.id === selectedFolderId.value) || null);
 const filteredModules = computed(() => {
-    const rows = props.modules || [];
-    if (selectedFolderId.value === 'all') return rows;
+    if (!selectedFolder.value) return [];
 
-    return rows.filter((module) => module.admin_module_folder_id === selectedFolderId.value);
+    return (props.modules || []).filter((module) => module.admin_module_folder_id === selectedFolderId.value);
 });
 
 watch(
     () => props.folders,
     (folders) => {
-        if (!folders?.length) {
-            selectedFolderId.value = 'all';
-            return;
-        }
-        if (selectedFolderId.value !== 'all' && !folders.some((folder) => folder.id === selectedFolderId.value)) {
-            selectedFolderId.value = folders[0].id;
+        if (selectedFolderId.value && !folders?.some((folder) => folder.id === selectedFolderId.value)) {
+            selectedFolderId.value = null;
         }
     },
 );
@@ -99,6 +94,14 @@ function parseLines(value) {
         .split(/\r\n|\r|\n/)
         .map((line) => line.trim().replace(/^[-•]\s*/, ''))
         .filter(Boolean);
+}
+
+function openFolder(folder) {
+    selectedFolderId.value = folder.id;
+}
+
+function closeFolder() {
+    selectedFolderId.value = null;
 }
 
 function openFolderModal(folder = null) {
@@ -136,7 +139,7 @@ function saveFolder() {
 function openModuleDrawer(module = null) {
     editingModule.value = module;
     moduleForm.clearErrors();
-    const fallbackFolderId = selectedFolderId.value !== 'all'
+    const fallbackFolderId = selectedFolderId.value
         ? selectedFolderId.value
         : props.folders?.[0]?.id || '';
 
@@ -235,53 +238,49 @@ function confirmDelete() {
 
         <div class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
-                <section class="surface p-5">
-                    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <section v-if="!selectedFolder" class="surface p-5">
+                    <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
                         <div>
                             <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Cartelle</h3>
-                            <p class="mt-1 text-sm text-gray-500">Seleziona una cartella per vedere i moduli contenuti.</p>
+                            <p class="mt-1 text-sm text-gray-500">Apri una cartella per vedere e gestire i moduli contenuti.</p>
                         </div>
-                        <button
-                            type="button"
-                            :class="['settings-tab', selectedFolderId === 'all' ? 'settings-tab-active' : '']"
-                            @click="selectedFolderId = 'all'"
-                        >
-                            Tutti {{ modules?.length || 0 }}
-                        </button>
+                        <span class="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-500">
+                            {{ folders?.length || 0 }} cartelle · {{ modules?.length || 0 }} moduli
+                        </span>
                     </div>
 
-                    <div v-if="folders?.length" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div v-if="folders?.length" class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
                         <article
                             v-for="folder in folders"
                             :key="folder.id"
-                            :class="[
-                                'content-card project-preview-card group relative min-h-[150px] cursor-pointer overflow-hidden border shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg',
-                                selectedFolderId === folder.id ? 'ring-2 ring-[hsl(var(--primary-app)/0.35)]' : '',
-                            ]"
-                            :style="folderStyle(folder)"
-                            @click="selectedFolderId = folder.id"
+                            class="module-folder-card group"
+                            @click="openFolder(folder)"
                         >
-                            <div class="flex h-full min-h-[150px] flex-col p-5">
-                                <div class="flex items-start justify-between gap-3">
-                                    <div class="min-w-0 pr-16">
-                                        <h3 class="line-clamp-2 text-base font-semibold leading-5">{{ folder.name }}</h3>
-                                        <p v-if="folder.description" class="mt-2 line-clamp-2 text-sm opacity-80">{{ folder.description }}</p>
+                            <div class="module-folder-shape" :style="{ '--folder-color': folder.color || '#2563eb' }">
+                                <div class="module-folder-tab"></div>
+                                <div class="module-folder-body">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div class="min-w-0">
+                                            <h3 class="line-clamp-2 text-base font-semibold leading-5 text-gray-900">{{ folder.name }}</h3>
+                                            <p v-if="folder.description" class="mt-2 line-clamp-2 text-sm leading-5 text-gray-500">{{ folder.description }}</p>
+                                        </div>
+                                        <span class="rounded-full bg-white/80 px-2.5 py-1 text-xs font-semibold text-gray-600 shadow-sm">
+                                            {{ folder.modules_count || 0 }}
+                                        </span>
                                     </div>
-                                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-white/18">
-                                        <Folder class="h-5 w-5" :stroke-width="1.7" />
-                                    </span>
-                                </div>
 
-                                <div class="mt-auto pt-5 text-xs font-semibold opacity-80">
-                                    {{ folder.modules_count || 0 }} moduli
+                                    <div class="mt-auto flex items-center justify-between gap-3 pt-6">
+                                        <span class="text-xs font-semibold text-gray-500">{{ folder.modules_count || 0 }} moduli</span>
+                                        <span class="text-xs font-semibold text-[hsl(var(--primary-app))] opacity-0 transition group-hover:opacity-100">Apri</span>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div class="absolute right-4 top-4 flex items-center gap-1">
-                                <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] bg-white/18 text-current transition hover:-translate-y-0.5 hover:bg-white/28" title="Modifica" @click.stop="openFolderModal(folder)">
+                            <div class="absolute right-4 top-5 z-10 flex items-center gap-1">
+                                <button type="button" class="icon-btn h-8 w-8 bg-white/70" title="Modifica" @click.stop="openFolderModal(folder)">
                                     <Pencil class="h-4 w-4" :stroke-width="1.7" />
                                 </button>
-                                <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] bg-white/18 text-current transition hover:-translate-y-0.5 hover:bg-white/28" title="Elimina" @click.stop="requestDelete('folder', folder)">
+                                <button type="button" class="icon-btn h-8 w-8 bg-white/70 text-red-600 hover:bg-red-50" title="Elimina" @click.stop="requestDelete('folder', folder)">
                                     <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                 </button>
                             </div>
@@ -295,13 +294,17 @@ function confirmDelete() {
                     </div>
                 </section>
 
-                <section class="surface p-5">
+                <section v-else class="surface p-5">
                     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                         <div>
+                            <button type="button" class="mb-2 inline-flex items-center gap-1 text-xs font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]" @click="closeFolder">
+                                <ChevronLeft class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                Cartelle
+                            </button>
                             <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">
-                                {{ selectedFolder ? selectedFolder.name : 'Tutti i moduli' }}
+                                {{ selectedFolder.name }}
                             </h3>
-                            <p class="mt-1 text-sm text-gray-500">{{ filteredModules.length }} moduli disponibili.</p>
+                            <p class="mt-1 text-sm text-gray-500">{{ filteredModules.length }} moduli in questa cartella.</p>
                         </div>
                         <button type="button" class="btn btn-primary" :disabled="!folders?.length" @click="openModuleDrawer()">
                             <Plus class="h-4 w-4" :stroke-width="1.7" />
@@ -510,3 +513,71 @@ function confirmDelete() {
         </div>
     </AuthenticatedLayout>
 </template>
+
+<style scoped>
+.module-folder-card {
+    position: relative;
+    min-height: 178px;
+    cursor: pointer;
+    transition: transform 180ms ease, filter 180ms ease;
+}
+
+.module-folder-card:hover {
+    transform: translateY(-3px);
+}
+
+.module-folder-shape {
+    position: relative;
+    min-height: 178px;
+    padding-top: 18px;
+    filter: drop-shadow(0 18px 34px rgba(15, 23, 42, 0.10));
+    transition: filter 180ms ease;
+}
+
+.module-folder-card:hover .module-folder-shape {
+    filter: drop-shadow(0 22px 44px rgba(37, 99, 235, 0.16));
+}
+
+.module-folder-tab {
+    position: absolute;
+    left: 18px;
+    top: 0;
+    width: 42%;
+    height: 38px;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    background:
+        linear-gradient(180deg, color-mix(in srgb, var(--folder-color) 90%, white), var(--folder-color));
+}
+
+.module-folder-body {
+    position: relative;
+    display: flex;
+    min-height: 160px;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.74);
+    border-radius: var(--radius);
+    background:
+        linear-gradient(135deg, color-mix(in srgb, var(--folder-color) 16%, white) 0%, rgba(255, 255, 255, 0.94) 58%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.94), color-mix(in srgb, var(--folder-color) 9%, white));
+    padding: 22px;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.72),
+        0 1px 0 rgba(255, 255, 255, 0.70);
+}
+
+.module-folder-body::before {
+    position: absolute;
+    inset: 0;
+    border-top: 5px solid var(--folder-color);
+    content: "";
+    opacity: 0.88;
+}
+
+html.dark .module-folder-body {
+    border-color: rgba(148, 163, 184, 0.20);
+    background:
+        linear-gradient(135deg, color-mix(in srgb, var(--folder-color) 20%, rgb(15, 23, 42)) 0%, rgba(15, 23, 42, 0.95) 62%),
+        rgba(15, 23, 42, 0.96);
+}
+</style>
