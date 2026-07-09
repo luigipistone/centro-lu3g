@@ -258,7 +258,7 @@ function confirmDelete() {
                         </span>
                     </div>
 
-                    <div v-if="folders?.length" class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                    <div v-if="folders?.length" class="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
                         <article
                             v-for="folder in folders"
                             :key="folder.id"
