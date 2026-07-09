@@ -532,6 +532,7 @@ function confirmDelete() {
     min-height: 178px;
     padding-top: 18px;
     filter: drop-shadow(0 18px 34px rgba(15, 23, 42, 0.10));
+    perspective: 900px;
     transition: filter 180ms ease;
 }
 
@@ -548,12 +549,12 @@ function confirmDelete() {
     border-radius: var(--radius-sm) var(--radius-sm) 0 0;
     background: var(--folder-color);
     transform-origin: left bottom;
-    transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), filter 220ms ease;
+    transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1), filter 220ms ease;
 }
 
 .module-folder-card:hover .module-folder-tab {
     filter: brightness(1.04);
-    transform: translateY(-7px) rotateX(34deg) skewX(-2deg);
+    transform: translateY(-9px) rotateX(42deg) skewX(-2deg);
 }
 
 .module-folder-body {
@@ -570,11 +571,13 @@ function confirmDelete() {
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.18),
         0 1px 0 rgba(255, 255, 255, 0.28);
-    transition: filter 220ms ease;
+    transform-origin: center bottom;
+    transition: filter 220ms ease, transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .module-folder-card:hover .module-folder-body {
     filter: brightness(1.035);
+    transform: translateY(2px);
 }
 
 .module-folder-body::before {
@@ -589,6 +592,33 @@ function confirmDelete() {
 
 .module-folder-card:hover .module-folder-body::before {
     opacity: 1;
+}
+
+.module-folder-body::after {
+    position: absolute;
+    inset: auto 0 0;
+    height: 58%;
+    border-radius: calc(var(--radius) * 0.85) calc(var(--radius) * 0.85) var(--radius) var(--radius);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.02)),
+        color-mix(in srgb, var(--folder-color) 96%, black);
+    content: "";
+    opacity: 0.78;
+    pointer-events: none;
+    transform-origin: center bottom;
+    transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease, filter 220ms ease;
+    z-index: 0;
+}
+
+.module-folder-card:hover .module-folder-body::after {
+    filter: brightness(1.05);
+    opacity: 0.88;
+    transform: rotateX(-18deg) translateY(8px);
+}
+
+.module-folder-body > * {
+    position: relative;
+    z-index: 1;
 }
 
 html.dark .module-folder-body {
