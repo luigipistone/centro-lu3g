@@ -3,7 +3,7 @@ import AppSelect from '@/Components/AppSelect.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
-import { Check, ChevronLeft, Folder, PackageOpen, Pencil, Plus, Trash2, X } from '@lucide/vue';
+import { Check, ChevronDown, ChevronLeft, Folder, PackageOpen, Pencil, Plus, Trash2, X } from '@lucide/vue';
 
 const props = defineProps({
     folders: Array,
@@ -20,6 +20,7 @@ const editingModule = ref(null);
 const deleteTarget = ref(null);
 const deleteText = ref('');
 const requiredInputsText = ref('');
+const expandedModuleIds = ref([]);
 
 const folderForm = useForm({
     name: '',
@@ -80,6 +81,27 @@ const filteredModules = computed(() => {
     return (props.modules || []).filter((module) => module.admin_module_folder_id === selectedFolderId.value);
 });
 
+const childModulesByParent = computed(() => {
+    const grouped = {};
+    const visibleModuleIds = new Set(filteredModules.value.map((module) => module.id));
+
+    filteredModules.value.forEach((module) => {
+        if (!module.parent_module_id || !visibleModuleIds.has(module.parent_module_id)) return;
+        grouped[module.parent_module_id] = [...(grouped[module.parent_module_id] || []), module];
+    });
+
+    return grouped;
+});
+
+const visibleModules = computed(() => {
+    const childIds = new Set();
+    Object.values(childModulesByParent.value).forEach((children) => {
+        children.forEach((module) => childIds.add(module.id));
+    });
+
+    return filteredModules.value.filter((module) => !childIds.has(module.id));
+});
+
 watch(
     () => props.folders,
     (folders) => {
@@ -137,6 +159,7 @@ function openFolder(folder) {
 
 function closeFolder() {
     selectedFolderId.value = null;
+    expandedModuleIds.value = [];
 }
 
 function openFolderModal(folder = null) {
@@ -210,6 +233,23 @@ function toggleAgent(agent) {
     if (next.has(agent)) next.delete(agent);
     else next.add(agent);
     moduleForm.allowed_agents = Array.from(next);
+}
+
+function childModulesFor(moduleId) {
+    return childModulesByParent.value[moduleId] || [];
+}
+
+function isModuleExpanded(moduleId) {
+    return expandedModuleIds.value.includes(moduleId);
+}
+
+function toggleModuleChildren(moduleId) {
+    if (isModuleExpanded(moduleId)) {
+        expandedModuleIds.value = expandedModuleIds.value.filter((id) => id !== moduleId);
+        return;
+    }
+
+    expandedModuleIds.value = [...expandedModuleIds.value, moduleId];
 }
 
 function saveModule() {
@@ -344,9 +384,9 @@ function confirmDelete() {
                         </div>
                     </div>
 
-                    <div v-if="filteredModules.length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div v-if="visibleModules.length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                         <article
-                            v-for="module in filteredModules"
+                            v-for="module in visibleModules"
                             :key="module.id"
                             class="content-card group relative min-h-32 cursor-pointer rounded-[var(--radius)] border border-gray-200 p-4 transition duration-200 hover:-translate-y-0.5 hover:border-[hsl(var(--primary-app)/0.28)] hover:shadow-lg"
                             @click="openModuleDrawer(module)"
@@ -358,20 +398,41 @@ function confirmDelete() {
                                         <div class="mt-3 flex flex-wrap items-center gap-2">
                                             <span v-if="module.category" class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">{{ module.category }}</span>
                                             <span class="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{{ statusLabel(module.status) }}</span>
-                                            <span v-if="module.parent_module" class="rounded-full bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700">Figlio</span>
                                         </div>
                                     </div>
-                                    <button type="button" class="icon-btn h-8 w-8 shrink-0 text-red-600 hover:bg-red-50" title="Elimina" @click.stop="requestDelete('module', module)">
-                                        <Trash2 class="h-4 w-4" :stroke-width="1.7" />
-                                    </button>
+                                    <div class="flex shrink-0 items-center gap-1">
+                                        <button
+                                            v-if="childModulesFor(module.id).length"
+                                            type="button"
+                                            class="icon-btn h-8 w-8"
+                                            :title="isModuleExpanded(module.id) ? 'Nascondi moduli figli' : 'Mostra moduli figli'"
+                                            @click.stop="toggleModuleChildren(module.id)"
+                                        >
+                                            <ChevronDown :class="['h-4 w-4 transition', isModuleExpanded(module.id) ? 'rotate-180' : '']" :stroke-width="1.7" />
+                                        </button>
+                                        <button type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina" @click.stop="requestDelete('module', module)">
+                                            <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="flex items-center justify-between gap-3 text-xs font-semibold text-gray-400">
                                     <span v-if="module.version">Versione {{ module.version }}</span>
                                     <span v-else>Versione 1.0</span>
-                                    <span v-if="module.parent_module" class="truncate">Figlio di {{ module.parent_module.name }}</span>
-                                    <span v-else-if="module.children_count">{{ module.children_count }} figli</span>
+                                    <span v-if="childModulesFor(module.id).length">{{ childModulesFor(module.id).length }} figli</span>
                                     <span v-else-if="module.dependency_modules?.length">{{ module.dependency_modules.length }} dipendenze</span>
                                     <span v-else>Nessuna dipendenza</span>
+                                </div>
+                                <div v-if="isModuleExpanded(module.id) && childModulesFor(module.id).length" class="space-y-1.5 border-t border-gray-100 pt-3">
+                                    <button
+                                        v-for="child in childModulesFor(module.id)"
+                                        :key="child.id"
+                                        type="button"
+                                        class="flex w-full items-center justify-between gap-3 rounded-[var(--radius-sm)] px-2 py-1.5 text-left text-sm font-semibold text-gray-700 transition hover:bg-gray-50 hover:text-[hsl(var(--primary-app))]"
+                                        @click.stop="openModuleDrawer(child)"
+                                    >
+                                        <span class="truncate">{{ child.name }}</span>
+                                        <span class="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">{{ statusLabel(child.status) }}</span>
+                                    </button>
                                 </div>
                             </div>
                         </article>
