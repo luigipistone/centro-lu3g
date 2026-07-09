@@ -179,7 +179,7 @@ function openModuleDrawer(module = null) {
         rules: module?.rules || '',
         output: module?.output || '',
         allowed_agents: module?.allowed_agents || [],
-        active: module?.active ?? true,
+        active: true,
     });
     moduleForm.reset();
     requiredInputsText.value = (module?.required_inputs || []).join('\n');
@@ -345,20 +345,25 @@ function confirmDelete() {
                         </button>
                     </div>
 
-                    <div v-if="filteredModules.length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <div v-if="filteredModules.length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                         <article
                             v-for="module in filteredModules"
                             :key="module.id"
-                            class="content-card group relative min-h-36 cursor-pointer overflow-hidden p-5 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+                            class="content-card group relative min-h-32 cursor-pointer p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg"
                             @click="openModuleDrawer(module)"
                         >
-                            <div class="flex h-full flex-col justify-between gap-5">
-                                <div class="min-w-0 pr-10">
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        <span v-if="module.category" class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">{{ module.category }}</span>
-                                        <span class="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{{ statusLabel(module.status) }}</span>
+                            <div class="flex h-full flex-col justify-between gap-4">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="min-w-0">
+                                        <h3 class="line-clamp-2 text-base font-semibold leading-6 text-gray-900">{{ module.name }}</h3>
+                                        <div class="mt-3 flex flex-wrap items-center gap-2">
+                                            <span v-if="module.category" class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">{{ module.category }}</span>
+                                            <span class="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{{ statusLabel(module.status) }}</span>
+                                        </div>
                                     </div>
-                                    <h3 class="mt-3 line-clamp-2 text-base font-semibold leading-6 text-gray-900">{{ module.name }}</h3>
+                                    <button type="button" class="icon-btn h-8 w-8 shrink-0 text-red-600 hover:bg-red-50" title="Elimina" @click.stop="requestDelete('module', module)">
+                                        <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                    </button>
                                 </div>
                                 <div class="flex items-center justify-between gap-3 text-xs font-semibold text-gray-400">
                                     <span v-if="module.version">Versione {{ module.version }}</span>
@@ -367,10 +372,6 @@ function confirmDelete() {
                                     <span v-else>Nessuna dipendenza</span>
                                 </div>
                             </div>
-
-                            <button type="button" class="icon-btn absolute right-4 top-4 h-8 w-8 text-red-600 opacity-0 transition hover:bg-red-50 group-hover:opacity-100" title="Elimina" @click.stop="requestDelete('module', module)">
-                                    <Trash2 class="h-4 w-4" :stroke-width="1.7" />
-                            </button>
                         </article>
                     </div>
 
@@ -461,10 +462,6 @@ function confirmDelete() {
                             <AppSelect v-model="moduleForm.status" :options="moduleStatusOptions" placeholder="Stato" />
                             <div v-if="moduleForm.errors.status" class="mt-1 text-sm text-red-600">{{ moduleForm.errors.status }}</div>
                         </div>
-                        <label class="flex min-h-10 items-center gap-3 rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50 px-3 text-sm font-semibold text-gray-700">
-                            <input v-model="moduleForm.active" type="checkbox" class="rounded border-gray-300 text-[hsl(var(--primary-app))] focus:ring-[hsl(var(--primary-app))]" />
-                            Modulo attivo
-                        </label>
                     </div>
 
                     <div>
