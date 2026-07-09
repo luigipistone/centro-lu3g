@@ -89,6 +89,15 @@ function folderStyle(folder) {
     };
 }
 
+function folderCssVars(folder) {
+    const background = folder?.color || '#2563eb';
+
+    return {
+        '--folder-color': background,
+        '--folder-text': contrastColor(background),
+    };
+}
+
 function parseLines(value) {
     return String(value || '')
         .split(/\r\n|\r|\n/)
@@ -256,27 +265,24 @@ function confirmDelete() {
                             class="module-folder-card group"
                             @click="openFolder(folder)"
                         >
-                            <div class="module-folder-shape" :style="{ '--folder-color': folder.color || '#2563eb' }">
+                            <div class="module-folder-shape" :style="folderCssVars(folder)">
                                 <div class="module-folder-tab"></div>
                                 <div class="module-folder-body">
                                     <div class="flex items-start justify-between gap-3">
-                                        <div class="min-w-0">
-                                            <h3 class="line-clamp-2 text-base font-semibold leading-5 text-gray-900">{{ folder.name }}</h3>
-                                            <p v-if="folder.description" class="mt-2 line-clamp-2 text-sm leading-5 text-gray-500">{{ folder.description }}</p>
+                                        <div class="min-w-0 pr-16">
+                                            <h3 class="line-clamp-2 text-base font-semibold leading-5 text-current">{{ folder.name }}</h3>
+                                            <p v-if="folder.description" class="mt-2 line-clamp-2 text-sm leading-5 text-current opacity-[0.72]">{{ folder.description }}</p>
                                         </div>
-                                        <span class="rounded-full bg-white/80 px-2.5 py-1 text-xs font-semibold text-gray-600 shadow-sm">
-                                            {{ folder.modules_count || 0 }}
-                                        </span>
                                     </div>
 
                                     <div class="mt-auto flex items-center justify-between gap-3 pt-6">
-                                        <span class="text-xs font-semibold text-gray-500">{{ folder.modules_count || 0 }} moduli</span>
-                                        <span class="text-xs font-semibold text-[hsl(var(--primary-app))] opacity-0 transition group-hover:opacity-100">Apri</span>
+                                        <span class="text-xs font-semibold text-current opacity-70">{{ folder.modules_count || 0 }} moduli</span>
+                                        <span class="text-xs font-semibold text-current opacity-0 transition group-hover:opacity-80">Apri</span>
                                     </div>
                                 </div>
                             </div>
 
-                            <div class="absolute right-4 top-5 z-10 flex items-center gap-1">
+                            <div class="absolute right-6 top-12 z-10 flex items-center gap-1">
                                 <button type="button" class="icon-btn h-8 w-8 bg-white/70" title="Modifica" @click.stop="openFolderModal(folder)">
                                     <Pencil class="h-4 w-4" :stroke-width="1.7" />
                                 </button>
@@ -519,11 +525,6 @@ function confirmDelete() {
     position: relative;
     min-height: 178px;
     cursor: pointer;
-    transition: transform 180ms ease, filter 180ms ease;
-}
-
-.module-folder-card:hover {
-    transform: translateY(-3px);
 }
 
 .module-folder-shape {
@@ -545,8 +546,14 @@ function confirmDelete() {
     width: 42%;
     height: 38px;
     border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-    background:
-        linear-gradient(180deg, color-mix(in srgb, var(--folder-color) 90%, white), var(--folder-color));
+    background: var(--folder-color);
+    transform-origin: left bottom;
+    transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), filter 220ms ease;
+}
+
+.module-folder-card:hover .module-folder-tab {
+    filter: brightness(1.04);
+    transform: translateY(-7px) rotateX(34deg) skewX(-2deg);
 }
 
 .module-folder-body {
@@ -555,29 +562,37 @@ function confirmDelete() {
     min-height: 160px;
     flex-direction: column;
     overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.74);
+    border: 1px solid color-mix(in srgb, var(--folder-color) 80%, white);
     border-radius: var(--radius);
-    background:
-        linear-gradient(135deg, color-mix(in srgb, var(--folder-color) 16%, white) 0%, rgba(255, 255, 255, 0.94) 58%),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.94), color-mix(in srgb, var(--folder-color) 9%, white));
+    background: var(--folder-color);
+    color: var(--folder-text);
     padding: 22px;
     box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.72),
-        0 1px 0 rgba(255, 255, 255, 0.70);
+        inset 0 1px 0 rgba(255, 255, 255, 0.18),
+        0 1px 0 rgba(255, 255, 255, 0.28);
+    transition: filter 220ms ease;
+}
+
+.module-folder-card:hover .module-folder-body {
+    filter: brightness(1.035);
 }
 
 .module-folder-body::before {
     position: absolute;
-    inset: 0;
-    border-top: 5px solid var(--folder-color);
+    inset: 0 0 auto;
+    height: 14px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent);
     content: "";
-    opacity: 0.88;
+    opacity: 0;
+    transition: opacity 220ms ease;
+}
+
+.module-folder-card:hover .module-folder-body::before {
+    opacity: 1;
 }
 
 html.dark .module-folder-body {
-    border-color: rgba(148, 163, 184, 0.20);
-    background:
-        linear-gradient(135deg, color-mix(in srgb, var(--folder-color) 20%, rgb(15, 23, 42)) 0%, rgba(15, 23, 42, 0.95) 62%),
-        rgba(15, 23, 42, 0.96);
+    border-color: color-mix(in srgb, var(--folder-color) 72%, rgb(15, 23, 42));
+    background: var(--folder-color);
 }
 </style>
