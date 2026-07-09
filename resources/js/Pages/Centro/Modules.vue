@@ -90,6 +90,10 @@ const childModulesByParent = computed(() => {
         grouped[module.parent_module_id] = [...(grouped[module.parent_module_id] || []), module];
     });
 
+    Object.keys(grouped).forEach((parentId) => {
+        grouped[parentId] = grouped[parentId].sort((first, second) => new Date(first.created_at || 0) - new Date(second.created_at || 0));
+    });
+
     return grouped;
 });
 
