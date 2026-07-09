@@ -594,33 +594,6 @@ function confirmDelete() {
     opacity: 1;
 }
 
-.module-folder-body::after {
-    position: absolute;
-    inset: auto 0 0;
-    height: 58%;
-    border-radius: calc(var(--radius) * 0.85) calc(var(--radius) * 0.85) var(--radius) var(--radius);
-    background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.02)),
-        color-mix(in srgb, var(--folder-color) 96%, black);
-    content: "";
-    opacity: 0.78;
-    pointer-events: none;
-    transform-origin: center bottom;
-    transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease, filter 220ms ease;
-    z-index: 0;
-}
-
-.module-folder-card:hover .module-folder-body::after {
-    filter: brightness(1.05);
-    opacity: 0.88;
-    transform: rotateX(-18deg) translateY(8px);
-}
-
-.module-folder-body > * {
-    position: relative;
-    z-index: 1;
-}
-
 html.dark .module-folder-body {
     border-color: color-mix(in srgb, var(--folder-color) 72%, rgb(15, 23, 42));
     background: var(--folder-color);
