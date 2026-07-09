@@ -1629,6 +1629,7 @@ class CentroPageController extends Controller
             'folders' => $this->adminModuleFolderRows(),
             'modules' => $this->adminModuleRows(),
             'agentOptions' => $this->adminModuleAgentOptions(),
+            'moduleStatusOptions' => $this->adminModuleStatusOptions(),
         ]);
     }
 
@@ -1696,6 +1697,10 @@ class CentroPageController extends Controller
         $this->ensureAdmin($request);
         DB::table('admin_modules')->where('id', $id)->exists() || abort(404);
         $payload = $this->validatedModuleItemPayload($request);
+        $payload['dependency_module_ids'] = collect($payload['dependency_module_ids'] ?? [])
+            ->reject(fn ($moduleId) => $moduleId === $id)
+            ->values()
+            ->all();
 
         DB::table('admin_modules')->where('id', $id)->update([
             ...$this->moduleItemDatabasePayload($payload),
@@ -3789,9 +3794,13 @@ class CentroPageController extends Controller
             'admin_module_folder_id' => ['required', 'uuid', Rule::exists('admin_module_folders', 'id')],
             'name' => ['required', 'string', 'max:255'],
             'category' => ['nullable', 'string', 'max:120'],
+            'version' => ['nullable', 'string', 'max:40'],
+            'status' => ['required', Rule::in(['draft', 'test', 'approved'])],
             'description' => ['nullable', 'string', 'max:10000'],
             'required_inputs' => ['nullable'],
             'required_inputs.*' => ['nullable', 'string', 'max:255'],
+            'dependency_module_ids' => ['nullable', 'array'],
+            'dependency_module_ids.*' => ['uuid', Rule::exists('admin_modules', 'id')],
             'rules' => ['nullable', 'string', 'max:20000'],
             'output' => ['nullable', 'string', 'max:10000'],
             'allowed_agents' => ['nullable'],
@@ -3806,8 +3815,11 @@ class CentroPageController extends Controller
             'admin_module_folder_id' => $payload['admin_module_folder_id'],
             'name' => $payload['name'],
             'category' => $payload['category'] ?? null,
+            'version' => ($payload['version'] ?? null) ?: '1.0',
+            'status' => $payload['status'] ?? 'draft',
             'description' => $payload['description'] ?? null,
             'required_inputs' => json_encode($this->normalizeModuleList($payload['required_inputs'] ?? [])),
+            'dependency_module_ids' => json_encode($this->normalizeModuleList($payload['dependency_module_ids'] ?? [])),
             'rules' => $payload['rules'] ?? null,
             'output' => $payload['output'] ?? null,
             'allowed_agents' => json_encode($this->normalizeModuleList($payload['allowed_agents'] ?? [])),
@@ -3852,7 +3864,7 @@ class CentroPageController extends Controller
 
     private function adminModuleRows()
     {
-        return DB::table('admin_modules')
+        $modules = DB::table('admin_modules')
             ->leftJoin('admin_module_folders', 'admin_module_folders.id', '=', 'admin_modules.admin_module_folder_id')
             ->orderBy('admin_module_folders.name')
             ->orderBy('admin_modules.name')
@@ -3860,13 +3872,41 @@ class CentroPageController extends Controller
                 'admin_modules.*',
                 'admin_module_folders.name as folder_name',
                 'admin_module_folders.color as folder_color',
-            ])
-            ->map(function ($module) {
+            ]);
+
+        $moduleLookup = $modules->mapWithKeys(fn ($module) => [
+            $module->id => [
+                'id' => $module->id,
+                'name' => $module->name,
+                'category' => $module->category,
+                'folder_name' => $module->folder_name,
+            ],
+        ]);
+
+        return $modules
+            ->map(function ($module) use ($moduleLookup) {
                 $module->required_inputs = $this->decodeJsonArray($module->required_inputs);
+                $module->dependency_module_ids = $this->decodeJsonArray($module->dependency_module_ids ?? null);
+                $module->dependency_modules = collect($module->dependency_module_ids)
+                    ->map(fn ($moduleId) => $moduleLookup[$moduleId] ?? null)
+                    ->filter()
+                    ->values()
+                    ->all();
                 $module->allowed_agents = $this->decodeJsonArray($module->allowed_agents);
+                $module->status = $module->status ?: 'draft';
+                $module->version = $module->version ?: '1.0';
 
                 return $module;
             });
+    }
+
+    private function adminModuleStatusOptions(): array
+    {
+        return [
+            ['value' => 'draft', 'label' => 'Bozza'],
+            ['value' => 'test', 'label' => 'Test'],
+            ['value' => 'approved', 'label' => 'Approvato'],
+        ];
     }
 
     private function adminModuleAgentOptions(): array

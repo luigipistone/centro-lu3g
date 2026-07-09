@@ -9,6 +9,7 @@ const props = defineProps({
     folders: Array,
     modules: Array,
     agentOptions: Array,
+    moduleStatusOptions: Array,
 });
 
 const selectedFolderId = ref(null);
@@ -30,8 +31,11 @@ const moduleForm = useForm({
     admin_module_folder_id: '',
     name: '',
     category: 'Decisione',
+    version: '1.0',
+    status: 'draft',
     description: '',
     required_inputs: [],
+    dependency_module_ids: [],
     rules: '',
     output: '',
     allowed_agents: [],
@@ -50,6 +54,13 @@ const folderOptions = computed(() => (props.folders || []).map((folder) => ({
     value: folder.id,
     label: folder.name,
 })));
+
+const moduleDependencyOptions = computed(() => (props.modules || [])
+    .filter((module) => module.id !== editingModule.value?.id)
+    .map((module) => ({
+        value: module.id,
+        label: `${module.name}${module.folder_name ? ` · ${module.folder_name}` : ''}`,
+    })));
 
 const selectedFolder = computed(() => (props.folders || []).find((folder) => folder.id === selectedFolderId.value) || null);
 const filteredModules = computed(() => {
@@ -96,6 +107,10 @@ function folderCssVars(folder) {
         '--folder-color': background,
         '--folder-text': contrastColor(background),
     };
+}
+
+function statusLabel(status) {
+    return (props.moduleStatusOptions || []).find((option) => option.value === status)?.label || 'Bozza';
 }
 
 function parseLines(value) {
@@ -156,8 +171,11 @@ function openModuleDrawer(module = null) {
         admin_module_folder_id: module?.admin_module_folder_id || fallbackFolderId,
         name: module?.name || '',
         category: module?.category || 'Decisione',
+        version: module?.version || '1.0',
+        status: module?.status || 'draft',
         description: module?.description || '',
         required_inputs: module?.required_inputs || [],
+        dependency_module_ids: module?.dependency_module_ids || [],
         rules: module?.rules || '',
         output: module?.output || '',
         allowed_agents: module?.allowed_agents || [],
@@ -180,6 +198,15 @@ function toggleAgent(agent) {
     if (next.has(agent)) next.delete(agent);
     else next.add(agent);
     moduleForm.allowed_agents = Array.from(next);
+}
+
+function toggleDependency(moduleId) {
+    if (moduleId === editingModule.value?.id) return;
+
+    const next = new Set(moduleForm.dependency_module_ids || []);
+    if (next.has(moduleId)) next.delete(moduleId);
+    else next.add(moduleId);
+    moduleForm.dependency_module_ids = Array.from(next);
 }
 
 function saveModule() {
@@ -331,6 +358,8 @@ function confirmDelete() {
                                             {{ module.folder_name }}
                                         </span>
                                         <span v-if="module.category" class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">{{ module.category }}</span>
+                                        <span class="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{{ statusLabel(module.status) }}</span>
+                                        <span v-if="module.version" class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">v{{ module.version }}</span>
                                         <span v-if="!module.active" class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">Disattivo</span>
                                     </div>
                                     <h3 class="mt-3 text-lg font-semibold text-gray-900">{{ module.name }}</h3>
@@ -341,7 +370,7 @@ function confirmDelete() {
                                 </span>
                             </div>
 
-                            <div class="mt-4 grid gap-3 md:grid-cols-2">
+                            <div class="mt-4 grid gap-3 md:grid-cols-3">
                                 <div class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50 p-3">
                                     <div class="text-xs font-semibold uppercase tracking-wide text-gray-400">Input richiesti</div>
                                     <div v-if="module.required_inputs?.length" class="mt-2 flex flex-wrap gap-1.5">
@@ -355,6 +384,13 @@ function confirmDelete() {
                                         <span v-for="agent in module.allowed_agents" :key="agent" class="rounded-full bg-white px-2 py-1 text-xs font-semibold text-gray-600">{{ agent }}</span>
                                     </div>
                                     <p v-else class="mt-2 text-xs text-gray-500">Nessun agente assegnato.</p>
+                                </div>
+                                <div class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50 p-3">
+                                    <div class="text-xs font-semibold uppercase tracking-wide text-gray-400">Dipendenze</div>
+                                    <div v-if="module.dependency_modules?.length" class="mt-2 flex flex-wrap gap-1.5">
+                                        <span v-for="dependency in module.dependency_modules" :key="dependency.id" class="rounded-full bg-white px-2 py-1 text-xs font-semibold text-gray-600">{{ dependency.name }}</span>
+                                    </div>
+                                    <p v-else class="mt-2 text-xs text-gray-500">Nessuna dipendenza.</p>
                                 </div>
                             </div>
 
@@ -446,6 +482,16 @@ function confirmDelete() {
                             <label class="block text-sm font-medium text-gray-700">Categoria</label>
                             <AppSelect v-model="moduleForm.category" :options="categoryOptions" placeholder="Categoria" />
                         </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Versione</label>
+                            <input v-model="moduleForm.version" class="form-control" placeholder="1.0" />
+                            <div v-if="moduleForm.errors.version" class="mt-1 text-sm text-red-600">{{ moduleForm.errors.version }}</div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Stato</label>
+                            <AppSelect v-model="moduleForm.status" :options="moduleStatusOptions" placeholder="Stato" />
+                            <div v-if="moduleForm.errors.status" class="mt-1 text-sm text-red-600">{{ moduleForm.errors.status }}</div>
+                        </div>
                         <label class="flex min-h-10 items-center gap-3 rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50 px-3 text-sm font-semibold text-gray-700">
                             <input v-model="moduleForm.active" type="checkbox" class="rounded border-gray-300 text-[hsl(var(--primary-app))] focus:ring-[hsl(var(--primary-app))]" />
                             Modulo attivo
@@ -461,6 +507,32 @@ function confirmDelete() {
                         <label class="block text-sm font-medium text-gray-700">Input richiesti</label>
                         <textarea v-model="requiredInputsText" rows="5" class="form-control font-medium" placeholder="URL&#10;Settore&#10;Obiettivo&#10;Budget&#10;Competitor"></textarea>
                         <p class="mt-1 text-xs text-gray-500">Inserisci un input per riga.</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Dipendenze</label>
+                        <p class="mt-1 text-xs text-gray-500">Seleziona gli altri moduli da cui questo modulo dipende.</p>
+                        <div v-if="moduleDependencyOptions.length" class="mt-3 flex flex-wrap gap-2">
+                            <button
+                                v-for="module in moduleDependencyOptions"
+                                :key="module.value"
+                                type="button"
+                                :class="[
+                                    'inline-flex min-h-9 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5',
+                                    moduleForm.dependency_module_ids?.includes(module.value)
+                                        ? 'border-[hsl(var(--primary-app)/0.35)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]'
+                                        : 'border-gray-200 bg-white text-gray-600 hover:border-[hsl(var(--primary-app)/0.25)]',
+                                ]"
+                                @click="toggleDependency(module.value)"
+                            >
+                                <Check :class="['h-3.5 w-3.5', moduleForm.dependency_module_ids?.includes(module.value) ? 'opacity-100' : 'opacity-0']" :stroke-width="2" />
+                                {{ module.label }}
+                            </button>
+                        </div>
+                        <p v-else class="mt-2 rounded-[var(--radius-sm)] bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                            Nessun altro modulo disponibile.
+                        </p>
+                        <div v-if="moduleForm.errors.dependency_module_ids" class="mt-1 text-sm text-red-600">{{ moduleForm.errors.dependency_module_ids }}</div>
                     </div>
 
                     <div>
