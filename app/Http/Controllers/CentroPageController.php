@@ -1621,6 +1621,99 @@ class CentroPageController extends Controller
         ]);
     }
 
+    public function modules(Request $request): Response
+    {
+        $this->ensureAdmin($request);
+
+        return Inertia::render('Centro/Modules', [
+            'folders' => $this->adminModuleFolderRows(),
+            'modules' => $this->adminModuleRows(),
+            'agentOptions' => $this->adminModuleAgentOptions(),
+        ]);
+    }
+
+    public function storeModuleFolder(Request $request): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        $payload = $this->validatedModuleFolderPayload($request);
+
+        DB::table('admin_module_folders')->insert([
+            'id' => (string) str()->uuid(),
+            'name' => $payload['name'],
+            'description' => $payload['description'] ?? null,
+            'color' => $payload['color'] ?? '#2563eb',
+            'created_by' => $request->user()->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return back()->with('status', 'Cartella creata.');
+    }
+
+    public function updateModuleFolder(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        DB::table('admin_module_folders')->where('id', $id)->exists() || abort(404);
+        $payload = $this->validatedModuleFolderPayload($request);
+
+        DB::table('admin_module_folders')->where('id', $id)->update([
+            'name' => $payload['name'],
+            'description' => $payload['description'] ?? null,
+            'color' => $payload['color'] ?? '#2563eb',
+            'updated_at' => now(),
+        ]);
+
+        return back()->with('status', 'Cartella aggiornata.');
+    }
+
+    public function destroyModuleFolder(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        DB::table('admin_module_folders')->where('id', $id)->exists() || abort(404);
+        DB::table('admin_module_folders')->where('id', $id)->delete();
+
+        return back()->with('status', 'Cartella eliminata.');
+    }
+
+    public function storeModuleItem(Request $request): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        $payload = $this->validatedModuleItemPayload($request);
+
+        DB::table('admin_modules')->insert([
+            'id' => (string) str()->uuid(),
+            ...$this->moduleItemDatabasePayload($payload),
+            'created_by' => $request->user()->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return back()->with('status', 'Modulo creato.');
+    }
+
+    public function updateModuleItem(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        DB::table('admin_modules')->where('id', $id)->exists() || abort(404);
+        $payload = $this->validatedModuleItemPayload($request);
+
+        DB::table('admin_modules')->where('id', $id)->update([
+            ...$this->moduleItemDatabasePayload($payload),
+            'updated_at' => now(),
+        ]);
+
+        return back()->with('status', 'Modulo aggiornato.');
+    }
+
+    public function destroyModuleItem(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        DB::table('admin_modules')->where('id', $id)->exists() || abort(404);
+        DB::table('admin_modules')->where('id', $id)->delete();
+
+        return back()->with('status', 'Modulo eliminato.');
+    }
+
     public function enablePush(Request $request): \Illuminate\Contracts\View\View
     {
         return view('push-enable', [
@@ -3679,6 +3772,122 @@ class CentroPageController extends Controller
     private function canManageDocuments(Request $request): bool
     {
         return in_array($this->currentUserRole($request), ['superadmin', 'admin'], true);
+    }
+
+    private function validatedModuleFolderPayload(Request $request): array
+    {
+        return $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:5000'],
+            'color' => ['nullable', 'string', 'max:24'],
+        ]);
+    }
+
+    private function validatedModuleItemPayload(Request $request): array
+    {
+        return $request->validate([
+            'admin_module_folder_id' => ['required', 'uuid', Rule::exists('admin_module_folders', 'id')],
+            'name' => ['required', 'string', 'max:255'],
+            'category' => ['nullable', 'string', 'max:120'],
+            'description' => ['nullable', 'string', 'max:10000'],
+            'required_inputs' => ['nullable'],
+            'required_inputs.*' => ['nullable', 'string', 'max:255'],
+            'rules' => ['nullable', 'string', 'max:20000'],
+            'output' => ['nullable', 'string', 'max:10000'],
+            'allowed_agents' => ['nullable'],
+            'allowed_agents.*' => ['nullable', 'string', 'max:120'],
+            'active' => ['nullable', 'boolean'],
+        ]);
+    }
+
+    private function moduleItemDatabasePayload(array $payload): array
+    {
+        return [
+            'admin_module_folder_id' => $payload['admin_module_folder_id'],
+            'name' => $payload['name'],
+            'category' => $payload['category'] ?? null,
+            'description' => $payload['description'] ?? null,
+            'required_inputs' => json_encode($this->normalizeModuleList($payload['required_inputs'] ?? [])),
+            'rules' => $payload['rules'] ?? null,
+            'output' => $payload['output'] ?? null,
+            'allowed_agents' => json_encode($this->normalizeModuleList($payload['allowed_agents'] ?? [])),
+            'active' => (bool) ($payload['active'] ?? true),
+        ];
+    }
+
+    private function normalizeModuleList(mixed $value): array
+    {
+        if (is_string($value)) {
+            $value = preg_split('/\r\n|\r|\n/', $value) ?: [];
+        }
+
+        if (! is_array($value)) {
+            return [];
+        }
+
+        return collect($value)
+            ->map(fn ($item) => trim((string) $item))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function adminModuleFolderRows()
+    {
+        $moduleCounts = DB::table('admin_modules')
+            ->select('admin_module_folder_id', DB::raw('count(*) as aggregate'))
+            ->groupBy('admin_module_folder_id')
+            ->pluck('aggregate', 'admin_module_folder_id');
+
+        return DB::table('admin_module_folders')
+            ->orderBy('name')
+            ->get()
+            ->map(function ($folder) use ($moduleCounts) {
+                $folder->modules_count = (int) ($moduleCounts[$folder->id] ?? 0);
+
+                return $folder;
+            });
+    }
+
+    private function adminModuleRows()
+    {
+        return DB::table('admin_modules')
+            ->leftJoin('admin_module_folders', 'admin_module_folders.id', '=', 'admin_modules.admin_module_folder_id')
+            ->orderBy('admin_module_folders.name')
+            ->orderBy('admin_modules.name')
+            ->get([
+                'admin_modules.*',
+                'admin_module_folders.name as folder_name',
+                'admin_module_folders.color as folder_color',
+            ])
+            ->map(function ($module) {
+                $module->required_inputs = $this->decodeJsonArray($module->required_inputs);
+                $module->allowed_agents = $this->decodeJsonArray($module->allowed_agents);
+
+                return $module;
+            });
+    }
+
+    private function adminModuleAgentOptions(): array
+    {
+        return [
+            'Project Manager',
+            'Account',
+            'Copywriter',
+            'Designer',
+            'Developer',
+            'SEO Specialist',
+            'ADV Specialist',
+            'Social Media Manager',
+        ];
+    }
+
+    private function decodeJsonArray(?string $json): array
+    {
+        $decoded = $json ? json_decode($json, true) : [];
+
+        return is_array($decoded) ? array_values($decoded) : [];
     }
 
     private function canManagePasswords(Request $request): bool

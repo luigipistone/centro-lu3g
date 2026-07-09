@@ -25,6 +25,7 @@ import {
     Search,
     Settings,
     Moon,
+    PackageOpen,
     Sun,
     Target,
     UserCog,
@@ -327,6 +328,7 @@ const groups = computed(() => {
                 ['notifications.index', 'Notifiche', Bell],
                 ['billing.index', 'Fatturazione', Receipt],
                 ['users.index', 'Utenti', UserCog],
+                ['modules.index', 'Moduli', PackageOpen],
             ],
         },
     ];

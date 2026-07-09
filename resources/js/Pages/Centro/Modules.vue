@@ -1,0 +1,512 @@
+<script setup>
+import AppSelect from '@/Components/AppSelect.vue';
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import { Head, router, useForm } from '@inertiajs/vue3';
+import { computed, ref, watch } from 'vue';
+import { Check, Folder, PackageOpen, Pencil, Plus, Trash2, X } from '@lucide/vue';
+
+const props = defineProps({
+    folders: Array,
+    modules: Array,
+    agentOptions: Array,
+});
+
+const selectedFolderId = ref(props.folders?.[0]?.id || 'all');
+const folderModalOpen = ref(false);
+const moduleDrawerOpen = ref(false);
+const editingFolder = ref(null);
+const editingModule = ref(null);
+const deleteTarget = ref(null);
+const deleteText = ref('');
+const requiredInputsText = ref('');
+
+const folderForm = useForm({
+    name: '',
+    description: '',
+    color: '#2563eb',
+});
+
+const moduleForm = useForm({
+    admin_module_folder_id: '',
+    name: '',
+    category: 'Decisione',
+    description: '',
+    required_inputs: [],
+    rules: '',
+    output: '',
+    allowed_agents: [],
+    active: true,
+});
+
+const categoryOptions = [
+    { value: 'Decisione', label: 'Decisione' },
+    { value: 'Procedura', label: 'Procedura' },
+    { value: 'Analisi', label: 'Analisi' },
+    { value: 'Checklist', label: 'Checklist' },
+    { value: 'Operativo', label: 'Operativo' },
+];
+
+const folderOptions = computed(() => (props.folders || []).map((folder) => ({
+    value: folder.id,
+    label: folder.name,
+})));
+
+const selectedFolder = computed(() => (props.folders || []).find((folder) => folder.id === selectedFolderId.value) || null);
+const filteredModules = computed(() => {
+    const rows = props.modules || [];
+    if (selectedFolderId.value === 'all') return rows;
+
+    return rows.filter((module) => module.admin_module_folder_id === selectedFolderId.value);
+});
+
+watch(
+    () => props.folders,
+    (folders) => {
+        if (!folders?.length) {
+            selectedFolderId.value = 'all';
+            return;
+        }
+        if (selectedFolderId.value !== 'all' && !folders.some((folder) => folder.id === selectedFolderId.value)) {
+            selectedFolderId.value = folders[0].id;
+        }
+    },
+);
+
+function contrastColor(hex) {
+    const value = String(hex || '#2563eb').replace('#', '');
+    const full = value.length === 3 ? value.split('').map((part) => part + part).join('') : value;
+    const int = Number.parseInt(full, 16);
+    if (Number.isNaN(int)) return '#ffffff';
+
+    const red = (int >> 16) & 255;
+    const green = (int >> 8) & 255;
+    const blue = int & 255;
+    const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255;
+
+    return luminance > 0.62 ? '#111827' : '#ffffff';
+}
+
+function folderStyle(folder) {
+    const background = folder?.color || '#2563eb';
+    return {
+        backgroundColor: background,
+        color: contrastColor(background),
+    };
+}
+
+function parseLines(value) {
+    return String(value || '')
+        .split(/\r\n|\r|\n/)
+        .map((line) => line.trim().replace(/^[-•]\s*/, ''))
+        .filter(Boolean);
+}
+
+function openFolderModal(folder = null) {
+    editingFolder.value = folder;
+    folderForm.clearErrors();
+    folderForm.defaults({
+        name: folder?.name || '',
+        description: folder?.description || '',
+        color: folder?.color || '#2563eb',
+    });
+    folderForm.reset();
+    folderModalOpen.value = true;
+}
+
+function closeFolderModal() {
+    folderModalOpen.value = false;
+    editingFolder.value = null;
+    folderForm.reset();
+}
+
+function saveFolder() {
+    const options = {
+        preserveScroll: true,
+        onSuccess: closeFolderModal,
+    };
+
+    if (editingFolder.value) {
+        folderForm.put(route('modules.folders.update', editingFolder.value.id), options);
+        return;
+    }
+
+    folderForm.post(route('modules.folders.store'), options);
+}
+
+function openModuleDrawer(module = null) {
+    editingModule.value = module;
+    moduleForm.clearErrors();
+    const fallbackFolderId = selectedFolderId.value !== 'all'
+        ? selectedFolderId.value
+        : props.folders?.[0]?.id || '';
+
+    moduleForm.defaults({
+        admin_module_folder_id: module?.admin_module_folder_id || fallbackFolderId,
+        name: module?.name || '',
+        category: module?.category || 'Decisione',
+        description: module?.description || '',
+        required_inputs: module?.required_inputs || [],
+        rules: module?.rules || '',
+        output: module?.output || '',
+        allowed_agents: module?.allowed_agents || [],
+        active: module?.active ?? true,
+    });
+    moduleForm.reset();
+    requiredInputsText.value = (module?.required_inputs || []).join('\n');
+    moduleDrawerOpen.value = true;
+}
+
+function closeModuleDrawer() {
+    moduleDrawerOpen.value = false;
+    editingModule.value = null;
+    moduleForm.reset();
+    requiredInputsText.value = '';
+}
+
+function toggleAgent(agent) {
+    const next = new Set(moduleForm.allowed_agents || []);
+    if (next.has(agent)) next.delete(agent);
+    else next.add(agent);
+    moduleForm.allowed_agents = Array.from(next);
+}
+
+function saveModule() {
+    moduleForm.required_inputs = parseLines(requiredInputsText.value);
+
+    const options = {
+        preserveScroll: true,
+        onSuccess: closeModuleDrawer,
+    };
+
+    if (editingModule.value) {
+        moduleForm.put(route('modules.items.update', editingModule.value.id), options);
+        return;
+    }
+
+    moduleForm.post(route('modules.items.store'), options);
+}
+
+function requestDelete(type, item) {
+    deleteTarget.value = { type, item };
+    deleteText.value = '';
+}
+
+function closeDelete() {
+    deleteTarget.value = null;
+    deleteText.value = '';
+}
+
+function confirmDelete() {
+    if (!deleteTarget.value || deleteText.value !== 'ELIMINA') return;
+
+    const routeName = deleteTarget.value.type === 'folder'
+        ? route('modules.folders.destroy', deleteTarget.value.item.id)
+        : route('modules.items.destroy', deleteTarget.value.item.id);
+
+    router.delete(routeName, {
+        preserveScroll: true,
+        onSuccess: closeDelete,
+    });
+}
+</script>
+
+<template>
+    <Head title="Moduli" />
+
+    <AuthenticatedLayout>
+        <template #header>
+            <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div>
+                    <h2 class="text-xl font-semibold leading-tight text-gray-800">Moduli</h2>
+                    <p class="mt-1 text-sm text-gray-500">Cartelle operative con regole, input richiesti, output e agenti abilitati.</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" class="btn btn-outline" @click="openFolderModal()">
+                        <Folder class="h-4 w-4" :stroke-width="1.7" />
+                        Nuova cartella
+                    </button>
+                    <button type="button" class="btn btn-primary" :disabled="!folders?.length" @click="openModuleDrawer()">
+                        <Plus class="h-4 w-4" :stroke-width="1.7" />
+                        Nuovo modulo
+                    </button>
+                </div>
+            </div>
+        </template>
+
+        <div class="py-8">
+            <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
+                <section class="surface p-5">
+                    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Cartelle</h3>
+                            <p class="mt-1 text-sm text-gray-500">Seleziona una cartella per vedere i moduli contenuti.</p>
+                        </div>
+                        <button
+                            type="button"
+                            :class="['settings-tab', selectedFolderId === 'all' ? 'settings-tab-active' : '']"
+                            @click="selectedFolderId = 'all'"
+                        >
+                            Tutti {{ modules?.length || 0 }}
+                        </button>
+                    </div>
+
+                    <div v-if="folders?.length" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        <article
+                            v-for="folder in folders"
+                            :key="folder.id"
+                            :class="[
+                                'content-card project-preview-card group relative min-h-[150px] cursor-pointer overflow-hidden border shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg',
+                                selectedFolderId === folder.id ? 'ring-2 ring-[hsl(var(--primary-app)/0.35)]' : '',
+                            ]"
+                            :style="folderStyle(folder)"
+                            @click="selectedFolderId = folder.id"
+                        >
+                            <div class="flex h-full min-h-[150px] flex-col p-5">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="min-w-0 pr-16">
+                                        <h3 class="line-clamp-2 text-base font-semibold leading-5">{{ folder.name }}</h3>
+                                        <p v-if="folder.description" class="mt-2 line-clamp-2 text-sm opacity-80">{{ folder.description }}</p>
+                                    </div>
+                                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-white/18">
+                                        <Folder class="h-5 w-5" :stroke-width="1.7" />
+                                    </span>
+                                </div>
+
+                                <div class="mt-auto pt-5 text-xs font-semibold opacity-80">
+                                    {{ folder.modules_count || 0 }} moduli
+                                </div>
+                            </div>
+
+                            <div class="absolute right-4 top-4 flex items-center gap-1">
+                                <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] bg-white/18 text-current transition hover:-translate-y-0.5 hover:bg-white/28" title="Modifica" @click.stop="openFolderModal(folder)">
+                                    <Pencil class="h-4 w-4" :stroke-width="1.7" />
+                                </button>
+                                <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] bg-white/18 text-current transition hover:-translate-y-0.5 hover:bg-white/28" title="Elimina" @click.stop="requestDelete('folder', folder)">
+                                    <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                </button>
+                            </div>
+                        </article>
+                    </div>
+
+                    <div v-else class="rounded-[var(--radius)] border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
+                        <Folder class="mx-auto h-8 w-8 text-[hsl(var(--primary-app))]" :stroke-width="1.7" />
+                        <h3 class="mt-3 text-base font-semibold text-gray-900">Nessuna cartella</h3>
+                        <p class="mt-1 text-sm text-gray-500">Crea la prima cartella per organizzare i moduli.</p>
+                    </div>
+                </section>
+
+                <section class="surface p-5">
+                    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">
+                                {{ selectedFolder ? selectedFolder.name : 'Tutti i moduli' }}
+                            </h3>
+                            <p class="mt-1 text-sm text-gray-500">{{ filteredModules.length }} moduli disponibili.</p>
+                        </div>
+                        <button type="button" class="btn btn-primary" :disabled="!folders?.length" @click="openModuleDrawer()">
+                            <Plus class="h-4 w-4" :stroke-width="1.7" />
+                            Nuovo modulo
+                        </button>
+                    </div>
+
+                    <div v-if="filteredModules.length" class="grid gap-4 xl:grid-cols-2">
+                        <article
+                            v-for="module in filteredModules"
+                            :key="module.id"
+                            class="content-card group relative overflow-hidden p-5 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+                        >
+                            <div class="flex items-start justify-between gap-4">
+                                <div class="min-w-0">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="rounded-full px-2.5 py-1 text-xs font-semibold" :style="folderStyle({ color: module.folder_color || '#2563eb' })">
+                                            {{ module.folder_name }}
+                                        </span>
+                                        <span v-if="module.category" class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">{{ module.category }}</span>
+                                        <span v-if="!module.active" class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">Disattivo</span>
+                                    </div>
+                                    <h3 class="mt-3 text-lg font-semibold text-gray-900">{{ module.name }}</h3>
+                                    <p v-if="module.description" class="mt-2 line-clamp-2 text-sm leading-6 text-gray-500">{{ module.description }}</p>
+                                </div>
+                                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.08)] text-[hsl(var(--primary-app))]">
+                                    <PackageOpen class="h-5 w-5" :stroke-width="1.7" />
+                                </span>
+                            </div>
+
+                            <div class="mt-4 grid gap-3 md:grid-cols-2">
+                                <div class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50 p-3">
+                                    <div class="text-xs font-semibold uppercase tracking-wide text-gray-400">Input richiesti</div>
+                                    <div v-if="module.required_inputs?.length" class="mt-2 flex flex-wrap gap-1.5">
+                                        <span v-for="input in module.required_inputs" :key="input" class="rounded-full bg-white px-2 py-1 text-xs font-semibold text-gray-600">{{ input }}</span>
+                                    </div>
+                                    <p v-else class="mt-2 text-xs text-gray-500">Nessun input specifico.</p>
+                                </div>
+                                <div class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50 p-3">
+                                    <div class="text-xs font-semibold uppercase tracking-wide text-gray-400">Agenti</div>
+                                    <div v-if="module.allowed_agents?.length" class="mt-2 flex flex-wrap gap-1.5">
+                                        <span v-for="agent in module.allowed_agents" :key="agent" class="rounded-full bg-white px-2 py-1 text-xs font-semibold text-gray-600">{{ agent }}</span>
+                                    </div>
+                                    <p v-else class="mt-2 text-xs text-gray-500">Nessun agente assegnato.</p>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 flex justify-end gap-1">
+                                <button type="button" class="icon-btn h-9 w-9" title="Modifica" @click="openModuleDrawer(module)">
+                                    <Pencil class="h-4 w-4" :stroke-width="1.7" />
+                                </button>
+                                <button type="button" class="icon-btn h-9 w-9 text-red-600 hover:bg-red-50" title="Elimina" @click="requestDelete('module', module)">
+                                    <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                </button>
+                            </div>
+                        </article>
+                    </div>
+
+                    <div v-else class="rounded-[var(--radius)] border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
+                        <PackageOpen class="mx-auto h-8 w-8 text-[hsl(var(--primary-app))]" :stroke-width="1.7" />
+                        <h3 class="mt-3 text-base font-semibold text-gray-900">Nessun modulo</h3>
+                        <p class="mt-1 text-sm text-gray-500">Aggiungi un modulo con regole, output e agenti abilitati.</p>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <div v-if="folderModalOpen" class="fixed inset-0 z-[5200] grid place-items-center bg-gray-950/20 px-4 backdrop-blur-[2px]" @click.self="closeFolderModal">
+            <section class="w-full max-w-xl rounded-[var(--radius)] bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.20)]">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900">{{ editingFolder ? 'Modifica cartella' : 'Nuova cartella' }}</h3>
+                        <p class="mt-1 text-sm text-gray-500">Organizza i moduli per area o processo.</p>
+                    </div>
+                    <button type="button" class="icon-btn h-9 w-9" @click="closeFolderModal">
+                        <X class="h-5 w-5" :stroke-width="1.7" />
+                    </button>
+                </div>
+
+                <div class="mt-5 space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Nome</label>
+                        <input v-model="folderForm.name" class="form-control" />
+                        <div v-if="folderForm.errors.name" class="mt-1 text-sm text-red-600">{{ folderForm.errors.name }}</div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Descrizione</label>
+                        <textarea v-model="folderForm.description" rows="3" class="form-control"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Colore</label>
+                        <div class="mt-1 flex items-center gap-3">
+                            <input v-model="folderForm.color" type="color" class="h-10 w-16 cursor-pointer rounded-[var(--radius-sm)] border border-gray-200 bg-white p-1" />
+                            <input v-model="folderForm.color" class="form-control font-mono" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6 flex justify-end gap-2">
+                    <button type="button" class="btn btn-outline" @click="closeFolderModal">Annulla</button>
+                    <button type="button" class="btn btn-primary" :disabled="folderForm.processing" @click="saveFolder">
+                        {{ editingFolder ? 'Salva' : 'Crea cartella' }}
+                    </button>
+                </div>
+            </section>
+        </div>
+
+        <div v-if="moduleDrawerOpen" class="fixed inset-0 z-[5200] bg-gray-950/20 backdrop-blur-[2px]" @click.self="closeModuleDrawer">
+            <aside class="ml-auto flex h-dvh w-full max-w-3xl flex-col overflow-hidden bg-white shadow-[0_24px_90px_rgba(15,23,42,0.25)]">
+                <header class="flex items-start justify-between gap-4 border-b border-gray-100 p-6">
+                    <div>
+                        <h3 class="text-xl font-semibold text-gray-900">{{ editingModule ? 'Modifica modulo' : 'Nuovo modulo' }}</h3>
+                        <p class="mt-1 text-sm text-gray-500">Definisci quando usarlo, quali dati servono e quale output deve produrre.</p>
+                    </div>
+                    <button type="button" class="icon-btn h-10 w-10" @click="closeModuleDrawer">
+                        <X class="h-5 w-5" :stroke-width="1.7" />
+                    </button>
+                </header>
+
+                <div class="flex-1 space-y-5 overflow-y-auto p-6">
+                    <div class="grid gap-4 md:grid-cols-2">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Nome</label>
+                            <input v-model="moduleForm.name" class="form-control" placeholder="Quando proporre un nuovo sito" />
+                            <div v-if="moduleForm.errors.name" class="mt-1 text-sm text-red-600">{{ moduleForm.errors.name }}</div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Cartella</label>
+                            <AppSelect v-model="moduleForm.admin_module_folder_id" :options="folderOptions" placeholder="Seleziona cartella" />
+                            <div v-if="moduleForm.errors.admin_module_folder_id" class="mt-1 text-sm text-red-600">{{ moduleForm.errors.admin_module_folder_id }}</div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Categoria</label>
+                            <AppSelect v-model="moduleForm.category" :options="categoryOptions" placeholder="Categoria" />
+                        </div>
+                        <label class="flex min-h-10 items-center gap-3 rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50 px-3 text-sm font-semibold text-gray-700">
+                            <input v-model="moduleForm.active" type="checkbox" class="rounded border-gray-300 text-[hsl(var(--primary-app))] focus:ring-[hsl(var(--primary-app))]" />
+                            Modulo attivo
+                        </label>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Descrizione</label>
+                        <textarea v-model="moduleForm.description" rows="3" class="form-control" placeholder="Regole per capire quando e' necessario rifare il sito."></textarea>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Input richiesti</label>
+                        <textarea v-model="requiredInputsText" rows="5" class="form-control font-medium" placeholder="URL&#10;Settore&#10;Obiettivo&#10;Budget&#10;Competitor"></textarea>
+                        <p class="mt-1 text-xs text-gray-500">Inserisci un input per riga.</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Regole</label>
+                        <textarea v-model="moduleForm.rules" rows="7" class="form-control" placeholder="Se il sito ha piu' di 5 anni -> considera il rifacimento."></textarea>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Output</label>
+                        <textarea v-model="moduleForm.output" rows="5" class="form-control" placeholder="Consiglia: rifacimento completo, restyling oppure nessun intervento."></textarea>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Agenti che possono usarlo</label>
+                        <div class="mt-2 flex flex-wrap gap-2">
+                            <button
+                                v-for="agent in agentOptions"
+                                :key="agent"
+                                type="button"
+                                :class="[
+                                    'inline-flex min-h-9 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5',
+                                    moduleForm.allowed_agents?.includes(agent)
+                                        ? 'border-[hsl(var(--primary-app)/0.35)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]'
+                                        : 'border-gray-200 bg-white text-gray-600 hover:border-[hsl(var(--primary-app)/0.25)]',
+                                ]"
+                                @click="toggleAgent(agent)"
+                            >
+                                <Check :class="['h-3.5 w-3.5', moduleForm.allowed_agents?.includes(agent) ? 'opacity-100' : 'opacity-0']" :stroke-width="2" />
+                                {{ agent }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <footer class="flex justify-end gap-2 border-t border-gray-100 p-5">
+                    <button type="button" class="btn btn-outline" @click="closeModuleDrawer">Annulla</button>
+                    <button type="button" class="btn btn-primary" :disabled="moduleForm.processing" @click="saveModule">
+                        {{ editingModule ? 'Salva modulo' : 'Crea modulo' }}
+                    </button>
+                </footer>
+            </aside>
+        </div>
+
+        <div v-if="deleteTarget" class="fixed inset-0 z-[5400] flex items-center justify-center bg-transparent px-4" @click.self="closeDelete">
+            <section class="w-full max-w-md rounded-[var(--radius)] bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.20)]">
+                <h3 class="text-base font-semibold text-gray-900">Eliminare {{ deleteTarget.type === 'folder' ? 'cartella' : 'modulo' }}?</h3>
+                <p class="mt-2 text-sm text-gray-500">
+                    Digita <span class="font-mono font-semibold">ELIMINA</span> per confermare. L'azione non puo' essere annullata.
+                </p>
+                <input v-model="deleteText" class="form-control mt-4 font-mono" placeholder="ELIMINA" />
+                <div class="mt-4 flex justify-end gap-2">
+                    <button type="button" class="btn btn-outline" @click="closeDelete">Annulla</button>
+                    <button type="button" class="btn btn-danger" :disabled="deleteText !== 'ELIMINA'" @click="confirmDelete">Elimina</button>
+                </div>
+            </section>
+        </div>
+    </AuthenticatedLayout>
+</template>
