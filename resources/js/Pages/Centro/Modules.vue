@@ -200,15 +200,6 @@ function toggleAgent(agent) {
     moduleForm.allowed_agents = Array.from(next);
 }
 
-function toggleDependency(moduleId) {
-    if (moduleId === editingModule.value?.id) return;
-
-    const next = new Set(moduleForm.dependency_module_ids || []);
-    if (next.has(moduleId)) next.delete(moduleId);
-    else next.add(moduleId);
-    moduleForm.dependency_module_ids = Array.from(next);
-}
-
 function saveModule() {
     moduleForm.required_inputs = parseLines(requiredInputsText.value);
 
@@ -473,24 +464,14 @@ function confirmDelete() {
 
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Dipendenze</label>
-                        <p class="mt-1 text-xs text-gray-500">Seleziona gli altri moduli da cui questo modulo dipende.</p>
-                        <div v-if="moduleDependencyOptions.length" class="mt-3 flex flex-wrap gap-2">
-                            <button
-                                v-for="module in moduleDependencyOptions"
-                                :key="module.value"
-                                type="button"
-                                :class="[
-                                    'inline-flex min-h-9 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5',
-                                    moduleForm.dependency_module_ids?.includes(module.value)
-                                        ? 'border-[hsl(var(--primary-app)/0.35)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]'
-                                        : 'border-gray-200 bg-white text-gray-600 hover:border-[hsl(var(--primary-app)/0.25)]',
-                                ]"
-                                @click="toggleDependency(module.value)"
-                            >
-                                <Check :class="['h-3.5 w-3.5', moduleForm.dependency_module_ids?.includes(module.value) ? 'opacity-100' : 'opacity-0']" :stroke-width="2" />
-                                {{ module.label }}
-                            </button>
-                        </div>
+                        <AppSelect
+                            v-if="moduleDependencyOptions.length"
+                            v-model="moduleForm.dependency_module_ids"
+                            :options="moduleDependencyOptions"
+                            multiple
+                            searchable
+                            placeholder="Seleziona dipendenze"
+                        />
                         <p v-else class="mt-2 rounded-[var(--radius-sm)] bg-gray-50 px-3 py-2 text-sm text-gray-500">
                             Nessun altro modulo disponibile.
                         </p>

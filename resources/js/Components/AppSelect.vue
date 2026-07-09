@@ -7,7 +7,7 @@ defineOptions({ inheritAttrs: false });
 
 const props = defineProps({
     modelValue: {
-        type: [String, Number, Boolean, null],
+        type: [String, Number, Boolean, Array, null],
         default: '',
     },
     options: {
@@ -27,6 +27,10 @@ const props = defineProps({
         default: 8,
     },
     disabled: {
+        type: Boolean,
+        default: false,
+    },
+    multiple: {
         type: Boolean,
         default: false,
     },
@@ -53,8 +57,16 @@ const normalizedOptions = computed(() => props.options.map((option) => {
     return { value: option, label: option, disabled: false };
 }));
 
+const selectedValues = computed(() => (Array.isArray(props.modelValue) ? props.modelValue : []));
 const selectedOption = computed(() => normalizedOptions.value.find((option) => String(option.value) === String(props.modelValue)));
-const selectedLabel = computed(() => selectedOption.value?.label || props.placeholder);
+const selectedOptions = computed(() => normalizedOptions.value.filter((option) => selectedValues.value.some((value) => String(value) === String(option.value))));
+const selectedLabel = computed(() => {
+    if (!props.multiple) return selectedOption.value?.label || props.placeholder;
+    if (!selectedOptions.value.length) return props.placeholder;
+    if (selectedOptions.value.length === 1) return selectedOptions.value[0].label;
+
+    return `${selectedOptions.value.length} selezionati`;
+});
 const canSearch = computed(() => props.searchable || normalizedOptions.value.length >= props.searchThreshold);
 const filteredOptions = computed(() => {
     const needle = query.value.trim().toLowerCase();
@@ -78,10 +90,30 @@ function toggle() {
 function selectOption(option) {
     if (option.disabled) return;
 
+    if (props.multiple) {
+        const next = new Set(selectedValues.value);
+        const current = selectedValues.value.find((value) => String(value) === String(option.value));
+        if (current !== undefined) next.delete(current);
+        else next.add(option.value);
+
+        const value = Array.from(next);
+        emit('update:modelValue', value);
+        emit('change', value);
+        return;
+    }
+
     emit('update:modelValue', option.value);
     emit('change', option.value);
     open.value = false;
     query.value = '';
+}
+
+function isSelected(option) {
+    if (props.multiple) {
+        return selectedValues.value.some((value) => String(value) === String(option.value));
+    }
+
+    return String(props.modelValue) === String(option.value);
 }
 
 function closeOnOutside(event) {
@@ -147,7 +179,7 @@ onUnmounted(() => {
             :aria-expanded="open"
             @click.stop="toggle"
         >
-            <span :class="['truncate', selectedOption ? 'text-gray-800' : 'text-gray-400']">{{ selectedLabel }}</span>
+            <span :class="['truncate', props.multiple ? (selectedOptions.length ? 'text-gray-800' : 'text-gray-400') : (selectedOption ? 'text-gray-800' : 'text-gray-400')]">{{ selectedLabel }}</span>
             <ChevronDown :class="['h-4 w-4 shrink-0 text-gray-400 transition', open ? 'rotate-180 text-indigo-500' : '']" :stroke-width="1.7" />
         </button>
 
@@ -176,12 +208,12 @@ onUnmounted(() => {
                         :disabled="option.disabled"
                         :class="[
                             'field-dropdown-option flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50',
-                            String(modelValue) === String(option.value) ? 'bg-indigo-50 font-semibold text-indigo-700' : 'text-gray-700',
+                            isSelected(option) ? 'bg-indigo-50 font-semibold text-indigo-700' : 'text-gray-700',
                         ]"
                         @click="selectOption(option)"
                     >
                         <span class="truncate">{{ option.label }}</span>
-                        <Check v-if="String(modelValue) === String(option.value)" class="h-4 w-4 shrink-0" :stroke-width="1.8" />
+                        <Check v-if="isSelected(option)" class="h-4 w-4 shrink-0" :stroke-width="1.8" />
                     </button>
                     <p v-if="!filteredOptions.length" class="px-3 py-2 text-sm text-gray-500">Nessun risultato</p>
                 </div>
