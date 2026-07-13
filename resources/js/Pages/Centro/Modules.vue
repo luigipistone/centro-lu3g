@@ -36,6 +36,8 @@ const moduleForm = useForm({
     version: '1.0',
     status: 'draft',
     description: '',
+    available_components: '',
+    decision_criteria: '',
     required_inputs: [],
     dependency_module_ids: [],
     rules: '',
@@ -214,6 +216,8 @@ function openModuleDrawer(module = null) {
         version: module?.version || '1.0',
         status: module?.status || 'draft',
         description: module?.description || '',
+        available_components: module?.available_components || '',
+        decision_criteria: module?.decision_criteria || '',
         required_inputs: module?.required_inputs || [],
         dependency_module_ids: module?.dependency_module_ids || [],
         rules: module?.rules || '',
@@ -540,6 +544,19 @@ function confirmDelete() {
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Descrizione</label>
                         <textarea v-model="moduleForm.description" rows="3" class="form-control" placeholder="Regole per capire quando e' necessario rifare il sito."></textarea>
+                    </div>
+
+                    <div v-if="moduleForm.category === 'Standard'" class="grid gap-4 md:grid-cols-2">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Componenti disponibili</label>
+                            <textarea v-model="moduleForm.available_components" rows="5" class="form-control" placeholder="Elenca i componenti disponibili per questo standard."></textarea>
+                            <div v-if="moduleForm.errors.available_components" class="mt-1 text-sm text-red-600">{{ moduleForm.errors.available_components }}</div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Criteri decisionali</label>
+                            <textarea v-model="moduleForm.decision_criteria" rows="5" class="form-control" placeholder="Indica i criteri da usare per decidere."></textarea>
+                            <div v-if="moduleForm.errors.decision_criteria" class="mt-1 text-sm text-red-600">{{ moduleForm.errors.decision_criteria }}</div>
+                        </div>
                     </div>
 
                     <div>
