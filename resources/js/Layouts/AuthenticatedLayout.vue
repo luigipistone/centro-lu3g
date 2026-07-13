@@ -26,6 +26,7 @@ import {
     Settings,
     Moon,
     PackageOpen,
+    Workflow,
     Sun,
     Target,
     UserCog,
@@ -329,6 +330,7 @@ const groups = computed(() => {
                 ['billing.index', 'Fatturazione', Receipt],
                 ['users.index', 'Utenti', UserCog],
                 ['modules.index', 'Moduli', PackageOpen],
+                ['orchestrator.index', 'Orchestratore', Workflow],
             ],
         },
     ];

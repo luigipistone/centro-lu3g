@@ -1721,6 +1721,178 @@ class CentroPageController extends Controller
         return back()->with('status', 'Modulo eliminato.');
     }
 
+    public function orchestrator(Request $request): Response
+    {
+        $this->ensureAdmin($request);
+
+        return Inertia::render('Centro/Orchestrator', [
+            'projects' => DB::table('projects')
+                ->leftJoin('clients', 'clients.id', '=', 'projects.client_id')
+                ->orderBy('projects.name')
+                ->get(['projects.id', 'projects.name', 'projects.status', 'clients.name as client_name']),
+            'services' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name']),
+            'decisionModules' => $this->decisionModuleRows(),
+            'runs' => $this->orchestratorRunRows(),
+            'aiConfigured' => filled(config('services.openai.api_key')),
+        ]);
+    }
+
+    public function generateOrchestrator(Request $request): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+
+        $payload = $request->validate([
+            'project_id' => ['required', 'uuid', Rule::exists('projects', 'id')],
+        ]);
+
+        $project = $this->orchestratorProjectContext($payload['project_id']);
+        $decisionModules = $this->decisionModuleRows();
+        $prompt = $this->buildDecisionPrompt($project, $decisionModules);
+        $aiOutput = $this->callOrchestratorAi($prompt, true);
+        $fallback = $this->fallbackDecisionOutput($project, $decisionModules);
+        $decision = $this->decodeOrchestratorJson($aiOutput) ?: $fallback;
+
+        DB::table('orchestrator_runs')->insert([
+            'id' => (string) str()->uuid(),
+            'project_id' => $payload['project_id'],
+            'status' => 'draft',
+            'recommended_services' => json_encode($this->orchestratorStringList($decision['servizi_consigliati'] ?? [])),
+            'recommended_priority' => $decision['priorita'] ?? 'Media',
+            'roadmap' => $decision['roadmap'] ?? '',
+            'workflow_options' => json_encode($this->orchestratorStringList($decision['workflow_da_utilizzare'] ?? [])),
+            'decision_prompt' => $prompt,
+            'decision_output' => $aiOutput ?: json_encode($fallback, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE),
+            'created_by' => $request->user()->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return back()->with('status', 'Analisi generata.');
+    }
+
+    public function approveOrchestrator(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        $run = DB::table('orchestrator_runs')->where('id', $id)->first();
+        abort_if(! $run, 404);
+
+        $payload = $request->validate([
+            'workflow_module_id' => ['required', 'uuid', Rule::exists('admin_modules', 'id')],
+        ]);
+
+        $workflow = DB::table('admin_modules')->where('id', $payload['workflow_module_id'])->first();
+        abort_if(! $workflow, 404);
+
+        $modules = DB::table('admin_modules')
+            ->where('parent_module_id', $workflow->id)
+            ->orderBy('created_at')
+            ->get();
+
+        if ($modules->isEmpty()) {
+            $modules = collect([$workflow]);
+        }
+
+        DB::transaction(function () use ($run, $workflow, $modules) {
+            DB::table('orchestrator_run_modules')->where('orchestrator_run_id', $run->id)->delete();
+
+            $modules->values()->each(function ($module, int $index) use ($run) {
+                DB::table('orchestrator_run_modules')->insert([
+                    'id' => (string) str()->uuid(),
+                    'orchestrator_run_id' => $run->id,
+                    'module_id' => $module->id,
+                    'position' => $index + 1,
+                    'status' => $index === 0 ? 'todo' : 'blocked',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            });
+
+            DB::table('orchestrator_runs')->where('id', $run->id)->update([
+                'workflow_module_id' => $workflow->id,
+                'status' => 'approved',
+                'approved_at' => now(),
+                'updated_at' => now(),
+            ]);
+        });
+
+        return back()->with('status', 'Workflow approvato.');
+    }
+
+    public function executeOrchestratorModule(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+
+        $step = DB::table('orchestrator_run_modules')->where('id', $id)->first();
+        abort_if(! $step, 404);
+        abort_if($step->status !== 'todo', 422, 'Questo modulo non e\' eseguibile ora.');
+
+        $firstTodo = DB::table('orchestrator_run_modules')
+            ->where('orchestrator_run_id', $step->orchestrator_run_id)
+            ->where('status', 'todo')
+            ->orderBy('position')
+            ->first();
+        abort_if(! $firstTodo || $firstTodo->id !== $step->id, 422, 'Devi eseguire il primo modulo disponibile.');
+
+        $running = DB::table('orchestrator_run_modules')
+            ->where('orchestrator_run_id', $step->orchestrator_run_id)
+            ->where('status', 'in_progress')
+            ->exists();
+        abort_if($running, 422, 'C\'e\' gia\' un modulo in esecuzione.');
+
+        $run = DB::table('orchestrator_runs')->where('id', $step->orchestrator_run_id)->first();
+        abort_if(! $run, 404);
+        $module = DB::table('admin_modules')->where('id', $step->module_id)->first();
+        abort_if(! $module, 404);
+
+        DB::table('orchestrator_run_modules')->where('id', $step->id)->update([
+            'status' => 'in_progress',
+            'started_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $project = $this->orchestratorProjectContext($run->project_id);
+        $previousOutputs = DB::table('orchestrator_run_modules')
+            ->join('admin_modules', 'admin_modules.id', '=', 'orchestrator_run_modules.module_id')
+            ->where('orchestrator_run_modules.orchestrator_run_id', $run->id)
+            ->where('orchestrator_run_modules.status', 'completed')
+            ->orderBy('orchestrator_run_modules.position')
+            ->get(['admin_modules.name', 'orchestrator_run_modules.output']);
+        $prompt = $this->buildModuleExecutionPrompt($project, $module, $previousOutputs);
+        $output = $this->callOrchestratorAi($prompt, false)
+            ?: "AI non configurata o non disponibile.\n\nPrompt costruito:\n".$prompt;
+
+        DB::transaction(function () use ($step, $output, $prompt, $run) {
+            DB::table('orchestrator_run_modules')->where('id', $step->id)->update([
+                'status' => 'completed',
+                'prompt' => $prompt,
+                'output' => $output,
+                'completed_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $next = DB::table('orchestrator_run_modules')
+                ->where('orchestrator_run_id', $step->orchestrator_run_id)
+                ->where('position', '>', $step->position)
+                ->orderBy('position')
+                ->first();
+
+            if ($next) {
+                DB::table('orchestrator_run_modules')->where('id', $next->id)->update([
+                    'status' => 'todo',
+                    'updated_at' => now(),
+                ]);
+                return;
+            }
+
+            DB::table('orchestrator_runs')->where('id', $run->id)->update([
+                'status' => 'completed',
+                'updated_at' => now(),
+            ]);
+        });
+
+        return back()->with('status', 'Modulo eseguito.');
+    }
+
     public function enablePush(Request $request): \Illuminate\Contracts\View\View
     {
         return view('push-enable', [
@@ -3913,6 +4085,234 @@ class CentroPageController extends Controller
 
                 return $module;
             });
+    }
+
+    private function decisionModuleRows()
+    {
+        return $this->adminModuleRows()
+            ->filter(fn ($module) => strcasecmp((string) $module->folder_name, 'Decisioni') === 0)
+            ->values();
+    }
+
+    private function orchestratorRunRows()
+    {
+        if (! Schema::hasTable('orchestrator_runs')) {
+            return collect();
+        }
+
+        $runs = DB::table('orchestrator_runs')
+            ->leftJoin('projects', 'projects.id', '=', 'orchestrator_runs.project_id')
+            ->leftJoin('clients', 'clients.id', '=', 'projects.client_id')
+            ->leftJoin('admin_modules as workflow_modules', 'workflow_modules.id', '=', 'orchestrator_runs.workflow_module_id')
+            ->orderByDesc('orchestrator_runs.updated_at')
+            ->limit(50)
+            ->get([
+                'orchestrator_runs.*',
+                'projects.name as project_name',
+                'clients.name as client_name',
+                'workflow_modules.name as workflow_name',
+            ]);
+
+        $runIds = $runs->pluck('id');
+        $steps = DB::table('orchestrator_run_modules')
+            ->join('admin_modules', 'admin_modules.id', '=', 'orchestrator_run_modules.module_id')
+            ->whereIn('orchestrator_run_modules.orchestrator_run_id', $runIds)
+            ->orderBy('orchestrator_run_modules.position')
+            ->get([
+                'orchestrator_run_modules.*',
+                'admin_modules.name as module_name',
+                'admin_modules.category as module_category',
+            ])
+            ->groupBy('orchestrator_run_id');
+
+        return $runs->map(function ($run) use ($steps) {
+            $run->recommended_services = $this->decodeJsonArray($run->recommended_services);
+            $run->workflow_options = $this->decodeJsonArray($run->workflow_options);
+            $run->modules = ($steps[$run->id] ?? collect())->values();
+
+            return $run;
+        });
+    }
+
+    private function orchestratorProjectContext(string $projectId): array
+    {
+        $project = DB::table('projects')
+            ->leftJoin('clients', 'clients.id', '=', 'projects.client_id')
+            ->where('projects.id', $projectId)
+            ->first([
+                'projects.*',
+                'clients.name as client_name',
+                'clients.email as client_email',
+                'clients.phone as client_phone',
+            ]);
+        abort_if(! $project, 404);
+
+        $tasks = DB::table('tasks')
+            ->where('project_id', $projectId)
+            ->where(fn ($query) => $query->whereNull('parent_task_id')->orWhere('parent_task_id', ''))
+            ->orderBy('due_date')
+            ->limit(30)
+            ->get(['title', 'status', 'priority', 'start_date', 'due_date']);
+
+        return [
+            'project' => $project,
+            'tasks' => $tasks,
+            'services' => DB::table('services')->where('active', true)->orderBy('name')->pluck('name')->values(),
+        ];
+    }
+
+    private function buildDecisionPrompt(array $context, $decisionModules): string
+    {
+        $project = $context['project'];
+        $modules = $decisionModules->map(fn ($module) => [
+            'nome' => $module->name,
+            'categoria' => $module->category,
+            'descrizione' => $module->description,
+            'componenti_disponibili' => $module->available_components ?? null,
+            'criteri_decisionali' => $module->decision_criteria ?? null,
+            'regole' => $module->rules,
+            'output' => $module->output,
+            'figli' => $decisionModules
+                ->where('parent_module_id', $module->id)
+                ->pluck('name')
+                ->values()
+                ->all(),
+        ])->values();
+
+        return "Sei l'Orchestratore del gestionale Il Centro. Non creare agenti autonomi e non creare automazioni complesse.\n"
+            ."Analizza il progetto e i moduli della cartella Decisioni. Rispondi solo JSON valido con chiavi: servizi_consigliati (array), priorita (stringa), roadmap (stringa), workflow_da_utilizzare (array di nomi workflow ordinati per pertinenza).\n\n"
+            ."PROGETTO:\n".json_encode([
+                'nome' => $project->name,
+                'cliente' => $project->client_name,
+                'stato' => $project->status,
+                'descrizione' => $project->description,
+                'task_esistenti' => $context['tasks'],
+                'servizi_disponibili' => $context['services'],
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
+            ."\n\nMODULI DECISIONI:\n".json_encode($modules, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    private function buildModuleExecutionPrompt(array $context, object $module, $previousOutputs): string
+    {
+        $project = $context['project'];
+
+        return "Esegui un solo modulo dell'Orchestratore. Non attivare automazioni esterne e non creare agenti autonomi.\n"
+            ."Usa il modulo, il progetto e gli output precedenti. Restituisci un output operativo chiaro in italiano.\n\n"
+            ."PROGETTO:\n".json_encode([
+                'nome' => $project->name,
+                'cliente' => $project->client_name,
+                'descrizione' => $project->description,
+                'task_esistenti' => $context['tasks'],
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
+            ."\n\nMODULO:\n".json_encode([
+                'nome' => $module->name,
+                'categoria' => $module->category,
+                'descrizione' => $module->description,
+                'componenti_disponibili' => $module->available_components ?? null,
+                'criteri_decisionali' => $module->decision_criteria ?? null,
+                'input_richiesti' => json_decode($module->required_inputs ?: '[]', true),
+                'regole' => $module->rules,
+                'output_atteso' => $module->output,
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
+            ."\n\nOUTPUT PRECEDENTI:\n".json_encode($previousOutputs, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    private function callOrchestratorAi(string $prompt, bool $json): ?string
+    {
+        $apiKey = config('services.openai.api_key');
+        if (! $apiKey) {
+            return null;
+        }
+
+        try {
+            $payload = [
+                'model' => config('services.openai.model', 'gpt-4.1-mini'),
+                'messages' => [
+                    ['role' => 'system', 'content' => 'Rispondi in italiano. Segui esattamente le istruzioni dell\'utente.'],
+                    ['role' => 'user', 'content' => $prompt],
+                ],
+                'temperature' => 0.2,
+            ];
+
+            if ($json) {
+                $payload['response_format'] = ['type' => 'json_object'];
+            }
+
+            $response = Http::withToken($apiKey)
+                ->timeout(60)
+                ->post('https://api.openai.com/v1/chat/completions', $payload);
+
+            if (! $response->successful()) {
+                Log::warning('Chiamata AI orchestratore non riuscita.', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+
+                return null;
+            }
+
+            return $response->json('choices.0.message.content');
+        } catch (\Throwable $exception) {
+            Log::warning('Errore chiamata AI orchestratore.', [
+                'message' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    private function decodeOrchestratorJson(?string $value): ?array
+    {
+        if (! $value) {
+            return null;
+        }
+
+        $clean = trim(preg_replace('/^```json|```$/m', '', $value) ?: $value);
+        $decoded = json_decode($clean, true);
+
+        return is_array($decoded) ? $decoded : null;
+    }
+
+    private function orchestratorStringList(mixed $value): array
+    {
+        if (is_string($value)) {
+            $value = preg_split('/\r\n|\r|\n|,/', $value) ?: [];
+        }
+
+        if (! is_array($value)) {
+            return [];
+        }
+
+        return collect($value)
+            ->map(function ($item) {
+                if (is_array($item)) {
+                    return $item['nome'] ?? $item['name'] ?? $item['label'] ?? reset($item);
+                }
+
+                return $item;
+            })
+            ->map(fn ($item) => trim((string) $item))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function fallbackDecisionOutput(array $context, $decisionModules): array
+    {
+        $project = $context['project'];
+        $workflowNames = $decisionModules
+            ->filter(fn ($module) => blank($module->parent_module_id ?? null))
+            ->pluck('name')
+            ->values()
+            ->all();
+
+        return [
+            'servizi_consigliati' => collect($context['services'])->take(3)->values()->all(),
+            'priorita' => 'Media',
+            'roadmap' => "Analisi iniziale del progetto {$project->name}, scelta del workflow, esecuzione sequenziale dei moduli e revisione finale degli output.",
+            'workflow_da_utilizzare' => $workflowNames,
+        ];
     }
 
     private function ensureModuleParentIsValid(?string $parentModuleId, string $moduleId): void

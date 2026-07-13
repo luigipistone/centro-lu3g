@@ -129,6 +129,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/modules/items', [CentroPageController::class, 'storeModuleItem'])->name('modules.items.store');
     Route::put('/modules/items/{id}', [CentroPageController::class, 'updateModuleItem'])->name('modules.items.update');
     Route::delete('/modules/items/{id}', [CentroPageController::class, 'destroyModuleItem'])->name('modules.items.destroy');
+    Route::get('/orchestrator', [CentroPageController::class, 'orchestrator'])->name('orchestrator.index');
+    Route::post('/orchestrator/generate', [CentroPageController::class, 'generateOrchestrator'])->name('orchestrator.generate');
+    Route::post('/orchestrator/{id}/approve', [CentroPageController::class, 'approveOrchestrator'])->name('orchestrator.approve');
+    Route::post('/orchestrator/modules/{id}/execute', [CentroPageController::class, 'executeOrchestratorModule'])->name('orchestrator.modules.execute');
     Route::get('/updates/social', [CentroPageController::class, 'index'])->defaults('section', 'updates-social')->name('updates.social');
     Route::post('/updates/social', [CentroPageController::class, 'store'])->defaults('section', 'updates-social')->name('updates-social.store');
     Route::put('/updates/social/{id}', [CentroPageController::class, 'update'])->defaults('section', 'updates-social')->name('updates-social.update');
