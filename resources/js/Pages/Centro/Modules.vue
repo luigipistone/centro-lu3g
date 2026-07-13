@@ -45,6 +45,7 @@ const moduleForm = useForm({
 });
 
 const categoryOptions = [
+    { value: 'Standard', label: 'Standard' },
     { value: 'Decisione', label: 'Decisione' },
     { value: 'Procedura', label: 'Procedura' },
     { value: 'Analisi', label: 'Analisi' },
