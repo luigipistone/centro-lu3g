@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { BrainCircuit, Check, ChevronDown, ChevronLeft, CircleAlert, CircleCheck, Clock3, Euro, FileCheck2, Sparkles, Trash2 } from '@lucide/vue';
+import { BrainCircuit, Check, ChevronDown, ChevronLeft, CircleAlert, CircleCheck, Clock3, Euro, FileCheck2, LockKeyhole, Sparkles, Trash2 } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 const props = defineProps({ run: Object, proposal: Object, brief: Object, approvedServices: Array, services: Array, steps: Array, budget: Object });
@@ -134,7 +134,7 @@ const statusLabel = { draft: 'Da analizzare', analyzing: 'Analisi in corso', nee
                     <div v-show="expandedSections.workflows" class="space-y-5 border-t border-gray-100 px-5 pb-5 pt-4">
                         <div v-for="serviceId in approvedServices" :key="serviceId">
                             <p class="font-semibold text-gray-900">{{ serviceById[serviceId]?.name || 'Servizio senza workflow collegato' }}</p>
-                            <div v-if="stepsByService[serviceId]?.length" class="mt-2 divide-y divide-gray-100 border-y border-gray-100"><div v-for="step in stepsByService[serviceId]" :key="step.id" class="flex items-center gap-3 py-3"><Clock3 class="h-4 w-4 text-gray-400" /><span class="flex-1 text-sm text-gray-700">{{ step.name }}</span><span class="text-xs text-gray-400">{{ step.status === 'todo' ? 'Da fare' : 'Bloccato' }}</span></div></div>
+                            <div v-if="stepsByService[serviceId]?.length" class="mt-2 divide-y divide-gray-100 border-y border-gray-100"><div v-for="step in stepsByService[serviceId]" :key="step.id" class="flex items-center gap-3 py-3" :class="step.status === 'completed' ? 'opacity-65' : ''"><CircleCheck v-if="step.status === 'completed'" class="h-4 w-4 text-green-600" /><Clock3 v-else-if="step.status === 'todo'" class="h-4 w-4 text-[hsl(var(--primary-app))]" /><LockKeyhole v-else class="h-4 w-4 text-gray-400" /><span class="flex-1 text-sm text-gray-700">{{ step.name }}</span><span class="text-xs font-medium" :class="step.status === 'completed' ? 'text-green-600' : 'text-gray-400'">{{ step.status === 'completed' ? 'Completato' : (step.status === 'todo' ? 'Da fare' : 'Bloccato') }}</span></div></div>
                             <p v-else class="mt-2 text-sm text-amber-700">Nessun workflow collegato a questo servizio.</p>
                         </div>
                     </div>

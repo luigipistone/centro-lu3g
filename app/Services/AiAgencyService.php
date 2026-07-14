@@ -117,6 +117,7 @@ class AiAgencyService
         DB::transaction(function () use ($runId, $serviceIds) {
             DB::table('ai_agency_steps')->where('run_id', $runId)->delete();
             $position = 0;
+            $nextActionableAssigned = false;
             $mappings = DB::table('ai_agency_service_workflows')
                 ->join('admin_modules', 'admin_modules.id', '=', 'ai_agency_service_workflows.workflow_module_id')
                 ->whereIn('ai_agency_service_workflows.service_id', $serviceIds)
@@ -127,11 +128,16 @@ class AiAgencyService
                     ->where('active', true)->orderBy('created_at')->get(['id', 'name', 'allowed_agents']);
                 foreach ($children as $child) {
                     $agents = json_decode($child->allowed_agents ?: '[]', true) ?: [];
+                    $artifactType = $this->completedWorkflowArtifact($child->name);
+                    $status = $artifactType ? 'completed' : (! $nextActionableAssigned ? 'todo' : 'blocked');
+                    if ($status === 'todo') $nextActionableAssigned = true;
                     DB::table('ai_agency_steps')->insert([
                         'id' => (string) Str::uuid(), 'run_id' => $runId, 'service_id' => $mapping->service_id,
                         'workflow_module_id' => $mapping->workflow_id, 'module_id' => $child->id, 'name' => $child->name,
-                        'agent_role' => $agents[0] ?? null, 'status' => $position === 0 ? 'todo' : 'blocked',
-                        'position' => $position++, 'created_at' => now(), 'updated_at' => now(),
+                        'agent_role' => $agents[0] ?? null, 'status' => $status,
+                        'output_data' => $artifactType ? $this->encodeJson(['artifact_type' => $artifactType]) : null,
+                        'position' => $position++, 'completed_at' => $artifactType ? now() : null,
+                        'created_at' => now(), 'updated_at' => now(),
                     ]);
                 }
             }
@@ -251,6 +257,17 @@ PROMPT;
             ->get(['admin_modules.name', 'admin_modules.description', 'admin_modules.required_inputs', 'admin_modules.rules', 'admin_modules.output'])
             ->map(fn ($module) => ['name' => $module->name, 'description' => $this->plainText($module->description),
                 'required_inputs' => json_decode($module->required_inputs ?: '[]', true) ?: [], 'rules' => $this->plainText($module->rules), 'expected_output' => $this->plainText($module->output)]);
+    }
+
+    private function completedWorkflowArtifact(string $name): ?string
+    {
+        return match (Str::lower(Str::ascii(trim($name)))) {
+            'raccolta informazioni cliente' => 'project_brief',
+            'analisi cliente' => 'client_analysis',
+            'analisi competitor' => 'competitor_analysis',
+            'definizione strategia' => 'strategy',
+            default => null,
+        };
     }
 
     private function extractFileText(object $file): ?string
