@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
@@ -104,6 +105,71 @@ class AiAgencyTest extends TestCase
         $this->assertDatabaseHas('ai_agency_steps', ['id' => $firstStepId, 'status' => 'completed']);
         $this->assertDatabaseHas('ai_agency_steps', ['id' => $secondStepId, 'status' => 'todo']);
         $this->assertDatabaseHas('ai_agency_artifacts', ['run_id' => $runId, 'type' => 'project_brief']);
+    }
+
+    public function test_pm_strategy_runs_autonomously_and_stops_for_strategy_approval(): void
+    {
+        config(['ai-agency.api_key' => 'sk-test-key', 'ai-agency.model' => 'test-model']);
+        $admin = User::factory()->create();
+        $this->role($admin, 'admin');
+        $projectId = $this->project($admin);
+        $runId = (string) Str::uuid();
+        $document = [
+            'summary' => 'Sintesi',
+            'findings' => ['Evidenza'],
+            'recommendations' => ['Raccomandazione'],
+            'risks' => [],
+            'assumptions' => [],
+            'sources' => [],
+        ];
+        Http::fake(['api.openai.com/*' => Http::response([
+            'output' => [[
+                'type' => 'message',
+                'content' => [['type' => 'output_text', 'text' => json_encode([
+                    'client_analysis' => $document,
+                    'competitor_analysis' => $document,
+                    'strategy' => $document,
+                ])]],
+            ]],
+            'usage' => ['input_tokens' => 800, 'output_tokens' => 400],
+        ])]);
+
+        DB::table('ai_agency_runs')->insert([
+            'id' => $runId,
+            'project_id' => $projectId,
+            'created_by' => $admin->id,
+            'status' => 'approved',
+            'proposal' => json_encode([]),
+            'project_snapshot' => json_encode([]),
+            'approved_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        foreach (['Raccolta informazioni cliente', 'Analisi Cliente', 'Analisi Competitor', 'Definizione Strategia', 'Creazione Sitemap'] as $position => $name) {
+            DB::table('ai_agency_steps')->insert([
+                'id' => (string) Str::uuid(),
+                'run_id' => $runId,
+                'name' => $name,
+                'status' => $position === 0 ? 'completed' : ($position === 1 ? 'todo' : 'blocked'),
+                'position' => $position,
+                'output_data' => $position === 0 ? json_encode(['files' => [], 'questions' => []]) : null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $this->actingAs($admin)->post(route('ai-agency.pm-strategy.execute', $runId))->assertSessionHasNoErrors();
+
+        $this->assertSame(
+            ['completed', 'completed', 'completed', 'approval', 'blocked'],
+            DB::table('ai_agency_steps')->where('run_id', $runId)->orderBy('position')->pluck('status')->all(),
+        );
+        $this->assertDatabaseHas('ai_agency_artifacts', ['run_id' => $runId, 'type' => 'client_analysis']);
+        $this->assertDatabaseHas('ai_agency_artifacts', ['run_id' => $runId, 'type' => 'competitor_analysis']);
+        $this->assertDatabaseHas('ai_agency_artifacts', ['run_id' => $runId, 'type' => 'strategy']);
+
+        $this->actingAs($admin)->post(route('ai-agency.pm-strategy.approve', $runId))->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('ai_agency_steps', ['run_id' => $runId, 'position' => 4, 'status' => 'todo']);
     }
 
     private function role(User $user, string $role): void

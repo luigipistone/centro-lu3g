@@ -27,6 +27,16 @@ const briefForm = useForm({
     answers: { ...(initialStepInput.answers || {}) },
     file_assessments: { ...(initialStepInput.file_assessments || {}) },
 });
+const strategyForm = useForm({});
+const workflowStep = (position) => (props.steps || []).find((step) => Number(step.position) === position);
+const clientAnalysisStep = computed(() => workflowStep(1));
+const competitorAnalysisStep = computed(() => workflowStep(2));
+const strategyStep = computed(() => workflowStep(3));
+const strategicDocuments = computed(() => [clientAnalysisStep.value, competitorAnalysisStep.value, strategyStep.value]
+    .filter((step) => step?.output_data)
+    .map((step) => {
+        try { return { step, content: JSON.parse(step.output_data) }; } catch { return { step, content: {} }; }
+    }));
 const isReady = computed(() => props.run.status === 'proposal_ready');
 const isApproved = computed(() => props.run.status === 'approved');
 const serviceById = computed(() => Object.fromEntries((props.services || []).map((service) => [service.id, service])));
@@ -73,6 +83,14 @@ function submitBrief() {
 
 function approveBrief() {
     router.post(route('ai-agency.steps.approve', [props.run.id, activeStep.value.id]), {}, { preserveScroll: true });
+}
+
+function executeStrategy() {
+    strategyForm.post(route('ai-agency.pm-strategy.execute', props.run.id), { preserveScroll: true });
+}
+
+function approveStrategy() {
+    strategyForm.post(route('ai-agency.pm-strategy.approve', props.run.id), { preserveScroll: true });
 }
 
 const stepStatusLabel = { todo: 'Da fare', in_progress: 'In corso', approval: 'Da approvare', completed: 'Completato', blocked: 'Bloccato' };
@@ -250,6 +268,49 @@ const assessmentOptions = [
                     </div>
 
                     <div v-if="activeStep.status === 'completed'" class="mt-5 flex items-center gap-3 rounded-[var(--radius-sm)] border border-green-200 bg-green-50/70 p-4 text-sm text-green-800"><CircleCheck class="h-5 w-5 shrink-0" :stroke-width="1.9" />Brief approvato. Il modulo Analisi Cliente è stato sbloccato.</div>
+                </section>
+
+                <section v-if="isApproved && activeStep?.status === 'completed'" class="surface p-5">
+                    <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--primary-app))]">Fase autonoma</p>
+                            <h3 class="mt-1 text-lg font-semibold text-gray-900">Analisi e strategia</h3>
+                            <p class="mt-1 max-w-3xl text-sm leading-6 text-gray-500">Il PM usa brief, allegati e ricerca web per eseguire tre moduli senza richiedere altri input. Si fermerà soltanto sull’approvazione della strategia.</p>
+                        </div>
+                        <span v-if="strategyStep" class="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600">{{ stepStatusLabel[strategyStep.status] || strategyStep.status }}</span>
+                    </div>
+
+                    <div v-if="$page.props.errors?.strategy" class="mt-4 rounded-[var(--radius-sm)] border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ $page.props.errors.strategy }}</div>
+
+                    <div v-if="clientAnalysisStep?.status === 'todo' && !strategicDocuments.length" class="mt-5 rounded-[var(--radius-sm)] border border-dashed border-gray-200 bg-gray-50/70 p-6 text-center">
+                        <p class="text-sm text-gray-600">Una sola elaborazione produrrà tre documenti distinti, riducendo il consumo di token.</p>
+                        <button type="button" class="btn btn-primary mt-4" :disabled="strategyForm.processing" @click="executeStrategy">
+                            <Sparkles class="h-4 w-4" :stroke-width="1.8" />
+                            {{ strategyForm.processing ? 'Elaborazione in corso...' : 'Avvia fase strategica' }}
+                        </button>
+                    </div>
+
+                    <div v-if="strategicDocuments.length" class="mt-6 divide-y divide-gray-100 border-y border-gray-100">
+                        <article v-for="document in strategicDocuments" :key="document.step.id" class="py-6 first:pt-0 last:pb-0">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <h4 class="text-base font-semibold text-gray-900">{{ document.step.name }}</h4>
+                                <span class="text-xs font-semibold" :class="document.step.status === 'completed' ? 'text-green-600' : 'text-blue-600'">{{ stepStatusLabel[document.step.status] }}</span>
+                            </div>
+                            <p class="mt-3 text-sm leading-6 text-gray-600">{{ document.content.summary }}</p>
+                            <div class="mt-5 grid gap-5 lg:grid-cols-2">
+                                <div v-if="document.content.findings?.length"><p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Evidenze</p><ul class="mt-2 space-y-2 text-sm leading-5 text-gray-700"><li v-for="item in document.content.findings" :key="item">{{ item }}</li></ul></div>
+                                <div v-if="document.content.recommendations?.length"><p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Raccomandazioni</p><ul class="mt-2 space-y-2 text-sm leading-5 text-gray-700"><li v-for="item in document.content.recommendations" :key="item">{{ item }}</li></ul></div>
+                                <div v-if="document.content.risks?.length"><p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Rischi</p><ul class="mt-2 space-y-2 text-sm leading-5 text-gray-700"><li v-for="item in document.content.risks" :key="item">{{ item }}</li></ul></div>
+                                <div v-if="document.content.assumptions?.length"><p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Assunzioni</p><ul class="mt-2 space-y-2 text-sm leading-5 text-gray-700"><li v-for="item in document.content.assumptions" :key="item">{{ item }}</li></ul></div>
+                            </div>
+                            <div v-if="document.content.sources?.length" class="mt-5"><p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Fonti</p><ul class="mt-2 space-y-1 text-xs text-gray-500"><li v-for="source in document.content.sources" :key="source" class="break-all">{{ source }}</li></ul></div>
+                        </article>
+                    </div>
+
+                    <div v-if="strategyStep?.status === 'approval'" class="mt-6 flex flex-col gap-4 rounded-[var(--radius-sm)] border border-blue-200 bg-blue-50/60 p-5 md:flex-row md:items-center md:justify-between">
+                        <div><h4 class="font-semibold text-gray-900">Approvazione strategica</h4><p class="mt-1 text-sm text-gray-600">Questo è il prossimo punto fondamentale. Dopo l’approvazione verrà sbloccata la sitemap.</p></div>
+                        <button type="button" class="btn btn-primary shrink-0" :disabled="strategyForm.processing" @click="approveStrategy"><CircleCheck class="h-4 w-4" :stroke-width="1.8" />Approva strategia</button>
+                    </div>
                 </section>
 
                 <div v-if="run.input_tokens" class="flex flex-wrap items-center gap-x-5 gap-y-2 px-1 text-xs text-gray-400">

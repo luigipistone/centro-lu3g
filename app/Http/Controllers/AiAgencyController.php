@@ -236,6 +236,29 @@ class AiAgencyController extends Controller
         return back()->with('status', 'Brief approvato. Il modulo successivo è ora disponibile.');
     }
 
+    public function executePmStrategy(Request $request, string $runId): RedirectResponse
+    {
+        $this->authorizeAdmin($request);
+
+        try {
+            $this->agency->executePmStrategy($runId);
+        } catch (\Throwable $error) {
+            report($error);
+
+            return back()->withErrors(['strategy' => $error->getMessage()]);
+        }
+
+        return back()->with('status', 'Fase strategica completata. La strategia è pronta per l’approvazione.');
+    }
+
+    public function approvePmStrategy(Request $request, string $runId): RedirectResponse
+    {
+        $this->authorizeAdmin($request);
+        $this->agency->approvePmStrategy($runId);
+
+        return back()->with('status', 'Strategia approvata. La creazione della sitemap è ora disponibile.');
+    }
+
     public function configure(Request $request): RedirectResponse
     {
         abort_unless($this->role($request) === 'superadmin', 403);

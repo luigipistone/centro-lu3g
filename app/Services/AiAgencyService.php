@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
+use Smalot\PdfParser\Parser as PdfParser;
 use ZipArchive;
 
 class AiAgencyService
@@ -140,6 +141,138 @@ class AiAgencyService
                 'approved_services' => json_encode(array_values($serviceIds)),
                 'approved_at' => now(),
                 'updated_at' => now(),
+            ]);
+        });
+    }
+
+    public function executePmStrategy(string $runId): void
+    {
+        $run = DB::table('ai_agency_runs')->where('id', $runId)->first();
+        throw_unless($run, RuntimeException::class, 'Processo non trovato.');
+        $steps = DB::table('ai_agency_steps')->where('run_id', $runId)->orderBy('position')->get();
+        throw_unless(($steps[0]->status ?? null) === 'completed', RuntimeException::class, 'Approva prima la raccolta informazioni.');
+        throw_unless(($steps[1]->status ?? null) === 'todo', RuntimeException::class, 'La fase strategica non è disponibile.');
+
+        $snapshot = $this->buildProjectSnapshot($run->project_id);
+        $brief = json_decode($steps[0]->output_data ?: '{}', true) ?: [];
+        $relevantNames = collect($brief['files'] ?? [])->where('assessment', 'relevant')->pluck('name');
+        $snapshot['files'] = collect($snapshot['files'] ?? [])
+            ->filter(fn ($file) => $relevantNames->contains($file['name'] ?? null))
+            ->values()
+            ->all();
+
+        $moduleIds = $steps->slice(1, 3)->pluck('module_id')->filter();
+        $modules = DB::table('admin_modules')->whereIn('id', $moduleIds)->get([
+            'id', 'name', 'description', 'required_inputs', 'rules', 'output',
+        ])->map(fn ($module) => [
+            'name' => $module->name,
+            'description' => $this->plainText($module->description),
+            'required_inputs' => json_decode($module->required_inputs ?: '[]', true) ?: [],
+            'rules' => $this->plainText($module->rules),
+            'expected_output' => $this->plainText($module->output),
+        ]);
+
+        $input = json_encode([
+            'project_snapshot' => $snapshot,
+            'approved_project_brief' => $brief,
+            'modules_to_execute_in_order' => $modules,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+        $estimatedInputTokens = $this->estimateTokens($input);
+        $maximumEstimatedCost = $this->estimatedCost($estimatedInputTokens, config('ai-agency.max_output_tokens'), 3);
+        if ($maximumEstimatedCost > $this->remainingBudget()) {
+            throw new RuntimeException('Budget AI mensile insufficiente per la fase strategica.');
+        }
+        if (! $this->apiKey()) {
+            throw new RuntimeException('Chiave OpenAI non configurata sul server.');
+        }
+
+        DB::table('ai_agency_steps')->whereIn('id', $steps->slice(1, 3)->pluck('id'))->update([
+            'status' => 'in_progress',
+            'started_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        try {
+            $response = Http::withToken($this->apiKey())
+                ->acceptJson()
+                ->timeout(180)
+                ->retry(2, 1200)
+                ->post('https://api.openai.com/v1/responses', [
+                    'model' => config('ai-agency.model'),
+                    'instructions' => <<<'PROMPT'
+Sei il Project Manager AI di LU3G. Esegui autonomamente, nell'ordine indicato, Analisi Cliente, Analisi Competitor e Definizione Strategia. Usa il brief approvato come fonte prioritaria rispetto alle informazioni precedenti in conflitto. Usa gli allegati pertinenti e svolgi ricerche web mirate per verificare azienda, dominio, mercato e competitor; non confondere omonimi e non inventare informazioni. Non chiedere input all'utente: evidenzia eventuali assunzioni e prosegui con la migliore analisi possibile. Ogni risultato deve essere un documento professionale, sintetico ma operativo, in italiano. La strategia deve integrare i risultati delle due analisi precedenti e fermarsi prima di sitemap, contenuti, design o sviluppo.
+PROMPT,
+                    'input' => $input,
+                    'tools' => [['type' => 'web_search']],
+                    'max_output_tokens' => config('ai-agency.max_output_tokens'),
+                    'text' => ['format' => $this->pmStrategySchema()],
+                ])->throw()->json();
+
+            $outputPart = collect($response['output'] ?? [])->where('type', 'message')
+                ->flatMap(fn ($item) => $item['content'] ?? [])->firstWhere('type', 'output_text');
+            $result = json_decode((string) ($outputPart['text'] ?? ''), true, 512, JSON_THROW_ON_ERROR);
+            $inputTokens = (int) data_get($response, 'usage.input_tokens', $estimatedInputTokens);
+            $outputTokens = (int) data_get($response, 'usage.output_tokens', $this->estimateTokens(json_encode($result)));
+            $webSearches = collect($response['output'] ?? [])->where('type', 'web_search_call')->count();
+            $documents = [
+                1 => ['key' => 'client_analysis', 'type' => 'client_analysis', 'title' => 'Analisi Cliente', 'status' => 'completed'],
+                2 => ['key' => 'competitor_analysis', 'type' => 'competitor_analysis', 'title' => 'Analisi Competitor', 'status' => 'completed'],
+                3 => ['key' => 'strategy', 'type' => 'strategy', 'title' => 'Strategia', 'status' => 'approval'],
+            ];
+
+            DB::transaction(function () use ($runId, $run, $steps, $result, $documents, $snapshot, $inputTokens, $outputTokens, $webSearches) {
+                foreach ($documents as $position => $document) {
+                    $content = $result[$document['key']] ?? [];
+                    DB::table('ai_agency_steps')->where('id', $steps[$position]->id)->update([
+                        'status' => $document['status'],
+                        'output_data' => json_encode($content, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                        'submitted_at' => now(),
+                        'completed_at' => $document['status'] === 'completed' ? now() : null,
+                        'updated_at' => now(),
+                    ]);
+                    DB::table('ai_agency_artifacts')->updateOrInsert(
+                        ['run_id' => $runId, 'type' => $document['type']],
+                        [
+                            'id' => (string) Str::uuid(),
+                            'title' => $document['title'],
+                            'content' => json_encode($content, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ],
+                    );
+                }
+
+                DB::table('ai_agency_runs')->where('id', $runId)->update([
+                    'project_snapshot' => json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'input_tokens' => (int) $run->input_tokens + $inputTokens,
+                    'output_tokens' => (int) $run->output_tokens + $outputTokens,
+                    'web_searches' => (int) $run->web_searches + $webSearches,
+                    'estimated_cost_eur' => (float) $run->estimated_cost_eur + $this->estimatedCost($inputTokens, $outputTokens, $webSearches),
+                    'updated_at' => now(),
+                ]);
+            });
+        } catch (\Throwable $error) {
+            foreach ($steps->slice(1, 3)->values() as $index => $step) {
+                DB::table('ai_agency_steps')->where('id', $step->id)->update([
+                    'status' => $index === 0 ? 'todo' : 'blocked',
+                    'updated_at' => now(),
+                ]);
+            }
+            throw $error;
+        }
+    }
+
+    public function approvePmStrategy(string $runId): void
+    {
+        $strategy = DB::table('ai_agency_steps')->where('run_id', $runId)->where('position', 3)->first();
+        throw_unless($strategy && $strategy->status === 'approval', RuntimeException::class, 'La strategia non è pronta per l’approvazione.');
+
+        DB::transaction(function () use ($runId, $strategy) {
+            DB::table('ai_agency_steps')->where('id', $strategy->id)->update([
+                'status' => 'completed', 'completed_at' => now(), 'updated_at' => now(),
+            ]);
+            DB::table('ai_agency_steps')->where('run_id', $runId)->where('position', 4)->update([
+                'status' => 'todo', 'updated_at' => now(),
             ]);
         });
     }
@@ -308,6 +441,39 @@ PROMPT;
         ];
     }
 
+    private function pmStrategySchema(): array
+    {
+        $document = [
+            'type' => 'object',
+            'additionalProperties' => false,
+            'properties' => [
+                'summary' => ['type' => 'string'],
+                'findings' => ['type' => 'array', 'items' => ['type' => 'string']],
+                'recommendations' => ['type' => 'array', 'items' => ['type' => 'string']],
+                'risks' => ['type' => 'array', 'items' => ['type' => 'string']],
+                'assumptions' => ['type' => 'array', 'items' => ['type' => 'string']],
+                'sources' => ['type' => 'array', 'items' => ['type' => 'string']],
+            ],
+            'required' => ['summary', 'findings', 'recommendations', 'risks', 'assumptions', 'sources'],
+        ];
+
+        return [
+            'type' => 'json_schema',
+            'name' => 'lu3g_pm_strategy',
+            'strict' => true,
+            'schema' => [
+                'type' => 'object',
+                'additionalProperties' => false,
+                'properties' => [
+                    'client_analysis' => $document,
+                    'competitor_analysis' => $document,
+                    'strategy' => $document,
+                ],
+                'required' => ['client_analysis', 'competitor_analysis', 'strategy'],
+            ],
+        ];
+    }
+
     private function extractFileText(object $file): ?string
     {
         if (! Storage::disk('local')->exists($file->path)) {
@@ -328,6 +494,18 @@ PROMPT;
                 $zip->close();
                 return Str::limit($this->plainText(str_replace(['</w:p>', '</w:tr>'], ["\n", "\n"], (string) $xml)), 20000, '');
             }
+        }
+
+        if ($extension === 'pdf') {
+            try {
+                return Str::limit((new PdfParser())->parseFile($path)->getText(), 30000, '');
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
+        if ($extension === 'svg') {
+            return Str::limit($this->plainText((string) file_get_contents($path)), 5000, '');
         }
 
         return null;

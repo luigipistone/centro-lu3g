@@ -140,6 +140,8 @@ Route::middleware('auth')->group(function () {
     Route::put('/ai-agency/{runId}/steps/{stepId}', [AiAgencyController::class, 'saveStep'])->name('ai-agency.steps.update');
     Route::post('/ai-agency/{runId}/steps/{stepId}/submit', [AiAgencyController::class, 'submitStep'])->name('ai-agency.steps.submit');
     Route::post('/ai-agency/{runId}/steps/{stepId}/approve', [AiAgencyController::class, 'approveStep'])->name('ai-agency.steps.approve');
+    Route::post('/ai-agency/{runId}/pm-strategy', [AiAgencyController::class, 'executePmStrategy'])->name('ai-agency.pm-strategy.execute');
+    Route::post('/ai-agency/{runId}/pm-strategy/approve', [AiAgencyController::class, 'approvePmStrategy'])->name('ai-agency.pm-strategy.approve');
     Route::delete('/ai-agency/{id}', [AiAgencyController::class, 'destroy'])->name('ai-agency.destroy');
     Route::get('/updates/social', [CentroPageController::class, 'index'])->defaults('section', 'updates-social')->name('updates.social');
     Route::post('/updates/social', [CentroPageController::class, 'store'])->defaults('section', 'updates-social')->name('updates-social.store');
