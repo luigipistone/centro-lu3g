@@ -1,9 +1,9 @@
 <script setup>
 import AppSelect from '@/Components/AppSelect.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, router, useForm } from '@inertiajs/vue3';
+import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
-import { CheckCircle2, Lock, Play, RefreshCw, Sparkles } from '@lucide/vue';
+import { CheckCircle2, Lock, Play, RefreshCw, Sparkles, Trash2 } from '@lucide/vue';
 
 const props = defineProps({
     projects: Array,
@@ -14,6 +14,10 @@ const props = defineProps({
 });
 
 const selectedWorkflowByRun = ref({});
+const page = usePage();
+const deleteTarget = ref(null);
+const deleteText = ref('');
+const isSuperadmin = computed(() => page.props.auth?.user?.role === 'superadmin');
 
 const generateForm = useForm({
     project_id: '',
@@ -65,6 +69,30 @@ function approveRun(run) {
 function executeStep(step) {
     router.post(route('orchestrator.modules.execute', step.id), {}, {
         preserveScroll: true,
+    });
+}
+
+function requestDelete(run) {
+    if (isSuperadmin.value) {
+        router.delete(route('orchestrator.destroy', run.id), { preserveScroll: true });
+        return;
+    }
+
+    deleteTarget.value = run;
+    deleteText.value = '';
+}
+
+function closeDelete() {
+    deleteTarget.value = null;
+    deleteText.value = '';
+}
+
+function confirmDelete() {
+    if (!deleteTarget.value || deleteText.value !== 'ELIMINA') return;
+
+    router.delete(route('orchestrator.destroy', deleteTarget.value.id), {
+        preserveScroll: true,
+        onFinish: closeDelete,
     });
 }
 
@@ -120,6 +148,22 @@ function stepStatusClass(status) {
 
         <div class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
+                <div v-if="deleteTarget" class="fixed inset-0 z-[7000] flex items-center justify-center bg-transparent px-4 py-6" @click.self="closeDelete">
+                    <div class="w-full max-w-md rounded-[var(--radius)] bg-white p-5 shadow-xl">
+                        <h3 class="text-base font-semibold text-gray-900">Eliminare questo contenuto?</h3>
+                        <p class="mt-2 text-sm text-gray-600">
+                            Verranno eliminati l'analisi di <span class="font-semibold text-gray-900">{{ deleteTarget.project_name }}</span>,
+                            il workflow e tutti gli output generati. Digita
+                            <span class="font-mono font-semibold text-gray-900">ELIMINA</span> per confermare.
+                        </p>
+                        <input v-model="deleteText" class="form-control mt-4 font-mono" placeholder="ELIMINA" autocomplete="off" />
+                        <div class="mt-5 flex justify-end gap-2">
+                            <button type="button" class="btn btn-outline" @click="closeDelete">Annulla</button>
+                            <button type="button" class="btn btn-danger" :disabled="deleteText !== 'ELIMINA'" @click="confirmDelete">Elimina</button>
+                        </div>
+                    </div>
+                </div>
+
                 <section class="surface p-5">
                     <div class="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
                         <div>
@@ -150,14 +194,25 @@ function stepStatusClass(status) {
                                 <p v-if="run.client_name" class="mt-1 text-sm text-gray-500">{{ run.client_name }}</p>
                             </div>
 
-                            <div v-if="runCanApprove(run)" class="w-full max-w-md space-y-2">
-                                <label class="block text-sm font-medium text-gray-700">Workflow da utilizzare</label>
-                                <div class="flex gap-2">
-                                    <AppSelect v-model="selectedWorkflowByRun[run.id]" :options="workflowOptions" searchable placeholder="Seleziona workflow" />
-                                    <button type="button" class="btn btn-primary shrink-0" @click="approveRun(run)">
-                                        Approva
-                                    </button>
+                            <div class="flex w-full max-w-md items-start justify-end gap-2">
+                                <div v-if="runCanApprove(run)" class="min-w-0 flex-1 space-y-2">
+                                    <label class="block text-sm font-medium text-gray-700">Workflow da utilizzare</label>
+                                    <div class="flex gap-2">
+                                        <AppSelect v-model="selectedWorkflowByRun[run.id]" :options="workflowOptions" searchable placeholder="Seleziona workflow" />
+                                        <button type="button" class="btn btn-primary shrink-0" @click="approveRun(run)">
+                                            Approva
+                                        </button>
+                                    </div>
                                 </div>
+                                <button
+                                    type="button"
+                                    class="icon-btn h-8 w-8 shrink-0 text-red-600 hover:bg-red-50"
+                                    title="Elimina contenuto"
+                                    aria-label="Elimina contenuto dell'orchestratore"
+                                    @click="requestDelete(run)"
+                                >
+                                    <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                </button>
                             </div>
                         </div>
 

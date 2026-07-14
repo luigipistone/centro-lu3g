@@ -132,6 +132,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/orchestrator', [CentroPageController::class, 'orchestrator'])->name('orchestrator.index');
     Route::post('/orchestrator/generate', [CentroPageController::class, 'generateOrchestrator'])->name('orchestrator.generate');
     Route::post('/orchestrator/{id}/approve', [CentroPageController::class, 'approveOrchestrator'])->name('orchestrator.approve');
+    Route::delete('/orchestrator/{id}', [CentroPageController::class, 'destroyOrchestrator'])->name('orchestrator.destroy');
     Route::post('/orchestrator/modules/{id}/execute', [CentroPageController::class, 'executeOrchestratorModule'])->name('orchestrator.modules.execute');
     Route::get('/updates/social', [CentroPageController::class, 'index'])->defaults('section', 'updates-social')->name('updates.social');
     Route::post('/updates/social', [CentroPageController::class, 'store'])->defaults('section', 'updates-social')->name('updates-social.store');

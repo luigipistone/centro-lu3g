@@ -1818,6 +1818,18 @@ class CentroPageController extends Controller
         return back()->with('status', 'Workflow approvato.');
     }
 
+    public function destroyOrchestrator(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+
+        $run = DB::table('orchestrator_runs')->where('id', $id)->first();
+        abort_if(! $run, 404);
+
+        DB::table('orchestrator_runs')->where('id', $run->id)->delete();
+
+        return back()->with('status', 'Contenuto dell\'orchestratore eliminato.');
+    }
+
     public function executeOrchestratorModule(Request $request, string $id): RedirectResponse
     {
         $this->ensureAdmin($request);
