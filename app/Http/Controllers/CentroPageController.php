@@ -1629,6 +1629,7 @@ class CentroPageController extends Controller
         return Inertia::render('Centro/Modules', [
             'folders' => $this->adminModuleFolderRows(),
             'modules' => $this->adminModuleRows(),
+            'services' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name']),
             'agentOptions' => $this->adminModuleAgentOptions(),
             'moduleStatusOptions' => $this->adminModuleStatusOptions(),
         ]);
@@ -1730,10 +1731,10 @@ class CentroPageController extends Controller
                 ->leftJoin('clients', 'clients.id', '=', 'projects.client_id')
                 ->orderBy('projects.name')
                 ->get(['projects.id', 'projects.name', 'projects.status', 'clients.name as client_name']),
-            'services' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name']),
-            'decisionModules' => $this->decisionModuleRows(),
             'runs' => $this->orchestratorRunRows(),
+            'hasDecisionModules' => $this->decisionModuleRows()->isNotEmpty(),
             'aiConfigured' => filled(config('services.openai.api_key')),
+            'focusedRunId' => $request->string('run')->toString(),
         ]);
     }
 
@@ -1757,9 +1758,12 @@ class CentroPageController extends Controller
             'project_id' => $payload['project_id'],
             'status' => 'draft',
             'recommended_services' => json_encode($this->orchestratorStringList($decision['servizi_consigliati'] ?? [])),
-            'recommended_priority' => $decision['priorita'] ?? 'Media',
-            'roadmap' => $decision['roadmap'] ?? '',
-            'workflow_options' => json_encode($this->orchestratorStringList($decision['workflow_da_utilizzare'] ?? [])),
+            'not_recommended_services' => json_encode($this->orchestratorStringList($decision['servizi_non_consigliati'] ?? [])),
+            'recommended_priority' => $this->orchestratorStringList($decision['priorita'] ?? [])[0] ?? 'Media',
+            'recommended_priorities' => json_encode($this->orchestratorStringList($decision['priorita'] ?? [])),
+            'motivations' => $this->orchestratorText($decision['motivazioni'] ?? ''),
+            'roadmap' => $this->orchestratorText($decision['roadmap_strategica'] ?? $decision['roadmap'] ?? ''),
+            'workflow_options' => json_encode([]),
             'decision_prompt' => $prompt,
             'decision_output' => $aiOutput ?: json_encode($fallback, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE),
             'created_by' => $request->user()->id,
@@ -1775,47 +1779,61 @@ class CentroPageController extends Controller
         $this->ensureAdmin($request);
         $run = DB::table('orchestrator_runs')->where('id', $id)->first();
         abort_if(! $run, 404);
+        abort_if($run->status !== 'draft', 422, 'Questa strategia e\' gia\' stata approvata.');
 
-        $payload = $request->validate([
-            'workflow_module_id' => ['required', 'uuid', Rule::exists('admin_modules', 'id')],
-        ]);
+        $approvedServices = $this->decodeJsonArray($run->recommended_services);
+        $workflows = $this->workflowsForServices($approvedServices);
 
-        $workflow = DB::table('admin_modules')->where('id', $payload['workflow_module_id'])->first();
-        abort_if(! $workflow, 404);
-
-        $modules = DB::table('admin_modules')
-            ->where('parent_module_id', $workflow->id)
-            ->orderBy('created_at')
-            ->get();
-
-        if ($modules->isEmpty()) {
-            $modules = collect([$workflow]);
+        if ($workflows->isEmpty()) {
+            throw ValidationException::withMessages([
+                'workflow' => 'Nella cartella Workflow non esistono moduli padre con lo stesso nome dei servizi consigliati.',
+            ]);
         }
 
-        DB::transaction(function () use ($run, $workflow, $modules) {
+        $workflowIds = $workflows->pluck('id')->values();
+        $modulesByWorkflow = DB::table('admin_modules')
+            ->whereIn('parent_module_id', $workflowIds)
+            ->orderBy('created_at')
+            ->get()
+            ->groupBy('parent_module_id');
+
+        DB::transaction(function () use ($run, $approvedServices, $workflows, $modulesByWorkflow) {
             DB::table('orchestrator_run_modules')->where('orchestrator_run_id', $run->id)->delete();
 
-            $modules->values()->each(function ($module, int $index) use ($run) {
-                DB::table('orchestrator_run_modules')->insert([
-                    'id' => (string) str()->uuid(),
-                    'orchestrator_run_id' => $run->id,
-                    'module_id' => $module->id,
-                    'position' => $index + 1,
-                    'status' => $index === 0 ? 'todo' : 'blocked',
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            });
+            $position = 0;
+            foreach ($workflows as $workflow) {
+                $modules = $modulesByWorkflow->get($workflow->id, collect());
+                if ($modules->isEmpty()) {
+                    $modules = collect([$workflow]);
+                }
+
+                foreach ($modules as $module) {
+                    $position++;
+                    DB::table('orchestrator_run_modules')->insert([
+                        'id' => (string) str()->uuid(),
+                        'orchestrator_run_id' => $run->id,
+                        'module_id' => $module->id,
+                        'workflow_module_id' => $workflow->id,
+                        'position' => $position,
+                        'status' => $position === 1 ? 'todo' : 'blocked',
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+            }
 
             DB::table('orchestrator_runs')->where('id', $run->id)->update([
-                'workflow_module_id' => $workflow->id,
+                'workflow_module_id' => $workflows->first()->id,
+                'workflow_module_ids' => json_encode($workflows->pluck('id')->values()->all()),
+                'approved_services' => json_encode($approvedServices),
                 'status' => 'approved',
                 'approved_at' => now(),
                 'updated_at' => now(),
             ]);
         });
 
-        return back()->with('status', 'Workflow approvato.');
+        return redirect()->route('orchestrator.index', ['run' => $run->id])
+            ->with('status', 'Strategia approvata. I workflow sono pronti per l\'esecuzione.');
     }
 
     public function destroyOrchestrator(Request $request, string $id): RedirectResponse
@@ -3979,6 +3997,7 @@ class CentroPageController extends Controller
         return $request->validate([
             'admin_module_folder_id' => ['required', 'uuid', Rule::exists('admin_module_folders', 'id')],
             'parent_module_id' => ['nullable', 'uuid', Rule::exists('admin_modules', 'id')],
+            'service_id' => ['nullable', 'uuid', Rule::exists('services', 'id')],
             'name' => ['required', 'string', 'max:255'],
             'category' => ['nullable', 'string', 'max:120'],
             'version' => ['nullable', 'string', 'max:40'],
@@ -4003,6 +4022,7 @@ class CentroPageController extends Controller
         return [
             'admin_module_folder_id' => $payload['admin_module_folder_id'],
             'parent_module_id' => $payload['parent_module_id'] ?? null,
+            'service_id' => $payload['service_id'] ?? null,
             'name' => $payload['name'],
             'category' => $payload['category'] ?? null,
             'version' => ($payload['version'] ?? null) ?: '1.0',
@@ -4128,18 +4148,46 @@ class CentroPageController extends Controller
         $runIds = $runs->pluck('id');
         $steps = DB::table('orchestrator_run_modules')
             ->join('admin_modules', 'admin_modules.id', '=', 'orchestrator_run_modules.module_id')
+            ->leftJoin('admin_modules as workflow_parent', 'workflow_parent.id', '=', 'orchestrator_run_modules.workflow_module_id')
             ->whereIn('orchestrator_run_modules.orchestrator_run_id', $runIds)
             ->orderBy('orchestrator_run_modules.position')
             ->get([
                 'orchestrator_run_modules.*',
                 'admin_modules.name as module_name',
                 'admin_modules.category as module_category',
+                'workflow_parent.name as workflow_name',
             ])
             ->groupBy('orchestrator_run_id');
 
-        return $runs->map(function ($run) use ($steps) {
+        $availableWorkflows = $this->workflowModuleRows();
+        $availableServices = DB::table('services')->where('active', true)->get(['id', 'name']);
+
+        return $runs->map(function ($run) use ($steps, $availableWorkflows, $availableServices) {
             $run->recommended_services = $this->decodeJsonArray($run->recommended_services);
-            $run->workflow_options = $this->decodeJsonArray($run->workflow_options);
+            $run->not_recommended_services = $this->decodeJsonArray($run->not_recommended_services ?? null);
+            $run->recommended_priorities = $this->decodeJsonArray($run->recommended_priorities ?? null);
+            if (empty($run->recommended_priorities) && filled($run->recommended_priority)) {
+                $run->recommended_priorities = [$run->recommended_priority];
+            }
+            $run->approved_services = $this->decodeJsonArray($run->approved_services ?? null);
+            $run->workflow_module_ids = $this->decodeJsonArray($run->workflow_module_ids ?? null);
+            $run->matched_workflows = $this->workflowsForServices($run->recommended_services, $availableWorkflows, $availableServices)
+                ->map(function ($workflow) use ($availableServices) {
+                    $service = $availableServices->firstWhere('id', $workflow->service_id);
+
+                    return [
+                        'id' => $workflow->id,
+                        'name' => $workflow->name,
+                        'service_name' => $service?->name ?? $workflow->name,
+                    ];
+                })
+                ->values();
+            $matchedNames = $run->matched_workflows
+                ->pluck('service_name')
+                ->map(fn ($name) => $this->normalizeOrchestratorName($name));
+            $run->unmatched_services = collect($run->recommended_services)
+                ->reject(fn ($service) => $matchedNames->contains($this->normalizeOrchestratorName($service)))
+                ->values();
             $run->modules = ($steps[$run->id] ?? collect())->values();
 
             return $run;
@@ -4191,8 +4239,9 @@ class CentroPageController extends Controller
                 ->all(),
         ])->values();
 
-        return "Sei l'Orchestratore del gestionale Il Centro. Non creare agenti autonomi e non creare automazioni complesse.\n"
-            ."Analizza il progetto e i moduli della cartella Decisioni. Rispondi solo JSON valido con chiavi: servizi_consigliati (array), priorita (stringa), roadmap (stringa), workflow_da_utilizzare (array di nomi workflow ordinati per pertinenza).\n\n"
+        return "Sei il motore decisionale dell'Orchestratore del gestionale Il Centro. Non creare agenti autonomi e non creare automazioni complesse.\n"
+            ."Analizza il progetto usando esclusivamente i moduli forniti della cartella Decisioni. Non conoscere, cercare, proporre o nominare workflow e non descrivere la struttura del database. I nomi e i contenuti dei moduli decisionali sono istruzioni interne e non devono comparire nell'output.\n"
+            ."Rispondi solo con JSON valido e con queste sole chiavi: servizi_consigliati (array di nomi scelti esclusivamente tra servizi_disponibili), servizi_non_consigliati (array degli altri servizi valutati), priorita (array ordinato dei servizi consigliati), motivazioni (testo), roadmap_strategica (testo).\n\n"
             ."PROGETTO:\n".json_encode([
                 'nome' => $project->name,
                 'cliente' => $project->client_name,
@@ -4310,20 +4359,76 @@ class CentroPageController extends Controller
             ->all();
     }
 
+    private function orchestratorText(mixed $value): string
+    {
+        if (is_array($value)) {
+            return collect($value)
+                ->map(fn ($item) => is_scalar($item) ? trim((string) $item) : json_encode($item, JSON_UNESCAPED_UNICODE))
+                ->filter()
+                ->implode("\n");
+        }
+
+        return trim((string) $value);
+    }
+
+    private function workflowModuleRows()
+    {
+        return $this->adminModuleRows()
+            ->filter(fn ($module) => strcasecmp((string) $module->folder_name, 'Workflow') === 0)
+            ->filter(fn ($module) => blank($module->parent_module_id ?? null))
+            ->filter(fn ($module) => (bool) $module->active)
+            ->values();
+    }
+
+    private function workflowsForServices(array $services, $availableWorkflows = null, $availableServices = null)
+    {
+        $requested = collect($services)
+            ->map(fn ($service) => $this->normalizeOrchestratorName($service))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $serviceCatalog = $availableServices ?? DB::table('services')->where('active', true)->get(['id', 'name']);
+        $requestedServices = $serviceCatalog
+            ->filter(fn ($service) => $requested->contains($this->normalizeOrchestratorName($service->name)))
+            ->values();
+        $requestedServiceIds = $requestedServices->pluck('id');
+        $serviceNamesById = $serviceCatalog->mapWithKeys(fn ($service) => [
+            $service->id => $this->normalizeOrchestratorName($service->name),
+        ]);
+
+        return ($availableWorkflows ?? $this->workflowModuleRows())
+            ->filter(fn ($workflow) => ($workflow->service_id && $requestedServiceIds->contains($workflow->service_id))
+                || $requested->contains($this->normalizeOrchestratorName($workflow->name)))
+            ->sortBy(function ($workflow) use ($requested, $serviceNamesById) {
+                $workflowServiceName = $serviceNamesById[$workflow->service_id] ?? $this->normalizeOrchestratorName($workflow->name);
+
+                return $requested->search($workflowServiceName);
+            })
+            ->values();
+    }
+
+    private function normalizeOrchestratorName(mixed $value): string
+    {
+        return Str::of((string) $value)
+            ->ascii()
+            ->lower()
+            ->replaceMatches('/[^a-z0-9]+/', ' ')
+            ->squish()
+            ->toString();
+    }
+
     private function fallbackDecisionOutput(array $context, $decisionModules): array
     {
         $project = $context['project'];
-        $workflowNames = $decisionModules
-            ->filter(fn ($module) => blank($module->parent_module_id ?? null))
-            ->pluck('name')
-            ->values()
-            ->all();
+        $recommended = collect($context['services'])->take(3)->values();
 
         return [
-            'servizi_consigliati' => collect($context['services'])->take(3)->values()->all(),
-            'priorita' => 'Media',
-            'roadmap' => "Analisi iniziale del progetto {$project->name}, scelta del workflow, esecuzione sequenziale dei moduli e revisione finale degli output.",
-            'workflow_da_utilizzare' => $workflowNames,
+            'servizi_consigliati' => $recommended->all(),
+            'servizi_non_consigliati' => collect($context['services'])->skip(3)->values()->all(),
+            'priorita' => $recommended->all(),
+            'motivazioni' => "I servizi sono stati ordinati in base alle informazioni disponibili per il progetto {$project->name}.",
+            'roadmap_strategica' => 'Validazione delle priorita, avvio dei servizi approvati e verifica progressiva dei risultati.',
         ];
     }
 

@@ -8,6 +8,7 @@ import { Check, ChevronDown, ChevronLeft, Folder, PackageOpen, Pencil, Plus, Tra
 const props = defineProps({
     folders: Array,
     modules: Array,
+    services: Array,
     agentOptions: Array,
     moduleStatusOptions: Array,
 });
@@ -31,6 +32,7 @@ const folderForm = useForm({
 const moduleForm = useForm({
     admin_module_folder_id: '',
     parent_module_id: '',
+    service_id: '',
     name: '',
     category: 'Decisione',
     version: '1.0',
@@ -59,6 +61,16 @@ const folderOptions = computed(() => (props.folders || []).map((folder) => ({
     value: folder.id,
     label: folder.name,
 })));
+
+const serviceOptions = computed(() => (props.services || []).map((service) => ({
+    value: service.id,
+    label: service.name,
+})));
+
+const isWorkflowParent = computed(() => {
+    const folder = (props.folders || []).find((item) => item.id === moduleForm.admin_module_folder_id);
+    return String(folder?.name || '').toLowerCase() === 'workflow' && !moduleForm.parent_module_id;
+});
 
 const moduleDependencyOptions = computed(() => (props.modules || [])
     .filter((module) => module.id !== editingModule.value?.id)
@@ -117,6 +129,12 @@ watch(
         }
     },
 );
+
+watch(isWorkflowParent, (active) => {
+    if (!active && moduleDrawerOpen.value) {
+        moduleForm.service_id = '';
+    }
+});
 
 function contrastColor(hex) {
     const value = String(hex || '#2563eb').replace('#', '');
@@ -211,6 +229,7 @@ function openModuleDrawer(module = null) {
     moduleForm.defaults({
         admin_module_folder_id: module?.admin_module_folder_id || fallbackFolderId,
         parent_module_id: module?.parent_module_id || '',
+        service_id: module?.service_id || '',
         name: module?.name || '',
         category: module?.category || 'Decisione',
         version: module?.version || '1.0',
@@ -528,6 +547,11 @@ function confirmDelete() {
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Categoria</label>
                             <AppSelect v-model="moduleForm.category" :options="categoryOptions" placeholder="Categoria" />
+                        </div>
+                        <div v-if="isWorkflowParent">
+                            <label class="block text-sm font-medium text-gray-700">Servizio collegato</label>
+                            <AppSelect v-model="moduleForm.service_id" :options="serviceOptions" searchable placeholder="Seleziona servizio" />
+                            <div v-if="moduleForm.errors.service_id" class="mt-1 text-sm text-red-600">{{ moduleForm.errors.service_id }}</div>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Versione</label>
