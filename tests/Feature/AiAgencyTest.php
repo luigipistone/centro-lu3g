@@ -57,6 +57,55 @@ class AiAgencyTest extends TestCase
             );
     }
 
+    public function test_first_workflow_step_requires_brief_approval_before_unlocking_the_next_step(): void
+    {
+        $admin = User::factory()->create();
+        $this->role($admin, 'admin');
+        $projectId = $this->project($admin);
+        $runId = (string) Str::uuid();
+        $firstStepId = (string) Str::uuid();
+        $secondStepId = (string) Str::uuid();
+
+        DB::table('ai_agency_runs')->insert([
+            'id' => $runId,
+            'project_id' => $projectId,
+            'created_by' => $admin->id,
+            'status' => 'approved',
+            'proposal' => json_encode(['missing_information' => ['Qual è l’obiettivo principale?']]),
+            'project_snapshot' => json_encode(['files' => [['name' => 'brief.pdf', 'mime_type' => 'application/pdf']]]),
+            'approved_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        foreach ([[$firstStepId, 'Raccolta informazioni cliente', 'todo', 0], [$secondStepId, 'Analisi Cliente', 'blocked', 1]] as [$id, $name, $status, $position]) {
+            DB::table('ai_agency_steps')->insert([
+                'id' => $id,
+                'run_id' => $runId,
+                'name' => $name,
+                'status' => $status,
+                'position' => $position,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $this->actingAs($admin)->post(route('ai-agency.steps.start', [$runId, $firstStepId]))->assertSessionHasNoErrors();
+        $this->actingAs($admin)->put(route('ai-agency.steps.update', [$runId, $firstStepId]), [
+            'answers' => ['0' => 'Generare richieste di preventivo.'],
+            'file_assessments' => ['0' => 'relevant'],
+        ])->assertSessionHasNoErrors();
+        $this->actingAs($admin)->post(route('ai-agency.steps.submit', [$runId, $firstStepId]))->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('ai_agency_steps', ['id' => $firstStepId, 'status' => 'approval']);
+        $this->assertDatabaseHas('ai_agency_steps', ['id' => $secondStepId, 'status' => 'blocked']);
+
+        $this->actingAs($admin)->post(route('ai-agency.steps.approve', [$runId, $firstStepId]))->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('ai_agency_steps', ['id' => $firstStepId, 'status' => 'completed']);
+        $this->assertDatabaseHas('ai_agency_steps', ['id' => $secondStepId, 'status' => 'todo']);
+        $this->assertDatabaseHas('ai_agency_artifacts', ['run_id' => $runId, 'type' => 'project_brief']);
+    }
+
     private function role(User $user, string $role): void
     {
         DB::table('user_roles')->insert([

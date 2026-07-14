@@ -56,6 +56,11 @@ class AiAgencyController extends Controller
                 ->whereIn('ai_agency_service_workflows.service_id', $serviceIds)
                 ->pluck('admin_modules.name', 'ai_agency_service_workflows.service_id'),
             'budget' => $this->budgetPayload(),
+            'projectFiles' => collect(json_decode($run->project_snapshot ?: '{}', true)['files'] ?? [])->map(fn ($file, $index) => [
+                'id' => (string) $index,
+                'name' => $file['name'] ?? 'Allegato',
+                'mime_type' => $file['mime_type'] ?? null,
+            ])->values(),
         ]);
     }
 
@@ -119,6 +124,118 @@ class AiAgencyController extends Controller
         return redirect()->route('ai-agency.index')->with('status', 'Analisi eliminata.');
     }
 
+    public function startStep(Request $request, string $runId, string $stepId): RedirectResponse
+    {
+        $this->authorizeAdmin($request);
+        $step = $this->step($runId, $stepId);
+        abort_unless($step->position === 0 && $step->status === 'todo', 422);
+
+        DB::table('ai_agency_steps')->where('id', $stepId)->update([
+            'status' => 'in_progress',
+            'started_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return back()->with('status', 'Raccolta informazioni avviata.');
+    }
+
+    public function saveStep(Request $request, string $runId, string $stepId): RedirectResponse
+    {
+        $this->authorizeAdmin($request);
+        $step = $this->step($runId, $stepId);
+        abort_unless($step->position === 0 && in_array($step->status, ['in_progress', 'approval'], true), 422);
+        $payload = $request->validate([
+            'answers' => ['present', 'array'],
+            'answers.*' => ['nullable', 'string', 'max:10000'],
+            'file_assessments' => ['present', 'array'],
+            'file_assessments.*' => [Rule::in(['relevant', 'uncertain', 'irrelevant'])],
+        ]);
+
+        DB::table('ai_agency_steps')->where('id', $stepId)->update([
+            'input_data' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'status' => 'in_progress',
+            'submitted_at' => null,
+            'updated_at' => now(),
+        ]);
+
+        return back()->with('status', 'Brief salvato.');
+    }
+
+    public function submitStep(Request $request, string $runId, string $stepId): RedirectResponse
+    {
+        $this->authorizeAdmin($request);
+        $step = $this->step($runId, $stepId);
+        abort_unless($step->position === 0 && $step->status === 'in_progress', 422);
+        $input = json_decode($step->input_data ?: '{}', true) ?: [];
+        $run = DB::table('ai_agency_runs')->where('id', $runId)->first();
+        $proposal = json_decode($run->proposal ?: '{}', true) ?: [];
+        $questions = $proposal['missing_information'] ?? [];
+        $answers = $input['answers'] ?? [];
+        $files = json_decode($run->project_snapshot ?: '{}', true)['files'] ?? [];
+        $fileAssessments = $input['file_assessments'] ?? [];
+
+        if (collect($questions)->contains(fn ($question, $index) => blank($answers[$index] ?? null))) {
+            return back()->withErrors(['step' => 'Completa tutte le informazioni richieste prima di inviare il brief.']);
+        }
+        if (count($fileAssessments) < count($files)) {
+            return back()->withErrors(['step' => 'Classifica tutti gli allegati prima di inviare il brief.']);
+        }
+
+        $output = [
+            'title' => 'Brief di progetto',
+            'questions' => collect($questions)->map(fn ($question, $index) => [
+                'question' => $question,
+                'answer' => $answers[$index] ?? '',
+            ])->values()->all(),
+            'files' => collect($files)->map(fn ($file, $index) => [
+                'name' => $file['name'] ?? 'Allegato',
+                'assessment' => $fileAssessments[(string) $index] ?? $fileAssessments[$index] ?? 'uncertain',
+            ])->values()->all(),
+        ];
+
+        DB::table('ai_agency_steps')->where('id', $stepId)->update([
+            'status' => 'approval',
+            'output_data' => json_encode($output, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'submitted_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return back()->with('status', 'Brief pronto per l’approvazione.');
+    }
+
+    public function approveStep(Request $request, string $runId, string $stepId): RedirectResponse
+    {
+        $this->authorizeAdmin($request);
+        $step = $this->step($runId, $stepId);
+        abort_unless($step->position === 0 && $step->status === 'approval', 422);
+
+        DB::transaction(function () use ($runId, $stepId, $step) {
+            DB::table('ai_agency_artifacts')->updateOrInsert(
+                ['run_id' => $runId, 'type' => 'project_brief'],
+                [
+                    'id' => (string) Str::uuid(),
+                    'title' => 'Brief di progetto',
+                    'content' => $step->output_data,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ],
+            );
+            DB::table('ai_agency_steps')->where('id', $stepId)->update([
+                'status' => 'completed',
+                'completed_at' => now(),
+                'updated_at' => now(),
+            ]);
+            DB::table('ai_agency_steps')
+                ->where('run_id', $runId)
+                ->where('position', '>', $step->position)
+                ->orderBy('position')
+                ->limit(1)
+                ->update(['status' => 'todo', 'updated_at' => now()]);
+        });
+
+        return back()->with('status', 'Brief approvato. Il modulo successivo è ora disponibile.');
+    }
+
     public function configure(Request $request): RedirectResponse
     {
         abort_unless($this->role($request) === 'superadmin', 403);
@@ -138,6 +255,14 @@ class AiAgencyController extends Controller
     private function role(Request $request): string
     {
         return (string) DB::table('user_roles')->where('user_id', $request->user()->id)->value('role');
+    }
+
+    private function step(string $runId, string $stepId): object
+    {
+        $step = DB::table('ai_agency_steps')->where('run_id', $runId)->where('id', $stepId)->first();
+        abort_unless($step, 404);
+
+        return $step;
     }
 
     private function runQuery()

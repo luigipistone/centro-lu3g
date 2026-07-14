@@ -127,7 +127,7 @@ class AiAgencyService
                         'module_id' => $child->id,
                         'name' => $child->name,
                         'agent_role' => $agents[0] ?? null,
-                        'status' => 'planned',
+                        'status' => $position === 0 ? 'todo' : 'blocked',
                         'position' => $position++,
                         'created_at' => now(),
                         'updated_at' => now(),
