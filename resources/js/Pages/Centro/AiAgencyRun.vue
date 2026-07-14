@@ -108,7 +108,7 @@ const statusLabel = { draft: 'Da analizzare', analyzing: 'Analisi in corso', nee
                         </div>
                     </section>
 
-                    <div class="grid gap-6 xl:grid-cols-2">
+                    <div class="space-y-6">
                         <section class="surface overflow-hidden"><button type="button" class="flex w-full items-center justify-between gap-4 p-5 text-left" @click="toggleSection('priorities')"><h3 class="text-base font-semibold text-gray-900">Priorità</h3><ChevronDown class="h-4 w-4 text-gray-400 transition-transform duration-200" :class="expandedSections.priorities ? 'rotate-180' : ''" /></button><ol v-show="expandedSections.priorities" class="space-y-3 border-t border-gray-100 px-5 pb-5 pt-4 text-sm text-gray-700"><li v-for="(item, index) in proposal.priorities" :key="item"><span class="mr-2 font-semibold text-gray-400">{{ index + 1 }}.</span>{{ item }}</li></ol></section>
                         <section class="surface overflow-hidden"><button type="button" class="flex w-full items-center justify-between gap-4 p-5 text-left" @click="toggleSection('roadmap')"><h3 class="text-base font-semibold text-gray-900">Roadmap strategica</h3><ChevronDown class="h-4 w-4 text-gray-400 transition-transform duration-200" :class="expandedSections.roadmap ? 'rotate-180' : ''" /></button><ol v-show="expandedSections.roadmap" class="space-y-3 border-t border-gray-100 px-5 pb-5 pt-4 text-sm text-gray-700"><li v-for="(item, index) in proposal.roadmap" :key="item"><span class="mr-2 font-semibold text-gray-400">{{ index + 1 }}.</span>{{ item }}</li></ol></section>
                     </div>
