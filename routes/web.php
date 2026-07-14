@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CentroPageController;
+use App\Http\Controllers\AiAgencyController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -129,6 +130,13 @@ Route::middleware('auth')->group(function () {
     Route::post('/modules/items', [CentroPageController::class, 'storeModuleItem'])->name('modules.items.store');
     Route::put('/modules/items/{id}', [CentroPageController::class, 'updateModuleItem'])->name('modules.items.update');
     Route::delete('/modules/items/{id}', [CentroPageController::class, 'destroyModuleItem'])->name('modules.items.destroy');
+    Route::get('/ai-agency', [AiAgencyController::class, 'index'])->name('ai-agency.index');
+    Route::post('/ai-agency', [AiAgencyController::class, 'store'])->name('ai-agency.store');
+    Route::put('/ai-agency/configuration', [AiAgencyController::class, 'configure'])->name('ai-agency.configure');
+    Route::get('/ai-agency/{id}', [AiAgencyController::class, 'show'])->name('ai-agency.show');
+    Route::post('/ai-agency/{id}/analyze', [AiAgencyController::class, 'analyze'])->name('ai-agency.analyze');
+    Route::post('/ai-agency/{id}/approve', [AiAgencyController::class, 'approve'])->name('ai-agency.approve');
+    Route::delete('/ai-agency/{id}', [AiAgencyController::class, 'destroy'])->name('ai-agency.destroy');
     Route::get('/updates/social', [CentroPageController::class, 'index'])->defaults('section', 'updates-social')->name('updates.social');
     Route::post('/updates/social', [CentroPageController::class, 'store'])->defaults('section', 'updates-social')->name('updates-social.store');
     Route::put('/updates/social/{id}', [CentroPageController::class, 'update'])->defaults('section', 'updates-social')->name('updates-social.update');
