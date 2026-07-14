@@ -17,6 +17,7 @@ const projectOptions = computed(() => (props.projects || []).map((project) => ({
 const statusLabel = {
     draft: 'Da analizzare',
     analyzing: 'Analisi in corso',
+    needs_information: 'Informazioni necessarie',
     proposal_ready: 'Proposta pronta',
     approved: 'Strategia approvata',
     error: 'Da controllare',
