@@ -169,6 +169,9 @@ class AiAgencyTest extends TestCase
         $this->assertDatabaseHas('ai_agency_steps', ['id' => $firstStep, 'status' => 'completed']);
         $this->assertDatabaseHas('ai_agency_steps', ['id' => $secondStep, 'status' => 'todo']);
         $this->assertStringContainsString('Sitemap', DB::table('ai_agency_steps')->where('id', $firstStep)->value('output_data'));
+        $pdf = $this->actingAs($admin)->get(route('ai-agency.steps.pdf', [$runId, $firstStep]));
+        $pdf->assertOk()->assertHeader('content-type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF-', (string) file_get_contents($pdf->baseResponse->getFile()->getPathname()));
     }
 
     public function test_operational_engine_only_stops_for_blocking_information_and_can_resume(): void

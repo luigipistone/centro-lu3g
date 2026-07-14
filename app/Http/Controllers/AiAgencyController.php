@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\AiAgencyService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -160,6 +161,17 @@ class AiAgencyController extends Controller
         } catch (\Throwable $error) {
             return response()->json(['state' => 'error', 'message' => $error->getMessage(), 'continue' => false], 422);
         }
+    }
+
+    public function stepPdf(Request $request, string $id, string $stepId): BinaryFileResponse
+    {
+        $this->authorizeAdmin($request);
+        $pdf = $this->agency->stepPdf($id, $stepId);
+
+        return response()->file($pdf['path'], [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$pdf['name'].'"',
+        ]);
     }
 
     public function configure(Request $request): RedirectResponse

@@ -138,6 +138,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/ai-agency/{id}/approve', [AiAgencyController::class, 'approve'])->name('ai-agency.approve');
     Route::post('/ai-agency/{id}/execute-next', [AiAgencyController::class, 'executeNext'])->name('ai-agency.execute-next');
     Route::post('/ai-agency/{id}/steps/{stepId}/information', [AiAgencyController::class, 'provideStepInformation'])->name('ai-agency.steps.information');
+    Route::get('/ai-agency/{id}/steps/{stepId}/pdf', [AiAgencyController::class, 'stepPdf'])->name('ai-agency.steps.pdf');
     Route::post('/ai-agency/{id}/information', [AiAgencyController::class, 'provideInformation'])->name('ai-agency.information.store');
     Route::delete('/ai-agency/{id}', [AiAgencyController::class, 'destroy'])->name('ai-agency.destroy');
     Route::get('/updates/social', [CentroPageController::class, 'index'])->defaults('section', 'updates-social')->name('updates.social');

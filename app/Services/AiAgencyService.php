@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +16,45 @@ use ZipArchive;
 
 class AiAgencyService
 {
+    public function stepPdf(string $runId, string $stepId): array
+    {
+        $step = DB::table('ai_agency_steps')->leftJoin('services', 'services.id', '=', 'ai_agency_steps.service_id')
+            ->where('ai_agency_steps.id', $stepId)->where('ai_agency_steps.run_id', $runId)
+            ->first(['ai_agency_steps.*', 'services.name as service_name']);
+        throw_unless($step && $step->status === 'completed', RuntimeException::class, 'Il risultato di questa fase non è ancora disponibile.');
+        $data = json_decode($step->output_data ?: '{}', true) ?: [];
+        throw_unless(filled($data['content'] ?? null), RuntimeException::class, 'Questa fase utilizza un risultato già presente nell’analisi iniziale.');
+        $run = DB::table('ai_agency_runs')->join('projects', 'projects.id', '=', 'ai_agency_runs.project_id')
+            ->leftJoin('clients', 'clients.id', '=', 'projects.client_id')->where('ai_agency_runs.id', $runId)
+            ->first(['ai_agency_runs.id', 'projects.name as project_name', 'clients.name as client_name']);
+        throw_unless($run, RuntimeException::class, 'Processo non trovato.');
+
+        $directory = 'ai-agency/'.$runId;
+        $relativePath = $directory.'/'.$stepId.'.pdf';
+        if (! Storage::disk('local')->exists($relativePath)) {
+            $options = new Options();
+            $options->set('isRemoteEnabled', false);
+            $options->set('defaultFont', 'DejaVu Sans');
+            $options->setChroot(public_path());
+            $dompdf = new Dompdf($options);
+            $html = view('ai-agency.step-pdf', [
+                'step' => $step,
+                'run' => $run,
+                'content' => Str::markdown($data['content'], ['html_input' => 'strip', 'allow_unsafe_links' => false]),
+                'generatedAt' => $step->completed_at ? \Carbon\Carbon::parse($step->completed_at) : now(),
+            ])->render();
+            $dompdf->loadHtml($html, 'UTF-8');
+            $dompdf->setPaper('A4');
+            $dompdf->render();
+            Storage::disk('local')->put($relativePath, $dompdf->output());
+        }
+
+        return [
+            'path' => Storage::disk('local')->path($relativePath),
+            'name' => Str::slug($run->project_name.'-'.$step->name).'.pdf',
+        ];
+    }
+
     public function executeNextStep(string $runId): array
     {
         $claimed = DB::transaction(function () use ($runId) {
