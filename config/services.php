@@ -41,9 +41,4 @@ return [
         'private_key' => env('VAPID_PRIVATE_KEY'),
     ],
 
-    'openai' => [
-        'api_key' => env('OPENAI_API_KEY'),
-        'model' => env('OPENAI_MODEL', 'gpt-4.1-mini'),
-    ],
-
 ];
