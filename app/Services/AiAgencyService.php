@@ -20,57 +20,80 @@ class AiAgencyService
         throw_unless($run, RuntimeException::class, 'Processo non trovato.');
         $snapshot = $this->buildProjectSnapshot($run->project_id);
         $brief = $this->artifactContent($runId, 'project_brief');
-        $input = json_encode([
+        $input = $this->encodeJson([
             'project_snapshot' => $snapshot,
             'approved_or_integrated_brief' => $brief,
             'decision_modules' => $this->decisionModules()->all(),
             'available_services' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name', 'description']),
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+        ], JSON_PRETTY_PRINT);
 
         $estimatedInputTokens = $this->estimateTokens($input);
-        if ($this->estimatedCost($estimatedInputTokens, config('ai-agency.max_output_tokens'), 3) > $this->remainingBudget()) {
-            throw new RuntimeException('Budget AI mensile insufficiente per completare l’analisi.');
-        }
-        if (! $this->apiKey()) {
-            throw new RuntimeException('Chiave OpenAI non configurata sul server.');
+        $hasPendingOutput = filled($run->pending_output ?? null);
+        if (! $hasPendingOutput) {
+            if ($this->estimatedCost($estimatedInputTokens, config('ai-agency.max_output_tokens'), 3) > $this->remainingBudget()) {
+                throw new RuntimeException('Budget AI mensile insufficiente per completare l’analisi.');
+            }
+            if (! $this->apiKey()) {
+                throw new RuntimeException('Chiave OpenAI non configurata sul server.');
+            }
         }
 
         DB::table('ai_agency_runs')->where('id', $runId)->update([
             'status' => 'analyzing',
-            'project_snapshot' => json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'project_snapshot' => $this->encodeJson($snapshot),
             'model' => config('ai-agency.model'),
             'error_message' => null,
             'updated_at' => now(),
         ]);
 
         try {
-            $response = Http::withToken($this->apiKey())->acceptJson()->timeout(210)->retry(2, 1200)
-                ->post('https://api.openai.com/v1/responses', [
-                    'model' => config('ai-agency.model'),
-                    'instructions' => $this->analysisInstructions(),
-                    'input' => $input,
-                    'tools' => [['type' => 'web_search']],
-                    'max_output_tokens' => config('ai-agency.max_output_tokens'),
-                    'text' => ['format' => $this->analysisSchema()],
-                ])->throw()->json();
+            if ($hasPendingOutput) {
+                $rawOutput = $run->pending_output;
+                $usage = json_decode((string) ($run->pending_usage ?? ''), true) ?: [];
+            } else {
+                $response = Http::withToken($this->apiKey())->acceptJson()->timeout(210)->retry(2, 1200)
+                    ->post('https://api.openai.com/v1/responses', [
+                        'model' => config('ai-agency.model'),
+                        'instructions' => $this->analysisInstructions(),
+                        'input' => $input,
+                        'tools' => [['type' => 'web_search']],
+                        'max_output_tokens' => config('ai-agency.max_output_tokens'),
+                        'text' => ['format' => $this->analysisSchema()],
+                    ])->throw()->json();
 
-            $outputPart = collect($response['output'] ?? [])->where('type', 'message')
-                ->flatMap(fn ($item) => $item['content'] ?? [])->firstWhere('type', 'output_text');
-            $analysis = json_decode((string) ($outputPart['text'] ?? ''), true, 512, JSON_THROW_ON_ERROR);
-            $inputTokens = (int) data_get($response, 'usage.input_tokens', $estimatedInputTokens);
-            $outputTokens = (int) data_get($response, 'usage.output_tokens', $this->estimateTokens(json_encode($analysis)));
-            $webSearches = collect($response['output'] ?? [])->where('type', 'web_search_call')->count();
+                $outputPart = collect($response['output'] ?? [])->where('type', 'message')
+                    ->flatMap(fn ($item) => $item['content'] ?? [])->firstWhere('type', 'output_text');
+                $rawOutput = (string) ($outputPart['text'] ?? '');
+                $usage = [
+                    'input_tokens' => (int) data_get($response, 'usage.input_tokens', $estimatedInputTokens),
+                    'output_tokens' => (int) data_get($response, 'usage.output_tokens', $this->estimateTokens($rawOutput)),
+                    'web_searches' => collect($response['output'] ?? [])->where('type', 'web_search_call')->count(),
+                ];
+                DB::table('ai_agency_runs')->where('id', $runId)->update([
+                    'pending_output' => $rawOutput,
+                    'pending_usage' => $this->encodeJson($usage),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            $analysis = $this->decodeStructuredOutput($rawOutput);
+            $inputTokens = (int) ($usage['input_tokens'] ?? $estimatedInputTokens);
+            $outputTokens = (int) ($usage['output_tokens'] ?? $this->estimateTokens($rawOutput));
+            $webSearches = (int) ($usage['web_searches'] ?? 0);
             $ready = (bool) data_get($analysis, 'readiness.ready', false);
 
             DB::transaction(function () use ($runId, $run, $analysis, $snapshot, $inputTokens, $outputTokens, $webSearches, $ready) {
                 DB::table('ai_agency_runs')->where('id', $runId)->update([
                     'status' => $ready ? 'proposal_ready' : 'needs_information',
-                    'project_snapshot' => json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                    'proposal' => json_encode($analysis, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'project_snapshot' => $this->encodeJson($snapshot),
+                    'proposal' => $this->encodeJson($analysis),
                     'input_tokens' => (int) $run->input_tokens + $inputTokens,
                     'output_tokens' => (int) $run->output_tokens + $outputTokens,
                     'web_searches' => (int) $run->web_searches + $webSearches,
                     'estimated_cost_eur' => (float) $run->estimated_cost_eur + $this->estimatedCost($inputTokens, $outputTokens, $webSearches),
+                    'pending_output' => null,
+                    'pending_usage' => null,
+                    'error_message' => null,
                     'updated_at' => now(),
                 ]);
 
@@ -256,7 +279,7 @@ PROMPT;
     {
         DB::table('ai_agency_artifacts')->updateOrInsert(['run_id' => $runId, 'type' => $type], [
             'id' => (string) Str::uuid(), 'title' => $title,
-            'content' => json_encode($content, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 'created_at' => now(), 'updated_at' => now(),
+            'content' => $this->encodeJson($content), 'created_at' => now(), 'updated_at' => now(),
         ]);
     }
 
@@ -276,7 +299,33 @@ PROMPT;
 
     private function plainText(?string $value): string
     {
-        return trim(preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags((string) $value), ENT_QUOTES | ENT_HTML5, 'UTF-8')) ?: '');
+        $value = $this->sanitizeText(html_entity_decode(strip_tags((string) $value), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+
+        return trim(preg_replace('/\s+/u', ' ', $value) ?: '');
+    }
+
+    private function sanitizeText(string $value): string
+    {
+        $value = mb_convert_encoding($value, 'UTF-8', 'UTF-8');
+
+        return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', ' ', $value) ?: '';
+    }
+
+    private function encodeJson(mixed $value, int $flags = 0): string
+    {
+        return json_encode($value, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | $flags);
+    }
+
+    private function decodeStructuredOutput(string $output): array
+    {
+        try {
+            return json_decode($output, true, 512, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
+        } catch (\JsonException) {
+            // Literal control bytes are invalid inside JSON strings but can occur in model output.
+            $sanitized = preg_replace('/[\x00-\x1F\x7F]/u', ' ', mb_convert_encoding($output, 'UTF-8', 'UTF-8')) ?: '';
+
+            return json_decode($sanitized, true, 512, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
+        }
     }
 
     private function estimateTokens(string $text): int

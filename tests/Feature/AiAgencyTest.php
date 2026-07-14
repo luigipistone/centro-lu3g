@@ -87,6 +87,43 @@ class AiAgencyTest extends TestCase
         $this->assertDatabaseHas('ai_agency_runs', ['id' => $runId, 'status' => 'proposal_ready']);
     }
 
+    public function test_analysis_repairs_literal_control_characters_in_structured_output(): void
+    {
+        config(['ai-agency.api_key' => 'sk-test-key']);
+        $admin = User::factory()->create();
+        $this->role($admin, 'admin');
+        $projectId = $this->project($admin);
+        $serviceId = $this->service();
+        $runId = $this->createRun($admin, $projectId);
+        $response = $this->apiResponse($this->analysis(true, $serviceId));
+        $response['output'][0]['content'][0]['text'] = str_replace('Analisi completa', "Analisi\vcompleta", $response['output'][0]['content'][0]['text']);
+        Http::fake(['api.openai.com/*' => Http::response($response)]);
+
+        $this->actingAs($admin)->post(route('ai-agency.analyze', $runId))->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('ai_agency_runs', ['id' => $runId, 'status' => 'proposal_ready', 'pending_output' => null]);
+    }
+
+    public function test_analysis_resumes_from_saved_output_without_another_api_call(): void
+    {
+        config(['ai-agency.api_key' => 'sk-test-key']);
+        $admin = User::factory()->create();
+        $this->role($admin, 'admin');
+        $projectId = $this->project($admin);
+        $serviceId = $this->service();
+        $runId = $this->createRun($admin, $projectId);
+        DB::table('ai_agency_runs')->where('id', $runId)->update([
+            'status' => 'error',
+            'pending_output' => json_encode($this->analysis(true, $serviceId)),
+            'pending_usage' => json_encode(['input_tokens' => 700, 'output_tokens' => 300, 'web_searches' => 1]),
+        ]);
+        Http::preventStrayRequests();
+
+        $this->actingAs($admin)->post(route('ai-agency.analyze', $runId))->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('ai_agency_runs', ['id' => $runId, 'status' => 'proposal_ready', 'input_tokens' => 700, 'output_tokens' => 300, 'web_searches' => 1]);
+    }
+
     private function analysis(bool $ready, string $serviceId): array
     {
         $document = ['summary' => $ready ? 'Analisi completa' : '', 'findings' => [], 'recommendations' => [], 'risks' => [], 'assumptions' => [], 'sources' => []];
