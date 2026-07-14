@@ -165,7 +165,7 @@ class AiAgencyService
     private function analysisInstructions(): string
     {
         return <<<'PROMPT'
-Sei il Project Manager AI di LU3G. Devi seguire rigorosamente questo ordine: 1) leggere progetto, brief e allegati; 2) verificare identità, coerenza e sufficienza delle fonti; 3) se mancano informazioni davvero bloccanti, fermarti e formulare solo poche domande indispensabili; 4) se i dati sono sufficienti, produrre Analisi Cliente; 5) svolgere Analisi Competitor con ricerca web mirata e fonti; 6) solo dopo applicare i moduli Decisioni LU3G e generare strategia, servizi consigliati e non consigliati, priorità e roadmap. Il brief approvato prevale su dati precedenti in conflitto. Non confondere omonimi, non inventare informazioni e distingui fatti, assunzioni e fonti. Non proporre servizi prima di aver completato le analisi. Consiglia solo servizi presenti in available_services usando il loro id esatto. Scrivi in italiano. Se readiness.ready è false, lascia vuoti analisi, strategia e servizi: non prendere decisioni premature.
+Sei il Project Manager AI di LU3G. Devi seguire rigorosamente questo ordine: 1) leggere progetto, brief e allegati; 2) verificare identità, coerenza e sufficienza delle fonti; 3) se mancano informazioni davvero bloccanti, fermarti e formulare solo poche domande indispensabili; 4) se i dati sono sufficienti, produrre Analisi Cliente; 5) svolgere Analisi Competitor con ricerca web mirata e fonti; 6) solo dopo applicare i moduli Decisioni LU3G e generare strategia, servizi consigliati e non consigliati, priorità e roadmap. Il brief approvato prevale su dati precedenti in conflitto. Non confondere omonimi, non inventare informazioni e distingui fatti, assunzioni e fonti. Non proporre servizi prima di aver completato le analisi. Consiglia solo servizi presenti in available_services usando il loro id esatto. Scrivi in italiano. Se readiness.ready è false, lascia vuoti analisi, strategia e servizi: non prendere decisioni premature. Sii sintetico: ogni riepilogo deve restare entro 100 parole, ogni elenco deve contenere al massimo 6 punti e ogni punto entro 45 parole. Nelle fonti usa titolo e URL senza descrizioni estese. Completa sempre tutte le proprietà dello schema JSON entro il limite disponibile.
 PROMPT;
     }
 
@@ -324,8 +324,89 @@ PROMPT;
             // Literal control bytes are invalid inside JSON strings but can occur in model output.
             $sanitized = preg_replace('/[\x00-\x1F\x7F]/u', ' ', mb_convert_encoding($output, 'UTF-8', 'UTF-8')) ?: '';
 
-            return json_decode($sanitized, true, 512, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
+            try {
+                return json_decode($sanitized, true, 512, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
+            } catch (\JsonException $error) {
+                return $this->recoverTruncatedAnalysis($sanitized, $error);
+            }
         }
+    }
+
+    private function recoverTruncatedAnalysis(string $output, \JsonException $originalError): array
+    {
+        $fields = [];
+        foreach (['readiness', 'client_analysis', 'competitor_analysis', 'strategy', 'recommended_services', 'not_recommended_services', 'priorities', 'roadmap'] as $key) {
+            $value = $this->extractCompleteJsonProperty($output, $key);
+            if ($value !== null) {
+                $fields[$key] = $value;
+            }
+        }
+
+        $required = ['readiness', 'client_analysis', 'competitor_analysis', 'strategy', 'recommended_services'];
+        if (collect($required)->contains(fn ($key) => ! array_key_exists($key, $fields))) {
+            throw $originalError;
+        }
+
+        $fields['not_recommended_services'] ??= [];
+        $fields['priorities'] ??= collect($fields['recommended_services'])
+            ->map(fn ($service) => trim(($service['name'] ?? 'Servizio consigliato').': '.($service['motivation'] ?? '')))
+            ->values()->all();
+        $fields['roadmap'] ??= array_values($fields['strategy']['recommendations'] ?? []);
+
+        return $fields;
+    }
+
+    private function extractCompleteJsonProperty(string $json, string $property): mixed
+    {
+        if (! preg_match('/"'.preg_quote($property, '/').'"\s*:\s*/', $json, $match, PREG_OFFSET_CAPTURE)) {
+            return null;
+        }
+
+        $start = $match[0][1] + strlen($match[0][0]);
+        $first = $json[$start] ?? '';
+        if (! in_array($first, ['{', '['], true)) {
+            return null;
+        }
+
+        $stack = [];
+        $inString = false;
+        $escaped = false;
+        $length = strlen($json);
+        for ($index = $start; $index < $length; $index++) {
+            $character = $json[$index];
+            if ($inString) {
+                if ($escaped) {
+                    $escaped = false;
+                } elseif ($character === '\\') {
+                    $escaped = true;
+                } elseif ($character === '"') {
+                    $inString = false;
+                }
+                continue;
+            }
+
+            if ($character === '"') {
+                $inString = true;
+            } elseif ($character === '{' || $character === '[') {
+                $stack[] = $character;
+            } elseif ($character === '}' || $character === ']') {
+                $opening = array_pop($stack);
+                if (($character === '}' && $opening !== '{') || ($character === ']' && $opening !== '[')) {
+                    return null;
+                }
+                if ($stack === []) {
+                    $fragment = substr($json, $start, $index - $start + 1);
+
+                    try {
+                        return json_decode($fragment, true, 512, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
+                    } catch (\JsonException) {
+                        return null;
+                    }
+                }
+            }
+        }
+
+        return null;
     }
 
     private function estimateTokens(string $text): int

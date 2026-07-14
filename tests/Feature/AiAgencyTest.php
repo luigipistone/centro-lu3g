@@ -124,6 +124,34 @@ class AiAgencyTest extends TestCase
         $this->assertDatabaseHas('ai_agency_runs', ['id' => $runId, 'status' => 'proposal_ready', 'input_tokens' => 700, 'output_tokens' => 300, 'web_searches' => 1]);
     }
 
+    public function test_analysis_recovers_complete_sections_from_a_truncated_saved_response(): void
+    {
+        config(['ai-agency.api_key' => 'sk-test-key']);
+        $admin = User::factory()->create();
+        $this->role($admin, 'admin');
+        $projectId = $this->project($admin);
+        $serviceId = $this->service();
+        $runId = $this->createRun($admin, $projectId);
+        $analysis = $this->analysis(true, $serviceId);
+        $analysis['strategy']['recommendations'] = ['Definire la struttura', 'Realizzare il sito'];
+        $output = json_encode($analysis, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        $output = substr($output, 0, strpos($output, '"priorities"') + 30);
+        DB::table('ai_agency_runs')->where('id', $runId)->update([
+            'status' => 'error',
+            'pending_output' => $output,
+            'pending_usage' => json_encode(['input_tokens' => 900, 'output_tokens' => 450, 'web_searches' => 1]),
+        ]);
+        Http::preventStrayRequests();
+
+        $this->actingAs($admin)->post(route('ai-agency.analyze', $runId))->assertSessionHasNoErrors();
+
+        $run = DB::table('ai_agency_runs')->where('id', $runId)->first();
+        $proposal = json_decode($run->proposal, true);
+        $this->assertSame('proposal_ready', $run->status);
+        $this->assertSame(['Definire la struttura', 'Realizzare il sito'], $proposal['roadmap']);
+        $this->assertStringContainsString('WEB', $proposal['priorities'][0]);
+    }
+
     private function analysis(bool $ready, string $serviceId): array
     {
         $document = ['summary' => $ready ? 'Analisi completa' : '', 'findings' => [], 'recommendations' => [], 'risks' => [], 'assumptions' => [], 'sources' => []];
