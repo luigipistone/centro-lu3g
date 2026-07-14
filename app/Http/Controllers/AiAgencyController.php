@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\AiAgencyService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -134,6 +135,31 @@ class AiAgencyController extends Controller
         $this->agency->prepareWorkflows($id, $payload['service_ids']);
 
         return back()->with('status', 'Strategia approvata e workflow operativi preparati.');
+    }
+
+    public function executeNext(Request $request, string $id): JsonResponse
+    {
+        $this->authorizeAdmin($request);
+
+        try {
+            return response()->json($this->agency->executeNextStep($id));
+        } catch (\Throwable $error) {
+            report($error);
+            return response()->json(['state' => 'error', 'message' => $error->getMessage(), 'continue' => false], 422);
+        }
+    }
+
+    public function provideStepInformation(Request $request, string $id, string $stepId): JsonResponse
+    {
+        $this->authorizeAdmin($request);
+        $payload = $request->validate(['answers' => ['required', 'array', 'min:1'], 'answers.*' => ['required', 'string', 'max:10000']]);
+
+        try {
+            $this->agency->provideStepInformation($id, $stepId, $payload['answers']);
+            return response()->json(['state' => 'ready', 'continue' => true]);
+        } catch (\Throwable $error) {
+            return response()->json(['state' => 'error', 'message' => $error->getMessage(), 'continue' => false], 422);
+        }
     }
 
     public function configure(Request $request): RedirectResponse

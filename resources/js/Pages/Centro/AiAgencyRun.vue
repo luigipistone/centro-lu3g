@@ -1,7 +1,8 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { BrainCircuit, Check, ChevronDown, ChevronLeft, CircleAlert, CircleCheck, Clock3, Euro, FileCheck2, LockKeyhole, Sparkles, Trash2 } from '@lucide/vue';
+import { BrainCircuit, Check, ChevronDown, ChevronLeft, CircleAlert, CircleCheck, Clock3, Euro, FileCheck2, LockKeyhole, Play, RotateCcw, Sparkles, Trash2 } from '@lucide/vue';
+import axios from 'axios';
 import { computed, ref } from 'vue';
 
 const props = defineProps({ run: Object, proposal: Object, brief: Object, approvedServices: Array, services: Array, steps: Array, budget: Object });
@@ -11,15 +12,22 @@ const approvalForm = useForm({ service_ids: props.approvedServices?.length ? [..
 const deleteOpen = ref(false);
 const deleteText = ref('');
 const expandedSections = ref({ client_analysis: true });
+const expandedSteps = ref({});
+const stepAnswers = ref({});
+const autoRunning = ref(false);
+const executionError = ref('');
 const readiness = computed(() => props.proposal?.readiness || {});
 const isReady = computed(() => props.run.status === 'proposal_ready');
-const isApproved = computed(() => props.run.status === 'approved');
+const isApproved = computed(() => ['approved', 'operating', 'awaiting_information', 'operation_error', 'completed'].includes(props.run.status));
 const serviceById = computed(() => Object.fromEntries((props.services || []).map((service) => [service.id, service])));
 const stepsByService = computed(() => {
     const grouped = {};
     (props.steps || []).forEach((step) => { grouped[step.service_id] = [...(grouped[step.service_id] || []), step]; });
     return grouped;
 });
+const hasExecutableStep = computed(() => (props.steps || []).some((step) => ['todo', 'error'].includes(step.status)));
+const needsStepInformation = computed(() => (props.steps || []).some((step) => step.status === 'needs_information'));
+const completedStepCount = computed(() => (props.steps || []).filter((step) => step.status === 'completed').length);
 const documents = computed(() => [
     { key: 'client_analysis', title: 'Analisi Cliente', content: props.proposal?.client_analysis },
     { key: 'competitor_analysis', title: 'Analisi Competitor', content: props.proposal?.competitor_analysis },
@@ -28,6 +36,38 @@ const documents = computed(() => [
 
 function analyze() { analysisForm.post(route('ai-agency.analyze', props.run.id), { preserveScroll: true }); }
 function toggleSection(key) { expandedSections.value[key] = !expandedSections.value[key]; }
+function stepData(step) { try { return JSON.parse(step.output_data || '{}'); } catch { return {}; } }
+function setStepAnswer(stepId, index, value) { stepAnswers.value[stepId] ||= {}; stepAnswers.value[stepId][index] = value; }
+function reloadWorkflow() { return new Promise((resolve) => router.reload({ only: ['run', 'steps', 'budget'], preserveScroll: true, onFinish: resolve })); }
+async function executeWorkflow() {
+    if (autoRunning.value) return;
+    autoRunning.value = true;
+    executionError.value = '';
+    try {
+        let shouldContinue = true;
+        while (shouldContinue) {
+            const { data } = await axios.post(route('ai-agency.execute-next', props.run.id));
+            shouldContinue = !!data.continue;
+            await reloadWorkflow();
+        }
+    } catch (error) {
+        executionError.value = error.response?.data?.message || 'Non è stato possibile eseguire la fase.';
+        await reloadWorkflow();
+    } finally {
+        autoRunning.value = false;
+    }
+}
+async function submitStepInformation(step) {
+    executionError.value = '';
+    try {
+        const questions = stepData(step).questions || [];
+        await axios.post(route('ai-agency.steps.information', [props.run.id, step.id]), { answers: questions.map((_, index) => stepAnswers.value[step.id]?.[index] || '') });
+        await reloadWorkflow();
+        executeWorkflow();
+    } catch (error) {
+        executionError.value = error.response?.data?.message || 'Completa tutte le informazioni indispensabili.';
+    }
+}
 function provideInformation() { informationForm.post(route('ai-agency.information.store', props.run.id), { preserveScroll: true }); }
 function toggleService(id) {
     if (!isReady.value) return;
@@ -38,7 +78,7 @@ function destroyRun() {
     if (deleteText.value !== 'ELIMINA') return;
     router.delete(route('ai-agency.destroy', props.run.id));
 }
-const statusLabel = { draft: 'Da analizzare', analyzing: 'Analisi in corso', needs_information: 'Informazioni necessarie', proposal_ready: 'Strategia pronta', approved: 'Strategia approvata', error: 'Da controllare' };
+const statusLabel = { draft: 'Da analizzare', analyzing: 'Analisi in corso', needs_information: 'Informazioni necessarie', proposal_ready: 'Strategia pronta', approved: 'Strategia approvata', operating: 'Workflow operativo', awaiting_information: 'Informazione indispensabile', operation_error: 'Esecuzione da controllare', completed: 'Processo completato', error: 'Da controllare' };
 </script>
 
 <template>
@@ -130,13 +170,25 @@ const statusLabel = { draft: 'Da analizzare', analyzing: 'Analisi in corso', nee
                 </template>
 
                 <section v-if="isApproved && steps?.length" class="surface overflow-hidden">
-                    <button type="button" class="flex w-full items-center justify-between gap-4 p-5 text-left" @click="toggleSection('workflows')"><h3 class="text-lg font-semibold text-gray-900">Workflow operativi</h3><ChevronDown class="h-4 w-4 text-gray-400 transition-transform duration-200" :class="expandedSections.workflows ? 'rotate-180' : ''" /></button>
+                    <div class="flex flex-wrap items-center justify-between gap-3 p-5"><button type="button" class="flex min-w-0 flex-1 items-center justify-between gap-4 text-left" @click="toggleSection('workflows')"><div><h3 class="text-lg font-semibold text-gray-900">Workflow operativi</h3><p class="mt-1 text-xs text-gray-400">{{ completedStepCount }} di {{ steps.length }} fasi completate</p></div><ChevronDown class="h-4 w-4 text-gray-400 transition-transform duration-200" :class="expandedSections.workflows ? 'rotate-180' : ''" /></button><button v-if="hasExecutableStep" type="button" class="btn btn-primary" :disabled="autoRunning || needsStepInformation" @click="executeWorkflow"><RotateCcw v-if="autoRunning" class="h-4 w-4 animate-spin" /><Play v-else class="h-4 w-4" />{{ autoRunning ? 'Esecuzione automatica...' : (run.status === 'operation_error' ? 'Riprendi workflow' : 'Avvia workflow') }}</button></div>
                     <div v-show="expandedSections.workflows" class="space-y-5 border-t border-gray-100 px-5 pb-5 pt-4">
+                        <div v-if="executionError" class="rounded-[var(--radius-sm)] border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ executionError }}</div>
                         <div v-for="serviceId in approvedServices" :key="serviceId">
                             <p class="font-semibold text-gray-900">{{ serviceById[serviceId]?.name || 'Servizio senza workflow collegato' }}</p>
-                            <div v-if="stepsByService[serviceId]?.length" class="mt-2 divide-y divide-gray-100 border-y border-gray-100"><div v-for="step in stepsByService[serviceId]" :key="step.id" class="flex items-center gap-3 py-3" :class="step.status === 'completed' ? 'opacity-65' : ''"><CircleCheck v-if="step.status === 'completed'" class="h-4 w-4 text-green-600" /><Clock3 v-else-if="step.status === 'todo'" class="h-4 w-4 text-[hsl(var(--primary-app))]" /><LockKeyhole v-else class="h-4 w-4 text-gray-400" /><span class="flex-1 text-sm text-gray-700">{{ step.name }}</span><span class="text-xs font-medium" :class="step.status === 'completed' ? 'text-green-600' : 'text-gray-400'">{{ step.status === 'completed' ? 'Completato' : (step.status === 'todo' ? 'Da fare' : 'Bloccato') }}</span></div></div>
+                            <div v-if="stepsByService[serviceId]?.length" class="mt-2 divide-y divide-gray-100 border-y border-gray-100">
+                                <div v-for="step in stepsByService[serviceId]" :key="step.id" class="py-3">
+                                    <button type="button" class="flex w-full items-center gap-3 text-left" :class="step.status === 'completed' && !stepData(step).content ? 'opacity-65' : ''" :disabled="!stepData(step).content" @click="expandedSteps[step.id] = !expandedSteps[step.id]">
+                                        <CircleCheck v-if="step.status === 'completed'" class="h-4 w-4 shrink-0 text-green-600" /><RotateCcw v-else-if="step.status === 'running'" class="h-4 w-4 shrink-0 animate-spin text-[hsl(var(--primary-app))]" /><Clock3 v-else-if="['todo', 'error', 'needs_information'].includes(step.status)" class="h-4 w-4 shrink-0 text-[hsl(var(--primary-app))]" /><LockKeyhole v-else class="h-4 w-4 shrink-0 text-gray-400" />
+                                        <span class="flex-1 text-sm text-gray-700">{{ step.name }}</span><span class="text-xs font-medium" :class="step.status === 'completed' ? 'text-green-600' : (step.status === 'error' ? 'text-red-600' : 'text-gray-400')">{{ step.status === 'completed' ? 'Completato' : (step.status === 'todo' ? 'Da fare' : (step.status === 'running' ? 'In corso' : (step.status === 'needs_information' ? 'Informazione necessaria' : (step.status === 'error' ? 'Da riprendere' : 'Bloccato')))) }}</span><ChevronDown v-if="stepData(step).content" class="h-4 w-4 text-gray-400 transition-transform" :class="expandedSteps[step.id] ? 'rotate-180' : ''" />
+                                    </button>
+                                    <div v-if="step.status === 'error' && step.error_message" class="ml-7 mt-2 text-xs text-red-600">{{ step.error_message }}</div>
+                                    <div v-show="expandedSteps[step.id] && stepData(step).content" class="ml-7 mt-3 whitespace-pre-wrap rounded-[var(--radius-sm)] bg-gray-50 p-4 text-sm leading-6 text-gray-700">{{ stepData(step).content }}</div>
+                                    <form v-if="step.status === 'needs_information'" class="ml-7 mt-4 space-y-4 rounded-[var(--radius-sm)] border border-amber-200 bg-amber-50/70 p-4" @submit.prevent="submitStepInformation(step)"><p class="text-sm font-semibold text-amber-900">Servono solo queste informazioni indispensabili</p><label v-for="(question, index) in stepData(step).questions" :key="question" class="block"><span class="mb-1.5 block text-sm text-amber-900">{{ question }}</span><textarea :value="stepAnswers[step.id]?.[index] || ''" class="form-control min-h-20 bg-white" @input="setStepAnswer(step.id, index, $event.target.value)" /></label><div class="flex justify-end"><button type="submit" class="btn btn-primary">Invia e riprendi automaticamente</button></div></form>
+                                </div>
+                            </div>
                             <p v-else class="mt-2 text-sm text-amber-700">Nessun workflow collegato a questo servizio.</p>
                         </div>
+                        <div v-if="run.status === 'completed'" class="flex items-center gap-3 rounded-[var(--radius-sm)] border border-green-200 bg-green-50 p-4 text-sm text-green-800"><CircleCheck class="h-5 w-5" />Tutti i workflow disponibili sono stati completati.</div>
                     </div>
                 </section>
 

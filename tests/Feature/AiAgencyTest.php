@@ -152,6 +152,44 @@ class AiAgencyTest extends TestCase
         $this->assertStringContainsString('WEB', $proposal['priorities'][0]);
     }
 
+    public function test_operational_engine_completes_any_module_and_unlocks_the_next_one(): void
+    {
+        config(['ai-agency.api_key' => 'sk-test-key']);
+        $admin = User::factory()->create();
+        $this->role($admin, 'admin');
+        $projectId = $this->project($admin);
+        $runId = $this->createRun($admin, $projectId);
+        $serviceId = $this->service();
+        DB::table('ai_agency_runs')->where('id', $runId)->update(['status' => 'approved', 'proposal' => json_encode($this->analysis(true, $serviceId))]);
+        [$firstStep, $secondStep] = $this->operationalSteps($runId, $admin, true, $serviceId);
+        Http::fake(['api.openai.com/*' => Http::response($this->textResponse("# Sitemap\n\n- Home\n- Servizi\n- Contatti"))]);
+
+        $this->actingAs($admin)->postJson(route('ai-agency.execute-next', $runId))->assertOk()->assertJson(['state' => 'completed_step', 'continue' => true]);
+
+        $this->assertDatabaseHas('ai_agency_steps', ['id' => $firstStep, 'status' => 'completed']);
+        $this->assertDatabaseHas('ai_agency_steps', ['id' => $secondStep, 'status' => 'todo']);
+        $this->assertStringContainsString('Sitemap', DB::table('ai_agency_steps')->where('id', $firstStep)->value('output_data'));
+    }
+
+    public function test_operational_engine_only_stops_for_blocking_information_and_can_resume(): void
+    {
+        config(['ai-agency.api_key' => 'sk-test-key']);
+        $admin = User::factory()->create();
+        $this->role($admin, 'admin');
+        $projectId = $this->project($admin);
+        $runId = $this->createRun($admin, $projectId);
+        DB::table('ai_agency_runs')->where('id', $runId)->update(['status' => 'approved']);
+        [$stepId] = $this->operationalSteps($runId, $admin, false);
+        Http::fake(['api.openai.com/*' => Http::response($this->textResponse("BLOCCATO\nQual è il dominio definitivo?"))]);
+
+        $this->actingAs($admin)->postJson(route('ai-agency.execute-next', $runId))->assertOk()->assertJson(['state' => 'needs_information', 'continue' => false]);
+        $this->assertDatabaseHas('ai_agency_steps', ['id' => $stepId, 'status' => 'needs_information']);
+
+        $this->actingAs($admin)->postJson(route('ai-agency.steps.information', [$runId, $stepId]), ['answers' => ['pedrinazzi.it']])->assertOk();
+        $this->assertDatabaseHas('ai_agency_steps', ['id' => $stepId, 'status' => 'todo']);
+        $this->assertStringContainsString('pedrinazzi.it', DB::table('ai_agency_steps')->where('id', $stepId)->value('input_data'));
+    }
+
     private function analysis(bool $ready, string $serviceId): array
     {
         $document = ['summary' => $ready ? 'Analisi completa' : '', 'findings' => [], 'recommendations' => [], 'risks' => [], 'assumptions' => [], 'sources' => []];
@@ -170,6 +208,26 @@ class AiAgencyTest extends TestCase
     private function apiResponse(array $analysis): array
     {
         return ['output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => json_encode($analysis)]]]], 'usage' => ['input_tokens' => 700, 'output_tokens' => 300]];
+    }
+
+    private function textResponse(string $text): array
+    {
+        return ['output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => $text]]]], 'usage' => ['input_tokens' => 500, 'output_tokens' => 120]];
+    }
+
+    private function operationalSteps(string $runId, User $user, bool $withSecond = true, ?string $serviceId = null): array
+    {
+        $folderId = (string) Str::uuid();
+        DB::table('admin_module_folders')->insert(['id' => $folderId, 'name' => 'Workflow', 'color' => '#2563eb', 'created_by' => $user->id, 'created_at' => now(), 'updated_at' => now()]);
+        $moduleIds = [(string) Str::uuid(), (string) Str::uuid()];
+        foreach ($moduleIds as $index => $moduleId) {
+            DB::table('admin_modules')->insert(['id' => $moduleId, 'admin_module_folder_id' => $folderId, 'name' => $index === 0 ? 'Creazione Sitemap' : 'Struttura SEO', 'version' => '1.0', 'status' => 'approved', 'rules' => 'Produci il risultato usando i dati del progetto.', 'active' => true, 'created_by' => $user->id, 'created_at' => now(), 'updated_at' => now()]);
+        }
+        $serviceId ??= $this->service();
+        $stepIds = [(string) Str::uuid(), (string) Str::uuid()];
+        DB::table('ai_agency_steps')->insert(['id' => $stepIds[0], 'run_id' => $runId, 'service_id' => $serviceId, 'module_id' => $moduleIds[0], 'name' => 'Creazione Sitemap', 'status' => 'todo', 'position' => 0, 'created_at' => now(), 'updated_at' => now()]);
+        if ($withSecond) DB::table('ai_agency_steps')->insert(['id' => $stepIds[1], 'run_id' => $runId, 'service_id' => $serviceId, 'module_id' => $moduleIds[1], 'name' => 'Struttura SEO', 'status' => 'blocked', 'position' => 1, 'created_at' => now(), 'updated_at' => now()]);
+        return $withSecond ? $stepIds : [$stepIds[0]];
     }
 
     private function role(User $user, string $role): void

@@ -8,4 +8,5 @@ return [
     'output_eur_per_million' => (float) env('AI_AGENCY_OUTPUT_EUR_PER_MILLION', 6),
     'web_search_eur_per_call' => (float) env('AI_AGENCY_WEB_SEARCH_EUR_PER_CALL', 0.025),
     'max_output_tokens' => (int) env('AI_AGENCY_MAX_OUTPUT_TOKENS', 5000),
+    'operation_max_output_tokens' => (int) env('AI_AGENCY_OPERATION_MAX_OUTPUT_TOKENS', 3000),
 ];

@@ -14,6 +14,112 @@ use ZipArchive;
 
 class AiAgencyService
 {
+    public function executeNextStep(string $runId): array
+    {
+        $claimed = DB::transaction(function () use ($runId) {
+            $run = DB::table('ai_agency_runs')->where('id', $runId)->lockForUpdate()->first();
+            throw_unless($run && in_array($run->status, ['approved', 'operating', 'operation_error', 'awaiting_information'], true), RuntimeException::class, 'Il workflow non è pronto per l’esecuzione.');
+            if (DB::table('ai_agency_steps')->where('run_id', $runId)->where('status', 'running')->exists()) {
+                throw new RuntimeException('È già in esecuzione una fase del workflow.');
+            }
+            if (DB::table('ai_agency_steps')->where('run_id', $runId)->where('status', 'needs_information')->exists()) {
+                return null;
+            }
+
+            $step = DB::table('ai_agency_steps')->where('run_id', $runId)->whereIn('status', ['todo', 'error'])->orderBy('position')->lockForUpdate()->first();
+            if (! $step) {
+                DB::table('ai_agency_runs')->where('id', $runId)->update(['status' => 'completed', 'updated_at' => now()]);
+                return false;
+            }
+
+            DB::table('ai_agency_steps')->where('id', $step->id)->update([
+                'status' => 'running', 'error_message' => null, 'attempts' => (int) $step->attempts + 1,
+                'started_at' => $step->started_at ?: now(), 'updated_at' => now(),
+            ]);
+            DB::table('ai_agency_runs')->where('id', $runId)->update(['status' => 'operating', 'error_message' => null, 'updated_at' => now()]);
+
+            return [$run, $step];
+        });
+
+        if ($claimed === null) return ['state' => 'needs_information', 'continue' => false];
+        if ($claimed === false) return ['state' => 'completed', 'continue' => false];
+        [$run, $step] = $claimed;
+
+        try {
+            $module = DB::table('admin_modules')->where('id', $step->module_id)->first();
+            throw_unless($module, RuntimeException::class, 'Il modulo operativo non è più disponibile.');
+            $context = $this->operationalContext($run, $step, $module);
+            $input = $this->encodeJson($context, JSON_PRETTY_PRINT);
+            $estimatedInputTokens = $this->estimateTokens($input);
+            $maxOutput = (int) config('ai-agency.operation_max_output_tokens');
+            $useWeb = $this->moduleNeedsWebResearch($module);
+            if ($this->estimatedCost($estimatedInputTokens, $maxOutput, $useWeb ? 1 : 0) > $this->remainingBudget()) {
+                throw new RuntimeException('Budget AI mensile insufficiente per eseguire la prossima fase.');
+            }
+            if (! $this->apiKey()) throw new RuntimeException('Chiave OpenAI non configurata sul server.');
+
+            $payload = [
+                'model' => config('ai-agency.model'),
+                'instructions' => $this->operationInstructions($module),
+                'input' => $input,
+                'max_output_tokens' => $maxOutput,
+            ];
+            if ($useWeb) $payload['tools'] = [['type' => 'web_search']];
+            $response = Http::withToken($this->apiKey())->acceptJson()->timeout(210)->retry(2, 1200)
+                ->post('https://api.openai.com/v1/responses', $payload)->throw()->json();
+            $outputPart = collect($response['output'] ?? [])->where('type', 'message')
+                ->flatMap(fn ($item) => $item['content'] ?? [])->firstWhere('type', 'output_text');
+            $output = trim((string) ($outputPart['text'] ?? ''));
+            throw_if($output === '', RuntimeException::class, 'La fase non ha prodotto alcun risultato.');
+            $inputTokens = (int) data_get($response, 'usage.input_tokens', $estimatedInputTokens);
+            $outputTokens = (int) data_get($response, 'usage.output_tokens', $this->estimateTokens($output));
+            $webSearches = collect($response['output'] ?? [])->where('type', 'web_search_call')->count();
+
+            if (Str::startsWith(Str::upper($output), 'BLOCCATO')) {
+                $questions = collect(preg_split('/\R/u', $output))->skip(1)->map(fn ($line) => trim(preg_replace('/^[\s\-\d\.\)]+/u', '', $line)))->filter()->take(3)->values()->all();
+                if ($questions === []) $questions = ['Quale informazione indispensabile manca per completare questa fase?'];
+                DB::table('ai_agency_steps')->where('id', $step->id)->update([
+                    'status' => 'needs_information', 'output_data' => $this->encodeJson(['questions' => $questions]), 'updated_at' => now(),
+                ]);
+                DB::table('ai_agency_runs')->where('id', $runId)->update(['status' => 'awaiting_information', 'updated_at' => now()]);
+                $this->recordOperationalUsage($runId, $inputTokens, $outputTokens, $webSearches);
+                return ['state' => 'needs_information', 'continue' => false, 'step_id' => $step->id];
+            }
+
+            DB::transaction(function () use ($runId, $step, $module, $output, $inputTokens, $outputTokens, $webSearches) {
+                DB::table('ai_agency_steps')->where('id', $step->id)->update([
+                    'status' => 'completed', 'output_data' => $this->encodeJson(['title' => $module->name, 'content' => $output, 'completed_by' => 'ai']),
+                    'completed_at' => now(), 'error_message' => null, 'updated_at' => now(),
+                ]);
+                $next = DB::table('ai_agency_steps')->where('run_id', $runId)->where('status', 'blocked')->orderBy('position')->first();
+                if ($next) DB::table('ai_agency_steps')->where('id', $next->id)->update(['status' => 'todo', 'updated_at' => now()]);
+                DB::table('ai_agency_runs')->where('id', $runId)->update(['status' => $next ? 'operating' : 'completed', 'updated_at' => now()]);
+                $this->recordOperationalUsage($runId, $inputTokens, $outputTokens, $webSearches);
+            });
+
+            return ['state' => 'completed_step', 'continue' => DB::table('ai_agency_steps')->where('run_id', $runId)->where('status', 'todo')->exists(), 'step_id' => $step->id];
+        } catch (\Throwable $error) {
+            DB::table('ai_agency_steps')->where('id', $step->id)->update(['status' => 'error', 'error_message' => Str::limit($error->getMessage(), 900), 'updated_at' => now()]);
+            DB::table('ai_agency_runs')->where('id', $runId)->update(['status' => 'operation_error', 'error_message' => Str::limit($error->getMessage(), 900), 'updated_at' => now()]);
+            throw $error;
+        }
+    }
+
+    public function provideStepInformation(string $runId, string $stepId, array $answers): void
+    {
+        $step = DB::table('ai_agency_steps')->where('id', $stepId)->where('run_id', $runId)->first();
+        throw_unless($step && $step->status === 'needs_information', RuntimeException::class, 'Questa fase non richiede informazioni.');
+        $output = json_decode($step->output_data ?: '{}', true) ?: [];
+        $questions = $output['questions'] ?? [];
+        throw_if(count($answers) < count($questions), RuntimeException::class, 'Completa tutte le informazioni indispensabili.');
+        DB::table('ai_agency_steps')->where('id', $stepId)->update([
+            'status' => 'todo',
+            'input_data' => $this->encodeJson(['answers' => collect($questions)->map(fn ($question, $index) => ['question' => $question, 'answer' => $answers[$index] ?? ''])->all()]),
+            'output_data' => null, 'updated_at' => now(),
+        ]);
+        DB::table('ai_agency_runs')->where('id', $runId)->update(['status' => 'operating', 'error_message' => null, 'updated_at' => now()]);
+    }
+
     public function analyze(string $runId): void
     {
         $run = DB::table('ai_agency_runs')->where('id', $runId)->first();
@@ -257,6 +363,61 @@ PROMPT;
             ->get(['admin_modules.name', 'admin_modules.description', 'admin_modules.required_inputs', 'admin_modules.rules', 'admin_modules.output'])
             ->map(fn ($module) => ['name' => $module->name, 'description' => $this->plainText($module->description),
                 'required_inputs' => json_decode($module->required_inputs ?: '[]', true) ?: [], 'rules' => $this->plainText($module->rules), 'expected_output' => $this->plainText($module->output)]);
+    }
+
+    private function operationalContext(object $run, object $step, object $module): array
+    {
+        $proposal = json_decode($run->proposal ?: '{}', true) ?: [];
+        $stepInput = json_decode($step->input_data ?: '{}', true) ?: [];
+        $priorOutputs = DB::table('ai_agency_steps')->where('run_id', $run->id)->where('position', '<', $step->position)
+            ->where('status', 'completed')->orderByDesc('position')->limit(5)->get(['name', 'output_data'])->reverse()
+            ->map(function ($prior) {
+                $data = json_decode($prior->output_data ?: '{}', true) ?: [];
+                return isset($data['content']) ? ['phase' => $prior->name, 'output' => Str::limit($data['content'], 8000, '')] : null;
+            })->filter()->values()->all();
+
+        return [
+            'project' => json_decode($run->project_snapshot ?: '{}', true) ?: $this->buildProjectSnapshot($run->project_id),
+            'validated_analysis' => [
+                'client' => $proposal['client_analysis'] ?? [],
+                'competitors' => $proposal['competitor_analysis'] ?? [],
+                'strategy' => $proposal['strategy'] ?? [],
+                'recommended_services' => $proposal['recommended_services'] ?? [],
+                'priorities' => $proposal['priorities'] ?? [],
+                'roadmap' => $proposal['roadmap'] ?? [],
+            ],
+            'current_module' => [
+                'name' => $module->name, 'description' => $this->plainText($module->description),
+                'required_inputs' => json_decode($module->required_inputs ?: '[]', true) ?: [],
+                'rules' => $this->plainText($module->rules), 'expected_output' => $this->plainText($module->output),
+                'version' => $module->version ?? '1.0', 'agent_role' => $step->agent_role,
+            ],
+            'answers_to_blocking_questions' => $stepInput['answers'] ?? [],
+            'recent_operational_outputs' => $priorOutputs,
+        ];
+    }
+
+    private function operationInstructions(object $module): string
+    {
+        return "Sei l'agente operativo LU3G incaricato del modulo: {$module->name}. Esegui concretamente il modulo usando i dati forniti, le regole del modulo e gli output precedenti. Produci un deliverable professionale, specifico per il progetto e immediatamente utilizzabile dalle fasi successive. Non descrivere cosa farai: consegna direttamente il risultato in Markdown ben strutturato. Non chiedere conferme, preferenze o dati migliorativi: usa assunzioni prudenti e dichiarale nel risultato. Solo se manca un dato senza il quale il deliverable sarebbe oggettivamente impossibile o pericolosamente inventato, rispondi con la prima riga esatta BLOCCATO e poi al massimo 3 domande indispensabili, una per riga. Non usare BLOCCATO per dati reperibili dal progetto, dagli allegati, dalle analisi, dagli output precedenti o tramite ragionevole inferenza. Mantieni il risultato entro 1.200 parole e scrivi in italiano.";
+    }
+
+    private function moduleNeedsWebResearch(object $module): bool
+    {
+        $text = Str::lower(implode(' ', [$module->name, $module->description, $module->rules, $module->output]));
+        return Str::contains($text, ['ricerca web', 'ricerca online', 'competitor', 'concorrent', 'benchmark', 'fonti online']);
+    }
+
+    private function recordOperationalUsage(string $runId, int $inputTokens, int $outputTokens, int $webSearches): void
+    {
+        $cost = $this->estimatedCost($inputTokens, $outputTokens, $webSearches);
+        DB::table('ai_agency_runs')->where('id', $runId)->update([
+            'input_tokens' => DB::raw('input_tokens + '.max(0, $inputTokens)),
+            'output_tokens' => DB::raw('output_tokens + '.max(0, $outputTokens)),
+            'web_searches' => DB::raw('web_searches + '.max(0, $webSearches)),
+            'estimated_cost_eur' => DB::raw('estimated_cost_eur + '.max(0, $cost)),
+            'updated_at' => now(),
+        ]);
     }
 
     private function completedWorkflowArtifact(string $name): ?string
