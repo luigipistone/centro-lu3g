@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { BrainCircuit, Check, ChevronLeft, CircleAlert, CircleCheck, Clock3, Euro, FileCheck2, Sparkles, Trash2 } from '@lucide/vue';
+import { BrainCircuit, Check, ChevronDown, ChevronLeft, CircleAlert, CircleCheck, Clock3, Euro, FileCheck2, Sparkles, Trash2 } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 const props = defineProps({ run: Object, proposal: Object, brief: Object, approvedServices: Array, services: Array, steps: Array, budget: Object });
@@ -10,6 +10,7 @@ const informationForm = useForm({ answers: {} });
 const approvalForm = useForm({ service_ids: props.approvedServices?.length ? [...props.approvedServices] : (props.proposal?.recommended_services || []).map((item) => item.service_id) });
 const deleteOpen = ref(false);
 const deleteText = ref('');
+const expandedSections = ref({ client_analysis: true });
 const readiness = computed(() => props.proposal?.readiness || {});
 const isReady = computed(() => props.run.status === 'proposal_ready');
 const isApproved = computed(() => props.run.status === 'approved');
@@ -26,6 +27,7 @@ const documents = computed(() => [
 ].filter((item) => item.content?.summary));
 
 function analyze() { analysisForm.post(route('ai-agency.analyze', props.run.id), { preserveScroll: true }); }
+function toggleSection(key) { expandedSections.value[key] = !expandedSections.value[key]; }
 function provideInformation() { informationForm.post(route('ai-agency.information.store', props.run.id), { preserveScroll: true }); }
 function toggleService(id) {
     if (!isReady.value) return;
@@ -89,9 +91,13 @@ const statusLabel = { draft: 'Da analizzare', analyzing: 'Analisi in corso', nee
                 </section>
 
                 <template v-if="documents.length">
-                    <section v-for="document in documents" :key="document.key" class="surface p-5">
-                        <h3 class="text-lg font-semibold text-gray-900">{{ document.title }}</h3>
-                        <p class="mt-3 max-w-5xl text-sm leading-6 text-gray-600">{{ document.content.summary }}</p>
+                    <section v-for="document in documents" :key="document.key" class="surface overflow-hidden">
+                        <button type="button" class="flex w-full items-center justify-between gap-4 p-5 text-left" :aria-expanded="!!expandedSections[document.key]" @click="toggleSection(document.key)">
+                            <h3 class="text-lg font-semibold text-gray-900">{{ document.title }}</h3>
+                            <ChevronDown class="h-4 w-4 shrink-0 text-gray-400 transition-transform duration-200" :class="expandedSections[document.key] ? 'rotate-180' : ''" />
+                        </button>
+                        <div v-show="expandedSections[document.key]" class="border-t border-gray-100 px-5 pb-5 pt-4">
+                        <p class="max-w-5xl text-sm leading-6 text-gray-600">{{ document.content.summary }}</p>
                         <div class="mt-6 grid gap-6 lg:grid-cols-2">
                             <div v-if="document.content.findings?.length"><p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Evidenze</p><ul class="mt-2 space-y-2 text-sm leading-5 text-gray-700"><li v-for="item in document.content.findings" :key="item">{{ item }}</li></ul></div>
                             <div v-if="document.content.recommendations?.length"><p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Raccomandazioni</p><ul class="mt-2 space-y-2 text-sm leading-5 text-gray-700"><li v-for="item in document.content.recommendations" :key="item">{{ item }}</li></ul></div>
@@ -99,15 +105,17 @@ const statusLabel = { draft: 'Da analizzare', analyzing: 'Analisi in corso', nee
                             <div v-if="document.content.assumptions?.length"><p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Assunzioni</p><ul class="mt-2 space-y-2 text-sm leading-5 text-gray-700"><li v-for="item in document.content.assumptions" :key="item">{{ item }}</li></ul></div>
                         </div>
                         <div v-if="document.content.sources?.length" class="mt-5"><p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Fonti</p><ul class="mt-2 space-y-1 text-xs text-gray-500"><li v-for="source in document.content.sources" :key="source" class="break-all">{{ source }}</li></ul></div>
+                        </div>
                     </section>
 
                     <div class="grid gap-6 xl:grid-cols-2">
-                        <section class="surface p-5"><h3 class="text-base font-semibold text-gray-900">Priorità</h3><ol class="mt-4 space-y-3 text-sm text-gray-700"><li v-for="(item, index) in proposal.priorities" :key="item"><span class="mr-2 font-semibold text-gray-400">{{ index + 1 }}.</span>{{ item }}</li></ol></section>
-                        <section class="surface p-5"><h3 class="text-base font-semibold text-gray-900">Roadmap strategica</h3><ol class="mt-4 space-y-3 text-sm text-gray-700"><li v-for="(item, index) in proposal.roadmap" :key="item"><span class="mr-2 font-semibold text-gray-400">{{ index + 1 }}.</span>{{ item }}</li></ol></section>
+                        <section class="surface overflow-hidden"><button type="button" class="flex w-full items-center justify-between gap-4 p-5 text-left" @click="toggleSection('priorities')"><h3 class="text-base font-semibold text-gray-900">Priorità</h3><ChevronDown class="h-4 w-4 text-gray-400 transition-transform duration-200" :class="expandedSections.priorities ? 'rotate-180' : ''" /></button><ol v-show="expandedSections.priorities" class="space-y-3 border-t border-gray-100 px-5 pb-5 pt-4 text-sm text-gray-700"><li v-for="(item, index) in proposal.priorities" :key="item"><span class="mr-2 font-semibold text-gray-400">{{ index + 1 }}.</span>{{ item }}</li></ol></section>
+                        <section class="surface overflow-hidden"><button type="button" class="flex w-full items-center justify-between gap-4 p-5 text-left" @click="toggleSection('roadmap')"><h3 class="text-base font-semibold text-gray-900">Roadmap strategica</h3><ChevronDown class="h-4 w-4 text-gray-400 transition-transform duration-200" :class="expandedSections.roadmap ? 'rotate-180' : ''" /></button><ol v-show="expandedSections.roadmap" class="space-y-3 border-t border-gray-100 px-5 pb-5 pt-4 text-sm text-gray-700"><li v-for="(item, index) in proposal.roadmap" :key="item"><span class="mr-2 font-semibold text-gray-400">{{ index + 1 }}.</span>{{ item }}</li></ol></section>
                     </div>
 
-                    <section class="surface p-5">
-                        <h3 class="text-lg font-semibold text-gray-900">Servizi risultanti dalle analisi</h3>
+                    <section class="surface overflow-hidden">
+                        <button type="button" class="flex w-full items-center justify-between gap-4 p-5 text-left" @click="toggleSection('services')"><h3 class="text-lg font-semibold text-gray-900">Servizi risultanti dalle analisi</h3><ChevronDown class="h-4 w-4 text-gray-400 transition-transform duration-200" :class="expandedSections.services ? 'rotate-180' : ''" /></button>
+                        <div v-show="expandedSections.services" class="border-t border-gray-100 px-5 pb-5 pt-4">
                         <p class="mt-1 text-sm text-gray-500">Questa è l’unica approvazione strategica. Modifica la selezione solo sui punti fondamentali.</p>
                         <div class="mt-5 grid gap-3 lg:grid-cols-2">
                             <button v-for="item in proposal.recommended_services" :key="item.service_id" type="button" class="rounded-[var(--radius-sm)] border p-4 text-left transition" :class="approvalForm.service_ids.includes(item.service_id) ? 'border-blue-300 bg-blue-50/80' : 'border-gray-200 bg-white/70 opacity-60'" @click="toggleService(item.service_id)">
@@ -117,12 +125,13 @@ const statusLabel = { draft: 'Da analizzare', analyzing: 'Analisi in corso', nee
                         </div>
                         <div v-if="isReady" class="mt-6 flex justify-end"><button type="button" class="btn btn-primary" :disabled="approvalForm.processing || !approvalForm.service_ids.length" @click="approve"><CircleCheck class="h-4 w-4" />Approva strategia e crea workflow</button></div>
                         <div v-if="isApproved" class="mt-6 flex items-center gap-3 rounded-[var(--radius-sm)] border border-green-200 bg-green-50 p-4 text-sm text-green-800"><CircleCheck class="h-5 w-5" />Strategia approvata. I workflow sono stati creati.</div>
+                        </div>
                     </section>
                 </template>
 
-                <section v-if="isApproved && steps?.length" class="surface p-5">
-                    <h3 class="text-lg font-semibold text-gray-900">Workflow operativi</h3>
-                    <div class="mt-5 space-y-5">
+                <section v-if="isApproved && steps?.length" class="surface overflow-hidden">
+                    <button type="button" class="flex w-full items-center justify-between gap-4 p-5 text-left" @click="toggleSection('workflows')"><h3 class="text-lg font-semibold text-gray-900">Workflow operativi</h3><ChevronDown class="h-4 w-4 text-gray-400 transition-transform duration-200" :class="expandedSections.workflows ? 'rotate-180' : ''" /></button>
+                    <div v-show="expandedSections.workflows" class="space-y-5 border-t border-gray-100 px-5 pb-5 pt-4">
                         <div v-for="serviceId in approvedServices" :key="serviceId">
                             <p class="font-semibold text-gray-900">{{ serviceById[serviceId]?.name || 'Servizio senza workflow collegato' }}</p>
                             <div v-if="stepsByService[serviceId]?.length" class="mt-2 divide-y divide-gray-100 border-y border-gray-100"><div v-for="step in stepsByService[serviceId]" :key="step.id" class="flex items-center gap-3 py-3"><Clock3 class="h-4 w-4 text-gray-400" /><span class="flex-1 text-sm text-gray-700">{{ step.name }}</span><span class="text-xs text-gray-400">{{ step.status === 'todo' ? 'Da fare' : 'Bloccato' }}</span></div></div>
