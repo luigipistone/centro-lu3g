@@ -1306,6 +1306,12 @@ class CentroPageController extends Controller
         $view = $request->route('view', 'items');
         $selectedVault = null;
         $selectedGroup = null;
+        $needsVaults = in_array($view, ['items', 'compromised', 'vaults', 'vault-create', 'vault-detail'], true);
+        $needsGroups = in_array($view, ['vault-create', 'vault-detail', 'groups', 'group-create', 'group-detail'], true);
+        $needsUsers = in_array($view, ['vault-create', 'vault-detail', 'groups', 'group-create', 'group-detail'], true);
+        $needsItems = in_array($view, ['items', 'compromised'], true);
+        $vaults = $needsVaults ? $this->passwordVaultRows($request) : collect();
+        $groups = $needsGroups ? $this->passwordGroupRows($request) : collect();
 
         if ($view === 'vault-create') {
             abort_if($this->isGuest($request), 403);
@@ -1316,13 +1322,13 @@ class CentroPageController extends Controller
         }
 
         if ($view === 'vault-detail') {
-            $selectedVault = $this->passwordVaultRows($request)->firstWhere('id', $request->route('id'));
+            $selectedVault = $vaults->firstWhere('id', $request->route('id'));
             abort_if(! $selectedVault, 404);
             abort_unless($selectedVault->can_edit, 403);
         }
 
         if ($view === 'group-detail') {
-            $selectedGroup = $this->passwordGroupRows($request)->firstWhere('id', $request->route('id'));
+            $selectedGroup = $groups->firstWhere('id', $request->route('id'));
             abort_if(! $selectedGroup, 404);
             abort_unless($this->canManagePasswords($request), 403);
         }
@@ -1331,16 +1337,13 @@ class CentroPageController extends Controller
             'view' => $view,
             'canManage' => $this->canManagePasswords($request),
             'canCreateVaults' => ! $this->isGuest($request),
-            'vaults' => $this->passwordVaultRows($request),
-            'groups' => $this->passwordGroupRows($request),
-            'items' => $this->passwordItemRows($request, $view === 'compromised'),
-            'users' => $this->userOptions(),
-            'clients' => $this->isGuest($request)
+            'vaults' => $vaults,
+            'groups' => $groups,
+            'items' => $needsItems ? $this->passwordItemRows($request, $view === 'compromised') : [],
+            'users' => $needsUsers ? $this->userOptions() : [],
+            'clients' => ! $needsItems ? [] : ($this->isGuest($request)
                 ? DB::table('clients')->whereIn('id', $this->visibleClientIdsForUser($request->user()->id))->orderBy('name')->get(['id', 'name'])
-                : DB::table('clients')->orderBy('name')->get(['id', 'name']),
-            'projects' => $this->isGuest($request)
-                ? $this->visibleProjectOptionsForUser($request->user()->id)
-                : DB::table('projects')->orderBy('name')->get(['id', 'name']),
+                : DB::table('clients')->orderBy('name')->get(['id', 'name'])),
             'selectedVault' => $selectedVault,
             'selectedGroup' => $selectedGroup,
             'nav' => [
@@ -4055,6 +4058,12 @@ class CentroPageController extends Controller
 
     private function passwordItemRows(Request $request, bool $withCompromiseCheck = false)
     {
+        $role = $this->currentUserRole($request);
+        $manageable = in_array($role, ['superadmin', 'admin'], true);
+        $visibleVaultIds = $this->visiblePasswordVaultIds($request);
+        $currentUserGroupIds = $role === 'superadmin'
+            ? collect()
+            : DB::table('password_group_user')->where('user_id', $request->user()->id)->pluck('password_group_id');
         $items = $this->passwordItemsQuery($request)
             ->leftJoin('password_vaults', 'password_vaults.id', '=', 'password_items.password_vault_id')
             ->leftJoin('clients', 'clients.id', '=', 'password_items.client_id')
@@ -4077,20 +4086,7 @@ class CentroPageController extends Controller
             ->whereIn('password_item_id', $itemIds)
             ->get(['password_item_id', 'password_group_id', 'permission'])
             ->groupBy('password_item_id');
-        $audit = DB::table('password_audit_logs')
-            ->leftJoin('users', 'users.id', '=', 'password_audit_logs.user_id')
-            ->whereIn('password_audit_logs.password_item_id', $itemIds)
-            ->latest('password_audit_logs.created_at')
-            ->get([
-                'password_audit_logs.password_item_id',
-                'password_audit_logs.action',
-                'password_audit_logs.details',
-                'password_audit_logs.created_at',
-                'users.name as user_name',
-            ])
-            ->groupBy('password_item_id');
-
-        return $items->map(function ($item) use ($request, $userShares, $groupShares, $audit, $withCompromiseCheck) {
+        return $items->map(function ($item) use ($request, $role, $manageable, $visibleVaultIds, $currentUserGroupIds, $userShares, $groupShares, $withCompromiseCheck) {
             $item->has_password = filled($item->encrypted_password);
             $encryptedPassword = $item->encrypted_password;
             unset($item->encrypted_password);
@@ -4100,10 +4096,17 @@ class CentroPageController extends Controller
             $item->group_ids = ($groupShares[$item->id] ?? collect())->pluck('password_group_id')->values();
             $item->share_permission = ($userShares[$item->id] ?? collect())->first()?->permission
                 ?: (($groupShares[$item->id] ?? collect())->first()?->permission ?: 'view');
-            $item->can_edit = $this->canEditPasswordItem($request, $item);
-            $item->can_delete = $this->canManagePasswords($request);
+            $directShare = ($userShares[$item->id] ?? collect())->firstWhere('user_id', $request->user()->id);
+            $editableGroupShare = ($groupShares[$item->id] ?? collect())->first(
+                fn ($share) => $currentUserGroupIds->contains($share->password_group_id) && $share->permission === 'edit'
+            );
+            $item->can_edit = $role === 'superadmin'
+                || $item->created_by === $request->user()->id
+                || $visibleVaultIds->contains($item->password_vault_id)
+                || $directShare?->permission === 'edit'
+                || (bool) $editableGroupShare;
+            $item->can_delete = $manageable;
             $item->risk_flags = $this->passwordRiskFlags($item, $encryptedPassword, $withCompromiseCheck);
-            $item->audit = ($audit[$item->id] ?? collect())->take(8)->values();
 
             return $item;
         });
