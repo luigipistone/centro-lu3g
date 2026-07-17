@@ -522,16 +522,34 @@ class CentroPageController extends Controller
         }
 
         if ($section === 'clients') {
+            $clientIds = $rows->pluck('id');
             $servicesByClient = DB::table('client_services')
                 ->join('services', 'services.id', '=', 'client_services.service_id')
+                ->whereIn('client_services.client_id', $clientIds)
                 ->get(['client_services.client_id', 'services.id', 'services.name', 'services.color'])
                 ->groupBy('client_id');
+            $projectCounts = DB::table('projects')
+                ->whereIn('client_id', $clientIds)
+                ->selectRaw('client_id, COUNT(*) as aggregate')
+                ->groupBy('client_id')
+                ->pluck('aggregate', 'client_id');
+            $taskCounts = DB::table('tasks')
+                ->whereIn('client_id', $clientIds)
+                ->where('status', '!=', 'done')
+                ->selectRaw('client_id, COUNT(*) as aggregate')
+                ->groupBy('client_id')
+                ->pluck('aggregate', 'client_id');
+            $documentCounts = DB::table('documents')
+                ->whereIn('client_id', $clientIds)
+                ->selectRaw('client_id, COUNT(*) as aggregate')
+                ->groupBy('client_id')
+                ->pluck('aggregate', 'client_id');
 
-            $rows = $rows->map(function ($row) use ($servicesByClient) {
+            $rows = $rows->map(function ($row) use ($servicesByClient, $projectCounts, $taskCounts, $documentCounts) {
                 $row->services = ($servicesByClient[$row->id] ?? collect())->values();
-                $row->projects_count = DB::table('projects')->where('client_id', $row->id)->count();
-                $row->tasks_count = DB::table('tasks')->where('client_id', $row->id)->where('status', '!=', 'done')->count();
-                $row->documents_count = DB::table('documents')->where('client_id', $row->id)->count();
+                $row->projects_count = (int) ($projectCounts[$row->id] ?? 0);
+                $row->tasks_count = (int) ($taskCounts[$row->id] ?? 0);
+                $row->documents_count = (int) ($documentCounts[$row->id] ?? 0);
 
                 return $row;
             });
@@ -7332,7 +7350,6 @@ class CentroPageController extends Controller
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:255'],
             'role' => ['nullable', 'string', 'max:255'],
-            'notes' => ['nullable', 'string'],
         ]);
 
         foreach ($payload as $key => $value) {

@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Inertia\Middleware;
 
@@ -36,7 +37,8 @@ class HandleInertiaRequests extends Middleware
         }
 
         $role = $user ? DB::table('user_roles')->where('user_id', $user->id)->value('role') : null;
-        $completionEffect = $user ? DB::table('profiles')->where('user_id', $user->id)->value('completion_effect') : null;
+        $profile = $user ? DB::table('profiles')->where('user_id', $user->id)->first(['avatar_url', 'completion_effect']) : null;
+        $completionEffect = $profile?->completion_effect;
         if (! in_array($completionEffect, ['balloons', 'fireworks', 'snow', 'glitch'], true)) {
             $completionEffect = 'balloons';
         }
@@ -46,29 +48,12 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => fn () => $user ? [
                     ...$user->only(['id', 'name', 'email', 'email_verified_at']),
-                    'avatar_url' => DB::table('profiles')->where('user_id', $user->id)->value('avatar_url'),
+                    'avatar_url' => $profile?->avatar_url,
                     'role' => $role ?: 'guest',
                     'completion_effect' => $completionEffect,
                 ] : null,
             ],
-            'notifications' => fn () => $user ? [
-                'active' => DB::table('notifications')
-                    ->where('user_id', $user->id)
-                    ->whereNull('archived_at')
-                    ->count(),
-                'unread' => DB::table('notifications')
-                    ->where('user_id', $user->id)
-                    ->whereNull('archived_at')
-                    ->where('read', false)
-                    ->count(),
-                'latest' => DB::table('notifications')
-                    ->where('user_id', $user->id)
-                    ->whereNull('archived_at')
-                    ->where('read', false)
-                    ->latest()
-                    ->limit(8)
-                    ->get(['id', 'task_id', 'company_document_id', 'company_message_id', 'type', 'message', 'read', 'created_at']),
-            ] : ['active' => 0, 'unread' => 0, 'latest' => []],
+            'notifications' => fn () => $user ? $this->notificationPayload($user->id) : ['active' => 0, 'unread' => 0, 'latest' => []],
             'push' => [
                 'vapidPublicKey' => config('services.webpush.public_key'),
             ],
@@ -81,6 +66,10 @@ class HandleInertiaRequests extends Middleware
 
     private function maintainNotifications(string $userId): void
     {
+        if (! Cache::add("notification-maintenance:{$userId}", true, now()->addHour())) {
+            return;
+        }
+
         DB::table('notifications')
             ->where('user_id', $userId)
             ->whereNull('archived_at')
@@ -92,5 +81,26 @@ class HandleInertiaRequests extends Middleware
             ->whereNotNull('archived_at')
             ->where('archived_at', '<', now()->subDays(30))
             ->delete();
+    }
+
+    private function notificationPayload(string $userId): array
+    {
+        $counts = DB::table('notifications')
+            ->where('user_id', $userId)
+            ->whereNull('archived_at')
+            ->selectRaw('COUNT(*) as active, SUM(CASE WHEN `read` = 0 THEN 1 ELSE 0 END) as unread')
+            ->first();
+
+        return [
+            'active' => (int) ($counts->active ?? 0),
+            'unread' => (int) ($counts->unread ?? 0),
+            'latest' => DB::table('notifications')
+                ->where('user_id', $userId)
+                ->whereNull('archived_at')
+                ->where('read', false)
+                ->latest()
+                ->limit(8)
+                ->get(['id', 'task_id', 'company_document_id', 'company_message_id', 'type', 'message', 'read', 'created_at']),
+        ];
     }
 }

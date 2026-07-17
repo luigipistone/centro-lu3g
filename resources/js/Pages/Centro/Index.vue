@@ -4441,7 +4441,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                     </button>
                                 </div>
                                 <div v-if="calendarTaskFeedTab === 'comments'">
-                                <form class="mb-5 grid gap-3 md:grid-cols-[1fr_auto]" @submit.prevent="addCalendarComment">
+                                <form class="mb-5" @submit.prevent="addCalendarComment">
                                     <div class="overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white/90 shadow-inner">
                                         <div class="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50/80 p-2">
                                             <button type="button" class="icon-btn h-8 w-8" title="Grassetto" @mousedown.prevent @click="runCalendarCommentEditorCommand('new', 'bold')">
@@ -4473,7 +4473,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                             @blur="updateCalendarCommentFromEditor('new')"
                                         ></div>
                                     </div>
-                                    <button type="submit" class="btn btn-primary self-start px-4" :disabled="calendarCommentForm.processing">Invia</button>
+                                    <div class="mt-3 flex justify-end"><button type="submit" class="btn btn-primary px-4" :disabled="calendarCommentForm.processing">Invia</button></div>
                                 </form>
                                 <div class="space-y-3">
                                     <div v-for="comment in visibleCalendarPanelComments()" :key="comment.id" class="rounded-[var(--radius-sm)] border border-gray-100 bg-white px-3 py-3 text-sm transition hover:border-indigo-100 hover:shadow-sm">

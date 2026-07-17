@@ -90,9 +90,6 @@ function confirmDelete() {
                                     <h3 class="line-clamp-2 text-base font-semibold leading-5">{{ template.name }}</h3>
                                     <p v-if="!template.active" class="mt-2 inline-flex rounded-full bg-white/20 px-2 py-1 text-[11px] font-semibold">Disattivo</p>
                                 </div>
-                                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-white/18">
-                                    <Layers3 class="h-5 w-5" :stroke-width="1.7" />
-                                </span>
                             </div>
 
                             <p v-if="template.description" class="mt-4 line-clamp-2 text-sm opacity-80">{{ template.description }}</p>
@@ -101,6 +98,9 @@ function confirmDelete() {
                                 <div class="text-xs font-semibold opacity-80">
                                     {{ template.sections?.length || 0 }} fasi · {{ template.tasks_count || 0 }} task
                                 </div>
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-white/18">
+                                    <Layers3 class="h-4 w-4" :stroke-width="1.7" />
+                                </span>
                             </div>
                         </Link>
 

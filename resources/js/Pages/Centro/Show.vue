@@ -34,6 +34,7 @@ import {
     Mail,
     MoreHorizontal,
     Paperclip,
+    Pencil,
     Plus,
     Printer,
     Quote,
@@ -563,8 +564,8 @@ const contactForm = useForm({
     email: '',
     phone: '',
     role: '',
-    notes: '',
 });
+const editingContactId = ref(null);
 const contactDrafts = ref({});
 const contactAutosaveStates = ref({});
 const contactAutosaveErrors = ref({});
@@ -1661,7 +1662,6 @@ function contactDraftPayload(contactId) {
         email: draft.email || '',
         phone: draft.phone || '',
         role: draft.role || '',
-        notes: draft.notes || '',
     };
 }
 
@@ -3488,7 +3488,6 @@ watch(
                 email: contact.email || '',
                 phone: contact.phone || '',
                 role: contact.role || '',
-                notes: contact.notes || '',
             };
         }
         contactDrafts.value = next;
@@ -4195,10 +4194,14 @@ onUnmounted(() => {
                             <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
                         </form>
 
-                        <div v-if="related.contacts?.length" class="divide-y divide-gray-100">
+                        <div v-if="related.contacts?.length" class="overflow-x-auto">
+                            <div class="grid min-w-[760px] grid-cols-[minmax(180px,1.1fr)_minmax(130px,0.8fr)_minmax(190px,1.2fr)_minmax(140px,0.8fr)_80px] gap-3 border-b border-gray-100 px-2 pb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                                <span>Nome e cognome</span><span>Ruolo</span><span>Email</span><span>Telefono</span><span class="text-right">Azioni</span>
+                            </div>
+                            <div class="min-w-[760px] divide-y divide-gray-100">
                             <article v-for="contact in related.contacts" :key="contact.id" class="py-3 first:pt-0 last:pb-0">
-                                <div class="grid items-center gap-2 md:grid-cols-[minmax(150px,1fr)_minmax(120px,0.8fr)_minmax(150px,1fr)_minmax(110px,0.7fr)_minmax(160px,1fr)_40px]">
-                                    <template v-if="canEditClient">
+                                <div class="grid grid-cols-[minmax(180px,1.1fr)_minmax(130px,0.8fr)_minmax(190px,1.2fr)_minmax(140px,0.8fr)_80px] items-center gap-3 rounded-[var(--radius-sm)] px-2 py-1 transition hover:bg-gray-50/80">
+                                    <template v-if="canEditClient && editingContactId === contact.id">
                                         <div class="grid min-w-0 gap-2 sm:grid-cols-2">
                                             <input
                                                 v-if="contactDrafts[contact.id]"
@@ -4237,29 +4240,21 @@ onUnmounted(() => {
                                             placeholder="Telefono"
                                             @input="saveContactInline(contact)"
                                         />
-                                        <input
-                                            v-if="contactDrafts[contact.id]"
-                                            v-model="contactDrafts[contact.id].notes"
-                                            class="form-control mt-0"
-                                            placeholder="Note"
-                                            @input="saveContactInline(contact)"
-                                        />
-                                        <button v-if="canEditClient" type="button" class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-red-600 transition hover:bg-red-50 hover:text-red-700" aria-label="Elimina referente" @click="removeContact(contact)">
-                                            <Trash2 class="h-4 w-4" :stroke-width="1.7" />
-                                        </button>
-                                        <div v-if="contactAutosaveStates[contact.id] && contactAutosaveStates[contact.id] !== 'idle'" :class="['md:col-span-6 text-[11px] font-medium', contactAutosaveStates[contact.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
-                                            {{ autosaveLabel(contactAutosaveStates[contact.id], contactAutosaveErrors[contact.id]) }}
+                                        <div class="flex justify-end gap-1"><button type="button" class="icon-btn h-9 w-9" title="Chiudi modifica" @click="editingContactId = null"><Check class="h-4 w-4" :stroke-width="1.7" /></button><button type="button" class="icon-btn h-9 w-9 text-red-600 hover:bg-red-50" title="Elimina referente" @click="removeContact(contact)"><Trash2 class="h-4 w-4" :stroke-width="1.7" /></button></div>
+                                        <div v-if="contactAutosaveStates[contact.id] === 'error'" class="col-span-5 text-[11px] font-medium text-red-600">
+                                            {{ contactAutosaveErrors[contact.id] || 'Non salvato' }}
                                         </div>
                                     </template>
                                     <template v-else>
                                         <div class="min-w-0 truncate text-sm font-semibold text-gray-900">{{ [contact.first_name, contact.last_name].filter(Boolean).join(' ') || 'Referente' }}</div>
                                         <div class="min-w-0 truncate text-sm text-gray-600">{{ contact.role || '-' }}</div>
-                                        <div class="min-w-0 truncate text-sm text-gray-600">{{ contact.email || '-' }}</div>
+                                        <a v-if="contact.email" :href="`mailto:${contact.email}`" class="min-w-0 truncate text-sm text-indigo-600 hover:underline" @click.stop>{{ contact.email }}</a><div v-else class="text-sm text-gray-400">-</div>
                                         <div class="min-w-0 truncate text-sm text-gray-600">{{ contact.phone || '-' }}</div>
-                                        <div class="min-w-0 truncate text-sm text-gray-500">{{ contact.notes || '-' }}</div>
+                                        <div class="flex justify-end gap-1"><button v-if="canEditClient" type="button" class="icon-btn h-9 w-9" title="Modifica referente" @click="editingContactId = contact.id"><Pencil class="h-4 w-4" :stroke-width="1.7" /></button><button v-if="canEditClient" type="button" class="icon-btn h-9 w-9 text-red-600 hover:bg-red-50" title="Elimina referente" @click="removeContact(contact)"><Trash2 class="h-4 w-4" :stroke-width="1.7" /></button></div>
                                     </template>
                                 </div>
                             </article>
+                            </div>
                         </div>
                         <p v-else class="rounded-md border border-dashed border-gray-300 bg-white px-4 py-8 text-center text-sm text-gray-500">
                             Nessun referente inserito.
