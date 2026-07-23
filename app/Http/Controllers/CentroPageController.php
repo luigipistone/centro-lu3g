@@ -1932,6 +1932,9 @@ class CentroPageController extends Controller
         if ($section === 'projects' && ! in_array($this->currentUserRole($request), ['admin', 'superadmin'], true)) {
             unset($payload['figma_url']);
         }
+        if ($section === 'projects' && array_key_exists('figma_url', $payload) && ! $this->isWebServiceId($payload['service_id'] ?? null)) {
+            $payload['figma_url'] = null;
+        }
         $taskPeople = $section === 'tasks' ? $this->extractTaskPeoplePayload($payload) : null;
         $taskDependencies = $section === 'tasks' ? $this->extractTaskDependencyPayload($payload) : null;
         $projectFollowers = $section === 'projects' ? $this->extractProjectFollowersPayload($payload) : null;
@@ -2024,6 +2027,9 @@ class CentroPageController extends Controller
         $payload = $this->validatedPayload($request, $section);
         if ($section === 'projects' && ! in_array($this->currentUserRole($request), ['admin', 'superadmin'], true)) {
             unset($payload['figma_url']);
+        }
+        if ($section === 'projects' && array_key_exists('figma_url', $payload) && ! $this->isWebServiceId($payload['service_id'] ?? null)) {
+            $payload['figma_url'] = null;
         }
         $taskPeople = $section === 'tasks' ? $this->extractTaskPeoplePayload($payload) : null;
         $taskDependencies = $section === 'tasks' ? $this->extractTaskDependencyPayload($payload) : null;
@@ -7494,6 +7500,17 @@ class CentroPageController extends Controller
         }
 
         return $fields;
+    }
+
+    private function isWebServiceId(?string $serviceId): bool
+    {
+        if (blank($serviceId)) {
+            return false;
+        }
+
+        $serviceName = DB::table('services')->where('id', $serviceId)->value('name');
+
+        return str_contains(mb_strtolower(trim((string) $serviceName)), 'web');
     }
 
     private function taskFieldLabel(string $field): string

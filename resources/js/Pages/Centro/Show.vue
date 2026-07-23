@@ -1797,7 +1797,7 @@ function projectPayload() {
         description: projectForm.description,
         client_id: projectForm.client_id,
         service_id: projectForm.service_id,
-        ...(isAdmin.value ? { figma_url: projectForm.figma_url } : {}),
+        ...(isAdmin.value ? { figma_url: isWebProject.value ? projectForm.figma_url : '' } : {}),
         status: projectForm.status,
         color: normalizeHexColor(projectForm.color),
     };
@@ -4574,7 +4574,7 @@ onUnmounted(() => {
                                     <AppSelect v-model="projectForm.status" :options="projectStatusOptions" :disabled="!canEditProject" />
                                 </div>
                             </div>
-                            <div>
+                            <div v-if="isWebProject">
                                 <label class="block text-sm font-medium text-gray-700">Mockup Figma</label>
                                 <div v-if="isAdmin" class="flex items-center gap-2">
                                     <input v-model="projectForm.figma_url" type="url" class="form-control min-w-0 flex-1" placeholder="https://www.figma.com/..." />
