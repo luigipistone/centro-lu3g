@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Services\CentroBackupService;
 use App\Services\CentroNotificationService;
+use Carbon\Carbon;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Illuminate\Http\JsonResponse;
@@ -2816,6 +2817,12 @@ class CentroPageController extends Controller
             if ($value === '') {
                 $payload[$key] = null;
             }
+        }
+
+        if ($section === 'projects' && filled($payload['figma_last_modified_at'] ?? null)) {
+            $payload['figma_last_modified_at'] = Carbon::parse($payload['figma_last_modified_at'])
+                ->setTimezone('Europe/Rome')
+                ->format('Y-m-d H:i:s');
         }
 
         if ($section === 'settings') {

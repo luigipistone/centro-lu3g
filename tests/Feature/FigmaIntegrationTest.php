@@ -88,6 +88,53 @@ class FigmaIntegrationTest extends TestCase
             ->assertJsonPath('files.0.name', 'Homepage');
     }
 
+    public function test_figma_iso_timestamp_is_normalized_when_linking_a_project(): void
+    {
+        $admin = $this->userWithRole('admin');
+        $serviceId = (string) Str::uuid();
+        $projectId = (string) Str::uuid();
+
+        DB::table('services')->insert([
+            'id' => $serviceId,
+            'name' => 'Web',
+            'color' => '#2563eb',
+            'active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('projects')->insert([
+            'id' => $projectId,
+            'name' => 'Sito cliente',
+            'service_id' => $serviceId,
+            'status' => 'active',
+            'color' => '#2563eb',
+            'created_by' => $admin->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->put(route('projects.update', $projectId), [
+                'name' => 'Sito cliente',
+                'service_id' => $serviceId,
+                'status' => 'active',
+                'color' => '#2563eb',
+                'figma_url' => 'https://www.figma.com/file/file-key',
+                'figma_project_id' => 'project-1',
+                'figma_file_key' => 'file-key',
+                'figma_file_name' => 'Homepage',
+                'figma_thumbnail_url' => 'https://figma.example/thumbnail.png',
+                'figma_last_modified_at' => '2026-06-03T12:31:24Z',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('projects', [
+            'id' => $projectId,
+            'figma_file_key' => 'file-key',
+            'figma_last_modified_at' => '2026-06-03 14:31:24',
+        ]);
+    }
+
     private function userWithRole(string $role): User
     {
         $user = User::factory()->create();
