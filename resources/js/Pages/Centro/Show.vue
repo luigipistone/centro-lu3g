@@ -686,10 +686,15 @@ const projectForm = useForm({
     name: props.record.name || '',
     description: props.record.description || '',
     client_id: props.record.client_id || '',
+    service_id: props.record.service_id || '',
+    figma_url: props.record.figma_url || '',
     status: props.record.status || 'active',
     color: props.record.color || '#2563eb',
     user_ids: [...(props.related.followers || [])],
 });
+const selectedProjectService = computed(() => (props.related.projectServices || [])
+    .find((service) => String(service.id) === String(projectForm.service_id)));
+const isWebProject = computed(() => String(selectedProjectService.value?.name || '').toLocaleLowerCase('it').includes('web'));
 const selectedProjectFollowers = ref([...(props.related.followers || [])]);
 const projectAutosaveState = ref('idle');
 const projectAutosaveError = ref('');
@@ -1791,6 +1796,8 @@ function projectPayload() {
         name: projectForm.name,
         description: projectForm.description,
         client_id: projectForm.client_id,
+        service_id: projectForm.service_id,
+        ...(isAdmin.value ? { figma_url: projectForm.figma_url } : {}),
         status: projectForm.status,
         color: normalizeHexColor(projectForm.color),
     };
@@ -3412,6 +3419,8 @@ watch(
         projectForm.name,
         projectForm.description,
         projectForm.client_id,
+        projectForm.service_id,
+        projectForm.figma_url,
         projectForm.status,
         projectForm.color,
     ],
@@ -4541,7 +4550,7 @@ onUnmounted(() => {
                                 <input v-model="projectForm.name" class="form-control" required :readonly="!canEditProject" />
                                 <div v-if="projectForm.errors.name" class="mt-1 text-sm text-red-600">{{ projectForm.errors.name }}</div>
                             </div>
-                            <div class="grid gap-4 md:grid-cols-2">
+                            <div class="grid gap-4 md:grid-cols-3">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Cliente</label>
                                     <AppSelect
@@ -4552,9 +4561,46 @@ onUnmounted(() => {
                                     />
                                 </div>
                                 <div>
+                                    <label class="block text-sm font-medium text-gray-700">Servizio</label>
+                                    <AppSelect
+                                        v-model="projectForm.service_id"
+                                        :options="namedOptions(related.projectServices, { value: '', label: 'Nessun servizio' })"
+                                        searchable
+                                        :disabled="!canEditProject"
+                                    />
+                                </div>
+                                <div>
                                     <label class="block text-sm font-medium text-gray-700">Stato</label>
                                     <AppSelect v-model="projectForm.status" :options="projectStatusOptions" :disabled="!canEditProject" />
                                 </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Mockup Figma</label>
+                                <div v-if="isAdmin" class="flex items-center gap-2">
+                                    <input v-model="projectForm.figma_url" type="url" class="form-control min-w-0 flex-1" placeholder="https://www.figma.com/..." />
+                                    <a
+                                        v-if="projectForm.figma_url"
+                                        :href="projectForm.figma_url"
+                                        target="_blank"
+                                        rel="noopener"
+                                        class="icon-btn h-10 w-10 shrink-0"
+                                        title="Apri mockup Figma"
+                                    >
+                                        <ExternalLink class="h-4 w-4" :stroke-width="1.7" />
+                                    </a>
+                                </div>
+                                <a
+                                    v-else-if="projectForm.figma_url"
+                                    :href="projectForm.figma_url"
+                                    target="_blank"
+                                    rel="noopener"
+                                    class="interactive-row mt-1 inline-flex items-center gap-2 text-sm font-medium text-[hsl(var(--primary-app))]"
+                                >
+                                    <ExternalLink class="h-4 w-4" :stroke-width="1.7" />
+                                    Apri mockup Figma
+                                </a>
+                                <p v-else class="mt-1 text-sm text-gray-400">Nessun mockup collegato.</p>
+                                <div v-if="projectForm.errors.figma_url" class="mt-1 text-sm text-red-600">{{ projectForm.errors.figma_url }}</div>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Colore</label>
@@ -4579,7 +4625,7 @@ onUnmounted(() => {
                         </div>
                     </section>
 
-                    <section v-if="isAdmin" class="surface rounded-md p-5">
+                    <section v-if="isAdmin && isWebProject" class="surface rounded-md p-5">
                         <div class="flex flex-wrap items-start justify-between gap-4">
                             <div class="flex min-w-0 items-start gap-3">
                                 <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]">
@@ -4634,7 +4680,7 @@ onUnmounted(() => {
                                     @click="wordpressProvisioningConfirmOpen = true"
                                 >
                                     <Rocket class="h-4 w-4" :stroke-width="1.7" />
-                                    {{ wordpressProvisioning?.status === 'failed' ? 'Riprova' : 'Prepara WordPress' }}
+                                    {{ wordpressProvisioning?.status === 'failed' ? 'Riprendi' : 'Prepara WordPress' }}
                                 </button>
                             </div>
                         </div>

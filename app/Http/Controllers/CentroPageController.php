@@ -1833,6 +1833,7 @@ class CentroPageController extends Controller
                 'taskProjects' => $this->isGuest($request)
                     ? DB::table('projects')->where('id', $id)->get(['id', 'name'])
                     : DB::table('projects')->orderBy('name')->get(['id', 'name']),
+                'projectServices' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name', 'color']),
                 'taskServices' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name', 'color']),
                 'taskDependencyOptions' => $this->isGuest($request) ? collect() : $this->taskDependencyOptions(),
                 'followers' => DB::table('project_followers')->where('project_id', $id)->pluck('user_id'),
@@ -1928,6 +1929,9 @@ class CentroPageController extends Controller
         }
 
         $payload = $this->validatedPayload($request, $section);
+        if ($section === 'projects' && ! in_array($this->currentUserRole($request), ['admin', 'superadmin'], true)) {
+            unset($payload['figma_url']);
+        }
         $taskPeople = $section === 'tasks' ? $this->extractTaskPeoplePayload($payload) : null;
         $taskDependencies = $section === 'tasks' ? $this->extractTaskDependencyPayload($payload) : null;
         $projectFollowers = $section === 'projects' ? $this->extractProjectFollowersPayload($payload) : null;
@@ -2018,6 +2022,9 @@ class CentroPageController extends Controller
         }
 
         $payload = $this->validatedPayload($request, $section);
+        if ($section === 'projects' && ! in_array($this->currentUserRole($request), ['admin', 'superadmin'], true)) {
+            unset($payload['figma_url']);
+        }
         $taskPeople = $section === 'tasks' ? $this->extractTaskPeoplePayload($payload) : null;
         $taskDependencies = $section === 'tasks' ? $this->extractTaskDependencyPayload($payload) : null;
         if ($section === 'tasks' && $this->isGuest($request)) {
@@ -2418,6 +2425,7 @@ class CentroPageController extends Controller
                 'fields' => [
                     ['name' => 'name', 'label' => 'Nome', 'type' => 'text', 'required' => true],
                     ['name' => 'client_id', 'label' => 'Cliente', 'type' => 'client'],
+                    ['name' => 'service_id', 'label' => 'Servizio', 'type' => 'service'],
                     ['name' => 'status', 'label' => 'Stato', 'type' => 'select', 'options' => ['active', 'completed', 'on_hold', 'archived']],
                     ['name' => 'color', 'label' => 'Colore', 'type' => 'color'],
                     ['name' => 'description', 'label' => 'Descrizione', 'type' => 'textarea'],
@@ -2703,9 +2711,11 @@ class CentroPageController extends Controller
             'projects' => [
                 'name' => ['required', 'string', 'max:255'],
                 'client_id' => ['nullable', 'uuid', 'exists:clients,id'],
+                'service_id' => ['nullable', 'uuid', 'exists:services,id'],
                 'status' => ['required', Rule::in(['active', 'completed', 'on_hold', 'archived'])],
                 'color' => ['required', 'string', 'max:20'],
                 'description' => ['nullable', 'string'],
+                'figma_url' => ['nullable', 'url', 'max:2048'],
                 'user_ids' => ['nullable', 'array'],
                 'user_ids.*' => ['uuid', 'exists:users,id'],
                 'template_id' => ['nullable', 'uuid', 'exists:project_templates,id'],

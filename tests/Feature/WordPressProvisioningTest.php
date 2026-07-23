@@ -75,6 +75,23 @@ class WordPressProvisioningTest extends TestCase
         Queue::assertNothingPushed();
     }
 
+    public function test_project_without_web_service_cannot_be_provisioned(): void
+    {
+        Queue::fake();
+
+        $admin = $this->userWithRole('admin');
+        [, $projectId] = $this->projectWithClient($admin);
+        DB::table('projects')->where('id', $projectId)->update(['service_id' => null]);
+
+        $this->actingAs($admin)
+            ->from(route('projects.show', $projectId))
+            ->post(route('projects.wordpress-provisioning.store', $projectId))
+            ->assertRedirect(route('projects.show', $projectId))
+            ->assertSessionHasErrors('project');
+
+        Queue::assertNothingPushed();
+    }
+
     private function userWithRole(string $role): User
     {
         $user = User::factory()->create();
@@ -92,6 +109,16 @@ class WordPressProvisioningTest extends TestCase
     {
         $clientId = (string) Str::uuid();
         $projectId = (string) Str::uuid();
+        $serviceId = (string) Str::uuid();
+
+        DB::table('services')->insert([
+            'id' => $serviceId,
+            'name' => 'Web',
+            'color' => '#2563eb',
+            'active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         DB::table('clients')->insert([
             'id' => $clientId,
@@ -105,6 +132,7 @@ class WordPressProvisioningTest extends TestCase
             'id' => $projectId,
             'name' => 'Nuovo sito cliente',
             'client_id' => $clientId,
+            'service_id' => $serviceId,
             'status' => 'active',
             'color' => '#2563eb',
             'created_by' => $creator->id,

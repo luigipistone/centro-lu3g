@@ -23,6 +23,12 @@ class WordPressProvisioningController extends Controller
             ]);
         }
 
+        if (! $this->isWebService($project->service_name)) {
+            throw ValidationException::withMessages([
+                'project' => 'Associa il progetto al servizio Web prima di preparare WordPress.',
+            ]);
+        }
+
         $folder = Str::slug($project->client_name);
         if ($folder === '') {
             throw ValidationException::withMessages([
@@ -84,12 +90,18 @@ class WordPressProvisioningController extends Controller
     {
         $project = DB::table('projects')
             ->leftJoin('clients', 'clients.id', '=', 'projects.client_id')
+            ->leftJoin('services', 'services.id', '=', 'projects.service_id')
             ->where('projects.id', $projectId)
-            ->first(['projects.id', 'projects.client_id', 'clients.name as client_name']);
+            ->first(['projects.id', 'projects.client_id', 'clients.name as client_name', 'services.name as service_name']);
 
         abort_if(! $project, 404);
 
         return $project;
+    }
+
+    private function isWebService(?string $serviceName): bool
+    {
+        return str_contains(mb_strtolower(trim((string) $serviceName)), 'web');
     }
 
     private function ensureAdmin(Request $request): void
