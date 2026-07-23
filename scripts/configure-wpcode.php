@@ -33,10 +33,7 @@ foreach ($snippets as $definition) {
         'posts_per_page' => 1,
     ]);
 
-    $snippet = new WPCode_Snippet;
-    if ($existing) {
-        $snippet->id = $existing[0]->ID;
-    }
+    $snippet = new WPCode_Snippet($existing ? $existing[0]->ID : []);
     $snippet->title = $definition['title'];
     $snippet->code = $definition['code'];
     $snippet->code_type = $definition['type'];
