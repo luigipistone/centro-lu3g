@@ -159,16 +159,16 @@ state_write "$CREDENTIALS_FILE" \
     "Password: $ADMIN_PASSWORD"
 
 wpcli option update blog_public 0
-wpcli rewrite structure '/%postname%/' --hard
-wpcli rewrite flush --hard
+wpcli rewrite structure '/%postname%/'
+wpcli rewrite flush
 progress 42 settings "Lettura e permalink configurati"
 
+wpcli theme install hello-elementor --activate --force
 CURRENT_DEFAULT_THEME="$(wpcli theme list --field=name | grep -E '^twentytwenty' | sort -V | tail -n 1 || true)"
 while IFS= read -r theme; do
     [[ -z "$theme" || "$theme" == "$CURRENT_DEFAULT_THEME" || "$theme" == "hello-elementor" ]] && continue
     wpcli theme delete "$theme" >/dev/null
 done < <(wpcli theme list --field=name)
-wpcli theme install hello-elementor --activate
 progress 50 theme "Tema Hello Elementor installato"
 
 wpcli plugin install elementor cleantalk-spam-protect insert-headers-and-footers duplicate-post --activate --force
