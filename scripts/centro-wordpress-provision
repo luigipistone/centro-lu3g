@@ -86,7 +86,7 @@ CREDENTIALS_FILE="${DESTINATION}/credenziali-wordpress.txt"
 
 progress 4 preflight "Controlli preliminari completati"
 
-if [[ -d "$DESTINATION" && ! -f "$STATE_FILE" ]]; then
+if [[ -d "$DESTINATION" && ! -f "$STATE_FILE" ]] && find "$DESTINATION" -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then
     fail "La cartella ${FOLDER} esiste già e non appartiene al provisioning."
 fi
 
@@ -105,7 +105,11 @@ else
     ADMIN_USERNAME="sviluppo"
     ADMIN_PASSWORD="$(random_secret)"
 
-    PSA_PASSWORD="$DATABASE_PASSWORD" plesk bin database --create-dbuser "$DATABASE_USER" -database "$DATABASE_NAME" -passwd "" >/dev/null
+    PSA_PASSWORD="$DATABASE_PASSWORD" plesk bin database \
+        --create-dbuser "$DATABASE_USER" \
+        -domain "lu3g.com" \
+        -database "$DATABASE_NAME" \
+        -passwd "" >/dev/null
 
     state_write "$STATE_FILE" \
         "DATABASE_NAME=$(printf '%q' "$DATABASE_NAME")" \
