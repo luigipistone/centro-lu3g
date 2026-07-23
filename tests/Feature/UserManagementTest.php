@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -14,6 +15,29 @@ use Tests\TestCase;
 class UserManagementTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_superadmin_can_create_a_user(): void
+    {
+        $superadmin = User::factory()->create();
+        $this->role($superadmin, 'superadmin');
+
+        $this
+            ->actingAs($superadmin)
+            ->post(route('users.store'), [
+                'name' => 'Nuovo Utente',
+                'email' => 'nuovo.utente@example.test',
+                'role' => 'editor',
+                'password' => 'Password-sicura-123',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $user = User::query()->where('email', 'nuovo.utente@example.test')->firstOrFail();
+
+        $this->assertSame('Nuovo Utente', $user->name);
+        $this->assertTrue(Hash::check('Password-sicura-123', $user->password));
+        $this->assertDatabaseHas('user_roles', ['user_id' => $user->id, 'role' => 'editor']);
+        $this->assertDatabaseHas('profiles', ['user_id' => $user->id, 'full_name' => 'Nuovo Utente']);
+    }
 
     public function test_superadmin_can_open_a_user_profile_page(): void
     {
