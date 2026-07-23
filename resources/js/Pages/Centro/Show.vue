@@ -688,6 +688,10 @@ const projectForm = useForm({
     client_id: props.record.client_id || '',
     service_id: props.record.service_id || '',
     figma_url: props.record.figma_url || '',
+    figma_project_id: props.record.figma_project_id || '',
+    figma_file_key: props.record.figma_file_key || '',
+    figma_file_name: props.record.figma_file_name || '',
+    figma_thumbnail_url: props.record.figma_thumbnail_url || '',
     status: props.record.status || 'active',
     color: props.record.color || '#2563eb',
     user_ids: [...(props.related.followers || [])],
@@ -695,6 +699,11 @@ const projectForm = useForm({
 const selectedProjectService = computed(() => (props.related.projectServices || [])
     .find((service) => String(service.id) === String(projectForm.service_id)));
 const isWebProject = computed(() => String(selectedProjectService.value?.name || '').toLocaleLowerCase('it').includes('web'));
+const figmaProjects = ref([]);
+const figmaFiles = ref([]);
+const figmaLoadingProjects = ref(false);
+const figmaLoadingFiles = ref(false);
+const figmaError = ref('');
 const selectedProjectFollowers = ref([...(props.related.followers || [])]);
 const projectAutosaveState = ref('idle');
 const projectAutosaveError = ref('');
@@ -1797,7 +1806,13 @@ function projectPayload() {
         description: projectForm.description,
         client_id: projectForm.client_id,
         service_id: projectForm.service_id,
-        ...(isAdmin.value ? { figma_url: isWebProject.value ? projectForm.figma_url : '' } : {}),
+        ...(isAdmin.value ? {
+            figma_url: isWebProject.value ? projectForm.figma_url : '',
+            figma_project_id: isWebProject.value ? projectForm.figma_project_id : '',
+            figma_file_key: isWebProject.value ? projectForm.figma_file_key : '',
+            figma_file_name: isWebProject.value ? projectForm.figma_file_name : '',
+            figma_thumbnail_url: isWebProject.value ? projectForm.figma_thumbnail_url : '',
+        } : {}),
         status: projectForm.status,
         color: normalizeHexColor(projectForm.color),
     };
@@ -1845,6 +1860,57 @@ function wordpressExpectedFolder() {
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '');
+}
+
+async function loadFigmaProjects() {
+    if (!isAdmin.value || !isWebProject.value || figmaLoadingProjects.value) return;
+
+    figmaLoadingProjects.value = true;
+    figmaError.value = '';
+    try {
+        const response = await window.axios.get(route('figma.projects'));
+        figmaProjects.value = response.data.projects || [];
+    } catch (error) {
+        figmaError.value = error.response?.data?.message || 'Impossibile caricare i progetti Figma.';
+    } finally {
+        figmaLoadingProjects.value = false;
+    }
+}
+
+async function loadFigmaFiles(projectId = projectForm.figma_project_id) {
+    if (!isAdmin.value || !projectId || figmaLoadingFiles.value) {
+        if (!projectId) figmaFiles.value = [];
+        return;
+    }
+
+    figmaLoadingFiles.value = true;
+    figmaError.value = '';
+    try {
+        const response = await window.axios.get(route('figma.project-files', projectId));
+        figmaFiles.value = response.data.files || [];
+    } catch (error) {
+        figmaError.value = error.response?.data?.message || 'Impossibile caricare i file Figma.';
+    } finally {
+        figmaLoadingFiles.value = false;
+    }
+}
+
+async function selectFigmaProject() {
+    projectForm.figma_file_key = '';
+    projectForm.figma_file_name = '';
+    projectForm.figma_thumbnail_url = '';
+    projectForm.figma_url = '';
+    figmaFiles.value = [];
+    await loadFigmaFiles();
+    saveProjectInline(0);
+}
+
+function selectFigmaFile() {
+    const file = figmaFiles.value.find((item) => String(item.key) === String(projectForm.figma_file_key));
+    projectForm.figma_file_name = file?.name || '';
+    projectForm.figma_thumbnail_url = file?.thumbnail_url || '';
+    projectForm.figma_url = file?.key ? `https://www.figma.com/file/${file.key}` : '';
+    saveProjectInline(0);
 }
 
 function wordpressProvisioningActive() {
@@ -3421,6 +3487,10 @@ watch(
         projectForm.client_id,
         projectForm.service_id,
         projectForm.figma_url,
+        projectForm.figma_project_id,
+        projectForm.figma_file_key,
+        projectForm.figma_file_name,
+        projectForm.figma_thumbnail_url,
         projectForm.status,
         projectForm.color,
     ],
@@ -3431,6 +3501,13 @@ watch(
     () => projectWorkspaceTab.value,
     (tab) => {
         if (tab === 'overview') refreshProjectDescriptionEditor();
+    },
+);
+
+watch(
+    () => isWebProject.value,
+    (enabled) => {
+        if (enabled && isAdmin.value) loadFigmaProjects();
     },
 );
 
@@ -3646,6 +3723,10 @@ onMounted(() => {
     refreshProjectDescriptionEditor();
     if (wordpressProvisioningActive()) {
         startWordPressProvisioningPolling();
+    }
+    if (props.section === 'projects' && isAdmin.value && isWebProject.value) {
+        loadFigmaProjects();
+        if (projectForm.figma_project_id) loadFigmaFiles();
     }
 });
 
@@ -4576,18 +4657,44 @@ onUnmounted(() => {
                             </div>
                             <div v-if="isWebProject">
                                 <label class="block text-sm font-medium text-gray-700">Mockup Figma</label>
-                                <div v-if="isAdmin" class="flex items-center gap-2">
-                                    <input v-model="projectForm.figma_url" type="url" class="form-control min-w-0 flex-1" placeholder="https://www.figma.com/..." />
-                                    <a
-                                        v-if="projectForm.figma_url"
-                                        :href="projectForm.figma_url"
-                                        target="_blank"
-                                        rel="noopener"
-                                        class="icon-btn h-10 w-10 shrink-0"
-                                        title="Apri mockup Figma"
-                                    >
-                                        <ExternalLink class="h-4 w-4" :stroke-width="1.7" />
-                                    </a>
+                                <div v-if="isAdmin" class="space-y-3">
+                                    <div class="grid gap-3 md:grid-cols-2">
+                                        <AppSelect
+                                            v-model="projectForm.figma_project_id"
+                                            :options="[
+                                                { value: '', label: figmaLoadingProjects ? 'Caricamento progetti...' : 'Seleziona progetto Figma' },
+                                                ...figmaProjects.map((item) => ({ value: item.id, label: item.name })),
+                                            ]"
+                                            searchable
+                                            :disabled="figmaLoadingProjects"
+                                            @change="selectFigmaProject"
+                                        />
+                                        <AppSelect
+                                            v-model="projectForm.figma_file_key"
+                                            :options="[
+                                                { value: '', label: figmaLoadingFiles ? 'Caricamento file...' : 'Seleziona file Figma' },
+                                                ...figmaFiles.map((item) => ({ value: item.key, label: item.name })),
+                                            ]"
+                                            searchable
+                                            :disabled="!projectForm.figma_project_id || figmaLoadingFiles"
+                                            @change="selectFigmaFile"
+                                        />
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <input v-model="projectForm.figma_url" type="url" class="form-control min-w-0 flex-1" placeholder="Oppure incolla un link Figma" />
+                                        <a
+                                            v-if="projectForm.figma_url"
+                                            :href="projectForm.figma_url"
+                                            target="_blank"
+                                            rel="noopener"
+                                            class="icon-btn h-10 w-10 shrink-0"
+                                            title="Apri mockup Figma"
+                                        >
+                                            <ExternalLink class="h-4 w-4" :stroke-width="1.7" />
+                                        </a>
+                                    </div>
+                                    <p v-if="projectForm.figma_file_name" class="text-xs font-medium text-emerald-600">{{ projectForm.figma_file_name }} collegato.</p>
+                                    <p v-if="figmaError" class="text-sm text-red-600">{{ figmaError }}</p>
                                 </div>
                                 <a
                                     v-else-if="projectForm.figma_url"

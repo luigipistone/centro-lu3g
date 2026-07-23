@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AiAgencyController;
 use App\Http\Controllers\CentroPageController;
+use App\Http\Controllers\FigmaIntegrationController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WordPressProvisioningController;
 use Illuminate\Support\Facades\Route;
@@ -191,6 +192,10 @@ Route::middleware('auth')->group(function () {
     Route::put('/settings/document', [CentroPageController::class, 'updateDocumentSettings'])->name('settings.document.update');
     Route::put('/settings/email', [CentroPageController::class, 'updateEmailSettings'])->name('settings.email.update');
     Route::post('/settings/email/test', [CentroPageController::class, 'sendTestEmail'])->name('settings.email.test');
+    Route::put('/settings/figma', [FigmaIntegrationController::class, 'update'])->name('settings.figma.update');
+    Route::post('/settings/figma/test', [FigmaIntegrationController::class, 'test'])->name('settings.figma.test');
+    Route::get('/figma/projects', [FigmaIntegrationController::class, 'projects'])->name('figma.projects');
+    Route::get('/figma/projects/{projectId}/files', [FigmaIntegrationController::class, 'files'])->name('figma.project-files');
     Route::put('/settings/numbering/{id}', [CentroPageController::class, 'updateNumbering'])->name('settings.numbering.update');
     Route::post('/settings/backup', [CentroPageController::class, 'runBackup'])->name('settings.backup.run');
     Route::post('/settings/backup/{id}/restore', [CentroPageController::class, 'restoreBackup'])->name('settings.backup.restore');

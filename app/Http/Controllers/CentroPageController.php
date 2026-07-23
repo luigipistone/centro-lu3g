@@ -577,6 +577,7 @@ class CentroPageController extends Controller
             'clientStats' => $section === 'clients' ? $this->clientStats() : null,
             'documentSettings' => $section === 'settings' ? DB::table('document_settings')->first() : null,
             'emailSettings' => $section === 'settings' ? $this->emailSettingsForView() : null,
+            'figmaSettings' => $section === 'settings' ? $this->figmaSettingsForView() : null,
             'numberings' => $section === 'settings' ? DB::table('document_numbering')->orderBy('doc_type')->orderByDesc('year')->get() : [],
             'backupRuns' => $section === 'settings' ? $this->backupRuns() : [],
             'clients' => $this->isGuest($request)
@@ -1931,10 +1932,14 @@ class CentroPageController extends Controller
 
         $payload = $this->validatedPayload($request, $section);
         if ($section === 'projects' && ! in_array($this->currentUserRole($request), ['admin', 'superadmin'], true)) {
-            unset($payload['figma_url']);
+            foreach (['figma_url', 'figma_project_id', 'figma_file_key', 'figma_file_name', 'figma_thumbnail_url'] as $field) {
+                unset($payload[$field]);
+            }
         }
         if ($section === 'projects' && array_key_exists('figma_url', $payload) && ! $this->isWebServiceId($payload['service_id'] ?? null)) {
-            $payload['figma_url'] = null;
+            foreach (['figma_url', 'figma_project_id', 'figma_file_key', 'figma_file_name', 'figma_thumbnail_url'] as $field) {
+                $payload[$field] = null;
+            }
         }
         $taskPeople = $section === 'tasks' ? $this->extractTaskPeoplePayload($payload) : null;
         $taskDependencies = $section === 'tasks' ? $this->extractTaskDependencyPayload($payload) : null;
@@ -2027,10 +2032,14 @@ class CentroPageController extends Controller
 
         $payload = $this->validatedPayload($request, $section);
         if ($section === 'projects' && ! in_array($this->currentUserRole($request), ['admin', 'superadmin'], true)) {
-            unset($payload['figma_url']);
+            foreach (['figma_url', 'figma_project_id', 'figma_file_key', 'figma_file_name', 'figma_thumbnail_url'] as $field) {
+                unset($payload[$field]);
+            }
         }
         if ($section === 'projects' && array_key_exists('figma_url', $payload) && ! $this->isWebServiceId($payload['service_id'] ?? null)) {
-            $payload['figma_url'] = null;
+            foreach (['figma_url', 'figma_project_id', 'figma_file_key', 'figma_file_name', 'figma_thumbnail_url'] as $field) {
+                $payload[$field] = null;
+            }
         }
         $taskPeople = $section === 'tasks' ? $this->extractTaskPeoplePayload($payload) : null;
         $taskDependencies = $section === 'tasks' ? $this->extractTaskDependencyPayload($payload) : null;
@@ -2287,6 +2296,19 @@ class CentroPageController extends Controller
         $settings->pec_password = '';
 
         return $settings;
+    }
+
+    private function figmaSettingsForView(): ?object
+    {
+        $settings = DB::table('figma_settings')->first();
+        if (! $settings) {
+            return null;
+        }
+
+        return (object) [
+            'team_id' => $settings->team_id,
+            'token_saved' => filled($settings->encrypted_token),
+        ];
     }
 
     private function applyEmailSettingsConfig(object $settings): void
@@ -2723,6 +2745,10 @@ class CentroPageController extends Controller
                 'color' => ['required', 'string', 'max:20'],
                 'description' => ['nullable', 'string'],
                 'figma_url' => ['nullable', 'url', 'max:2048'],
+                'figma_project_id' => ['nullable', 'string', 'max:255'],
+                'figma_file_key' => ['nullable', 'string', 'max:255'],
+                'figma_file_name' => ['nullable', 'string', 'max:255'],
+                'figma_thumbnail_url' => ['nullable', 'url', 'max:2048'],
                 'user_ids' => ['nullable', 'array'],
                 'user_ids.*' => ['uuid', 'exists:users,id'],
                 'template_id' => ['nullable', 'uuid', 'exists:project_templates,id'],

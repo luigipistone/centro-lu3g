@@ -43,6 +43,7 @@ import {
     ListOrdered,
     Mail,
     MoreHorizontal,
+    PanelsTopLeft,
     Pencil,
     Plus,
     Printer,
@@ -82,6 +83,7 @@ const props = defineProps({
     clientStats: Object,
     documentSettings: Object,
     emailSettings: Object,
+    figmaSettings: Object,
     numberings: Array,
     backupRuns: Array,
     serviceName: String,
@@ -313,6 +315,12 @@ const emailSettingsForm = useForm({
 const testEmailForm = useForm({
     recipient: '',
 });
+const figmaSettingsForm = useForm({
+    team_id: props.figmaSettings?.team_id || '',
+    token: '',
+    token_saved: toBoolean(props.figmaSettings?.token_saved),
+});
+const figmaTestForm = useForm({});
 const numberingRows = ref((props.numberings || []).map((row) => ({ ...row })));
 
 const routeBase = computed(() => {
@@ -462,6 +470,7 @@ const settingsTabs = [
     ['personalizzazione', 'Personalizzazione', Building2],
     ['fatturazione', 'Fatturazione', Receipt],
     ['smtp', 'SMTP', Mail],
+    ['figma', 'Figma', PanelsTopLeft],
     ['backup', 'Backup', DatabaseBackup],
     ['gestione', 'Gestione', Settings],
 ];
@@ -1336,6 +1345,27 @@ function sendTestEmail() {
     testEmailForm.post(route('settings.email.test'), {
         preserveScroll: true,
     });
+}
+
+function saveFigmaSettings() {
+    const hadNewToken = Boolean(figmaSettingsForm.token);
+
+    figmaSettingsForm
+        .transform((data) => ({
+            team_id: data.team_id || '',
+            token: data.token || '',
+        }))
+        .put(route('settings.figma.update'), {
+            preserveScroll: true,
+            onSuccess: () => {
+                figmaSettingsForm.token = '';
+                if (hadNewToken) figmaSettingsForm.token_saved = true;
+            },
+        });
+}
+
+function testFigmaConnection() {
+    figmaTestForm.post(route('settings.figma.test'), { preserveScroll: true });
 }
 
 function saveNumbering(row) {
@@ -5497,6 +5527,42 @@ function calendarDayStyle(sectionMonth, cell) {
                             </button>
                         </div>
                     </form>
+                </section>
+
+                <section v-else-if="settingsTab === 'figma'" class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+                    <form class="app-card" @submit.prevent="saveFigmaSettings">
+                        <h3 class="section-title"><span class="section-icon"><PanelsTopLeft class="h-4 w-4" :stroke-width="1.7" /></span>Connessione Figma</h3>
+                        <p class="mt-2 text-sm text-gray-500">Collega il team Figma per selezionare automaticamente progetti e file nelle schede dei progetti Web.</p>
+                        <div class="mt-5 grid gap-5">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Team ID</label>
+                                <input v-model="figmaSettingsForm.team_id" class="form-control" placeholder="ID del team Figma" />
+                                <p class="mt-1 text-xs text-gray-500">È il valore presente nell’indirizzo della pagina Team di Figma.</p>
+                                <p v-if="figmaSettingsForm.errors.team_id" class="mt-1 text-sm text-red-600">{{ figmaSettingsForm.errors.team_id }}</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Personal Access Token</label>
+                                <input v-model="figmaSettingsForm.token" type="password" class="form-control" placeholder="Nuovo token Figma" autocomplete="new-password" />
+                                <p v-if="figmaSettingsForm.token_saved" class="mt-1 text-xs font-medium text-emerald-600">Token salvato e cifrato. Compila il campo solo per sostituirlo.</p>
+                                <p v-else class="mt-1 text-xs text-gray-500">Genera un token Figma con permesso projects:read.</p>
+                                <p v-if="figmaSettingsForm.errors.token" class="mt-1 text-sm text-red-600">{{ figmaSettingsForm.errors.token }}</p>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary mt-5" :disabled="figmaSettingsForm.processing">
+                            <Save class="h-4 w-4" :stroke-width="1.7" />
+                            {{ figmaSettingsForm.processing ? 'Salvataggio...' : 'Salva Figma' }}
+                        </button>
+                    </form>
+
+                    <div class="app-card">
+                        <h3 class="section-title"><span class="section-icon"><RefreshCw class="h-4 w-4" :stroke-width="1.7" /></span>Verifica connessione</h3>
+                        <p class="mt-2 text-sm text-gray-500">Controlla token, permessi e accesso ai progetti del team configurato.</p>
+                        <p v-if="figmaTestForm.errors.figma_test" class="mt-4 rounded-[var(--radius-sm)] border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">{{ figmaTestForm.errors.figma_test }}</p>
+                        <button type="button" class="btn btn-outline mt-5" :disabled="figmaTestForm.processing || !figmaSettingsForm.token_saved" @click="testFigmaConnection">
+                            <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': figmaTestForm.processing }" :stroke-width="1.7" />
+                            {{ figmaTestForm.processing ? 'Verifica...' : 'Testa connessione' }}
+                        </button>
+                    </div>
                 </section>
 
                 <section v-else-if="settingsTab === 'backup'" class="grid gap-6 lg:grid-cols-[360px_1fr]">
