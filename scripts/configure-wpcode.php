@@ -26,6 +26,8 @@ $snippets = [
 ];
 
 foreach ($snippets as $definition) {
+    global $wpdb;
+
     $existing = get_posts([
         'post_type' => 'wpcode',
         'post_status' => ['publish', 'draft'],
@@ -33,24 +35,41 @@ foreach ($snippets as $definition) {
         'posts_per_page' => 1,
     ]);
 
+    $now = current_time('mysql');
     $post = [
-        'post_type' => 'wpcode',
         'post_status' => 'publish',
         'post_title' => $definition['title'],
         'post_content' => $definition['code'],
+        'post_name' => sanitize_title($definition['title']),
+        'post_modified' => $now,
+        'post_modified_gmt' => get_gmt_from_date($now),
     ];
 
     if ($existing) {
-        $post['ID'] = $existing[0]->ID;
-        $snippetId = wp_update_post($post, true);
+        $snippetId = $existing[0]->ID;
+        $saved = $wpdb->update($wpdb->posts, $post, ['ID' => $snippetId]);
     } else {
-        $snippetId = wp_insert_post($post, true);
+        $saved = $wpdb->insert($wpdb->posts, [
+            ...$post,
+            'post_author' => 0,
+            'post_date' => $now,
+            'post_date_gmt' => get_gmt_from_date($now),
+            'post_excerpt' => '',
+            'comment_status' => 'closed',
+            'ping_status' => 'closed',
+            'post_parent' => 0,
+            'menu_order' => 0,
+            'post_type' => 'wpcode',
+            'comment_count' => 0,
+        ]);
+        $snippetId = (int) $wpdb->insert_id;
     }
 
-    if (is_wp_error($snippetId)) {
-        throw new RuntimeException('Impossibile salvare lo snippet '.$definition['title'].': '.$snippetId->get_error_message());
+    if ($saved === false || ! $snippetId) {
+        throw new RuntimeException('Impossibile salvare lo snippet '.$definition['title'].': '.$wpdb->last_error);
     }
 
+    clean_post_cache($snippetId);
     wp_set_object_terms($snippetId, $definition['type'], 'wpcode_type', false);
     wp_set_object_terms($snippetId, $definition['location'], 'wpcode_location', false);
     update_post_meta($snippetId, '_wpcode_auto_insert', 1);
