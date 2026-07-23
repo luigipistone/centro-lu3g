@@ -35,6 +35,7 @@ class FigmaIntegrationController extends Controller
         ];
         if (filled($payload['token'])) {
             $values['encrypted_token'] = Crypt::encryptString(trim($payload['token']));
+            $values['token_expires_at'] = now('Europe/Rome')->addDays(90)->toDateString();
         }
 
         DB::table('figma_settings')->updateOrInsert(

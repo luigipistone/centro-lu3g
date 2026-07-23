@@ -692,6 +692,7 @@ const projectForm = useForm({
     figma_file_key: props.record.figma_file_key || '',
     figma_file_name: props.record.figma_file_name || '',
     figma_thumbnail_url: props.record.figma_thumbnail_url || '',
+    figma_last_modified_at: props.record.figma_last_modified_at || '',
     status: props.record.status || 'active',
     color: props.record.color || '#2563eb',
     user_ids: [...(props.related.followers || [])],
@@ -1812,6 +1813,7 @@ function projectPayload() {
             figma_file_key: isWebProject.value ? projectForm.figma_file_key : '',
             figma_file_name: isWebProject.value ? projectForm.figma_file_name : '',
             figma_thumbnail_url: isWebProject.value ? projectForm.figma_thumbnail_url : '',
+            figma_last_modified_at: isWebProject.value ? projectForm.figma_last_modified_at : '',
         } : {}),
         status: projectForm.status,
         color: normalizeHexColor(projectForm.color),
@@ -1899,6 +1901,7 @@ async function selectFigmaProject() {
     projectForm.figma_file_key = '';
     projectForm.figma_file_name = '';
     projectForm.figma_thumbnail_url = '';
+    projectForm.figma_last_modified_at = '';
     projectForm.figma_url = '';
     figmaFiles.value = [];
     await loadFigmaFiles();
@@ -1909,8 +1912,15 @@ function selectFigmaFile() {
     const file = figmaFiles.value.find((item) => String(item.key) === String(projectForm.figma_file_key));
     projectForm.figma_file_name = file?.name || '';
     projectForm.figma_thumbnail_url = file?.thumbnail_url || '';
+    projectForm.figma_last_modified_at = file?.last_modified || '';
     projectForm.figma_url = file?.key ? `https://www.figma.com/file/${file.key}` : '';
     saveProjectInline(0);
+}
+
+async function refreshSelectedFigmaFile() {
+    if (!projectForm.figma_project_id || !projectForm.figma_file_key) return;
+    await loadFigmaFiles();
+    selectFigmaFile();
 }
 
 function wordpressProvisioningActive() {
@@ -3491,6 +3501,7 @@ watch(
         projectForm.figma_file_key,
         projectForm.figma_file_name,
         projectForm.figma_thumbnail_url,
+        projectForm.figma_last_modified_at,
         projectForm.status,
         projectForm.color,
     ],
@@ -4707,6 +4718,25 @@ onUnmounted(() => {
                                     Apri mockup Figma
                                 </a>
                                 <p v-else class="mt-1 text-sm text-gray-400">Nessun mockup collegato.</p>
+                                <a
+                                    v-if="projectForm.figma_url && projectForm.figma_thumbnail_url"
+                                    :href="projectForm.figma_url"
+                                    target="_blank"
+                                    rel="noopener"
+                                    class="mt-3 block overflow-hidden rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50"
+                                >
+                                    <img :src="projectForm.figma_thumbnail_url" :alt="projectForm.figma_file_name || 'Anteprima Figma'" class="max-h-64 w-full object-cover object-top" />
+                                </a>
+                                <div v-if="projectForm.figma_file_name" class="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+                                    <span>
+                                        {{ projectForm.figma_file_name }}
+                                        <template v-if="projectForm.figma_last_modified_at"> · aggiornato {{ dateTimeIt(projectForm.figma_last_modified_at) }}</template>
+                                    </span>
+                                    <button v-if="isAdmin" type="button" class="action-link" :disabled="figmaLoadingFiles" @click="refreshSelectedFigmaFile">
+                                        <RotateCcw class="h-3.5 w-3.5" :class="{ 'animate-spin': figmaLoadingFiles }" :stroke-width="1.7" />
+                                        Aggiorna
+                                    </button>
+                                </div>
                                 <div v-if="projectForm.errors.figma_url" class="mt-1 text-sm text-red-600">{{ projectForm.errors.figma_url }}</div>
                             </div>
                             <div>

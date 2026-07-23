@@ -319,6 +319,8 @@ const figmaSettingsForm = useForm({
     team_id: props.figmaSettings?.team_id || '',
     token: '',
     token_saved: toBoolean(props.figmaSettings?.token_saved),
+    token_expires_at: props.figmaSettings?.token_expires_at || '',
+    token_days_remaining: props.figmaSettings?.token_days_remaining ?? null,
 });
 const figmaTestForm = useForm({});
 const numberingRows = ref((props.numberings || []).map((row) => ({ ...row })));
@@ -1359,7 +1361,13 @@ function saveFigmaSettings() {
             preserveScroll: true,
             onSuccess: () => {
                 figmaSettingsForm.token = '';
-                if (hadNewToken) figmaSettingsForm.token_saved = true;
+                if (hadNewToken) {
+                    const expiresAt = new Date();
+                    expiresAt.setDate(expiresAt.getDate() + 90);
+                    figmaSettingsForm.token_saved = true;
+                    figmaSettingsForm.token_expires_at = expiresAt.toISOString().slice(0, 10);
+                    figmaSettingsForm.token_days_remaining = 90;
+                }
             },
         });
 }
@@ -5546,6 +5554,18 @@ function calendarDayStyle(sectionMonth, cell) {
                                 <p v-if="figmaSettingsForm.token_saved" class="mt-1 text-xs font-medium text-emerald-600">Token salvato e cifrato. Compila il campo solo per sostituirlo.</p>
                                 <p v-else class="mt-1 text-xs text-gray-500">Genera un token Figma con permesso projects:read.</p>
                                 <p v-if="figmaSettingsForm.errors.token" class="mt-1 text-sm text-red-600">{{ figmaSettingsForm.errors.token }}</p>
+                            </div>
+                            <div
+                                v-if="figmaSettingsForm.token_saved && figmaSettingsForm.token_expires_at"
+                                :class="[
+                                    'rounded-[var(--radius-sm)] border px-4 py-3 text-sm',
+                                    figmaSettingsForm.token_days_remaining <= 14
+                                        ? 'border-amber-200 bg-amber-50 text-amber-800'
+                                        : 'border-gray-100 bg-gray-50 text-gray-600',
+                                ]"
+                            >
+                                Il token scade il <strong>{{ dateIt(figmaSettingsForm.token_expires_at) }}</strong>.
+                                <span v-if="figmaSettingsForm.token_days_remaining <= 14"> Generane uno nuovo prima della scadenza.</span>
                             </div>
                         </div>
                         <button type="submit" class="btn btn-primary mt-5" :disabled="figmaSettingsForm.processing">

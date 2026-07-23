@@ -1,6 +1,7 @@
 <?php
 
 use App\Services\CentroBackupService;
+use App\Services\CentroNotificationService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +15,38 @@ use Symfony\Component\Console\Command\Command;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+Schedule::call(function () {
+    if (! Schema::hasTable('figma_settings') || ! Schema::hasColumn('figma_settings', 'token_expires_at')) {
+        return;
+    }
+
+    $expiresAt = DB::table('figma_settings')->value('token_expires_at');
+    if (! $expiresAt) {
+        return;
+    }
+
+    $days = now('Europe/Rome')->startOfDay()->diffInDays($expiresAt, false);
+    if ($days > 14) {
+        return;
+    }
+
+    $type = $days < 0 ? 'figma_token_expired' : 'figma_token_expiring';
+    $alreadySent = DB::table('notifications')
+        ->where('type', $type)
+        ->where('created_at', '>=', now()->subDays(7))
+        ->exists();
+    if ($alreadySent) {
+        return;
+    }
+
+    $superadminIds = DB::table('user_roles')->where('role', 'superadmin')->pluck('user_id');
+    $message = $days < 0
+        ? 'Il token Figma è scaduto. Sostituiscilo in Impostazioni → Figma.'
+        : "Il token Figma scade tra {$days} giorni. Preparane uno nuovo in Impostazioni → Figma.";
+
+    app(CentroNotificationService::class)->notifyUsers($superadminIds, null, $type, $message);
+})->dailyAt('09:00')->timezone('Europe/Rome')->name('figma-token-expiry-warning');
 
 Artisan::command('centro:backup {frequency=manual}', function (CentroBackupService $backupService) {
     $frequency = $this->argument('frequency');

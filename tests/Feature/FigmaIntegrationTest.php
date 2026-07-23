@@ -30,6 +30,7 @@ class FigmaIntegrationTest extends TestCase
         $this->assertSame('123456789', $settings->team_id);
         $this->assertNotSame('figma-secret-token', $settings->encrypted_token);
         $this->assertSame('figma-secret-token', Crypt::decryptString($settings->encrypted_token));
+        $this->assertSame(now('Europe/Rome')->addDays(90)->toDateString(), $settings->token_expires_at);
     }
 
     public function test_admin_can_load_figma_projects_from_configured_team(): void
@@ -55,6 +56,36 @@ class FigmaIntegrationTest extends TestCase
             ->assertJsonPath('projects.0.name', 'Sito LU3G');
 
         Http::assertSent(fn ($request) => $request->hasHeader('X-Figma-Token', 'figma-secret-token'));
+    }
+
+    public function test_admin_can_load_files_for_a_figma_project(): void
+    {
+        Http::fake([
+            'api.figma.com/v1/projects/project-1/files' => Http::response([
+                'files' => [[
+                    'key' => 'file-key',
+                    'name' => 'Homepage',
+                    'thumbnail_url' => 'https://figma.example/thumbnail.png',
+                    'last_modified' => '2026-07-23T10:00:00Z',
+                ]],
+            ]),
+        ]);
+
+        $admin = $this->userWithRole('admin');
+        DB::table('figma_settings')->insert([
+            'id' => (string) Str::uuid(),
+            'team_id' => '123456789',
+            'encrypted_token' => Crypt::encryptString('figma-secret-token'),
+            'token_expires_at' => now()->addDays(90),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->getJson(route('figma.project-files', 'project-1'))
+            ->assertOk()
+            ->assertJsonPath('files.0.key', 'file-key')
+            ->assertJsonPath('files.0.name', 'Homepage');
     }
 
     private function userWithRole(string $role): User

@@ -1932,12 +1932,12 @@ class CentroPageController extends Controller
 
         $payload = $this->validatedPayload($request, $section);
         if ($section === 'projects' && ! in_array($this->currentUserRole($request), ['admin', 'superadmin'], true)) {
-            foreach (['figma_url', 'figma_project_id', 'figma_file_key', 'figma_file_name', 'figma_thumbnail_url'] as $field) {
+            foreach (['figma_url', 'figma_project_id', 'figma_file_key', 'figma_file_name', 'figma_thumbnail_url', 'figma_last_modified_at'] as $field) {
                 unset($payload[$field]);
             }
         }
         if ($section === 'projects' && array_key_exists('figma_url', $payload) && ! $this->isWebServiceId($payload['service_id'] ?? null)) {
-            foreach (['figma_url', 'figma_project_id', 'figma_file_key', 'figma_file_name', 'figma_thumbnail_url'] as $field) {
+            foreach (['figma_url', 'figma_project_id', 'figma_file_key', 'figma_file_name', 'figma_thumbnail_url', 'figma_last_modified_at'] as $field) {
                 $payload[$field] = null;
             }
         }
@@ -2032,12 +2032,12 @@ class CentroPageController extends Controller
 
         $payload = $this->validatedPayload($request, $section);
         if ($section === 'projects' && ! in_array($this->currentUserRole($request), ['admin', 'superadmin'], true)) {
-            foreach (['figma_url', 'figma_project_id', 'figma_file_key', 'figma_file_name', 'figma_thumbnail_url'] as $field) {
+            foreach (['figma_url', 'figma_project_id', 'figma_file_key', 'figma_file_name', 'figma_thumbnail_url', 'figma_last_modified_at'] as $field) {
                 unset($payload[$field]);
             }
         }
         if ($section === 'projects' && array_key_exists('figma_url', $payload) && ! $this->isWebServiceId($payload['service_id'] ?? null)) {
-            foreach (['figma_url', 'figma_project_id', 'figma_file_key', 'figma_file_name', 'figma_thumbnail_url'] as $field) {
+            foreach (['figma_url', 'figma_project_id', 'figma_file_key', 'figma_file_name', 'figma_thumbnail_url', 'figma_last_modified_at'] as $field) {
                 $payload[$field] = null;
             }
         }
@@ -2308,6 +2308,10 @@ class CentroPageController extends Controller
         return (object) [
             'team_id' => $settings->team_id,
             'token_saved' => filled($settings->encrypted_token),
+            'token_expires_at' => $settings->token_expires_at,
+            'token_days_remaining' => $settings->token_expires_at
+                ? now('Europe/Rome')->startOfDay()->diffInDays($settings->token_expires_at, false)
+                : null,
         ];
     }
 
@@ -2749,6 +2753,7 @@ class CentroPageController extends Controller
                 'figma_file_key' => ['nullable', 'string', 'max:255'],
                 'figma_file_name' => ['nullable', 'string', 'max:255'],
                 'figma_thumbnail_url' => ['nullable', 'url', 'max:2048'],
+                'figma_last_modified_at' => ['nullable', 'date'],
                 'user_ids' => ['nullable', 'array'],
                 'user_ids.*' => ['uuid', 'exists:users,id'],
                 'template_id' => ['nullable', 'uuid', 'exists:project_templates,id'],
