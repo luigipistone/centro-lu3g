@@ -1,0 +1,214 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+readonly BASE_PATH="/var/www/vhosts/lu3g.com/testing.lu3g.com"
+readonly BASE_URL="https://testing.lu3g.com"
+readonly PACKAGE_PATH="${BASE_PATH}/uploads"
+readonly CONFIG_FILE="/etc/centro-wordpress-provision.env"
+readonly PHP_BIN="/opt/plesk/php/8.3/bin/php"
+readonly WP_CLI="/usr/local/bin/wp"
+readonly SYSTEM_USER="lu3g_admin_giordano"
+readonly SYSTEM_GROUP="psacln"
+readonly LOCK_FILE="/var/lock/centro-wordpress-provision.lock"
+readonly HELPER_PATH="/usr/local/lib/centro-wordpress"
+
+progress() {
+    printf 'CENTRO_PROGRESS\t%s\t%s\t%s\n' "$1" "$2" "$3"
+}
+
+fail() {
+    printf 'ERRORE: %s\n' "$1" >&2
+    exit 1
+}
+
+random_secret() {
+    "$PHP_BIN" -r '$chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!#%+,-.:=@_"; for ($i = 0; $i < 30; $i++) { echo $chars[random_int(0, strlen($chars) - 1)]; }'
+}
+
+state_write() {
+    local file="$1"
+    shift
+    : > "$file"
+    chmod 600 "$file"
+    for value in "$@"; do
+        printf '%s\n' "$value" >> "$file"
+    done
+}
+
+wpcli() {
+    "$PHP_BIN" "$WP_CLI" --path="$DESTINATION" --allow-root "$@"
+}
+
+require_file() {
+    [[ -f "$1" ]] || fail "Pacchetto richiesto non trovato: $(basename "$1")."
+}
+
+[[ "${1:-}" == "run" ]] || fail "Comando non supportato."
+shift
+
+FOLDER=""
+SITE_TITLE=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --folder)
+            FOLDER="${2:-}"
+            shift 2
+            ;;
+        --site-title)
+            SITE_TITLE="${2:-}"
+            shift 2
+            ;;
+        *)
+            fail "Parametro non riconosciuto: $1"
+            ;;
+    esac
+done
+
+[[ "$FOLDER" =~ ^[a-z0-9][a-z0-9-]{1,78}[a-z0-9]$ ]] || fail "Nome cartella non valido."
+[[ -n "$SITE_TITLE" ]] || fail "Titolo sito mancante."
+[[ -x "$PHP_BIN" && -f "$WP_CLI" ]] || fail "WP-CLI con PHP 8.3 non disponibile."
+[[ -f "$CONFIG_FILE" ]] || fail "Configurazione protetta del provisioning non disponibile."
+
+# shellcheck disable=SC1090
+source "$CONFIG_FILE"
+: "${ELEMENTOR_PRO_LICENSE:?Licenza Elementor Pro mancante}"
+: "${DYNAMIC_CONTENT_LICENSE:?Licenza Dynamic Content mancante}"
+: "${JET_PLUGINS_LICENSE:?Licenza Jet Plugins mancante}"
+
+exec 9>"$LOCK_FILE"
+flock -n 9 || fail "Un altro provisioning WordPress è già in esecuzione."
+
+DESTINATION="${BASE_PATH}/${FOLDER}"
+SITE_URL="${BASE_URL}/${FOLDER}"
+STATE_FILE="${DESTINATION}/.centro-provisioning.env"
+CREDENTIALS_FILE="${DESTINATION}/credenziali-wordpress.txt"
+
+progress 4 preflight "Controlli preliminari completati"
+
+if [[ -d "$DESTINATION" && ! -f "$STATE_FILE" ]]; then
+    fail "La cartella ${FOLDER} esiste già e non appartiene al provisioning."
+fi
+
+if [[ -f "$STATE_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$STATE_FILE"
+else
+    mkdir -p "$DESTINATION"
+    chmod 755 "$DESTINATION"
+
+    DATABASE_NAME="$(plesk db -Ne "SELECT s.SCHEMA_NAME FROM information_schema.SCHEMATA s LEFT JOIN information_schema.TABLES t ON t.TABLE_SCHEMA=s.SCHEMA_NAME WHERE s.SCHEMA_NAME NOT IN ('information_schema','mysql','performance_schema','sys') GROUP BY s.SCHEMA_NAME HAVING COUNT(t.TABLE_NAME)=0 ORDER BY s.SCHEMA_NAME LIMIT 1")"
+    [[ -n "$DATABASE_NAME" ]] || fail "Nessun database vuoto disponibile."
+
+    DATABASE_USER="lu3g_wp_$(printf '%s' "$FOLDER" | sha256sum | cut -c1-12)"
+    DATABASE_PASSWORD="$(random_secret)"
+    ADMIN_USERNAME="sviluppo"
+    ADMIN_PASSWORD="$(random_secret)"
+
+    PSA_PASSWORD="$DATABASE_PASSWORD" plesk bin database --create-dbuser "$DATABASE_USER" -database "$DATABASE_NAME" -passwd "" >/dev/null
+
+    state_write "$STATE_FILE" \
+        "DATABASE_NAME=$(printf '%q' "$DATABASE_NAME")" \
+        "DATABASE_USER=$(printf '%q' "$DATABASE_USER")" \
+        "DATABASE_PASSWORD=$(printf '%q' "$DATABASE_PASSWORD")" \
+        "ADMIN_USERNAME=$(printf '%q' "$ADMIN_USERNAME")" \
+        "ADMIN_PASSWORD=$(printf '%q' "$ADMIN_PASSWORD")"
+fi
+
+progress 10 database "Database vuoto selezionato e riservato"
+
+if [[ ! -f "${DESTINATION}/wp-load.php" ]]; then
+    wpcli core download --locale=it_IT
+fi
+progress 18 download "Ultima versione stabile di WordPress scaricata"
+
+if [[ ! -f "${DESTINATION}/wp-config.php" ]]; then
+    wpcli config create \
+        --dbname="$DATABASE_NAME" \
+        --dbuser="$DATABASE_USER" \
+        --dbpass="$DATABASE_PASSWORD" \
+        --dbhost=localhost \
+        --dbcharset=utf8mb4
+fi
+
+wpcli config set WP_MEMORY_LIMIT 512M --type=constant
+wpcli config set WP_POST_REVISIONS 20 --raw --type=constant
+"$PHP_BIN" "${HELPER_PATH}/wp-config-customize.php" "${DESTINATION}/wp-config.php"
+progress 25 configuration "Configurazione WordPress personalizzata"
+
+if ! wpcli core is-installed >/dev/null 2>&1; then
+    wpcli core install \
+        --url="$SITE_URL" \
+        --title="$SITE_TITLE" \
+        --admin_user="$ADMIN_USERNAME" \
+        --admin_password="$ADMIN_PASSWORD" \
+        --admin_email="sviluppo@lu3g.it" \
+        --skip-email
+fi
+progress 34 installation "WordPress installato"
+
+state_write "$CREDENTIALS_FILE" \
+    "URL: $SITE_URL" \
+    "Nome utente: $ADMIN_USERNAME" \
+    "Password: $ADMIN_PASSWORD"
+
+wpcli option update blog_public 0
+wpcli rewrite structure '/%postname%/' --hard
+wpcli rewrite flush --hard
+progress 42 settings "Lettura e permalink configurati"
+
+CURRENT_DEFAULT_THEME="$(wpcli theme list --field=name | grep -E '^twentytwenty' | sort -V | tail -n 1 || true)"
+while IFS= read -r theme; do
+    [[ -z "$theme" || "$theme" == "$CURRENT_DEFAULT_THEME" || "$theme" == "hello-elementor" ]] && continue
+    wpcli theme delete "$theme" >/dev/null
+done < <(wpcli theme list --field=name)
+wpcli theme install hello-elementor --activate
+progress 50 theme "Tema Hello Elementor installato"
+
+wpcli plugin install elementor cleantalk-spam-protect insert-headers-and-footers duplicate-post --activate --force
+progress 60 free_plugins "Plugin gratuiti installati"
+
+readonly ELEMENTOR_PACKAGE="${PACKAGE_PATH}/elementor-pro-4.2.0.zip"
+readonly DYNAMIC_PACKAGE="${PACKAGE_PATH}/dynamic-content-for-elementor_3.4.11.zip"
+readonly JET_ENGINE_PACKAGE="${PACKAGE_PATH}/jet-engine.zip"
+readonly JET_FILTERS_PACKAGE="${PACKAGE_PATH}/jet-smart-filters.zip"
+require_file "$ELEMENTOR_PACKAGE"
+require_file "$DYNAMIC_PACKAGE"
+require_file "$JET_ENGINE_PACKAGE"
+require_file "$JET_FILTERS_PACKAGE"
+
+wpcli plugin install "$ELEMENTOR_PACKAGE" "$DYNAMIC_PACKAGE" "$JET_ENGINE_PACKAGE" "$JET_FILTERS_PACKAGE" --activate --force
+progress 70 premium_plugins "Plugin premium installati"
+
+CENTRO_PROVISION_CONFIG="$CONFIG_FILE" wpcli eval-file "${HELPER_PATH}/activate-wordpress-licenses.php"
+progress 78 licenses "Licenze premium attivate"
+
+wpcli eval-file "${HELPER_PATH}/configure-wpcode.php"
+progress 85 snippets "Snippet WPCode configurati e attivati"
+
+POST_IDS="$(wpcli post list --post_type=post,page --format=ids)"
+if [[ -n "$POST_IDS" ]]; then
+    # shellcheck disable=SC2086
+    wpcli post delete $POST_IDS --force >/dev/null
+fi
+wpcli plugin delete akismet hello >/dev/null 2>&1 || true
+progress 90 cleanup "Contenuti e plugin predefiniti rimossi"
+
+wpcli plugin update --all
+progress 96 updates "Plugin aggiornati"
+
+chown -R "${SYSTEM_USER}:${SYSTEM_GROUP}" "$DESTINATION"
+chown root:root "$STATE_FILE" "$CREDENTIALS_FILE"
+chmod 600 "$STATE_FILE" "$CREDENTIALS_FILE"
+
+RESULT_JSON="$("$PHP_BIN" -r 'echo json_encode([
+    "database_name" => $argv[1],
+    "database_user" => $argv[2],
+    "database_password" => $argv[3],
+    "admin_username" => $argv[4],
+    "admin_password" => $argv[5],
+    "site_url" => $argv[6],
+], JSON_UNESCAPED_SLASHES);' "$DATABASE_NAME" "$DATABASE_USER" "$DATABASE_PASSWORD" "$ADMIN_USERNAME" "$ADMIN_PASSWORD" "$SITE_URL")"
+
+progress 99 verification "Verifica finale completata"
+printf 'CENTRO_RESULT\t%s\n' "$(printf '%s' "$RESULT_JSON" | base64 -w 0)"

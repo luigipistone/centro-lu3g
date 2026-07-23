@@ -22,7 +22,8 @@ const props = defineProps({
 });
 
 const page = usePage();
-const search = ref('');
+const initialSearch = new URLSearchParams(String(page.url || '').split('?')[1] || '').get('search') || '';
+const search = ref(initialSearch);
 const drawerOpen = ref(false);
 const editingItem = ref(null);
 const revealItem = ref(null);

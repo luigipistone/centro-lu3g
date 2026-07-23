@@ -28,6 +28,7 @@ import {
     GripVertical,
     Heading3,
     Italic,
+    KeyRound,
     Link2,
     List,
     ListOrdered,
@@ -38,6 +39,7 @@ import {
     Plus,
     Printer,
     Quote,
+    Rocket,
     RotateCcw,
     Send,
     Trash2,
@@ -60,6 +62,7 @@ const currentRole = computed(() => page.props.auth?.user?.role || 'guest');
 const isGuest = computed(() => page.props.auth?.user?.role === 'guest');
 const isEditor = computed(() => currentRole.value === 'editor');
 const isSuperadmin = computed(() => currentRole.value === 'superadmin');
+const isAdmin = computed(() => ['admin', 'superadmin'].includes(currentRole.value));
 const canEditClient = computed(() => !isGuest.value && !isEditor.value);
 const canEditProject = computed(() => !isGuest.value);
 const canDeleteProject = computed(() => !isGuest.value && !isEditor.value);
@@ -700,6 +703,11 @@ const projectFileInput = ref(null);
 const projectFileDragActive = ref(false);
 const projectMessageForm = useForm({ content: '' });
 const projectFileForm = useForm({ file: null, kind: 'file' });
+const wordpressProvisioning = ref(props.related.wordpressProvisioning || null);
+const wordpressProvisioningConfirmOpen = ref(false);
+const wordpressProvisioningStarting = ref(false);
+const wordpressProvisioningError = ref('');
+let wordpressProvisioningPollTimer = null;
 const projectSectionCollapsed = ref({});
 const projectSectionDrafts = ref({});
 const projectSectionSaveTimers = {};
@@ -1821,6 +1829,69 @@ function saveProjectInline(delay = AUTOSAVE_IDLE_DELAY) {
             },
         });
     }, autosaveDelay(delay));
+}
+
+function wordpressExpectedFolder() {
+    return String(props.related.client?.name || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+}
+
+function wordpressProvisioningActive() {
+    return ['queued', 'running'].includes(wordpressProvisioning.value?.status);
+}
+
+function wordpressProvisioningStatusLabel(status) {
+    return {
+        queued: 'In attesa',
+        running: 'In preparazione',
+        completed: 'Completato',
+        failed: 'Da controllare',
+    }[status] || 'Non avviato';
+}
+
+async function refreshWordPressProvisioning() {
+    if (props.section !== 'projects' || !isAdmin.value) return;
+
+    try {
+        const response = await window.axios.get(route('projects.wordpress-provisioning.status', props.record.id));
+        wordpressProvisioning.value = response.data.provisioning || null;
+        if (!wordpressProvisioningActive()) {
+            window.clearInterval(wordpressProvisioningPollTimer);
+            wordpressProvisioningPollTimer = null;
+        }
+    } catch (error) {
+        wordpressProvisioningError.value = 'Impossibile aggiornare lo stato del provisioning.';
+    }
+}
+
+function startWordPressProvisioningPolling() {
+    if (!wordpressProvisioningActive() || wordpressProvisioningPollTimer) return;
+    wordpressProvisioningPollTimer = window.setInterval(refreshWordPressProvisioning, 3000);
+}
+
+function startWordPressProvisioning() {
+    if (!isAdmin.value || wordpressProvisioningStarting.value) return;
+
+    wordpressProvisioningStarting.value = true;
+    wordpressProvisioningError.value = '';
+    router.post(route('projects.wordpress-provisioning.store', props.record.id), {}, {
+        preserveScroll: true,
+        onSuccess: async () => {
+            wordpressProvisioningConfirmOpen.value = false;
+            await refreshWordPressProvisioning();
+            startWordPressProvisioningPolling();
+        },
+        onError: (errors) => {
+            wordpressProvisioningError.value = errors.project || 'Il provisioning non è stato avviato.';
+        },
+        onFinish: () => {
+            wordpressProvisioningStarting.value = false;
+        },
+    });
 }
 
 function updateProjectDescriptionFromEditor() {
@@ -3564,11 +3635,15 @@ onMounted(() => {
     document.addEventListener('pointerdown', closeSubtaskAssigneeMenuOnOutside, true);
     window.addEventListener('centro:close-floating-ui', closeCentroShowFloatingUi);
     refreshProjectDescriptionEditor();
+    if (wordpressProvisioningActive()) {
+        startWordPressProvisioningPolling();
+    }
 });
 
 onUnmounted(() => {
     document.removeEventListener('pointerdown', closeSubtaskAssigneeMenuOnOutside, true);
     window.removeEventListener('centro:close-floating-ui', closeCentroShowFloatingUi);
+    window.clearInterval(wordpressProvisioningPollTimer);
     document.body.classList.remove('overflow-hidden');
 });
 </script>
@@ -3666,6 +3741,42 @@ onUnmounted(() => {
                         <Trash2 v-if="confirmAction.danger" class="h-4 w-4" :stroke-width="1.7" />
                         <Check v-else class="h-4 w-4" :stroke-width="1.7" />
                         {{ confirmAction.button }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="wordpressProvisioningConfirmOpen" class="fixed inset-0 z-[7100] flex items-center justify-center bg-gray-950/20 px-4 py-6 backdrop-blur-[2px]" @click.self="wordpressProvisioningConfirmOpen = false">
+            <div class="w-full max-w-md rounded-[var(--radius)] bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.24)]">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h3 class="text-base font-semibold text-gray-900">Preparare WordPress?</h3>
+                        <p class="mt-1 text-sm text-gray-500">La procedura verrà eseguita in background sul server di testing.</p>
+                    </div>
+                    <button type="button" class="icon-btn h-9 w-9" title="Chiudi" @click="wordpressProvisioningConfirmOpen = false">
+                        <X class="h-4 w-4" />
+                    </button>
+                </div>
+                <div class="mt-5 space-y-3 rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/80 p-4 text-sm">
+                    <div class="flex items-center justify-between gap-4">
+                        <span class="text-gray-500">Cartella</span>
+                        <span class="font-mono font-semibold text-gray-800">{{ wordpressExpectedFolder() }}</span>
+                    </div>
+                    <div class="flex items-center justify-between gap-4">
+                        <span class="text-gray-500">Indirizzo</span>
+                        <span class="min-w-0 truncate font-semibold text-gray-800">testing.lu3g.com/{{ wordpressExpectedFolder() }}</span>
+                    </div>
+                    <div class="flex items-center justify-between gap-4">
+                        <span class="text-gray-500">Credenziali</span>
+                        <span class="font-semibold text-gray-800">Cassaforte Generale</span>
+                    </div>
+                </div>
+                <p v-if="wordpressProvisioningError" class="mt-3 text-sm text-red-600">{{ wordpressProvisioningError }}</p>
+                <div class="mt-5 flex justify-end gap-2">
+                    <button type="button" class="btn btn-outline" @click="wordpressProvisioningConfirmOpen = false">Annulla</button>
+                    <button type="button" class="btn btn-primary" :disabled="wordpressProvisioningStarting" @click="startWordPressProvisioning">
+                        <Rocket class="h-4 w-4" :stroke-width="1.7" />
+                        {{ wordpressProvisioningStarting ? 'Avvio...' : 'Avvia procedura' }}
                     </button>
                 </div>
             </div>
@@ -4466,6 +4577,86 @@ onUnmounted(() => {
                                 </div>
                             </div>
                         </div>
+                    </section>
+
+                    <section v-if="isAdmin" class="surface rounded-md p-5">
+                        <div class="flex flex-wrap items-start justify-between gap-4">
+                            <div class="flex min-w-0 items-start gap-3">
+                                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]">
+                                    <Rocket class="h-5 w-5" :stroke-width="1.7" />
+                                </span>
+                                <div class="min-w-0">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-700">WordPress</h3>
+                                        <span
+                                            v-if="wordpressProvisioning"
+                                            :class="[
+                                                'rounded-full px-2.5 py-1 text-xs font-semibold',
+                                                wordpressProvisioning.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : '',
+                                                wordpressProvisioning.status === 'failed' ? 'bg-red-100 text-red-700' : '',
+                                                wordpressProvisioningActive() ? 'bg-sky-100 text-sky-700' : '',
+                                            ]"
+                                        >
+                                            {{ wordpressProvisioningStatusLabel(wordpressProvisioning.status) }}
+                                        </span>
+                                    </div>
+                                    <p class="mt-1 text-sm text-gray-500">
+                                        <template v-if="wordpressProvisioning">
+                                            {{ wordpressProvisioning.site_url }}
+                                        </template>
+                                        <template v-else-if="related.client">
+                                            Pronto per essere installato in testing.lu3g.com/{{ wordpressExpectedFolder() }}.
+                                        </template>
+                                        <template v-else>
+                                            Collega un cliente al progetto per preparare WordPress.
+                                        </template>
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap justify-end gap-2">
+                                <a v-if="wordpressProvisioning?.status === 'completed'" :href="wordpressProvisioning.site_url" target="_blank" rel="noopener" class="btn btn-outline">
+                                    <ExternalLink class="h-4 w-4" :stroke-width="1.7" />
+                                    Apri WordPress
+                                </a>
+                                <Link
+                                    v-if="wordpressProvisioning?.credential_item_id"
+                                    :href="route('passwords.index', { search: `${wordpressProvisioning.folder_slug} WordPress` })"
+                                    class="btn btn-outline"
+                                >
+                                    <KeyRound class="h-4 w-4" :stroke-width="1.7" />
+                                    Credenziali
+                                </Link>
+                                <button
+                                    v-if="wordpressProvisioning?.status !== 'completed'"
+                                    type="button"
+                                    class="btn btn-primary"
+                                    :disabled="!related.client || wordpressProvisioningActive()"
+                                    @click="wordpressProvisioningConfirmOpen = true"
+                                >
+                                    <Rocket class="h-4 w-4" :stroke-width="1.7" />
+                                    {{ wordpressProvisioning?.status === 'failed' ? 'Riprova' : 'Prepara WordPress' }}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div v-if="wordpressProvisioningActive()" class="mt-5">
+                            <div class="mb-2 flex items-center justify-between gap-3 text-xs font-semibold text-gray-500">
+                                <span>{{ wordpressProvisioning.current_step || 'Preparazione' }}</span>
+                                <span>{{ wordpressProvisioning.progress || 0 }}%</span>
+                            </div>
+                            <div class="h-2 overflow-hidden rounded-full bg-gray-100">
+                                <div class="h-full rounded-full bg-[hsl(var(--primary-app))] transition-[width] duration-500" :style="{ width: `${wordpressProvisioning.progress || 0}%` }"></div>
+                            </div>
+                        </div>
+
+                        <div v-if="wordpressProvisioning?.status === 'failed'" class="mt-4 rounded-[var(--radius-sm)] border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+                            {{ wordpressProvisioning.error_message || 'La procedura si è interrotta.' }}
+                        </div>
+
+                        <details v-if="wordpressProvisioning?.log" class="mt-4 rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70">
+                            <summary class="cursor-pointer px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Dettagli procedura</summary>
+                            <pre class="max-h-52 overflow-auto whitespace-pre-wrap border-t border-gray-100 px-4 py-3 text-xs leading-5 text-gray-600">{{ wordpressProvisioning.log }}</pre>
+                        </details>
                     </section>
 
                     <section class="surface rounded-md p-5">

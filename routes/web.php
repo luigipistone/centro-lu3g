@@ -1,8 +1,9 @@
 <?php
 
-use App\Http\Controllers\CentroPageController;
 use App\Http\Controllers\AiAgencyController;
+use App\Http\Controllers\CentroPageController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\WordPressProvisioningController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -51,6 +52,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/projects/{projectId}/files/{fileId}', [CentroPageController::class, 'downloadProjectFile'])->name('projects.files.download');
     Route::delete('/projects/{projectId}/files/{fileId}', [CentroPageController::class, 'destroyProjectFile'])->name('projects.files.destroy');
     Route::put('/projects/{id}/followers', [CentroPageController::class, 'syncProjectFollowers'])->name('projects.followers.sync');
+    Route::post('/projects/{id}/wordpress-provisioning', [WordPressProvisioningController::class, 'store'])->name('projects.wordpress-provisioning.store');
+    Route::get('/projects/{id}/wordpress-provisioning', [WordPressProvisioningController::class, 'status'])->name('projects.wordpress-provisioning.status');
     Route::delete('/projects/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'projects')->name('projects.destroy');
     Route::get('/tasks', [CentroPageController::class, 'index'])->defaults('section', 'tasks')->name('tasks.index');
     Route::post('/tasks', [CentroPageController::class, 'store'])->defaults('section', 'tasks')->name('tasks.store');

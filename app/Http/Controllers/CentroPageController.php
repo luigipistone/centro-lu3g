@@ -1836,6 +1836,22 @@ class CentroPageController extends Controller
                 'taskServices' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name', 'color']),
                 'taskDependencyOptions' => $this->isGuest($request) ? collect() : $this->taskDependencyOptions(),
                 'followers' => DB::table('project_followers')->where('project_id', $id)->pluck('user_id'),
+                'wordpressProvisioning' => DB::table('wordpress_provisionings')
+                    ->where('project_id', $id)
+                    ->first([
+                        'id',
+                        'folder_slug',
+                        'site_url',
+                        'status',
+                        'current_step',
+                        'progress',
+                        'database_name',
+                        'credential_item_id',
+                        'log',
+                        'error_message',
+                        'started_at',
+                        'completed_at',
+                    ]),
             ],
             'tasks' => [
                 'comments' => DB::table('task_comments')
