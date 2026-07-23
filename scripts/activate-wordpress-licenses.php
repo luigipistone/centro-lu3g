@@ -4,6 +4,7 @@ use DynamicContentForElementor\Plugin;
 use ElementorPro\License\Admin;
 use ElementorPro\License\API;
 use Jet_Dashboard\Dashboard;
+use Jet_Dashboard\License_Manager;
 
 $configPath = getenv('CENTRO_PROVISION_CONFIG') ?: '/etc/centro-wordpress-provision.env';
 $config = parse_ini_file($configPath);
@@ -36,6 +37,12 @@ if (! $dynamicSuccess) {
 }
 
 $jetManager = Dashboard::get_instance()->license_manager;
+if (! $jetManager && class_exists(License_Manager::class)) {
+    $jetManager = (new ReflectionClass(License_Manager::class))->newInstanceWithoutConstructor();
+}
+if (! $jetManager) {
+    throw new RuntimeException('Il gestore licenze Jet Plugins non è disponibile.');
+}
 $jetResponse = $jetManager->license_action_query('activate_license', $jetKey);
 if (! is_array($jetResponse) || ($jetResponse['status'] ?? 'error') === 'error' || empty($jetResponse['data'])) {
     throw new RuntimeException('Attivazione licenza Jet Plugins non riuscita.');
