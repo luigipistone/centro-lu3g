@@ -4666,7 +4666,7 @@ onUnmounted(() => {
                                     <AppSelect v-model="projectForm.status" :options="projectStatusOptions" :disabled="!canEditProject" />
                                 </div>
                             </div>
-                            <div v-if="isWebProject">
+                            <div v-if="isWebProject && (isAdmin || projectForm.figma_url)">
                                 <label class="block text-sm font-medium text-gray-700">Mockup Figma</label>
                                 <div v-if="isAdmin" class="space-y-3">
                                     <div class="grid gap-3 md:grid-cols-2">
@@ -4708,24 +4708,20 @@ onUnmounted(() => {
                                     <p v-if="figmaError" class="text-sm text-red-600">{{ figmaError }}</p>
                                 </div>
                                 <a
-                                    v-else-if="projectForm.figma_url"
+                                    v-if="projectForm.figma_url"
                                     :href="projectForm.figma_url"
                                     target="_blank"
                                     rel="noopener"
-                                    class="interactive-row mt-1 inline-flex items-center gap-2 text-sm font-medium text-[hsl(var(--primary-app))]"
+                                    class="group mt-3 block overflow-hidden rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50 transition hover:border-[hsl(var(--primary-app)/0.28)] hover:shadow-sm"
                                 >
-                                    <ExternalLink class="h-4 w-4" :stroke-width="1.7" />
-                                    Apri mockup Figma
-                                </a>
-                                <p v-else class="mt-1 text-sm text-gray-400">Nessun mockup collegato.</p>
-                                <a
-                                    v-if="projectForm.figma_url && projectForm.figma_thumbnail_url"
-                                    :href="projectForm.figma_url"
-                                    target="_blank"
-                                    rel="noopener"
-                                    class="mt-3 block overflow-hidden rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50"
-                                >
-                                    <img :src="projectForm.figma_thumbnail_url" :alt="projectForm.figma_file_name || 'Anteprima Figma'" class="max-h-64 w-full object-cover object-top" />
+                                    <img v-if="projectForm.figma_thumbnail_url" :src="projectForm.figma_thumbnail_url" :alt="projectForm.figma_file_name || 'Anteprima Figma'" class="max-h-64 w-full object-cover object-top" />
+                                    <span v-else class="flex min-h-24 items-center justify-between gap-4 px-4 py-4">
+                                        <span class="min-w-0">
+                                            <span class="block truncate text-sm font-semibold text-gray-800">{{ projectForm.figma_file_name || 'Mockup Figma' }}</span>
+                                            <span class="mt-1 block text-xs text-gray-500">Apri il progetto in Figma</span>
+                                        </span>
+                                        <ExternalLink class="h-4 w-4 shrink-0 text-gray-400 transition group-hover:text-[hsl(var(--primary-app))]" :stroke-width="1.7" />
+                                    </span>
                                 </a>
                                 <div v-if="projectForm.figma_file_name" class="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
                                     <span>
@@ -4737,6 +4733,7 @@ onUnmounted(() => {
                                         Aggiorna
                                     </button>
                                 </div>
+                                <p v-if="isAdmin && !projectForm.figma_url" class="mt-2 text-sm text-gray-400">Nessun mockup collegato.</p>
                                 <div v-if="projectForm.errors.figma_url" class="mt-1 text-sm text-red-600">{{ projectForm.errors.figma_url }}</div>
                             </div>
                             <div>
