@@ -8,6 +8,7 @@ readonly PACKAGE_PATH="${BASE_PATH}/uploads"
 readonly CONFIG_FILE="/etc/centro-wordpress-provision.env"
 readonly PHP_BIN="/opt/plesk/php/8.3/bin/php"
 readonly WP_CLI="/usr/local/bin/wp"
+readonly DATABASE_SERVER="localhost:3306"
 readonly SYSTEM_USER="lu3g_admin_giordano"
 readonly SYSTEM_GROUP="psacln"
 readonly LOCK_FILE="/var/lock/centro-wordpress-provision.lock"
@@ -108,6 +109,7 @@ else
     PSA_PASSWORD="$DATABASE_PASSWORD" plesk bin database \
         --create-dbuser "$DATABASE_USER" \
         -domain "lu3g.com" \
+        -server "$DATABASE_SERVER" \
         -database "$DATABASE_NAME" \
         -passwd "" >/dev/null
 
