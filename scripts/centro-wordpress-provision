@@ -38,7 +38,7 @@ state_write() {
 }
 
 wpcli() {
-    "$PHP_BIN" "$WP_CLI" --path="$DESTINATION" --allow-root "$@"
+    "$PHP_BIN" -d memory_limit=512M -d max_execution_time=300 "$WP_CLI" --path="$DESTINATION" --allow-root "$@"
 }
 
 require_file() {
@@ -124,7 +124,7 @@ fi
 progress 10 database "Database vuoto selezionato e riservato"
 
 if [[ ! -f "${DESTINATION}/wp-load.php" ]]; then
-    wpcli core download --locale=it_IT
+    wpcli core download --locale=it_IT --force
 fi
 progress 18 download "Ultima versione stabile di WordPress scaricata"
 
