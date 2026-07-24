@@ -119,7 +119,13 @@ class FigmaDesignSystemService
             'updated_at' => now(),
         ]);
 
-        return $this->publicRow(DB::table('figma_design_systems')->where('project_id', $project->id)->first());
+        $designSystem = $this->publicRow(DB::table('figma_design_systems')->where('project_id', $project->id)->first());
+        $output = trim($result->output());
+        $designSystem['application_message'] = str_contains($output, 'Font ignorati')
+            ? 'Colori applicati. Alcuni font non disponibili in Elementor sono stati ignorati: installali come Custom Fonts oppure scegli un Google Font.'
+            : 'Design system applicato a Elementor.';
+
+        return $designSystem;
     }
 
     public function current(string $projectId): ?array

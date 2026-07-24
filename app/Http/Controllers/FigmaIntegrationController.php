@@ -141,15 +141,20 @@ class FigmaIntegrationController extends Controller
         }
 
         try {
+            $applied = $designSystem->apply(
+                $project,
+                $provisioning,
+                $payload['colors'],
+                $payload['typography'],
+                $request->user()->id,
+            );
+            $message = $applied['application_message']
+                ?? 'Design system applicato a Elementor.';
+            unset($applied['application_message']);
+
             return response()->json([
-                'design_system' => $designSystem->apply(
-                    $project,
-                    $provisioning,
-                    $payload['colors'],
-                    $payload['typography'],
-                    $request->user()->id,
-                ),
-                'message' => 'Design system applicato a Elementor. Ricarica l’editor Elementor se era già aperto.',
+                'design_system' => $applied,
+                'message' => $message.' Ricarica l’editor Elementor se era già aperto.',
             ]);
         } catch (Throwable $exception) {
             return response()->json(['message' => $this->friendlyError($exception)], 422);

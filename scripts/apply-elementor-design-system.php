@@ -20,22 +20,29 @@ if (! did_action('elementor/loaded') || ! class_exists('\Elementor\Plugin')) {
     exit(1);
 }
 
-$kitId = (int) get_option('elementor_active_kit');
+$kit = \Elementor\Plugin::$instance->kits_manager->get_active_kit();
+$kitId = $kit ? (int) $kit->get_main_id() : 0;
 if ($kitId <= 0 || get_post_type($kitId) !== 'elementor_library') {
     fwrite(STDERR, "Kit Elementor attivo non disponibile.\n");
     exit(1);
 }
 
 $roles = [
-    'primary' => 'Primario',
+    'primary' => 'Principale',
     'secondary' => 'Secondario',
     'text' => 'Testo',
-    'accent' => 'Accento',
+    'accent' => 'In risalto',
 ];
-$settings = get_post_meta($kitId, '_elementor_page_settings', true);
-$settings = is_array($settings) ? $settings : [];
 $systemColors = [];
 $systemTypography = [];
+$currentTypography = [];
+$ignoredFonts = [];
+
+foreach ((array) $kit->get_settings('system_typography') as $item) {
+    if (! empty($item['_id'])) {
+        $currentTypography[$item['_id']] = $item;
+    }
+}
 
 foreach ($roles as $role => $title) {
     $color = strtoupper(trim((string) ($payload['colors'][$role] ?? '')));
@@ -53,6 +60,15 @@ foreach ($roles as $role => $title) {
         'title' => $title,
         'color' => $color,
     ];
+    $fontType = \Elementor\Fonts::get_font_type($family);
+    if ($fontType === false) {
+        $ignoredFonts[] = $family;
+        if (isset($currentTypography[$role])) {
+            $systemTypography[] = $currentTypography[$role];
+        }
+        continue;
+    }
+
     $systemTypography[] = [
         '_id' => $role,
         'title' => $title,
@@ -62,11 +78,15 @@ foreach ($roles as $role => $title) {
     ];
 }
 
-$settings['system_colors'] = $systemColors;
-$settings['system_typography'] = $systemTypography;
-update_post_meta($kitId, '_elementor_page_settings', $settings);
+$kit->update_settings([
+    'system_colors' => $systemColors,
+    'system_typography' => $systemTypography,
+]);
 
 \Elementor\Plugin::$instance->files_manager->clear_cache();
 do_action('elementor/core/files/clear_cache');
 
 fwrite(STDOUT, "Design system applicato al Kit Elementor {$kitId}.\n");
+if ($ignoredFonts !== []) {
+    fwrite(STDOUT, 'Font ignorati perché non disponibili in Elementor: '.implode(', ', array_unique($ignoredFonts)).".\n");
+}
