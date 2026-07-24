@@ -1940,6 +1940,39 @@ const figmaDesignRoles = [
     { id: 'accent', label: 'Accento' },
 ];
 
+const figmaFontOptions = computed(() => {
+    const available = figmaDesignSystem.value?.typography?.available || [];
+    const families = available.map((item) => item.family).filter(Boolean);
+
+    figmaDesignRoles.forEach((role) => {
+        const selected = figmaDesignDraft.value.typography?.[role.id]?.family;
+        if (selected && !families.includes(selected)) families.push(selected);
+    });
+
+    return families.map((family) => ({ value: family, label: family }));
+});
+
+function figmaWeightOptions(roleId) {
+    const family = figmaDesignDraft.value.typography?.[roleId]?.family;
+    const available = figmaDesignSystem.value?.typography?.available || [];
+    const weights = available.find((item) => item.family === family)?.weights || [];
+    const selected = Number(figmaDesignDraft.value.typography?.[roleId]?.weight);
+    const values = weights.map(Number).filter(Boolean);
+    if (selected && !values.includes(selected)) values.push(selected);
+
+    return (values.length ? values : [100, 200, 300, 400, 500, 600, 700, 800, 900])
+        .sort((a, b) => a - b)
+        .map((weight) => ({ value: weight, label: String(weight) }));
+}
+
+function selectFigmaFont(roleId, family) {
+    const weights = figmaDesignSystem.value?.typography?.available
+        ?.find((item) => item.family === family)?.weights || [];
+    if (weights.length && !weights.map(Number).includes(Number(figmaDesignDraft.value.typography[roleId].weight))) {
+        figmaDesignDraft.value.typography[roleId].weight = Number(weights[0]);
+    }
+}
+
 function setFigmaDesignSystem(value) {
     figmaDesignSystem.value = value || null;
     figmaDesignDraft.value = value
@@ -5277,13 +5310,18 @@ onUnmounted(() => {
                                             <div v-for="role in figmaDesignRoles" :key="`figma-font-${role.id}`" class="grid grid-cols-[minmax(0,1fr)_110px] gap-2">
                                                 <label class="block">
                                                     <span class="mb-1.5 block text-xs font-medium text-gray-600">{{ role.label }}</span>
-                                                    <input v-model="figmaDesignDraft.typography[role.id].family" type="text" class="form-control mt-0" />
+                                                    <AppSelect
+                                                        v-model="figmaDesignDraft.typography[role.id].family"
+                                                        :options="figmaFontOptions"
+                                                        searchable
+                                                        @change="selectFigmaFont(role.id, $event)"
+                                                    />
                                                 </label>
                                                 <label class="block">
                                                     <span class="mb-1.5 block text-xs font-medium text-gray-600">Peso</span>
                                                     <AppSelect
                                                         v-model="figmaDesignDraft.typography[role.id].weight"
-                                                        :options="[100, 200, 300, 400, 500, 600, 700, 800, 900].map((weight) => ({ value: weight, label: String(weight) }))"
+                                                        :options="figmaWeightOptions(role.id)"
                                                     />
                                                 </label>
                                             </div>

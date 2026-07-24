@@ -165,6 +165,11 @@ class FigmaIntegrationTest extends TestCase
                                 'type' => 'RECTANGLE',
                                 'fills' => [['type' => 'SOLID', 'color' => ['r' => 0.95, 'g' => 0.3, 'b' => 0.2]]],
                             ],
+                            [
+                                'type' => 'TEXT',
+                                'characters' => 'Etichetta',
+                                'style' => ['fontFamily' => 'Roboto Mono', 'fontWeight' => 500, 'fontSize' => 12],
+                            ],
                         ],
                     ]],
                 ],
@@ -180,6 +185,8 @@ class FigmaIntegrationTest extends TestCase
 
         $response->assertJsonPath('design_system.colors.primary', '#1A66E6');
         $response->assertJsonPath('design_system.typography.primary.family', 'Inter');
+        $response->assertJsonPath('design_system.typography.available.1.family', 'Roboto Mono');
+        $response->assertJsonPath('design_system.typography.available.1.weights.0', 500);
         $this->assertDatabaseHas('figma_design_systems', [
             'project_id' => $projectId,
             'status' => 'analyzed',

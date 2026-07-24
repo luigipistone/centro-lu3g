@@ -77,6 +77,9 @@ class FigmaDesignSystemService
 
     public function apply(object $project, object $provisioning, array $colors, array $typography, string $userId): array
     {
+        $currentTypography = json_decode((string) DB::table('figma_design_systems')
+            ->where('project_id', $project->id)
+            ->value('typography'), true) ?: [];
         $payload = [
             'colors' => $this->validateColors($colors),
             'typography' => $this->validateTypography($typography),
@@ -104,7 +107,11 @@ class FigmaDesignSystemService
 
         DB::table('figma_design_systems')->where('project_id', $project->id)->update([
             'colors' => json_encode($payload['colors'], JSON_UNESCAPED_SLASHES),
-            'typography' => json_encode($payload['typography'], JSON_UNESCAPED_SLASHES),
+            'typography' => json_encode([
+                ...$payload['typography'],
+                'available' => $currentTypography['available'] ?? [],
+                'detected' => $currentTypography['detected'] ?? [],
+            ], JSON_UNESCAPED_SLASHES),
             'status' => 'applied',
             'error_message' => null,
             'applied_by' => $userId,
@@ -208,13 +215,24 @@ class FigmaDesignSystemService
         $body = $styles->sortByDesc('count')->first();
         $heading = $styles->sortByDesc(fn ($style) => $style['size'] * max(1, $style['weight'] / 400))->first();
         $secondary = $styles->where('family', $heading['family'])->sortByDesc('size')->skip(1)->first() ?? $body;
+        $available = $styles
+            ->groupBy('family')
+            ->map(fn ($familyStyles, $family) => [
+                'family' => $family,
+                'weights' => $familyStyles->pluck('weight')->unique()->sort()->values()->all(),
+                'count' => $familyStyles->sum('count'),
+            ])
+            ->sortByDesc('count')
+            ->values()
+            ->all();
 
         return [
             'primary' => ['family' => $heading['family'], 'weight' => max(600, $heading['weight'])],
             'secondary' => ['family' => $secondary['family'], 'weight' => max(500, $secondary['weight'])],
             'text' => ['family' => $body['family'], 'weight' => $body['weight']],
             'accent' => ['family' => $heading['family'], 'weight' => max(500, min(700, $heading['weight']))],
-            'detected' => $styles->take(12)->all(),
+            'available' => $available,
+            'detected' => $styles->take(50)->all(),
         ];
     }
 
