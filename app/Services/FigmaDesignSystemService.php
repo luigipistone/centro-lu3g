@@ -13,6 +13,10 @@ class FigmaDesignSystemService
 
     public function analyze(object $project, string $userId): array
     {
+        // Large design files can exceed the application's normal request limit
+        // while Figma's full document JSON is decoded and inspected.
+        ini_set('memory_limit', '512M');
+
         $metadata = $this->figma->fileMetadata($project->figma_file_key);
         $editorType = mb_strtolower((string) ($metadata['editorType'] ?? ''));
         if ($editorType !== '' && $editorType !== 'figma') {
