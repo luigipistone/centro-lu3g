@@ -5066,7 +5066,7 @@ onUnmounted(() => {
                             <div v-if="isAdmin" class="space-y-4">
                                 <div class="grid gap-4 md:grid-cols-2">
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700">Progetto Figma</label>
+                                        <label class="mb-2 block text-sm font-medium text-gray-700">Progetto Figma</label>
                                         <AppSelect
                                             v-model="projectForm.figma_project_id"
                                             :options="[
@@ -5079,7 +5079,7 @@ onUnmounted(() => {
                                         />
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700">File Figma</label>
+                                        <label class="mb-2 block text-sm font-medium text-gray-700">File Figma</label>
                                         <AppSelect
                                             v-model="projectForm.figma_file_key"
                                             :options="[
@@ -5093,7 +5093,7 @@ onUnmounted(() => {
                                     </div>
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700">Link Figma</label>
+                                    <label class="mb-2 block text-sm font-medium text-gray-700">Link Figma</label>
                                     <div class="flex items-center gap-2">
                                         <input v-model="projectForm.figma_url" type="url" class="form-control min-w-0 flex-1" placeholder="Oppure incolla un link Figma" />
                                         <a
