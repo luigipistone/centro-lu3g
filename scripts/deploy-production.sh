@@ -22,11 +22,6 @@ deploy() {
 
     cd "$APP_DIR"
 
-    log "Installing WordPress provisioning runner"
-    install -m 0755 scripts/centro-wordpress-provision /usr/local/sbin/centro-wordpress-provision
-    install -d -m 0755 /usr/local/lib/centro-wordpress
-    install -m 0644 scripts/*.php /usr/local/lib/centro-wordpress/
-
     if [ -f "$COMPOSER_PHAR" ]; then
         log "Installing PHP dependencies"
         "$PHP_BIN" "$COMPOSER_PHAR" install --no-dev --no-interaction --prefer-dist --optimize-autoloader
