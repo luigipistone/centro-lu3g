@@ -6,6 +6,7 @@ GIT_DIR="/var/www/vhosts/lu3g.com/git/centro-lu3g"
 BRANCH="${DEPLOY_BRANCH:-main}"
 PHP_BIN="/opt/plesk/php/8.3/bin/php"
 COMPOSER_PHAR="/opt/psa/var/modules/composer/composer.phar"
+NODE_BIN_DIR="/opt/plesk/node/20/bin"
 LOCK_FILE="/tmp/centro-lu3g-deploy.lock"
 
 log() {
@@ -24,6 +25,17 @@ deploy() {
     if [ -f "$COMPOSER_PHAR" ]; then
         log "Installing PHP dependencies"
         "$PHP_BIN" "$COMPOSER_PHAR" install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+    fi
+
+    if [ -x "$NODE_BIN_DIR/node" ] && [ -x "$NODE_BIN_DIR/npm" ]; then
+        log "Installing frontend dependencies"
+        PATH="$NODE_BIN_DIR:$PATH" npm ci --no-audit --no-fund
+
+        log "Building frontend assets"
+        PATH="$NODE_BIN_DIR:$PATH" npm run build
+    else
+        log "Node.js runtime not found in $NODE_BIN_DIR"
+        return 1
     fi
 
     log "Running database migrations"

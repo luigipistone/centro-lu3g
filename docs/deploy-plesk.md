@@ -66,9 +66,9 @@ PLESK_SSH_KEY=<chiave privata dedicata al deploy>
 
 Lo script usa il repository Plesk in `/var/www/vhosts/lu3g.com/git/centro-lu3g`,
 esegue il checkout forzato su `/var/www/vhosts/lu3g.com/centro.lu3g.com`,
-aggiorna le dipendenze PHP, lancia le migrazioni e rigenera le cache Laravel.
-Gli asset Vite sono gia' versionati in `public/build`, quindi il server non ha bisogno
-di `node` o `npm` per pubblicare le modifiche.
+aggiorna le dipendenze PHP e frontend, genera gli asset Vite, lancia le migrazioni
+e rigenera le cache Laravel. Il runtime Node usato in produzione e'
+`/opt/plesk/node/20/bin`.
 
 ## Stato migrazione
 
