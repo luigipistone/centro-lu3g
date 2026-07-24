@@ -5064,10 +5064,6 @@ onUnmounted(() => {
 
                         <div v-else-if="projectWorkspaceTab === 'figma'" class="mt-8 space-y-5">
                             <div v-if="isAdmin" class="space-y-4">
-                                <div>
-                                    <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Mockup Figma</h3>
-                                    <p class="mt-1 text-sm text-gray-500">Seleziona il progetto e il file da collegare.</p>
-                                </div>
                                 <div class="grid gap-4 md:grid-cols-2">
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Progetto Figma</label>
