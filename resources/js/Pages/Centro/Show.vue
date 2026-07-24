@@ -1910,6 +1910,8 @@ async function selectFigmaProject() {
     projectForm.figma_last_modified_at = '';
     projectForm.figma_url = '';
     figmaFiles.value = [];
+    setFigmaDesignSystem(null);
+    figmaDesignError.value = '';
     await loadFigmaFiles();
     saveProjectInline(0);
 }
@@ -1920,6 +1922,8 @@ function selectFigmaFile() {
     projectForm.figma_thumbnail_url = file?.thumbnail_url || '';
     projectForm.figma_last_modified_at = file?.last_modified || '';
     projectForm.figma_url = file?.key ? `https://www.figma.com/design/${file.key}` : '';
+    setFigmaDesignSystem(null);
+    figmaDesignError.value = '';
     saveProjectInline(0);
 }
 

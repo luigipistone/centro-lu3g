@@ -113,7 +113,11 @@ class FigmaDesignSystemService
 
     public function current(string $projectId): ?array
     {
-        $row = DB::table('figma_design_systems')->where('project_id', $projectId)->first();
+        $row = DB::table('figma_design_systems')
+            ->join('projects', 'projects.id', '=', 'figma_design_systems.project_id')
+            ->where('figma_design_systems.project_id', $projectId)
+            ->whereColumn('figma_design_systems.figma_file_key', 'projects.figma_file_key')
+            ->first(['figma_design_systems.*']);
 
         return $row ? $this->publicRow($row) : null;
     }

@@ -266,6 +266,64 @@ class FigmaIntegrationTest extends TestCase
         ]);
     }
 
+    public function test_design_system_from_a_previously_selected_file_cannot_be_loaded_or_applied(): void
+    {
+        Process::fake();
+        $admin = $this->userWithRole('admin');
+        $projectId = $this->configuredWebProject($admin);
+        $clientId = DB::table('projects')->where('id', $projectId)->value('client_id');
+        DB::table('figma_design_systems')->insert([
+            'id' => (string) Str::uuid(),
+            'project_id' => $projectId,
+            'figma_file_key' => 'old-file-key',
+            'colors' => json_encode(['primary' => '#2563EB', 'secondary' => '#0F172A', 'text' => '#334155', 'accent' => '#F43F5E']),
+            'typography' => json_encode([
+                'primary' => ['family' => 'Inter', 'weight' => 700],
+                'secondary' => ['family' => 'Inter', 'weight' => 600],
+                'text' => ['family' => 'Inter', 'weight' => 400],
+                'accent' => ['family' => 'Inter', 'weight' => 500],
+            ]),
+            'status' => 'analyzed',
+            'analyzed_by' => $admin->id,
+            'analyzed_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('wordpress_provisionings')->insert([
+            'id' => (string) Str::uuid(),
+            'project_id' => $projectId,
+            'client_id' => $clientId,
+            'folder_slug' => 'cliente-figma',
+            'site_url' => 'https://testing.lu3g.com/cliente-figma',
+            'status' => 'completed',
+            'progress' => 100,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $payload = [
+            'colors' => ['primary' => '#2563EB', 'secondary' => '#0F172A', 'text' => '#334155', 'accent' => '#F43F5E'],
+            'typography' => [
+                'primary' => ['family' => 'Inter', 'weight' => 700],
+                'secondary' => ['family' => 'Inter', 'weight' => 600],
+                'text' => ['family' => 'Inter', 'weight' => 400],
+                'accent' => ['family' => 'Inter', 'weight' => 500],
+            ],
+        ];
+
+        $this->actingAs($admin)
+            ->getJson(route('projects.figma-design-system.show', $projectId))
+            ->assertOk()
+            ->assertJsonPath('design_system', null);
+
+        $this->actingAs($admin)
+            ->postJson(route('projects.figma-design-system.apply', $projectId), $payload)
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Analizza prima il design system Figma.');
+
+        Process::assertNothingRan();
+    }
+
     private function configuredWebProject(User $creator): string
     {
         DB::table('figma_settings')->insert([
