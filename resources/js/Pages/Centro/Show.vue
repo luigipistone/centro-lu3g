@@ -4666,76 +4666,6 @@ onUnmounted(() => {
                                     <AppSelect v-model="projectForm.status" :options="projectStatusOptions" :disabled="!canEditProject" />
                                 </div>
                             </div>
-                            <div v-if="isWebProject && (isAdmin || projectForm.figma_url)">
-                                <label class="block text-sm font-medium text-gray-700">Mockup Figma</label>
-                                <div v-if="isAdmin" class="space-y-3">
-                                    <div class="grid gap-3 md:grid-cols-2">
-                                        <AppSelect
-                                            v-model="projectForm.figma_project_id"
-                                            :options="[
-                                                { value: '', label: figmaLoadingProjects ? 'Caricamento progetti...' : 'Seleziona progetto Figma' },
-                                                ...figmaProjects.map((item) => ({ value: item.id, label: item.name })),
-                                            ]"
-                                            searchable
-                                            :disabled="figmaLoadingProjects"
-                                            @change="selectFigmaProject"
-                                        />
-                                        <AppSelect
-                                            v-model="projectForm.figma_file_key"
-                                            :options="[
-                                                { value: '', label: figmaLoadingFiles ? 'Caricamento file...' : 'Seleziona file Figma' },
-                                                ...figmaFiles.map((item) => ({ value: item.key, label: item.name })),
-                                            ]"
-                                            searchable
-                                            :disabled="!projectForm.figma_project_id || figmaLoadingFiles"
-                                            @change="selectFigmaFile"
-                                        />
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <input v-model="projectForm.figma_url" type="url" class="form-control min-w-0 flex-1" placeholder="Oppure incolla un link Figma" />
-                                        <a
-                                            v-if="projectForm.figma_url"
-                                            :href="projectForm.figma_url"
-                                            target="_blank"
-                                            rel="noopener"
-                                            class="icon-btn h-10 w-10 shrink-0"
-                                            title="Apri mockup Figma"
-                                        >
-                                            <ExternalLink class="h-4 w-4" :stroke-width="1.7" />
-                                        </a>
-                                    </div>
-                                    <p v-if="projectForm.figma_file_name" class="text-xs font-medium text-emerald-600">{{ projectForm.figma_file_name }} collegato.</p>
-                                    <p v-if="figmaError" class="text-sm text-red-600">{{ figmaError }}</p>
-                                </div>
-                                <a
-                                    v-if="projectForm.figma_url"
-                                    :href="projectForm.figma_url"
-                                    target="_blank"
-                                    rel="noopener"
-                                    class="group mt-3 block overflow-hidden rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50 transition hover:border-[hsl(var(--primary-app)/0.28)] hover:shadow-sm"
-                                >
-                                    <img v-if="projectForm.figma_thumbnail_url" :src="projectForm.figma_thumbnail_url" :alt="projectForm.figma_file_name || 'Anteprima Figma'" class="max-h-64 w-full object-cover object-top" />
-                                    <span v-else class="flex min-h-24 items-center justify-between gap-4 px-4 py-4">
-                                        <span class="min-w-0">
-                                            <span class="block truncate text-sm font-semibold text-gray-800">{{ projectForm.figma_file_name || 'Mockup Figma' }}</span>
-                                            <span class="mt-1 block text-xs text-gray-500">Apri il progetto in Figma</span>
-                                        </span>
-                                        <ExternalLink class="h-4 w-4 shrink-0 text-gray-400 transition group-hover:text-[hsl(var(--primary-app))]" :stroke-width="1.7" />
-                                    </span>
-                                </a>
-                                <div v-if="projectForm.figma_file_name" class="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
-                                    <span>
-                                        {{ projectForm.figma_file_name }}
-                                        <template v-if="projectForm.figma_last_modified_at"> · aggiornato {{ dateTimeIt(projectForm.figma_last_modified_at) }}</template>
-                                    </span>
-                                    <button v-if="isAdmin" type="button" class="action-link" :disabled="figmaLoadingFiles" @click="refreshSelectedFigmaFile">
-                                        <RotateCcw class="h-3.5 w-3.5" :class="{ 'animate-spin': figmaLoadingFiles }" :stroke-width="1.7" />
-                                        Aggiorna
-                                    </button>
-                                </div>
-                                <p v-if="isAdmin && !projectForm.figma_url" class="mt-2 text-sm text-gray-400">Nessun mockup collegato.</p>
-                                <div v-if="projectForm.errors.figma_url" class="mt-1 text-sm text-red-600">{{ projectForm.errors.figma_url }}</div>
-                            </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Colore</label>
                                 <div class="mt-2 flex flex-wrap gap-2">
@@ -4848,6 +4778,7 @@ onUnmounted(() => {
                                         { id: 'tasks', label: 'Task' },
                                         { id: 'messages', label: 'Messaggi' },
                                         { id: 'files', label: 'File' },
+                                        ...(isWebProject && (isAdmin || projectForm.figma_url) ? [{ id: 'figma', label: 'Figma' }] : []),
                                     ]"
                                     :key="tab.id"
                                     type="button"
@@ -5091,7 +5022,7 @@ onUnmounted(() => {
                             </p>
                         </div>
 
-                        <div v-else class="mt-8 space-y-4">
+                        <div v-else-if="projectWorkspaceTab === 'files'" class="mt-8 space-y-4">
                             <div
                                 :class="['rounded-md border border-dashed p-8 text-center transition', projectFileDragActive ? 'border-indigo-300 bg-indigo-50/70' : 'border-gray-200 bg-gray-50/70 hover:border-indigo-200 hover:bg-indigo-50/40']"
                                 @dragover.prevent="projectFileDragActive = true"
@@ -5129,6 +5060,90 @@ onUnmounted(() => {
                             <p v-if="!(related.files || []).length" class="rounded-md border border-dashed border-gray-200 bg-white px-4 py-8 text-center text-sm text-gray-500">
                                 Nessun file caricato nel progetto.
                             </p>
+                        </div>
+
+                        <div v-else-if="projectWorkspaceTab === 'figma'" class="mt-8 space-y-5">
+                            <div v-if="isAdmin" class="space-y-4">
+                                <div>
+                                    <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Mockup Figma</h3>
+                                    <p class="mt-1 text-sm text-gray-500">Seleziona il progetto e il file da collegare.</p>
+                                </div>
+                                <div class="grid gap-4 md:grid-cols-2">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Progetto Figma</label>
+                                        <AppSelect
+                                            v-model="projectForm.figma_project_id"
+                                            :options="[
+                                                { value: '', label: figmaLoadingProjects ? 'Caricamento progetti...' : 'Seleziona progetto Figma' },
+                                                ...figmaProjects.map((item) => ({ value: item.id, label: item.name })),
+                                            ]"
+                                            searchable
+                                            :disabled="figmaLoadingProjects"
+                                            @change="selectFigmaProject"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">File Figma</label>
+                                        <AppSelect
+                                            v-model="projectForm.figma_file_key"
+                                            :options="[
+                                                { value: '', label: figmaLoadingFiles ? 'Caricamento file...' : 'Seleziona file Figma' },
+                                                ...figmaFiles.map((item) => ({ value: item.key, label: item.name })),
+                                            ]"
+                                            searchable
+                                            :disabled="!projectForm.figma_project_id || figmaLoadingFiles"
+                                            @change="selectFigmaFile"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Link Figma</label>
+                                    <div class="flex items-center gap-2">
+                                        <input v-model="projectForm.figma_url" type="url" class="form-control min-w-0 flex-1" placeholder="Oppure incolla un link Figma" />
+                                        <a
+                                            v-if="projectForm.figma_url"
+                                            :href="projectForm.figma_url"
+                                            target="_blank"
+                                            rel="noopener"
+                                            class="icon-btn h-10 w-10 shrink-0"
+                                            title="Apri mockup Figma"
+                                        >
+                                            <ExternalLink class="h-4 w-4" :stroke-width="1.7" />
+                                        </a>
+                                    </div>
+                                </div>
+                                <p v-if="projectForm.figma_file_name" class="text-xs font-medium text-emerald-600">{{ projectForm.figma_file_name }} collegato.</p>
+                                <p v-if="figmaError" class="text-sm text-red-600">{{ figmaError }}</p>
+                            </div>
+
+                            <a
+                                v-if="projectForm.figma_url"
+                                :href="projectForm.figma_url"
+                                target="_blank"
+                                rel="noopener"
+                                class="group block overflow-hidden rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50 transition hover:border-[hsl(var(--primary-app)/0.28)] hover:shadow-sm"
+                            >
+                                <img v-if="projectForm.figma_thumbnail_url" :src="projectForm.figma_thumbnail_url" :alt="projectForm.figma_file_name || 'Anteprima Figma'" class="max-h-[32rem] w-full object-cover object-top" />
+                                <span v-else class="flex min-h-24 items-center justify-between gap-4 px-4 py-4">
+                                    <span class="min-w-0">
+                                        <span class="block truncate text-sm font-semibold text-gray-800">{{ projectForm.figma_file_name || 'Mockup Figma' }}</span>
+                                        <span class="mt-1 block text-xs text-gray-500">Apri il progetto in Figma</span>
+                                    </span>
+                                    <ExternalLink class="h-4 w-4 shrink-0 text-gray-400 transition group-hover:text-[hsl(var(--primary-app))]" :stroke-width="1.7" />
+                                </span>
+                            </a>
+                            <div v-if="projectForm.figma_file_name" class="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+                                <span>
+                                    {{ projectForm.figma_file_name }}
+                                    <template v-if="projectForm.figma_last_modified_at"> · aggiornato {{ dateTimeIt(projectForm.figma_last_modified_at) }}</template>
+                                </span>
+                                <button v-if="isAdmin" type="button" class="action-link" :disabled="figmaLoadingFiles" @click="refreshSelectedFigmaFile">
+                                    <RotateCcw class="h-3.5 w-3.5" :class="{ 'animate-spin': figmaLoadingFiles }" :stroke-width="1.7" />
+                                    Aggiorna
+                                </button>
+                            </div>
+                            <p v-if="isAdmin && !projectForm.figma_url" class="text-sm text-gray-400">Nessun mockup collegato.</p>
+                            <div v-if="projectForm.errors.figma_url" class="text-sm text-red-600">{{ projectForm.errors.figma_url }}</div>
                         </div>
                     </section>
                 </section>
