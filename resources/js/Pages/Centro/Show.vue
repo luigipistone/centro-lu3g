@@ -710,6 +710,7 @@ const figmaDesignDraft = ref({ colors: {}, typography: {} });
 const figmaDesignLoading = ref(false);
 const figmaDesignApplying = ref(false);
 const figmaDesignError = ref('');
+const figmaDesignSuccess = ref('');
 const figmaApplyConfirmOpen = ref(false);
 const selectedProjectFollowers = ref([...(props.related.followers || [])]);
 const projectAutosaveState = ref('idle');
@@ -1999,6 +2000,7 @@ async function analyzeFigmaDesignSystem() {
 
     figmaDesignLoading.value = true;
     figmaDesignError.value = '';
+    figmaDesignSuccess.value = '';
     try {
         const response = await window.axios.post(route('projects.figma-design-system.analyze', props.record.id));
         setFigmaDesignSystem(response.data.design_system);
@@ -2022,6 +2024,7 @@ async function applyFigmaDesignSystem() {
 
     figmaDesignApplying.value = true;
     figmaDesignError.value = '';
+    figmaDesignSuccess.value = '';
     try {
         const response = await window.axios.post(
             route('projects.figma-design-system.apply', props.record.id),
@@ -2031,6 +2034,7 @@ async function applyFigmaDesignSystem() {
             },
         );
         setFigmaDesignSystem(response.data.design_system);
+        figmaDesignSuccess.value = response.data.message || 'Design system applicato a Elementor.';
         figmaApplyConfirmOpen.value = false;
     } catch (error) {
         figmaDesignError.value = error.response?.data?.message || 'Applicazione a Elementor non riuscita.';
@@ -5299,6 +5303,12 @@ onUnmounted(() => {
                                 </div>
 
                                 <div v-if="figmaDesignSystem" class="mt-5 space-y-5">
+                                    <div
+                                        v-if="figmaDesignSuccess"
+                                        class="rounded-[var(--radius-sm)] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700"
+                                    >
+                                        {{ figmaDesignSuccess }}
+                                    </div>
                                     <div>
                                         <p class="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Colori globali</p>
                                         <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -5353,7 +5363,7 @@ onUnmounted(() => {
                                             @click="figmaApplyConfirmOpen = true"
                                         >
                                             <Check class="h-4 w-4" :stroke-width="1.7" />
-                                            Applica a Elementor
+                                            {{ figmaDesignSystem.status === 'applied' ? 'Riapplica a Elementor' : 'Applica a Elementor' }}
                                         </button>
                                     </div>
                                 </div>

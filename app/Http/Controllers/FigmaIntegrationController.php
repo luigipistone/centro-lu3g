@@ -149,6 +149,7 @@ class FigmaIntegrationController extends Controller
                     $payload['typography'],
                     $request->user()->id,
                 ),
+                'message' => 'Design system applicato a Elementor. Ricarica l’editor Elementor se era già aperto.',
             ]);
         } catch (Throwable $exception) {
             return response()->json(['message' => $this->friendlyError($exception)], 422);
