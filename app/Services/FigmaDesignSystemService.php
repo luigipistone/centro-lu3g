@@ -153,7 +153,10 @@ class FigmaDesignSystemService
 
         if (($node['type'] ?? null) === 'TEXT' && isset($node['style']['fontFamily'])) {
             $family = trim((string) $node['style']['fontFamily']);
-            $weight = (int) ($node['style']['fontWeight'] ?? 400);
+            $rawWeight = (int) ($node['style']['fontWeight'] ?? 400);
+            $weight = $rawWeight < 100 || $rawWeight > 900
+                ? 400
+                : (int) (round($rawWeight / 100) * 100);
             $size = (float) ($node['style']['fontSize'] ?? 16);
             $key = $family.'|'.$weight.'|'.$size;
             $fonts[$key] = ($fonts[$key] ?? 0) + max(1, mb_strlen((string) ($node['characters'] ?? '')));

@@ -119,8 +119,14 @@ class FigmaIntegrationController extends Controller
             'colors.text' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'colors.accent' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'typography' => ['required', 'array'],
-            'typography.*.family' => ['required', 'string', 'max:120'],
-            'typography.*.weight' => ['required', 'integer', 'between:100,900'],
+            'typography.primary.family' => ['required', 'string', 'max:120'],
+            'typography.primary.weight' => ['required', 'integer', 'between:100,900'],
+            'typography.secondary.family' => ['required', 'string', 'max:120'],
+            'typography.secondary.weight' => ['required', 'integer', 'between:100,900'],
+            'typography.text.family' => ['required', 'string', 'max:120'],
+            'typography.text.weight' => ['required', 'integer', 'between:100,900'],
+            'typography.accent.family' => ['required', 'string', 'max:120'],
+            'typography.accent.weight' => ['required', 'integer', 'between:100,900'],
         ]);
         $provisioning = DB::table('wordpress_provisionings')
             ->where('project_id', $projectId)

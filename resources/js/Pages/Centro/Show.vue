@@ -2012,6 +2012,14 @@ async function analyzeFigmaDesignSystem() {
 async function applyFigmaDesignSystem() {
     if (!figmaDesignSystem.value || figmaDesignApplying.value) return;
 
+    const typography = Object.fromEntries(figmaDesignRoles.map((role) => [
+        role.id,
+        {
+            family: figmaDesignDraft.value.typography[role.id]?.family,
+            weight: Number(figmaDesignDraft.value.typography[role.id]?.weight),
+        },
+    ]));
+
     figmaDesignApplying.value = true;
     figmaDesignError.value = '';
     try {
@@ -2019,7 +2027,7 @@ async function applyFigmaDesignSystem() {
             route('projects.figma-design-system.apply', props.record.id),
             {
                 colors: figmaDesignDraft.value.colors,
-                typography: figmaDesignDraft.value.typography,
+                typography,
             },
         );
         setFigmaDesignSystem(response.data.design_system);
