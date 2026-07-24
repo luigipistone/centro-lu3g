@@ -181,7 +181,7 @@ class FigmaIntegrationController extends Controller
         $status = $exception instanceof RequestException ? $exception->response->status() : null;
 
         return match ($status) {
-            401, 403 => 'Token Figma non valido, scaduto o privo del permesso projects:read.',
+            401, 403 => 'Token Figma non valido, scaduto o privo dei permessi projects:read e file_content:read.',
             404 => 'Team o progetto Figma non trovato.',
             429 => 'Figma ha temporaneamente limitato le richieste. Riprova tra poco.',
             default => $exception->getMessage(),

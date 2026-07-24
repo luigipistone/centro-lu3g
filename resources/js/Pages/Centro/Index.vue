@@ -5552,7 +5552,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                 <label class="block text-sm font-medium text-gray-700">Personal Access Token</label>
                                 <input v-model="figmaSettingsForm.token" type="password" class="form-control" placeholder="Nuovo token Figma" autocomplete="new-password" />
                                 <p v-if="figmaSettingsForm.token_saved" class="mt-1 text-xs font-medium text-emerald-600">Token salvato e cifrato. Compila il campo solo per sostituirlo.</p>
-                                <p v-else class="mt-1 text-xs text-gray-500">Genera un token Figma con permesso projects:read.</p>
+                                <p v-else class="mt-1 text-xs text-gray-500">Genera un token Figma con i permessi projects:read e file_content:read.</p>
                                 <p v-if="figmaSettingsForm.errors.token" class="mt-1 text-sm text-red-600">{{ figmaSettingsForm.errors.token }}</p>
                             </div>
                             <div
