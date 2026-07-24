@@ -1919,7 +1919,7 @@ function selectFigmaFile() {
     projectForm.figma_file_name = file?.name || '';
     projectForm.figma_thumbnail_url = file?.thumbnail_url || '';
     projectForm.figma_last_modified_at = file?.last_modified || '';
-    projectForm.figma_url = file?.key ? `https://www.figma.com/file/${file.key}` : '';
+    projectForm.figma_url = file?.key ? `https://www.figma.com/design/${file.key}` : '';
     saveProjectInline(0);
 }
 
