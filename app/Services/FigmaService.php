@@ -41,6 +41,14 @@ class FigmaService
             ->json();
     }
 
+    public function fileMetadata(string $fileKey): array
+    {
+        return $this->client($this->settings())
+            ->get("https://api.figma.com/v1/files/{$fileKey}/meta")
+            ->throw()
+            ->json('file', []);
+    }
+
     private function settings(): object
     {
         $settings = DB::table('figma_settings')->first();

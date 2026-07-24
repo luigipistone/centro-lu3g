@@ -13,6 +13,21 @@ class FigmaDesignSystemService
 
     public function analyze(object $project, string $userId): array
     {
+        $metadata = $this->figma->fileMetadata($project->figma_file_key);
+        $editorType = mb_strtolower((string) ($metadata['editorType'] ?? ''));
+        if ($editorType !== '' && $editorType !== 'figma') {
+            $label = match ($editorType) {
+                'sites' => 'Figma Sites',
+                'figjam' => 'FigJam',
+                'slides' => 'Figma Slides',
+                default => $metadata['editorType'],
+            };
+
+            throw new RuntimeException(
+                "Il file collegato è di tipo {$label}. Figma consente l’analisi di colori e font solo sui file Figma Design."
+            );
+        }
+
         $file = $this->figma->file($project->figma_file_key);
         $colors = [];
         $fonts = [];

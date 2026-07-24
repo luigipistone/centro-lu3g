@@ -139,6 +139,9 @@ class FigmaIntegrationTest extends TestCase
     public function test_admin_can_analyze_figma_colors_and_typography_without_ai(): void
     {
         Http::fake([
+            'api.figma.com/v1/files/file-key/meta' => Http::response([
+                'file' => ['name' => 'Homepage', 'editorType' => 'figma'],
+            ]),
             'api.figma.com/v1/files/file-key' => Http::response([
                 'document' => [
                     'type' => 'DOCUMENT',
@@ -181,6 +184,26 @@ class FigmaIntegrationTest extends TestCase
             'project_id' => $projectId,
             'status' => 'analyzed',
         ]);
+    }
+
+    public function test_figma_sites_file_returns_a_clear_design_analysis_error(): void
+    {
+        Http::fake([
+            'api.figma.com/v1/files/file-key/meta' => Http::response([
+                'file' => ['name' => 'Sito pubblicato', 'editorType' => 'sites'],
+            ]),
+        ]);
+
+        $admin = $this->userWithRole('admin');
+        $projectId = $this->configuredWebProject($admin);
+
+        $this->actingAs($admin)
+            ->postJson(route('projects.figma-design-system.analyze', $projectId))
+            ->assertUnprocessable()
+            ->assertJsonPath(
+                'message',
+                'Il file collegato è di tipo Figma Sites. Figma consente l’analisi di colori e font solo sui file Figma Design.',
+            );
     }
 
     public function test_admin_can_apply_analyzed_design_system_to_completed_wordpress_site(): void
