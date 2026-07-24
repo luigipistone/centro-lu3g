@@ -45,8 +45,44 @@ require_file() {
     [[ -f "$1" ]] || fail "Pacchetto richiesto non trovato: $(basename "$1")."
 }
 
-[[ "${1:-}" == "run" ]] || fail "Comando non supportato."
+COMMAND="${1:-}"
 shift
+
+if [[ "$COMMAND" == "apply-elementor-design" ]]; then
+    FOLDER=""
+    PAYLOAD=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --folder)
+                FOLDER="${2:-}"
+                shift 2
+                ;;
+            --payload)
+                PAYLOAD="${2:-}"
+                shift 2
+                ;;
+            *)
+                fail "Parametro non riconosciuto: $1"
+                ;;
+        esac
+    done
+
+    [[ "$FOLDER" =~ ^[a-z0-9][a-z0-9-]{1,78}[a-z0-9]$ ]] || fail "Nome cartella non valido."
+    [[ -n "$PAYLOAD" ]] || fail "Configurazione design system mancante."
+    DESTINATION="${BASE_PATH}/${FOLDER}"
+    [[ -f "${DESTINATION}/wp-load.php" ]] || fail "Installazione WordPress non disponibile."
+    [[ -f "${HELPER_PATH}/apply-elementor-design-system.php" ]] || fail "Helper Elementor non disponibile."
+
+    PAYLOAD_FILE="$(mktemp /tmp/centro-elementor-design.XXXXXX.json)"
+    trap 'rm -f "$PAYLOAD_FILE"' EXIT
+    printf '%s' "$PAYLOAD" | base64 -d > "$PAYLOAD_FILE" || fail "Configurazione design system illeggibile."
+    chmod 600 "$PAYLOAD_FILE"
+
+    CENTRO_DESIGN_PAYLOAD="$PAYLOAD_FILE" wpcli eval-file "${HELPER_PATH}/apply-elementor-design-system.php"
+    exit 0
+fi
+
+[[ "$COMMAND" == "run" ]] || fail "Comando non supportato."
 
 FOLDER=""
 SITE_TITLE=""

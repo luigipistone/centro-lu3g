@@ -32,6 +32,15 @@ class FigmaService
             ->json('files', []);
     }
 
+    public function file(string $fileKey): array
+    {
+        return $this->client($this->settings())
+            ->timeout(60)
+            ->get("https://api.figma.com/v1/files/{$fileKey}")
+            ->throw()
+            ->json();
+    }
+
     private function settings(): object
     {
         $settings = DB::table('figma_settings')->first();

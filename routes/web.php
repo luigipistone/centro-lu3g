@@ -55,6 +55,9 @@ Route::middleware('auth')->group(function () {
     Route::put('/projects/{id}/followers', [CentroPageController::class, 'syncProjectFollowers'])->name('projects.followers.sync');
     Route::post('/projects/{id}/wordpress-provisioning', [WordPressProvisioningController::class, 'store'])->name('projects.wordpress-provisioning.store');
     Route::get('/projects/{id}/wordpress-provisioning', [WordPressProvisioningController::class, 'status'])->name('projects.wordpress-provisioning.status');
+    Route::get('/projects/{id}/figma-design-system', [FigmaIntegrationController::class, 'designSystem'])->name('projects.figma-design-system.show');
+    Route::post('/projects/{id}/figma-design-system/analyze', [FigmaIntegrationController::class, 'analyzeDesignSystem'])->name('projects.figma-design-system.analyze');
+    Route::post('/projects/{id}/figma-design-system/apply', [FigmaIntegrationController::class, 'applyDesignSystem'])->name('projects.figma-design-system.apply');
     Route::delete('/projects/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'projects')->name('projects.destroy');
     Route::get('/tasks', [CentroPageController::class, 'index'])->defaults('section', 'tasks')->name('tasks.index');
     Route::post('/tasks', [CentroPageController::class, 'store'])->defaults('section', 'tasks')->name('tasks.store');

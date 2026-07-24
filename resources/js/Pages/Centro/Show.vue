@@ -705,6 +705,12 @@ const figmaFiles = ref([]);
 const figmaLoadingProjects = ref(false);
 const figmaLoadingFiles = ref(false);
 const figmaError = ref('');
+const figmaDesignSystem = ref(null);
+const figmaDesignDraft = ref({ colors: {}, typography: {} });
+const figmaDesignLoading = ref(false);
+const figmaDesignApplying = ref(false);
+const figmaDesignError = ref('');
+const figmaApplyConfirmOpen = ref(false);
 const selectedProjectFollowers = ref([...(props.related.followers || [])]);
 const projectAutosaveState = ref('idle');
 const projectAutosaveError = ref('');
@@ -1921,6 +1927,71 @@ async function refreshSelectedFigmaFile() {
     if (!projectForm.figma_project_id || !projectForm.figma_file_key) return;
     await loadFigmaFiles();
     selectFigmaFile();
+}
+
+const figmaDesignRoles = [
+    { id: 'primary', label: 'Primario' },
+    { id: 'secondary', label: 'Secondario' },
+    { id: 'text', label: 'Testo' },
+    { id: 'accent', label: 'Accento' },
+];
+
+function setFigmaDesignSystem(value) {
+    figmaDesignSystem.value = value || null;
+    figmaDesignDraft.value = value
+        ? {
+            colors: { ...(value.colors || {}) },
+            typography: JSON.parse(JSON.stringify(value.typography || {})),
+        }
+        : { colors: {}, typography: {} };
+}
+
+async function loadFigmaDesignSystem() {
+    if (!isAdmin.value || !isWebProject.value) return;
+
+    try {
+        const response = await window.axios.get(route('projects.figma-design-system.show', props.record.id));
+        setFigmaDesignSystem(response.data.design_system);
+    } catch (error) {
+        figmaDesignError.value = error.response?.data?.message || 'Impossibile caricare il design system.';
+    }
+}
+
+async function analyzeFigmaDesignSystem() {
+    if (!projectForm.figma_file_key || figmaDesignLoading.value) return;
+
+    figmaDesignLoading.value = true;
+    figmaDesignError.value = '';
+    try {
+        const response = await window.axios.post(route('projects.figma-design-system.analyze', props.record.id));
+        setFigmaDesignSystem(response.data.design_system);
+    } catch (error) {
+        figmaDesignError.value = error.response?.data?.message || 'Analisi del design system non riuscita.';
+    } finally {
+        figmaDesignLoading.value = false;
+    }
+}
+
+async function applyFigmaDesignSystem() {
+    if (!figmaDesignSystem.value || figmaDesignApplying.value) return;
+
+    figmaDesignApplying.value = true;
+    figmaDesignError.value = '';
+    try {
+        const response = await window.axios.post(
+            route('projects.figma-design-system.apply', props.record.id),
+            {
+                colors: figmaDesignDraft.value.colors,
+                typography: figmaDesignDraft.value.typography,
+            },
+        );
+        setFigmaDesignSystem(response.data.design_system);
+        figmaApplyConfirmOpen.value = false;
+    } catch (error) {
+        figmaDesignError.value = error.response?.data?.message || 'Applicazione a Elementor non riuscita.';
+    } finally {
+        figmaDesignApplying.value = false;
+    }
 }
 
 function wordpressProvisioningActive() {
@@ -3512,6 +3583,7 @@ watch(
     () => projectWorkspaceTab.value,
     (tab) => {
         if (tab === 'overview') refreshProjectDescriptionEditor();
+        if (tab === 'figma' && isAdmin.value) loadFigmaDesignSystem();
     },
 );
 
@@ -3878,6 +3950,34 @@ onUnmounted(() => {
                     <button type="button" class="btn btn-primary" :disabled="wordpressProvisioningStarting" @click="startWordPressProvisioning">
                         <Rocket class="h-4 w-4" :stroke-width="1.7" />
                         {{ wordpressProvisioningStarting ? 'Avvio...' : 'Avvia procedura' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="figmaApplyConfirmOpen" class="fixed inset-0 z-[7100] flex items-center justify-center bg-gray-950/20 px-4 py-6 backdrop-blur-[2px]" @click.self="figmaApplyConfirmOpen = false">
+            <div class="w-full max-w-md rounded-[var(--radius)] bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.24)]">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h3 class="text-base font-semibold text-gray-900">Applicare il design system?</h3>
+                        <p class="mt-1 text-sm text-gray-500">I colori e i font globali del Kit Elementor verranno sostituiti con quelli mostrati.</p>
+                    </div>
+                    <button type="button" class="icon-btn h-9 w-9" title="Chiudi" @click="figmaApplyConfirmOpen = false">
+                        <X class="h-4 w-4" />
+                    </button>
+                </div>
+                <div class="mt-5 grid grid-cols-4 gap-2">
+                    <div v-for="role in figmaDesignRoles" :key="`figma-confirm-${role.id}`" class="text-center">
+                        <span class="mx-auto block h-10 w-10 rounded-full border-2 border-white shadow-sm ring-1 ring-gray-200" :style="{ backgroundColor: figmaDesignDraft.colors[role.id] }"></span>
+                        <span class="mt-2 block truncate text-xs font-medium text-gray-600">{{ role.label }}</span>
+                    </div>
+                </div>
+                <p v-if="figmaDesignError" class="mt-3 text-sm text-red-600">{{ figmaDesignError }}</p>
+                <div class="mt-5 flex justify-end gap-2">
+                    <button type="button" class="btn btn-outline" :disabled="figmaDesignApplying" @click="figmaApplyConfirmOpen = false">Annulla</button>
+                    <button type="button" class="btn btn-primary" :disabled="figmaDesignApplying" @click="applyFigmaDesignSystem">
+                        <Check class="h-4 w-4" :stroke-width="1.7" />
+                        {{ figmaDesignApplying ? 'Applicazione...' : 'Conferma e applica' }}
                     </button>
                 </div>
             </div>
@@ -5140,6 +5240,75 @@ onUnmounted(() => {
                             </div>
                             <p v-if="isAdmin && !projectForm.figma_url" class="text-sm text-gray-400">Nessun mockup collegato.</p>
                             <div v-if="projectForm.errors.figma_url" class="text-sm text-red-600">{{ projectForm.errors.figma_url }}</div>
+
+                            <section v-if="isAdmin && projectForm.figma_file_key" class="rounded-[var(--radius)] border border-gray-100 bg-gray-50/70 p-4">
+                                <div class="flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                        <h3 class="text-sm font-semibold text-gray-900">Design system Elementor</h3>
+                                        <p class="mt-1 text-xs text-gray-500">Colori e tipografie rilevati automaticamente dal file collegato.</p>
+                                    </div>
+                                    <button type="button" class="btn btn-outline px-3 py-2 text-sm" :disabled="figmaDesignLoading" @click="analyzeFigmaDesignSystem">
+                                        <RotateCcw class="h-4 w-4" :class="{ 'animate-spin': figmaDesignLoading }" :stroke-width="1.7" />
+                                        {{ figmaDesignSystem ? 'Rianalizza' : 'Analizza Figma' }}
+                                    </button>
+                                </div>
+
+                                <div v-if="figmaDesignSystem" class="mt-5 space-y-5">
+                                    <div>
+                                        <p class="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Colori globali</p>
+                                        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                                            <label v-for="role in figmaDesignRoles" :key="`figma-color-${role.id}`" class="block">
+                                                <span class="mb-1.5 block text-xs font-medium text-gray-600">{{ role.label }}</span>
+                                                <span class="flex h-10 items-center gap-2 rounded-[var(--radius-sm)] border border-gray-200 bg-white px-2">
+                                                    <input v-model="figmaDesignDraft.colors[role.id]" type="color" class="h-6 w-6 cursor-pointer rounded border-0 bg-transparent p-0" />
+                                                    <input v-model="figmaDesignDraft.colors[role.id]" type="text" class="min-w-0 flex-1 border-0 bg-transparent p-0 font-mono text-xs uppercase outline-none" />
+                                                </span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <p class="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Font globali</p>
+                                        <div class="grid gap-3 sm:grid-cols-2">
+                                            <div v-for="role in figmaDesignRoles" :key="`figma-font-${role.id}`" class="grid grid-cols-[minmax(0,1fr)_110px] gap-2">
+                                                <label class="block">
+                                                    <span class="mb-1.5 block text-xs font-medium text-gray-600">{{ role.label }}</span>
+                                                    <input v-model="figmaDesignDraft.typography[role.id].family" type="text" class="form-control mt-0" />
+                                                </label>
+                                                <label class="block">
+                                                    <span class="mb-1.5 block text-xs font-medium text-gray-600">Peso</span>
+                                                    <AppSelect
+                                                        v-model="figmaDesignDraft.typography[role.id].weight"
+                                                        :options="[100, 200, 300, 400, 500, 600, 700, 800, 900].map((weight) => ({ value: weight, label: String(weight) }))"
+                                                    />
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-4">
+                                        <p class="text-xs text-gray-500">
+                                            <template v-if="figmaDesignSystem.status === 'applied'">
+                                                Applicato a Elementor il {{ dateTimeIt(figmaDesignSystem.applied_at) }}.
+                                            </template>
+                                            <template v-else>
+                                                Analizzato il {{ dateTimeIt(figmaDesignSystem.analyzed_at) }}.
+                                            </template>
+                                        </p>
+                                        <button
+                                            type="button"
+                                            class="btn btn-primary px-4 py-2 text-sm"
+                                            :disabled="wordpressProvisioning?.status !== 'completed'"
+                                            :title="wordpressProvisioning?.status !== 'completed' ? 'Completa prima la preparazione WordPress' : 'Applica al Kit Elementor'"
+                                            @click="figmaApplyConfirmOpen = true"
+                                        >
+                                            <Check class="h-4 w-4" :stroke-width="1.7" />
+                                            Applica a Elementor
+                                        </button>
+                                    </div>
+                                </div>
+                                <p v-if="figmaDesignError" class="mt-3 text-sm text-red-600">{{ figmaDesignError }}</p>
+                            </section>
                         </div>
                     </section>
                 </section>

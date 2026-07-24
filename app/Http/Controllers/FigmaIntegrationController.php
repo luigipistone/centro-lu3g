@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\FigmaService;
+use App\Services\FigmaDesignSystemService;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -81,6 +82,73 @@ class FigmaIntegrationController extends Controller
         }
     }
 
+    public function designSystem(Request $request, string $projectId, FigmaDesignSystemService $designSystem): JsonResponse
+    {
+        $this->ensureAdmin($request);
+        $this->project($projectId);
+
+        return response()->json(['design_system' => $designSystem->current($projectId)]);
+    }
+
+    public function analyzeDesignSystem(Request $request, string $projectId, FigmaDesignSystemService $designSystem): JsonResponse
+    {
+        $this->ensureAdmin($request);
+        $project = $this->project($projectId);
+
+        if (blank($project->figma_file_key)) {
+            return response()->json(['message' => 'Collega prima un file Figma al progetto.'], 422);
+        }
+
+        try {
+            return response()->json([
+                'design_system' => $designSystem->analyze($project, $request->user()->id),
+            ]);
+        } catch (Throwable $exception) {
+            return response()->json(['message' => $this->friendlyError($exception)], 422);
+        }
+    }
+
+    public function applyDesignSystem(Request $request, string $projectId, FigmaDesignSystemService $designSystem): JsonResponse
+    {
+        $this->ensureAdmin($request);
+        $project = $this->project($projectId);
+        $payload = $request->validate([
+            'colors' => ['required', 'array'],
+            'colors.primary' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'colors.secondary' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'colors.text' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'colors.accent' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'typography' => ['required', 'array'],
+            'typography.*.family' => ['required', 'string', 'max:120'],
+            'typography.*.weight' => ['required', 'integer', 'between:100,900'],
+        ]);
+        $provisioning = DB::table('wordpress_provisionings')
+            ->where('project_id', $projectId)
+            ->where('status', 'completed')
+            ->first();
+
+        if (! $provisioning) {
+            return response()->json(['message' => 'Completa prima la preparazione WordPress del progetto.'], 422);
+        }
+        if (! $designSystem->current($projectId)) {
+            return response()->json(['message' => 'Analizza prima il design system Figma.'], 422);
+        }
+
+        try {
+            return response()->json([
+                'design_system' => $designSystem->apply(
+                    $project,
+                    $provisioning,
+                    $payload['colors'],
+                    $payload['typography'],
+                    $request->user()->id,
+                ),
+            ]);
+        } catch (Throwable $exception) {
+            return response()->json(['message' => $this->friendlyError($exception)], 422);
+        }
+    }
+
     private function ensureSuperadmin(Request $request): void
     {
         abort_unless($this->role($request) === 'superadmin', 403);
@@ -94,6 +162,18 @@ class FigmaIntegrationController extends Controller
     private function role(Request $request): ?string
     {
         return DB::table('user_roles')->where('user_id', $request->user()->id)->value('role');
+    }
+
+    private function project(string $projectId): object
+    {
+        $project = DB::table('projects')->where('id', $projectId)->first([
+            'id',
+            'figma_file_key',
+            'figma_file_name',
+        ]);
+        abort_if(! $project, 404);
+
+        return $project;
     }
 
     private function friendlyError(Throwable $exception): string
