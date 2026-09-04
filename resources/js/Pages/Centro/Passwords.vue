@@ -548,7 +548,7 @@ if (props.selectedGroup) {
         </template>
 
         <div class="py-8">
-            <div class="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
+            <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <nav class="grid gap-3 md:grid-cols-4">
                     <Link
                         v-for="item in nav"

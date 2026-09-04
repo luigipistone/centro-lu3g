@@ -110,7 +110,7 @@ function showMoreCurrentYearDocuments() {
         </template>
 
         <div class="py-8">
-            <div class="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
+            <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <section class="grid gap-4 sm:grid-cols-3">
                     <div class="surface p-4">
                         <p class="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">Documenti</p>

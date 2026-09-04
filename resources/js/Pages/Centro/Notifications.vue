@@ -134,7 +134,7 @@ function formatDate(value) {
         </div>
 
         <div class="py-8">
-            <div class="mx-auto max-w-7xl space-y-5 px-4 sm:px-6 lg:px-8">
+            <div class="mx-auto max-w-[1600px] space-y-5 px-4 sm:px-6 lg:px-8">
                 <div class="surface flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div class="flex flex-wrap items-center gap-2">
                         <Link

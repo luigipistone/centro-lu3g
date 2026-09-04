@@ -4033,7 +4033,7 @@ onUnmounted(() => {
         </div>
 
         <div class="detail-page py-8">
-            <div v-if="section === 'billing'" class="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
+            <div v-if="section === 'billing'" class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <div class="flex flex-wrap items-start justify-between gap-4 rounded-md bg-white p-5 shadow-sm">
                     <div>
                         <div class="flex flex-wrap items-center gap-2">
@@ -4354,7 +4354,7 @@ onUnmounted(() => {
                 </div>
             </div>
 
-            <div v-else class="mx-auto grid max-w-7xl gap-6 px-4 sm:px-6 lg:grid-cols-[1fr_360px] lg:px-8">
+            <div v-else class="mx-auto grid max-w-[1600px] gap-6 px-4 sm:px-6 lg:grid-cols-[1fr_360px] lg:px-8">
                 <section v-if="section === 'clients'" class="space-y-6">
                     <section v-if="canEditClient" class="surface rounded-md p-5">
                         <div class="mb-5 flex flex-wrap items-center justify-between gap-3">

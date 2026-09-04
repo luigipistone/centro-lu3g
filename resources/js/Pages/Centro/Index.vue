@@ -5802,7 +5802,7 @@ function calendarDayStyle(sectionMonth, cell) {
         </div>
 
         <div v-else-if="section === 'billing'" class="py-8">
-            <div class="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
+            <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <div class="grid gap-4 md:grid-cols-4">
                     <div
                         v-for="card in [
@@ -6082,7 +6082,7 @@ function calendarDayStyle(sectionMonth, cell) {
         </div>
 
         <div v-else class="py-8">
-            <div class="mx-auto max-w-7xl space-y-4 px-4 sm:px-6 lg:px-8">
+            <div class="mx-auto max-w-[1600px] space-y-4 px-4 sm:px-6 lg:px-8">
                 <div v-if="canCreate" class="flex justify-end">
                     <button type="button" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500" @click="openCreate()">
                         {{ createButtonLabel }}

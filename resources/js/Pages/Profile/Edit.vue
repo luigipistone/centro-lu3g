@@ -170,7 +170,7 @@ watch(() => absenceForm.type, () => {
         </template>
 
         <div class="py-8">
-            <div class="mx-auto max-w-7xl space-y-6 sm:px-6 lg:px-8">
+            <div class="mx-auto max-w-[1600px] space-y-6 sm:px-6 lg:px-8">
                 <div
                     class="surface p-4 sm:p-8"
                 >

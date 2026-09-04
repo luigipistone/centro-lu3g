@@ -395,7 +395,7 @@ function deleteLabel(type) {
         </template>
 
         <div class="py-8">
-            <div class="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
+            <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <div v-if="confirmDelete" class="fixed inset-0 z-[5100] flex items-center justify-center bg-transparent px-4 py-6" @click.self="closeDeleteConfirm">
                     <div class="w-full max-w-md rounded-[var(--radius)] bg-white p-5 shadow-xl">
                         <h3 class="text-base font-semibold text-gray-900">
