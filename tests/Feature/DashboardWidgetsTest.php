@@ -14,6 +14,11 @@ class DashboardWidgetsTest extends TestCase
     public function test_user_can_save_dashboard_widget_layout(): void
     {
         $user = User::factory()->create();
+        DB::table('user_roles')->insert([
+            'id' => (string) str()->uuid(),
+            'user_id' => $user->id,
+            'role' => 'admin',
+        ]);
 
         $response = $this
             ->actingAs($user)
@@ -73,6 +78,34 @@ class DashboardWidgetsTest extends TestCase
         $this->assertStringContainsString('<h1>Promemoria</h1>', $content['html']);
         $this->assertStringContainsString('<strong>Chiamare cliente</strong>', $content['html']);
         $this->assertStringNotContainsString('<script>', $content['html']);
+    }
+
+    public function test_user_can_save_personal_dashboard_widget_settings(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->patchJson('/dashboard/widgets/quick_links/settings', [
+                'links' => [
+                    ['label' => 'Laravel', 'url' => 'https://laravel.com'],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('settings.links.0.label', 'Laravel');
+
+        $this->assertDatabaseHas('dashboard_widget_settings', [
+            'user_id' => $user->id,
+            'widget_type' => 'quick_links',
+        ]);
+
+        $this->actingAs($user)
+            ->patchJson('/dashboard/widgets/weather/settings', [
+                'city' => 'Milano',
+                'latitude' => 45.4642,
+                'longitude' => 9.19,
+            ])
+            ->assertOk()
+            ->assertJsonPath('settings.city', 'Milano');
     }
 
     public function test_dashboard_shows_only_active_projects_assigned_to_user(): void

@@ -81,6 +81,7 @@ class CentroPageController extends Controller
                 ->get(['projects.id', 'projects.name', 'projects.color', 'clients.name as client_name']),
             'dashboardWidgets' => $this->dashboardWidgetsFor($request->user()),
             'availableDashboardWidgets' => $this->availableDashboardWidgetsFor($request),
+            'dashboardWidgetSettings' => $this->dashboardWidgetSettingsFor($request->user()),
             'dashboardNote' => $this->dashboardNoteFor($request->user()),
             'passwordItems' => $this->dashboardPasswordItemRows($request),
             'todayAbsences' => $this->dashboardTodayAbsenceRows($request),
@@ -146,6 +147,61 @@ class CentroPageController extends Controller
         }
 
         return response()->json(['note' => $content]);
+    }
+
+    public function updateDashboardWidgetSettings(Request $request, string $type): JsonResponse
+    {
+        abort_unless(in_array($type, ['quick_links', 'weather'], true), 404);
+
+        $rules = $type === 'quick_links'
+            ? [
+                'links' => ['present', 'array', 'max:8'],
+                'links.*.label' => ['required', 'string', 'max:40'],
+                'links.*.url' => ['required', 'url:http,https', 'max:2048'],
+            ]
+            : [
+                'city' => ['required', 'string', 'max:100'],
+                'latitude' => ['required', 'numeric', 'between:-90,90'],
+                'longitude' => ['required', 'numeric', 'between:-180,180'],
+            ];
+
+        $settings = $request->validate($rules);
+        $existing = DB::table('dashboard_widget_settings')
+            ->where('user_id', $request->user()->id)
+            ->where('widget_type', $type)
+            ->first();
+        $now = now();
+
+        if ($existing) {
+            DB::table('dashboard_widget_settings')->where('id', $existing->id)->update([
+                'settings' => json_encode($settings),
+                'updated_at' => $now,
+            ]);
+        } else {
+            DB::table('dashboard_widget_settings')->insert([
+                'id' => (string) Str::uuid(),
+                'user_id' => $request->user()->id,
+                'widget_type' => $type,
+                'settings' => json_encode($settings),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+        }
+
+        return response()->json(['settings' => $settings]);
+    }
+
+    private function dashboardWidgetSettingsFor(User $user): array
+    {
+        if (! Schema::hasTable('dashboard_widget_settings')) {
+            return [];
+        }
+
+        return DB::table('dashboard_widget_settings')
+            ->where('user_id', $user->id)
+            ->get()
+            ->mapWithKeys(fn ($row) => [$row->widget_type => json_decode($row->settings, true) ?: []])
+            ->all();
     }
 
     private function dashboardWidgetsFor(User $user): array
@@ -224,6 +280,10 @@ class CentroPageController extends Controller
             ['widget_type' => 'notes', 'position' => 8, 'col_span' => 2, 'visible' => false],
             ['widget_type' => 'password_search', 'position' => 9, 'col_span' => 2, 'visible' => false],
             ['widget_type' => 'attendance_today', 'position' => 10, 'col_span' => 2, 'visible' => false],
+            ['widget_type' => 'clock_date', 'position' => 11, 'col_span' => 1, 'visible' => false],
+            ['widget_type' => 'quick_links', 'position' => 12, 'col_span' => 1, 'visible' => false],
+            ['widget_type' => 'calculator', 'position' => 13, 'col_span' => 1, 'visible' => false],
+            ['widget_type' => 'weather', 'position' => 14, 'col_span' => 1, 'visible' => false],
         ];
     }
 
@@ -241,6 +301,10 @@ class CentroPageController extends Controller
             ['type' => 'notes', 'label' => 'Note', 'description' => 'Scrittura libera con editor completo'],
             ['type' => 'password_search', 'label' => 'Password', 'description' => 'Ricerca credenziali per cassaforte'],
             ['type' => 'attendance_today', 'label' => 'Presenze oggi', 'description' => 'Assenze e smart working in giornata'],
+            ['type' => 'clock_date', 'label' => 'Orologio e data', 'description' => 'Ora e data locale'],
+            ['type' => 'quick_links', 'label' => 'Link rapidi', 'description' => 'Collegamenti personali'],
+            ['type' => 'calculator', 'label' => 'Calcolatrice', 'description' => 'Calcoli veloci'],
+            ['type' => 'weather', 'label' => 'Meteo', 'description' => 'Condizioni nella tua localita'],
         ];
     }
 

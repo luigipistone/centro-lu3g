@@ -11,8 +11,12 @@ import {
     AlertTriangle,
     Bold,
     Briefcase,
+    Calculator,
     CalendarClock,
     CheckSquare,
+    Clock3,
+    CloudSun,
+    ExternalLink,
     Heading1,
     Heading2,
     GripVertical,
@@ -42,6 +46,7 @@ const props = defineProps({
     dashboardWidgets: Array,
     availableDashboardWidgets: Array,
     dashboardNote: Object,
+    dashboardWidgetSettings: Object,
     passwordItems: Array,
     todayAbsences: Array,
     todaySmartworking: Array,
@@ -64,6 +69,20 @@ const passwordRevealUsername = ref('');
 const passwordRevealPassword = ref('');
 const passwordRevealCopied = ref('');
 const passwordRevealError = ref('');
+const clockNow = ref(new Date());
+const quickLinks = ref([...(props.dashboardWidgetSettings?.quick_links?.links || [])]);
+const quickLinksDraft = ref([]);
+const quickLinksOpen = ref(false);
+const weatherSettings = ref(props.dashboardWidgetSettings?.weather || { city: 'Milano', latitude: 45.4642, longitude: 9.19 });
+const weatherCityDraft = ref(weatherSettings.value.city);
+const weatherData = ref(null);
+const weatherLoading = ref(false);
+const weatherError = ref('');
+const weatherSettingsOpen = ref(false);
+const calculatorOpen = ref(false);
+const calculatorExpression = ref('');
+const calculatorResult = ref('0');
+let clockTimer = null;
 let saveTimer = null;
 let noteSaveTimer = null;
 let resizeState = null;
@@ -167,7 +186,41 @@ const widgetMeta = {
         iconClass: 'text-teal-600',
         kind: 'attendance',
     },
+    clock_date: {
+        label: 'Orologio e data',
+        description: 'Ora locale',
+        route: 'dashboard',
+        icon: Clock3,
+        iconClass: 'text-blue-600',
+        kind: 'clock',
+    },
+    quick_links: {
+        label: 'Link rapidi',
+        description: 'Collegamenti personali',
+        route: 'dashboard',
+        icon: ExternalLink,
+        iconClass: 'text-violet-600',
+        kind: 'links',
+    },
+    calculator: {
+        label: 'Calcolatrice',
+        description: 'Calcoli veloci',
+        route: 'dashboard',
+        icon: Calculator,
+        iconClass: 'text-emerald-600',
+        kind: 'calculator',
+    },
+    weather: {
+        label: 'Meteo',
+        description: 'Condizioni attuali',
+        route: 'dashboard',
+        icon: CloudSun,
+        iconClass: 'text-amber-500',
+        kind: 'weather',
+    },
 };
+
+const compactWidgetKinds = new Set(['stat', 'clock', 'links', 'calculator', 'weather']);
 
 const noteToolbar = [
     ['bold', Bold, 'Grassetto'],
@@ -241,6 +294,17 @@ function colSpanClass(widget) {
         3: 'lg:col-span-3',
         4: 'lg:col-span-4',
     }[clampSpan(widget.col_span)];
+}
+
+function rowSpanClass(widget) {
+    const kind = metaFor(widget)?.kind;
+    if (compactWidgetKinds.has(kind)) return 'lg:row-span-2';
+    if (['note', 'attendance'].includes(kind)) return 'lg:row-span-5';
+    return 'lg:row-span-4';
+}
+
+function showsWidgetNumber(widget) {
+    return ['stat', 'list', 'password', 'attendance'].includes(metaFor(widget)?.kind);
 }
 
 function commitWidgets(nextWidgets, persist = true) {
@@ -345,7 +409,7 @@ function startMove(widget, event) {
         description: metaFor(widget).description,
         icon: metaFor(widget).icon,
         iconClass: metaFor(widget).iconClass,
-        number: metaFor(widget).kind !== 'note' ? widgetNumber(widget) : null,
+        number: showsWidgetNumber(widget) ? widgetNumber(widget) : null,
     } : null;
     event.currentTarget.setPointerCapture?.(event.pointerId);
     document.body.style.cursor = 'grabbing';
@@ -473,6 +537,7 @@ function addWidget(widget) {
     if (widget.widget_type === 'notes') {
         nextTick(initializeNoteEditor);
     }
+    if (widget.widget_type === 'weather') loadWeather();
 }
 
 function startResize(widget, event) {
@@ -544,6 +609,119 @@ function widgetNumber(widget) {
     if (meta.kind === 'password') return props.passwordItems?.length ?? 0;
     if (meta.kind === 'attendance') return dashboardTodayAbsences.value.length + dashboardTodaySmartworking.value.length;
     return meta.items().length;
+}
+
+const clockTime = computed(() => clockNow.value.toLocaleTimeString('it-IT', {
+    timeZone: APP_TIME_ZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+}));
+const clockDate = computed(() => clockNow.value.toLocaleDateString('it-IT', {
+    timeZone: APP_TIME_ZONE,
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+}));
+
+function weatherDescription(code) {
+    if (code === 0) return 'Sereno';
+    if ([1, 2].includes(code)) return 'Poco nuvoloso';
+    if (code === 3) return 'Nuvoloso';
+    if ([45, 48].includes(code)) return 'Nebbia';
+    if ([51, 53, 55, 56, 57].includes(code)) return 'Pioviggine';
+    if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return 'Pioggia';
+    if ([71, 73, 75, 77, 85, 86].includes(code)) return 'Neve';
+    if ([95, 96, 99].includes(code)) return 'Temporale';
+    return 'Variabile';
+}
+
+async function loadWeather() {
+    weatherLoading.value = true;
+    weatherError.value = '';
+    try {
+        const { latitude, longitude } = weatherSettings.value;
+        const { data } = await window.axios.get('https://api.open-meteo.com/v1/forecast', {
+            params: {
+                latitude,
+                longitude,
+                current: 'temperature_2m,apparent_temperature,weather_code',
+                timezone: 'Europe/Rome',
+            },
+        });
+        weatherData.value = data?.current || null;
+    } catch (error) {
+        weatherError.value = 'Meteo non disponibile';
+    } finally {
+        weatherLoading.value = false;
+    }
+}
+
+function openWeatherSettings() {
+    weatherCityDraft.value = weatherSettings.value.city;
+    weatherSettingsOpen.value = true;
+}
+
+async function saveWeatherSettings() {
+    weatherError.value = '';
+    try {
+        const { data: geocoding } = await window.axios.get('https://geocoding-api.open-meteo.com/v1/search', {
+            params: { name: weatherCityDraft.value, count: 1, language: 'it', format: 'json' },
+        });
+        const location = geocoding?.results?.[0];
+        if (!location) {
+            weatherError.value = 'Località non trovata';
+            return;
+        }
+        const settings = { city: location.name, latitude: location.latitude, longitude: location.longitude };
+        await window.axios.patch(route('dashboard.widgets.settings.update', 'weather'), settings);
+        weatherSettings.value = settings;
+        weatherSettingsOpen.value = false;
+        await loadWeather();
+    } catch (error) {
+        weatherError.value = 'Impossibile salvare la località';
+    }
+}
+
+function openQuickLinksSettings() {
+    quickLinksDraft.value = quickLinks.value.map((link) => ({ ...link }));
+    quickLinksOpen.value = true;
+}
+
+function addQuickLink() {
+    if (quickLinksDraft.value.length < 8) quickLinksDraft.value.push({ label: '', url: '' });
+}
+
+function removeQuickLink(index) {
+    quickLinksDraft.value.splice(index, 1);
+}
+
+async function saveQuickLinks() {
+    const links = quickLinksDraft.value
+        .map((link) => ({ label: link.label.trim(), url: link.url.trim() }))
+        .filter((link) => link.label && link.url);
+    await window.axios.patch(route('dashboard.widgets.settings.update', 'quick_links'), { links });
+    quickLinks.value = links;
+    quickLinksOpen.value = false;
+}
+
+function appendCalculator(value) {
+    calculatorExpression.value += value;
+}
+
+function calculate() {
+    const expression = calculatorExpression.value.replace(/×/g, '*').replace(/÷/g, '/').replace(/,/g, '.');
+    if (!expression || !/^[0-9+\-*/().\s]+$/.test(expression)) return;
+    try {
+        const result = Function(`"use strict"; return (${expression})`)();
+        if (Number.isFinite(result)) calculatorResult.value = String(Math.round(result * 1e10) / 1e10);
+    } catch (error) {
+        calculatorResult.value = 'Errore';
+    }
+}
+
+function clearCalculator() {
+    calculatorExpression.value = '';
+    calculatorResult.value = '0';
 }
 
 const absenceTypeLabels = {
@@ -649,11 +827,14 @@ function closeDashboardFloatingUi() {
 
 onMounted(() => {
     nextTick(initializeNoteEditor);
+    clockTimer = window.setInterval(() => { clockNow.value = new Date(); }, 1000);
+    if (visibleWidgets.value.some((widget) => widget.widget_type === 'weather')) loadWeather();
     document.addEventListener('click', closeWidgetMenuOnOutside);
     window.addEventListener('centro:close-floating-ui', closeDashboardFloatingUi);
 });
 
 onUnmounted(() => {
+    window.clearInterval(clockTimer);
     document.removeEventListener('click', closeWidgetMenuOnOutside);
     window.removeEventListener('centro:close-floating-ui', closeDashboardFloatingUi);
 });
@@ -719,15 +900,16 @@ watch(
 
                 <div
                     ref="dashboardGrid"
-                    class="grid grid-cols-1 gap-4 lg:grid-cols-4"
+                    class="grid grid-cols-1 gap-4 lg:auto-rows-[72px] lg:grid-flow-dense lg:grid-cols-4"
                 >
                     <article
                         v-for="widget in visibleWidgets"
                         :key="widget.widget_type"
                         :data-widget-type="widget.widget_type"
                         :class="[
-                            'app-card widget-card group relative flex min-h-[154px] flex-col overflow-hidden transition',
+                            'app-card widget-card group relative flex min-h-[154px] flex-col overflow-hidden transition lg:h-full',
                             colSpanClass(widget),
+                            rowSpanClass(widget),
                             draggingType === widget.widget_type ? 'widget-card-drag-source' : '',
                         ]"
                     >
@@ -752,6 +934,12 @@ watch(
                             </button>
 
                             <div class="flex shrink-0 items-center gap-1">
+                                <button v-if="widget.widget_type === 'quick_links'" type="button" class="icon-btn h-7 w-7" title="Configura link" @click="openQuickLinksSettings">
+                                    <Settings2 class="h-4 w-4" :stroke-width="1.8" />
+                                </button>
+                                <button v-if="widget.widget_type === 'weather'" type="button" class="icon-btn h-7 w-7" title="Configura località" @click="openWeatherSettings">
+                                    <Settings2 class="h-4 w-4" :stroke-width="1.8" />
+                                </button>
                                 <button type="button" class="icon-btn h-7 w-7" :title="`Rimuovi ${metaFor(widget).label}`" @click="removeWidget(widget)">
                                     <X class="h-4 w-4" :stroke-width="1.8" />
                                     <span class="sr-only">Rimuovi</span>
@@ -769,7 +957,43 @@ watch(
                                     <span class="block truncate text-xs text-gray-500">{{ metaFor(widget).description }}</span>
                                 </span>
                             </span>
-                            <span v-if="metaFor(widget).kind !== 'note'" class="shrink-0 text-3xl font-bold leading-none text-gray-950">{{ widgetNumber(widget) }}</span>
+                            <span v-if="showsWidgetNumber(widget)" class="shrink-0 text-3xl font-bold leading-none text-gray-950">{{ widgetNumber(widget) }}</span>
+                        </div>
+
+                        <div v-if="metaFor(widget).kind === 'clock'" class="flex flex-1 items-end justify-between gap-3 pr-4">
+                            <strong class="text-3xl font-semibold leading-none text-gray-950">{{ clockTime }}</strong>
+                            <span class="max-w-[55%] text-right text-xs font-medium capitalize leading-4 text-gray-500">{{ clockDate }}</span>
+                        </div>
+
+                        <div v-if="metaFor(widget).kind === 'links'" class="flex min-h-0 flex-1 items-center pr-4">
+                            <div v-if="quickLinks.length" class="flex max-w-full gap-2 overflow-x-auto py-1">
+                                <a
+                                    v-for="link in quickLinks"
+                                    :key="`${link.label}-${link.url}`"
+                                    :href="link.url"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="inline-flex shrink-0 items-center gap-1.5 rounded-[var(--radius-sm)] border border-gray-100 bg-white/80 px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-[hsl(var(--primary-app)/0.25)] hover:text-[hsl(var(--primary-app))]"
+                                >
+                                    {{ link.label }}
+                                    <ExternalLink class="h-3 w-3" :stroke-width="1.8" />
+                                </a>
+                            </div>
+                            <button v-else type="button" class="text-left text-xs font-medium text-gray-500 hover:text-[hsl(var(--primary-app))]" @click="openQuickLinksSettings">Aggiungi i tuoi collegamenti</button>
+                        </div>
+
+                        <button v-if="metaFor(widget).kind === 'calculator'" type="button" class="flex flex-1 items-end justify-between gap-3 pr-4 text-left" @click="calculatorOpen = true">
+                            <span class="text-xs font-medium text-gray-500">Tocca per calcolare</span>
+                            <strong class="max-w-[60%] truncate text-2xl font-semibold text-gray-950">{{ calculatorResult }}</strong>
+                        </button>
+
+                        <div v-if="metaFor(widget).kind === 'weather'" class="flex flex-1 items-end justify-between gap-3 pr-4">
+                            <div>
+                                <strong v-if="weatherData" class="text-3xl font-semibold leading-none text-gray-950">{{ Math.round(weatherData.temperature_2m) }}°</strong>
+                                <span v-else class="text-sm font-medium text-gray-500">{{ weatherLoading ? 'Caricamento...' : weatherError }}</span>
+                                <p v-if="weatherData" class="mt-1 text-xs text-gray-500">{{ weatherDescription(weatherData.weather_code) }}</p>
+                            </div>
+                            <span class="max-w-[48%] truncate text-right text-xs font-semibold text-gray-600">{{ weatherSettings.city }}</span>
                         </div>
 
                         <div v-if="metaFor(widget).kind === 'list'" class="flex flex-1 flex-col pr-3">
@@ -966,6 +1190,72 @@ watch(
                 </div>
             </section>
         </div>
+
+        <Teleport to="body">
+            <div v-if="quickLinksOpen" class="fixed inset-0 z-[8000] grid place-items-center bg-gray-950/20 px-4 backdrop-blur-[2px]" @click.self="quickLinksOpen = false">
+                <form class="dashboard-utility-dialog surface max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-y-auto bg-white p-5" @submit.prevent="saveQuickLinks">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <h3 class="text-base font-semibold text-gray-900">Link rapidi</h3>
+                            <p class="mt-1 text-sm text-gray-500">Aggiungi fino a otto collegamenti personali.</p>
+                        </div>
+                        <button type="button" class="icon-btn" title="Chiudi" @click="quickLinksOpen = false"><X class="h-4 w-4" /></button>
+                    </div>
+                    <div class="mt-5 space-y-3">
+                        <div v-for="(link, index) in quickLinksDraft" :key="index" class="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.5fr)_auto] items-end gap-3">
+                            <label class="block text-sm font-medium text-gray-700">Nome<input v-model="link.label" class="form-control mt-1" maxlength="40" required /></label>
+                            <label class="block text-sm font-medium text-gray-700">URL<input v-model="link.url" class="form-control mt-1" type="url" placeholder="https://" required /></label>
+                            <button type="button" class="icon-btn mb-1 h-10 w-10 text-red-600" title="Rimuovi" @click="removeQuickLink(index)"><X class="h-4 w-4" /></button>
+                        </div>
+                        <button v-if="quickLinksDraft.length < 8" type="button" class="btn btn-outline" @click="addQuickLink"><Plus class="h-4 w-4" /> Aggiungi link</button>
+                    </div>
+                    <div class="mt-6 flex justify-end gap-2">
+                        <button type="button" class="btn btn-outline" @click="quickLinksOpen = false">Annulla</button>
+                        <button type="submit" class="btn btn-primary">Salva</button>
+                    </div>
+                </form>
+            </div>
+
+            <div v-if="weatherSettingsOpen" class="fixed inset-0 z-[8000] grid place-items-center bg-gray-950/20 px-4 backdrop-blur-[2px]" @click.self="weatherSettingsOpen = false">
+                <form class="dashboard-utility-dialog surface w-full max-w-md bg-white p-5" @submit.prevent="saveWeatherSettings">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <h3 class="text-base font-semibold text-gray-900">Località meteo</h3>
+                            <p class="mt-1 text-sm text-gray-500">Inserisci la città da mostrare nel widget.</p>
+                        </div>
+                        <button type="button" class="icon-btn" title="Chiudi" @click="weatherSettingsOpen = false"><X class="h-4 w-4" /></button>
+                    </div>
+                    <label class="mt-5 block text-sm font-medium text-gray-700">Città<input v-model="weatherCityDraft" class="form-control mt-1" required /></label>
+                    <p v-if="weatherError" class="mt-2 text-sm text-red-600">{{ weatherError }}</p>
+                    <div class="mt-6 flex justify-end gap-2">
+                        <button type="button" class="btn btn-outline" @click="weatherSettingsOpen = false">Annulla</button>
+                        <button type="submit" class="btn btn-primary">Salva</button>
+                    </div>
+                </form>
+            </div>
+
+            <div v-if="calculatorOpen" class="fixed inset-0 z-[8000] grid place-items-center bg-gray-950/20 px-4 backdrop-blur-[2px]" @click.self="calculatorOpen = false">
+                <section class="dashboard-utility-dialog surface w-full max-w-sm bg-white p-5">
+                    <div class="flex items-center justify-between gap-3">
+                        <h3 class="text-base font-semibold text-gray-900">Calcolatrice</h3>
+                        <button type="button" class="icon-btn" title="Chiudi" @click="calculatorOpen = false"><X class="h-4 w-4" /></button>
+                    </div>
+                    <div class="mt-5 rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50 px-4 py-3 text-right">
+                        <p class="min-h-5 truncate text-sm text-gray-500">{{ calculatorExpression || '0' }}</p>
+                        <p class="mt-1 truncate text-3xl font-semibold text-gray-950">{{ calculatorResult }}</p>
+                    </div>
+                    <div class="mt-4 grid grid-cols-4 gap-2">
+                        <button type="button" class="calculator-key col-span-2" @click="clearCalculator">AC</button>
+                        <button type="button" class="calculator-key" @click="calculatorExpression = calculatorExpression.slice(0, -1)">⌫</button>
+                        <button type="button" class="calculator-key is-operator" @click="appendCalculator('÷')">÷</button>
+                        <template v-for="key in ['7','8','9','×','4','5','6','-','1','2','3','+','0',',']" :key="key">
+                            <button type="button" :class="['calculator-key', ['×','-','+'].includes(key) ? 'is-operator' : '', key === '0' ? 'col-span-2' : '']" @click="appendCalculator(key)">{{ key }}</button>
+                        </template>
+                        <button type="button" class="calculator-key is-equals" @click="calculate">=</button>
+                    </div>
+                </section>
+            </div>
+        </Teleport>
     </AuthenticatedLayout>
 </template>
 
@@ -1003,5 +1293,35 @@ watch(
 
 .dashboard-password-reveal-row:disabled {
     cursor: default;
+}
+
+.dashboard-utility-dialog {
+    animation: dashboardPasswordDialogIn 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.calculator-key {
+    min-height: 2.75rem;
+    border: 1px solid rgb(229 231 235 / 0.9);
+    border-radius: var(--radius-sm);
+    background: rgb(249 250 251 / 0.9);
+    color: rgb(31 41 55);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.calculator-key:hover {
+    background: hsl(var(--primary-app) / 0.08);
+    transform: translateY(-1px);
+}
+
+.calculator-key.is-operator {
+    color: hsl(var(--primary-app));
+}
+
+.calculator-key.is-equals {
+    border-color: transparent;
+    background: hsl(var(--primary-app));
+    color: white;
 }
 </style>
