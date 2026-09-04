@@ -145,10 +145,8 @@ function toggleDocumentYear(year) {
     }
 }
 
-function yearScaleClass(year, index) {
+function yearScaleClass(year) {
     if (hoveredDocumentYear.value === year) return 'scale-[1.18] text-[hsl(var(--primary-app))]';
-    const hoveredIndex = documentYearGroups.value.findIndex((group) => group.year === hoveredDocumentYear.value);
-    if (hoveredIndex >= 0 && Math.abs(hoveredIndex - index) === 1) return 'scale-[1.07] text-gray-700';
     return selectedDocumentYear.value === year ? 'text-gray-950' : 'text-gray-500';
 }
 
@@ -975,18 +973,25 @@ function deleteLabel(type) {
                 </section>
 
                 <section v-if="!canManage || activeAdminSection === 'documents'" class="space-y-4">
-                    <div class="flex items-center justify-between gap-4">
+                    <div class="flex flex-wrap items-end justify-between gap-4">
                         <div>
                             <h3 class="text-base font-semibold text-gray-900">{{ canManage ? 'Tutti i documenti' : 'I miei documenti' }}</h3>
                             <p class="mt-1 text-sm text-gray-500">Documenti {{ currentYear }} in evidenza e archivio diviso per anno.</p>
                         </div>
+                        <div v-if="selectedDocumentYear" class="w-full max-w-[260px]">
+                            <AppSelect
+                                :model-value="categoryFilterFor(selectedDocumentYear)"
+                                :options="categoryOptions"
+                                @update:model-value="setCategoryFilter(selectedDocumentYear, $event)"
+                            />
+                        </div>
                     </div>
 
                     <div v-if="visibleDocuments.length" class="document-year-stack">
-                        <section v-for="(group, index) in documentYearGroups" :key="group.year" class="document-year-section">
+                        <section v-for="group in documentYearGroups" :key="group.year" class="document-year-section">
                             <button
                                 type="button"
-                                :class="['document-year-button origin-left', yearScaleClass(group.year, index)]"
+                                :class="['document-year-button origin-left', yearScaleClass(group.year)]"
                                 :aria-expanded="selectedDocumentYear === group.year"
                                 @mouseenter="hoveredDocumentYear = group.year"
                                 @mouseleave="hoveredDocumentYear = null"
@@ -995,25 +1000,11 @@ function deleteLabel(type) {
                                 @click="toggleDocumentYear(group.year)"
                             >
                                 <span class="text-2xl font-semibold leading-none">{{ group.year }}</span>
-                                <span class="text-xs font-medium text-gray-400">{{ group.total }} {{ group.total === 1 ? 'documento' : 'documenti' }}</span>
+                                <span v-if="selectedDocumentYear === group.year" class="text-xs font-medium text-gray-400">{{ group.total }} {{ group.total === 1 ? 'documento' : 'documenti' }}</span>
                             </button>
 
                             <Transition name="document-year-expand">
                                 <div v-if="selectedDocumentYear === group.year" class="mt-5 space-y-4 pb-7">
-                                    <div class="flex items-end justify-between gap-3">
-                                        <div>
-                                            <h4 class="text-sm font-semibold text-gray-900">Documenti {{ group.year }}</h4>
-                                            <p class="mt-1 text-xs text-gray-500">{{ filteredDocumentsForYear(group).length }} risultati</p>
-                                        </div>
-                                        <div class="w-full max-w-[260px]">
-                                            <AppSelect
-                                                :model-value="categoryFilterFor(group.year)"
-                                                :options="categoryOptions"
-                                                @update:model-value="setCategoryFilter(group.year, $event)"
-                                            />
-                                        </div>
-                                    </div>
-
                                     <div v-if="filteredDocumentsForYear(group).length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                                         <article
                                             v-for="document in visibleDocumentsForYear(group)"
