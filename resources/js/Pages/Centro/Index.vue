@@ -5089,8 +5089,8 @@ function calendarDayStyle(sectionMonth, cell) {
                             @mouseenter="startClientServicesAutoScroll"
                             @mouseleave="stopClientServicesAutoScroll"
                         >
-                            <Link :href="route('clients.show', client.id)" class="block h-full p-5 pr-14">
-                                <div class="min-w-0">
+                            <Link :href="route('clients.show', client.id)" class="block h-full p-5">
+                                <div class="min-w-0 pr-9">
                                     <h3 class="truncate text-base font-semibold text-gray-900">{{ client.name }}</h3>
                                     <p v-if="client.legal_name && client.legal_name !== client.name" class="mt-0.5 truncate text-sm text-gray-500">{{ client.legal_name }}</p>
                                 </div>

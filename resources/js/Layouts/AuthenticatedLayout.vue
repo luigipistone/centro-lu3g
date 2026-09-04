@@ -42,12 +42,48 @@ const collapsedGroups = ref({
 });
 const darkMode = ref(false);
 const completionEffect = ref(null);
+const SIDEBAR_MIN_WIDTH = 84;
+const SIDEBAR_MAX_WIDTH = 360;
+const SIDEBAR_COLLAPSE_AT = 132;
+const sidebarWidth = ref(256);
+const sidebarResizing = ref(false);
+const sidebarCollapsed = computed(() => sidebarWidth.value < SIDEBAR_COLLAPSE_AT);
 const page = usePage();
 const notificationPermission = ref('unsupported');
 const notificationStatusMessage = ref('');
 const notificationPermissionBusy = ref(false);
 let notificationPoller = null;
 let completionEffectTimer = null;
+let sidebarResizeStartX = 0;
+let sidebarResizeStartWidth = 256;
+
+function resizeSidebar(event) {
+    if (!sidebarResizing.value) return;
+    sidebarWidth.value = Math.min(SIDEBAR_MAX_WIDTH, Math.max(
+        SIDEBAR_MIN_WIDTH,
+        sidebarResizeStartWidth + event.clientX - sidebarResizeStartX,
+    ));
+}
+
+function stopSidebarResize() {
+    if (!sidebarResizing.value) return;
+    sidebarResizing.value = false;
+    document.body.classList.remove('sidebar-is-resizing');
+    window.localStorage.setItem('centro:sidebar-width', String(Math.round(sidebarWidth.value)));
+    window.removeEventListener('pointermove', resizeSidebar);
+    window.removeEventListener('pointerup', stopSidebarResize);
+    window.removeEventListener('pointercancel', stopSidebarResize);
+}
+
+function startSidebarResize(event) {
+    sidebarResizeStartX = event.clientX;
+    sidebarResizeStartWidth = sidebarWidth.value;
+    sidebarResizing.value = true;
+    document.body.classList.add('sidebar-is-resizing');
+    window.addEventListener('pointermove', resizeSidebar);
+    window.addEventListener('pointerup', stopSidebarResize);
+    window.addEventListener('pointercancel', stopSidebarResize);
+}
 
 const latestNotifications = computed(() => page.props.notifications?.latest || []);
 const latestUnreadNotification = computed(() => latestNotifications.value.find((notification) => !notification.read));
@@ -233,6 +269,10 @@ watch(latestUnreadNotification, (notification) => {
 });
 
 onMounted(() => {
+    const savedSidebarWidth = Number(window.localStorage.getItem('centro:sidebar-width'));
+    if (Number.isFinite(savedSidebarWidth)) {
+        sidebarWidth.value = Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, savedSidebarWidth));
+    }
     initializeTheme();
     refreshNotificationPermission();
     ensureCentroPushSubscription(page.props.push?.vapidPublicKey);
@@ -246,6 +286,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+    stopSidebarResize();
     window.clearInterval(notificationPoller);
     window.clearTimeout(completionEffectTimer);
     window.removeEventListener('centro:task-completed', playCompletionEffect);
@@ -339,18 +380,22 @@ const groups = computed(() => {
 
 <template>
     <div class="min-h-screen bg-[hsl(var(--background))]">
-        <aside class="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-white/60 bg-white/62 shadow-[20px_0_55px_rgba(28,42,73,0.08)] backdrop-blur-2xl lg:flex">
-            <div class="flex h-16 items-center justify-between border-b border-white/60 px-4">
-                <Link :href="route('dashboard')" class="flex items-center gap-2 font-semibold tracking-tight text-gray-950">
+        <aside
+            class="desktop-sidebar fixed inset-y-0 left-0 z-30 hidden flex-col border-r border-white/60 bg-white/62 shadow-[20px_0_55px_rgba(28,42,73,0.08)] backdrop-blur-2xl lg:flex"
+            :class="{ 'is-collapsed': sidebarCollapsed, 'is-resizing': sidebarResizing }"
+            :style="{ width: `${sidebarWidth}px` }"
+        >
+            <div :class="['flex min-h-16 items-center border-b border-white/60 px-3', sidebarCollapsed ? 'flex-col justify-center gap-1 py-2' : 'justify-between']">
+                <Link :href="route('dashboard')" :class="['flex items-center font-semibold tracking-tight text-gray-950', sidebarCollapsed ? 'justify-center' : 'gap-2']" title="Dashboard">
                     <span class="brand-mark">
                         <ApplicationLogo class="h-7 w-7" />
                     </span>
-                    <span>Il Centro</span>
+                    <span v-if="!sidebarCollapsed">Il Centro</span>
                 </Link>
-                <div class="flex items-center gap-1">
+                <div :class="['flex items-center', sidebarCollapsed ? 'gap-0' : 'gap-1']">
                     <button
                         type="button"
-                        class="inline-flex h-9 w-9 items-center justify-center rounded-2xl text-gray-500 transition hover:bg-white/70 hover:text-[hsl(var(--primary-app))] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]"
+                        :class="['inline-flex items-center justify-center rounded-2xl text-gray-500 transition hover:bg-white/70 hover:text-[hsl(var(--primary-app))] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]', sidebarCollapsed ? 'h-8 w-8' : 'h-9 w-9']"
                         :aria-label="darkMode ? 'Disattiva modalità dark' : 'Attiva modalità dark'"
                         :title="darkMode ? 'Modalità chiara' : 'Modalità dark'"
                         @click="toggleDarkMode"
@@ -361,7 +406,7 @@ const groups = computed(() => {
                     <div class="relative">
                         <button
                             type="button"
-                            class="relative inline-flex h-9 w-9 items-center justify-center rounded-2xl text-gray-500 transition hover:bg-white/70 hover:text-[hsl(var(--primary-app))] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]"
+                            :class="['relative inline-flex items-center justify-center rounded-2xl text-gray-500 transition hover:bg-white/70 hover:text-[hsl(var(--primary-app))] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]', sidebarCollapsed ? 'h-8 w-8' : 'h-9 w-9']"
                             :aria-expanded="notificationMenuOpen"
                             aria-label="Apri notifiche"
                             @click="toggleNotificationMenu"
@@ -386,7 +431,8 @@ const groups = computed(() => {
 
                         <div
                             v-if="notificationMenuOpen"
-                            class="app-popover fixed left-[17rem] top-4 z-[7900] w-96 max-w-[calc(100vw-18rem)] overflow-hidden rounded-2xl border border-white bg-white shadow-[0_24px_70px_rgba(28,42,73,0.14)]"
+                            class="app-popover fixed top-4 z-[7900] w-96 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-white bg-white shadow-[0_24px_70px_rgba(28,42,73,0.14)]"
+                            :style="{ left: `${sidebarWidth + 16}px` }"
                             @click.stop
                         >
                             <div class="flex items-center justify-between border-b border-white/60 px-3 py-2">
@@ -435,10 +481,10 @@ const groups = computed(() => {
                 </div>
             </div>
 
-            <div class="flex-1 overflow-y-auto p-3 pt-4">
+            <div :class="['flex-1 overflow-y-auto pt-4', sidebarCollapsed ? 'px-2' : 'p-3']">
                 <div v-for="group in groups" :key="group.label" class="mb-5">
                     <button
-                        v-if="group.collapsible"
+                        v-if="group.collapsible && !sidebarCollapsed"
                         type="button"
                         class="mb-2 flex w-full items-center gap-1.5 rounded-2xl px-3 py-1.5 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400 transition hover:bg-white/58 hover:text-gray-600"
                         :aria-expanded="isGroupOpen(group)"
@@ -448,40 +494,48 @@ const groups = computed(() => {
                         <span class="min-w-0 flex-1">{{ group.label }}</span>
                         <ChevronDown :class="['h-3.5 w-3.5 transition-transform', isGroupOpen(group) ? 'rotate-180' : '']" :stroke-width="1.8" />
                     </button>
-                    <div v-else class="mb-2 flex items-center gap-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400">
+                    <div v-else-if="!sidebarCollapsed" class="mb-2 flex items-center gap-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400">
                         <component v-if="group.icon" :is="group.icon" class="h-3 w-3" :stroke-width="1.6" />
                         {{ group.label }}
                     </div>
-                    <div v-show="isGroupOpen(group)" class="space-y-1">
+                    <div v-show="sidebarCollapsed || isGroupOpen(group)" class="space-y-1">
                         <Link
                             v-for="[name, label, icon] in group.links"
                             :key="name"
                             :href="route(name)"
-                            :class="['nav-link', route().current(name) ? 'nav-link-active' : '']"
+                            :class="['nav-link', sidebarCollapsed ? 'justify-center px-0' : '', route().current(name) ? 'nav-link-active' : '']"
+                            :title="sidebarCollapsed ? label : undefined"
                         >
                             <component :is="icon" class="h-[18px] w-[18px]" :stroke-width="1.6" />
-                            <span>{{ label }}</span>
+                            <span v-if="!sidebarCollapsed">{{ label }}</span>
                         </Link>
                     </div>
                 </div>
             </div>
 
-            <div class="border-t border-white/60 p-3">
-                <Link :href="route('profile.edit')" class="mb-2 flex items-center gap-2 rounded-2xl p-2 transition hover:bg-white/58">
+            <div :class="['border-t border-white/60', sidebarCollapsed ? 'p-2' : 'p-3']">
+                <Link :href="route('profile.edit')" :class="['mb-2 flex items-center rounded-2xl p-2 transition hover:bg-white/58', sidebarCollapsed ? 'justify-center' : 'gap-2']" title="Profilo">
                     <UserAvatar :user="$page.props.auth.user" size="sm" />
-                    <div class="min-w-0">
+                    <div v-if="!sidebarCollapsed" class="min-w-0">
                         <div class="truncate text-xs font-semibold text-gray-900">{{ $page.props.auth.user.name }}</div>
                         <div class="truncate text-[10px] text-gray-500">{{ $page.props.auth.user.email }}</div>
                     </div>
                 </Link>
-                <a href="/esci-app" class="nav-link w-full">
+                <a href="/esci-app" :class="['nav-link w-full', sidebarCollapsed ? 'justify-center px-0' : '']" title="Esci">
                     <LogOut class="h-[18px] w-[18px]" :stroke-width="1.6" />
-                    Esci
+                    <span v-if="!sidebarCollapsed">Esci</span>
                 </a>
             </div>
+            <button
+                type="button"
+                class="sidebar-resize-handle"
+                aria-label="Ridimensiona barra laterale"
+                title="Trascina per ridimensionare"
+                @pointerdown.prevent="startSidebarResize"
+            ></button>
         </aside>
 
-        <div class="lg:pl-64">
+        <div class="desktop-shell" :style="{ '--sidebar-width': `${sidebarWidth}px` }">
             <nav class="sticky top-0 z-30 border-b border-white/60 bg-white/68 shadow-[0_16px_40px_rgba(28,42,73,0.08)] backdrop-blur-2xl lg:hidden">
                 <div class="px-4 sm:px-6">
                     <div class="flex h-16 justify-between">

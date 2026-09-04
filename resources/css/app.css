@@ -162,6 +162,53 @@
         visibility: visible;
     }
 
+    .sidebar-resize-handle {
+        position: absolute;
+        inset: 0 -4px 0 auto;
+        z-index: 40;
+        width: 8px;
+        cursor: col-resize;
+        touch-action: none;
+    }
+
+    .sidebar-resize-handle::after {
+        content: '';
+        position: absolute;
+        right: 3px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: hsl(var(--primary-app) / 0);
+        transition: background-color 160ms ease;
+    }
+
+    .desktop-sidebar:hover .sidebar-resize-handle::after,
+    .desktop-sidebar.is-resizing .sidebar-resize-handle::after {
+        background: hsl(var(--primary-app) / 0.45);
+    }
+
+    body.sidebar-is-resizing,
+    body.sidebar-is-resizing * {
+        cursor: col-resize !important;
+        user-select: none !important;
+    }
+
+    @media (min-width: 1024px) {
+        .desktop-shell {
+            padding-left: var(--sidebar-width);
+            transition: padding-left 180ms ease;
+        }
+
+        .desktop-sidebar {
+            transition: width 180ms ease;
+        }
+
+        .desktop-sidebar.is-resizing,
+        body.sidebar-is-resizing .desktop-shell {
+            transition: none;
+        }
+    }
+
     .section-title {
         @apply flex items-center gap-2 text-base font-semibold text-gray-950;
     }
