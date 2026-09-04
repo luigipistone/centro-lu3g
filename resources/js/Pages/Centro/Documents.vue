@@ -22,7 +22,9 @@ const props = defineProps({
 const page = usePage();
 const confirmDelete = ref(null);
 const confirmDeleteText = ref('');
-const currentYearVisibleCount = ref(5);
+const selectedDocumentYear = ref(new Date().getFullYear());
+const hoveredDocumentYear = ref(null);
+const yearVisibleCounts = ref({ [new Date().getFullYear()]: 5 });
 const documentDescriptionEditor = ref(null);
 const messageBodyEditor = ref(null);
 const createModal = ref(null);
@@ -94,25 +96,17 @@ const categoryOptions = computed(() => [
     ...Object.entries(props.documentCategories || {}).map(([value, label]) => ({ value, label })),
 ]);
 const documentCategoryOptions = computed(() => categoryOptions.value.filter((option) => option.value !== 'all'));
-const currentYearDocuments = computed(() => filterDocumentsByCategory(
-    visibleDocuments.value.filter((document) => documentYear(document) === currentYear),
-    currentYear,
-));
-const visibleCurrentYearDocuments = computed(() => currentYearDocuments.value.slice(0, currentYearVisibleCount.value));
-const previousYearGroups = computed(() => {
-    const groups = visibleDocuments.value
-        .filter((document) => documentYear(document) !== currentYear)
-        .reduce((carry, document) => {
-            const year = documentYear(document);
-            carry[year] = carry[year] || [];
-            carry[year].push(document);
+const documentYearGroups = computed(() => {
+    const grouped = visibleDocuments.value.reduce((carry, document) => {
+        const year = documentYear(document);
+        carry[year] = carry[year] || [];
+        carry[year].push(document);
+        return carry;
+    }, { [currentYear]: [] });
 
-            return carry;
-        }, {});
-
-    return Object.entries(groups)
+    return Object.entries(grouped)
         .sort(([yearA], [yearB]) => Number(yearB) - Number(yearA))
-        .map(([year, documents]) => ({ year, documents, total: documents.length }));
+        .map(([year, documents]) => ({ year: Number(year), documents, total: documents.length }));
 });
 
 function documentYear(document) {
@@ -126,7 +120,7 @@ function categoryFilterFor(year) {
 
 function setCategoryFilter(year, value) {
     categoryFilters.value = { ...categoryFilters.value, [year]: value };
-    if (Number(year) === currentYear) currentYearVisibleCount.value = 5;
+    yearVisibleCounts.value = { ...yearVisibleCounts.value, [year]: 5 };
 }
 
 function filterDocumentsByCategory(documents, year) {
@@ -134,6 +128,28 @@ function filterDocumentsByCategory(documents, year) {
     if (category === 'all') return documents;
 
     return documents.filter((document) => (document.category || 'documenti_vari') === category);
+}
+
+function filteredDocumentsForYear(group) {
+    return filterDocumentsByCategory(group.documents, group.year);
+}
+
+function visibleDocumentsForYear(group) {
+    return filteredDocumentsForYear(group).slice(0, yearVisibleCounts.value[group.year] || 5);
+}
+
+function toggleDocumentYear(year) {
+    selectedDocumentYear.value = selectedDocumentYear.value === year ? null : year;
+    if (!yearVisibleCounts.value[year]) {
+        yearVisibleCounts.value = { ...yearVisibleCounts.value, [year]: 5 };
+    }
+}
+
+function yearScaleClass(year, index) {
+    if (hoveredDocumentYear.value === year) return 'scale-[1.18] text-[hsl(var(--primary-app))]';
+    const hoveredIndex = documentYearGroups.value.findIndex((group) => group.year === hoveredDocumentYear.value);
+    if (hoveredIndex >= 0 && Math.abs(hoveredIndex - index) === 1) return 'scale-[1.07] text-gray-700';
+    return selectedDocumentYear.value === year ? 'text-gray-950' : 'text-gray-500';
 }
 
 function categoryLabel(category) {
@@ -358,8 +374,11 @@ function fileSize(bytes) {
     return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function showMoreCurrentYearDocuments() {
-    currentYearVisibleCount.value += 5;
+function showMoreYearDocuments(year) {
+    yearVisibleCounts.value = {
+        ...yearVisibleCounts.value,
+        [year]: (yearVisibleCounts.value[year] || 5) + 5,
+    };
 }
 
 function loadReport() {
@@ -963,93 +982,82 @@ function deleteLabel(type) {
                         </div>
                     </div>
 
-                    <div v-if="visibleDocuments.length" class="space-y-6">
-                        <section class="space-y-3">
-                            <div class="flex items-end justify-between gap-3">
-                                <div>
-                                    <h4 class="text-sm font-semibold text-gray-900">Anno corrente</h4>
-                                    <p class="text-xs text-gray-500">{{ currentYearDocuments.length }} documenti del {{ currentYear }}</p>
-                                </div>
-                                <div class="w-full max-w-[260px]">
-                                    <AppSelect
-                                        :model-value="categoryFilterFor(currentYear)"
-                                        :options="categoryOptions"
-                                        @update:model-value="setCategoryFilter(currentYear, $event)"
-                                    />
-                                </div>
-                            </div>
+                    <div v-if="visibleDocuments.length" class="document-year-stack">
+                        <section v-for="(group, index) in documentYearGroups" :key="group.year" class="document-year-section">
+                            <button
+                                type="button"
+                                :class="['document-year-button origin-left', yearScaleClass(group.year, index)]"
+                                :aria-expanded="selectedDocumentYear === group.year"
+                                @mouseenter="hoveredDocumentYear = group.year"
+                                @mouseleave="hoveredDocumentYear = null"
+                                @focus="hoveredDocumentYear = group.year"
+                                @blur="hoveredDocumentYear = null"
+                                @click="toggleDocumentYear(group.year)"
+                            >
+                                <span class="text-2xl font-semibold leading-none">{{ group.year }}</span>
+                                <span class="text-xs font-medium text-gray-400">{{ group.total }} {{ group.total === 1 ? 'documento' : 'documenti' }}</span>
+                            </button>
 
-                            <div v-if="currentYearDocuments.length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                <article
-                                    v-for="document in visibleCurrentYearDocuments"
-                                    :key="document.id"
-                                    role="button"
-                                    tabindex="0"
-                                    :class="['surface group cursor-pointer p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]', !canManage && !document.user_read_at ? 'ring-1 ring-amber-100' : '']"
-                                    @click="openDocument(document)"
-                                    @keydown.enter.prevent="openDocument(document)"
-                                    @keydown.space.prevent="openDocument(document)"
-                                >
-                                    <div class="flex items-start justify-between gap-3">
-                                        <div class="flex min-w-0 items-center gap-3">
-                                            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]">
-                                                <FileText class="h-5 w-5" :stroke-width="1.7" />
-                                            </span>
-                                            <div class="min-w-0">
-                                                <p class="line-clamp-2 text-sm font-semibold text-gray-900 transition group-hover:text-[hsl(var(--primary-app))]">
-                                                    {{ document.title }}
-                                                </p>
-                                                <p class="mt-1 text-xs text-gray-500">{{ audienceLabel(document) }} · {{ fileSize(document.file_size) }}</p>
-                                                <p class="mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold" :style="categoryBadgeStyle(document.category)">
-                                                    {{ categoryLabel(document.category) }}
-                                                </p>
-                                            </div>
+                            <Transition name="document-year-expand">
+                                <div v-if="selectedDocumentYear === group.year" class="mt-5 space-y-4 pb-7">
+                                    <div class="flex items-end justify-between gap-3">
+                                        <div>
+                                            <h4 class="text-sm font-semibold text-gray-900">Documenti {{ group.year }}</h4>
+                                            <p class="mt-1 text-xs text-gray-500">{{ filteredDocumentsForYear(group).length }} risultati</p>
                                         </div>
-                                        <button v-if="canManage" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina documento" @click.stop="removeDocument(document)">
-                                            <Trash2 class="h-4 w-4" :stroke-width="1.7" />
-                                        </button>
+                                        <div class="w-full max-w-[260px]">
+                                            <AppSelect
+                                                :model-value="categoryFilterFor(group.year)"
+                                                :options="categoryOptions"
+                                                @update:model-value="setCategoryFilter(group.year, $event)"
+                                            />
+                                        </div>
                                     </div>
 
-                                    <div v-if="document.description" class="mt-3 line-clamp-2 text-sm text-gray-500" v-html="document.description"></div>
-
-                                    <div class="mt-4 flex items-center justify-between gap-3 text-xs text-gray-500">
-                                        <span>{{ dateIt(document.created_at) }}</span>
-                                        <span v-if="canManage" class="font-semibold text-gray-700">{{ document.read_count }}/{{ document.recipient_count }} letti</span>
-                                        <span v-else :class="['inline-flex items-center gap-1 rounded-full px-2 py-1 font-semibold', document.user_read_at ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700']">
-                                            <Check v-if="document.user_read_at" class="h-3.5 w-3.5" :stroke-width="1.8" />
-                                            {{ document.user_read_at ? 'Letto' : 'Da leggere' }}
-                                        </span>
+                                    <div v-if="filteredDocumentsForYear(group).length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                        <article
+                                            v-for="document in visibleDocumentsForYear(group)"
+                                            :key="document.id"
+                                            role="button"
+                                            tabindex="0"
+                                            :class="['surface group cursor-pointer p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]', !canManage && !document.user_read_at ? 'ring-1 ring-amber-100' : '']"
+                                            @click="openDocument(document)"
+                                            @keydown.enter.prevent="openDocument(document)"
+                                            @keydown.space.prevent="openDocument(document)"
+                                        >
+                                            <div class="flex items-start justify-between gap-3">
+                                                <div class="flex min-w-0 items-center gap-3">
+                                                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]">
+                                                        <FileText class="h-5 w-5" :stroke-width="1.7" />
+                                                    </span>
+                                                    <div class="min-w-0">
+                                                        <p class="line-clamp-2 text-sm font-semibold text-gray-900 transition group-hover:text-[hsl(var(--primary-app))]">{{ document.title }}</p>
+                                                        <p class="mt-1 text-xs text-gray-500">{{ audienceLabel(document) }} · {{ fileSize(document.file_size) }}</p>
+                                                        <p class="mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold" :style="categoryBadgeStyle(document.category)">{{ categoryLabel(document.category) }}</p>
+                                                    </div>
+                                                </div>
+                                                <button v-if="canManage" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina documento" @click.stop="removeDocument(document)">
+                                                    <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                                </button>
+                                            </div>
+                                            <div v-if="document.description" class="mt-3 line-clamp-2 text-sm text-gray-500" v-html="document.description"></div>
+                                            <div class="mt-4 flex items-center justify-between gap-3 text-xs text-gray-500">
+                                                <span>{{ dateIt(document.created_at) }}</span>
+                                                <span v-if="canManage" class="font-semibold text-gray-700">{{ document.read_count }}/{{ document.recipient_count }} letti</span>
+                                                <span v-else :class="['inline-flex items-center gap-1 rounded-full px-2 py-1 font-semibold', document.user_read_at ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700']">
+                                                    <Check v-if="document.user_read_at" class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                                    {{ document.user_read_at ? 'Letto' : 'Da leggere' }}
+                                                </span>
+                                            </div>
+                                        </article>
                                     </div>
-                                </article>
-                            </div>
-                            <div v-else class="surface px-5 py-8 text-center text-sm text-gray-500">
-                                Nessun documento per il {{ currentYear }}.
-                            </div>
+                                    <div v-else class="surface px-5 py-8 text-center text-sm text-gray-500">Nessun documento per questa categoria.</div>
 
-                            <div v-if="currentYearDocuments.length > visibleCurrentYearDocuments.length" class="flex justify-center">
-                                <button type="button" class="btn btn-outline" @click="showMoreCurrentYearDocuments">
-                                    Carica altri
-                                </button>
-                            </div>
-                        </section>
-
-                        <section v-if="previousYearGroups.length" class="space-y-4">
-                            <div>
-                                <h4 class="text-sm font-semibold text-gray-900">Anni precedenti</h4>
-                                <p class="text-xs text-gray-500">Seleziona un anno per aprire l'archivio relativo.</p>
-                            </div>
-
-                            <div class="flex flex-wrap gap-2">
-                                <Link
-                                    v-for="group in previousYearGroups"
-                                    :key="group.year"
-                                    :href="route('documents.archive', group.year)"
-                                    class="rounded-[var(--radius-sm)] border border-white bg-white/70 px-4 py-2 text-left text-gray-700 transition hover:-translate-y-0.5 hover:border-[hsl(var(--primary-app))] hover:bg-[hsl(var(--primary-app)/0.10)] hover:text-[hsl(var(--primary-app-dark))] hover:shadow-[0_12px_28px_rgba(28,42,73,0.08)]"
-                                >
-                                    <span class="block text-sm font-semibold">{{ group.year }}</span>
-                                    <span class="block text-xs text-gray-500">{{ group.total }} documenti</span>
-                                </Link>
-                            </div>
+                                    <div v-if="filteredDocumentsForYear(group).length > visibleDocumentsForYear(group).length" class="flex justify-center">
+                                        <button type="button" class="btn btn-outline" @click="showMoreYearDocuments(group.year)">Carica altri</button>
+                                    </div>
+                                </div>
+                            </Transition>
                         </section>
                     </div>
                     <div v-else class="surface px-5 py-12 text-center text-sm text-gray-500">
@@ -1060,3 +1068,78 @@ function deleteLabel(type) {
         </div>
     </AuthenticatedLayout>
 </template>
+
+<style scoped>
+.document-year-stack {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.document-year-stack::before {
+    content: '';
+    position: absolute;
+    left: 0.28rem;
+    top: 1.25rem;
+    bottom: 1.25rem;
+    width: 1px;
+    background: rgb(148 163 184 / 0.2);
+}
+
+.document-year-section {
+    position: relative;
+    padding-left: 1.5rem;
+}
+
+.document-year-section::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 1.1rem;
+    width: 0.58rem;
+    height: 0.58rem;
+    border: 2px solid white;
+    border-radius: 9999px;
+    background: hsl(var(--primary-app) / 0.42);
+    box-shadow: 0 0 0 1px hsl(var(--primary-app) / 0.14);
+}
+
+.document-year-button {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+    padding: 0.55rem 0;
+    text-align: left;
+    cursor: pointer;
+    transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), color 180ms ease;
+    will-change: transform;
+}
+
+.document-year-button:focus-visible {
+    border-radius: var(--radius-sm);
+    outline: 2px solid hsl(var(--primary-app) / 0.35);
+    outline-offset: 4px;
+}
+
+.document-year-expand-enter-active,
+.document-year-expand-leave-active {
+    transition: opacity 220ms ease, transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+    transform-origin: top left;
+}
+
+.document-year-expand-enter-from,
+.document-year-expand-leave-to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.985);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .document-year-button,
+    .document-year-expand-enter-active,
+    .document-year-expand-leave-active {
+        transition: none;
+    }
+}
+</style>
