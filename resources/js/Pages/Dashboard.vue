@@ -899,7 +899,7 @@ watch(
 
                 <div
                     ref="dashboardGrid"
-                    class="grid grid-cols-1 gap-4 lg:auto-rows-[72px] lg:grid-flow-dense lg:grid-cols-4"
+                    class="grid grid-cols-1 gap-4 lg:auto-rows-[84px] lg:grid-flow-dense lg:grid-cols-4"
                 >
                     <article
                         v-for="widget in visibleWidgets"
