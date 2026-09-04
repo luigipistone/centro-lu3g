@@ -1015,7 +1015,7 @@ function deleteLabel(type) {
                                             :key="document.id"
                                             role="button"
                                             tabindex="0"
-                                            :class="['surface group cursor-pointer p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]', !canManage && !document.user_read_at ? 'ring-1 ring-amber-100' : '']"
+                                            :class="['surface document-preview-card group cursor-pointer p-4 transition hover:-translate-y-0.5', !canManage && !document.user_read_at ? 'ring-1 ring-amber-100' : '']"
                                             @click="openDocument(document)"
                                             @keydown.enter.prevent="openDocument(document)"
                                             @keydown.space.prevent="openDocument(document)"
@@ -1141,6 +1141,14 @@ function deleteLabel(type) {
 .document-year-expand-inner {
     min-height: 0;
     overflow: hidden;
+}
+
+.document-preview-card {
+    box-shadow: 0 5px 14px rgb(28 42 73 / 0.055);
+}
+
+.document-preview-card:hover {
+    box-shadow: 0 8px 20px rgb(28 42 73 / 0.075);
 }
 
 @media (prefers-reduced-motion: reduce) {
