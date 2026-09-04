@@ -225,6 +225,25 @@
         animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
     }
 
+    .widget-card-drag-source {
+        opacity: 0.22;
+        transform: scale(0.985);
+        border: 2px dashed hsl(var(--primary-app) / 0.55);
+        background: hsl(var(--primary-app) / 0.06);
+        box-shadow: inset 0 0 0 1px hsl(var(--primary-app) / 0.08);
+    }
+
+    .widget-drag-preview {
+        border: 1px solid hsl(var(--primary-app) / 0.28);
+        background: rgb(255 255 255 / 0.96);
+        box-shadow: 0 28px 70px rgb(15 23 42 / 0.24), 0 8px 24px hsl(var(--primary-app) / 0.18);
+        transform: rotate(1deg) scale(1.025);
+        animation: widget-drag-lift 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        backdrop-filter: blur(18px) saturate(1.2);
+        -webkit-backdrop-filter: blur(18px) saturate(1.2);
+        will-change: left, top, transform;
+    }
+
     .content-card {
         animation-name: widget-rise-in;
         animation-duration: 320ms;
@@ -708,6 +727,18 @@
         }
     }
 
+    @keyframes widget-drag-lift {
+        from {
+            opacity: 0.5;
+            transform: rotate(0) scale(0.98);
+        }
+
+        to {
+            opacity: 1;
+            transform: rotate(1deg) scale(1.025);
+        }
+    }
+
     @keyframes popover-rise-in {
         from {
             opacity: 0;
@@ -723,6 +754,7 @@
     @media (prefers-reduced-motion: reduce) {
         .surface,
         .widget-card,
+        .widget-drag-preview,
         .content-card,
         .app-popover,
         .status-action-button,

@@ -55,6 +55,7 @@ const saving = ref(false);
 const savingNote = ref(false);
 const draggingType = ref(null);
 const dragOverIndex = ref(null);
+const dragPreview = ref(null);
 const noteEditor = ref(null);
 const noteHtml = ref(props.dashboardNote?.html || '');
 const passwordWidgetSearch = ref('');
@@ -328,7 +329,25 @@ function startMove(widget, event) {
 
     draggingType.value = widget.widget_type;
     dragOverIndex.value = visibleWidgets.value.findIndex((item) => item.widget_type === widget.widget_type);
-    moveState = { type: widget.widget_type };
+    const card = event.currentTarget.closest('[data-widget-type]');
+    const rect = card?.getBoundingClientRect();
+    moveState = {
+        type: widget.widget_type,
+        offsetX: rect ? event.clientX - rect.left : 24,
+        offsetY: rect ? event.clientY - rect.top : 24,
+    };
+    dragPreview.value = rect ? {
+        x: rect.left,
+        y: rect.top,
+        width: rect.width,
+        height: rect.height,
+        label: metaFor(widget).label,
+        description: metaFor(widget).description,
+        icon: metaFor(widget).icon,
+        iconClass: metaFor(widget).iconClass,
+        number: metaFor(widget).kind !== 'note' ? widgetNumber(widget) : null,
+    } : null;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
     document.body.style.cursor = 'grabbing';
     document.body.style.userSelect = 'none';
 
@@ -339,7 +358,53 @@ function startMove(widget, event) {
 function moveWidget(event) {
     if (!moveState || !dashboardGrid.value) return;
 
-    dragOverIndex.value = resolveDropIndex(event);
+    if (dragPreview.value) {
+        dragPreview.value = {
+            ...dragPreview.value,
+            x: event.clientX - moveState.offsetX,
+            y: event.clientY - moveState.offsetY,
+        };
+    }
+
+    const nextIndex = resolveDropIndex(event);
+    if (nextIndex !== dragOverIndex.value) reorderWidgetsDuringDrag(nextIndex);
+}
+
+function reorderWidgetsDuringDrag(nextIndex) {
+    const sourceType = draggingType.value;
+    if (!sourceType) return;
+
+    const before = new Map(
+        [...dashboardGrid.value.querySelectorAll('[data-widget-type]')]
+            .map((element) => [element.dataset.widgetType, element.getBoundingClientRect()]),
+    );
+    const current = visibleWidgets.value.filter((widget) => widget.widget_type !== sourceType);
+    const moved = widgets.value.find((widget) => widget.widget_type === sourceType);
+    if (!moved) return;
+
+    const target = Math.max(0, Math.min(nextIndex, current.length));
+    current.splice(target, 0, moved);
+    dragOverIndex.value = target;
+    widgets.value = [...current, ...hiddenWidgets.value].map((widget, index) => ({ ...widget, position: index }));
+
+    nextTick(() => {
+        dashboardGrid.value?.querySelectorAll('[data-widget-type]').forEach((element) => {
+            if (element.dataset.widgetType === sourceType) return;
+            const previous = before.get(element.dataset.widgetType);
+            const currentRect = element.getBoundingClientRect();
+            if (!previous) return;
+            const deltaX = previous.left - currentRect.left;
+            const deltaY = previous.top - currentRect.top;
+            if (!deltaX && !deltaY) return;
+            element.animate(
+                [
+                    { transform: `translate(${deltaX}px, ${deltaY}px)` },
+                    { transform: 'translate(0, 0)' },
+                ],
+                { duration: 260, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+            );
+        });
+    });
 }
 
 function resolveDropIndex(event) {
@@ -379,6 +444,7 @@ function stopMove() {
     document.body.style.userSelect = '';
     dropOnGrid();
     moveState = null;
+    dragPreview.value = null;
 }
 
 function dropOnGrid() {
@@ -389,12 +455,7 @@ function dropOnGrid() {
 
     if (!sourceType || to === null) return;
 
-    const current = visibleWidgets.value.filter((widget) => widget.widget_type !== sourceType);
-    const moved = widgets.value.find((widget) => widget.widget_type === sourceType);
-    if (!moved) return;
-
-    current.splice(Math.max(0, Math.min(to, current.length)), 0, moved);
-    commitWidgets([...current, ...hiddenWidgets.value]);
+    commitWidgets(widgets.value);
 }
 
 function removeWidget(widget) {
@@ -667,8 +728,7 @@ watch(
                         :class="[
                             'app-card widget-card group relative flex min-h-[154px] flex-col overflow-hidden transition',
                             colSpanClass(widget),
-                            draggingType === widget.widget_type ? 'opacity-45 ring-2 ring-indigo-300' : '',
-                            draggingType && dragOverIndex === visibleWidgets.findIndex((item) => item.widget_type === widget.widget_type) ? 'ring-2 ring-indigo-300' : '',
+                            draggingType === widget.widget_type ? 'widget-card-drag-source' : '',
                         ]"
                     >
                         <button
@@ -844,6 +904,36 @@ watch(
                 </div>
             </div>
         </div>
+
+        <Teleport to="body">
+            <div
+                v-if="dragPreview"
+                class="widget-drag-preview pointer-events-none fixed z-[8000] overflow-hidden rounded-[var(--radius)]"
+                :style="{
+                    left: `${dragPreview.x}px`,
+                    top: `${dragPreview.y}px`,
+                    width: `${dragPreview.width}px`,
+                    height: `${dragPreview.height}px`,
+                }"
+            >
+                <div class="flex items-start justify-between gap-4 px-5 pt-5">
+                    <span class="flex min-w-0 items-start gap-3">
+                        <span :class="['metric-icon', dragPreview.iconClass]">
+                            <component :is="dragPreview.icon" class="h-5 w-5" :stroke-width="1.7" />
+                        </span>
+                        <span class="min-w-0 pt-0.5">
+                            <span class="block truncate text-sm font-semibold text-gray-900">{{ dragPreview.label }}</span>
+                            <span class="block truncate text-xs text-gray-500">{{ dragPreview.description }}</span>
+                        </span>
+                    </span>
+                    <span v-if="dragPreview.number !== null" class="shrink-0 text-3xl font-bold leading-none text-gray-950">{{ dragPreview.number }}</span>
+                </div>
+                <div class="absolute inset-x-5 bottom-4 flex items-center gap-2 text-xs font-semibold text-indigo-600">
+                    <GripVertical class="h-4 w-4" :stroke-width="1.9" />
+                    Sposta e rilascia
+                </div>
+            </div>
+        </Teleport>
 
         <div v-if="passwordRevealItem" class="fixed inset-0 z-[5200] grid h-dvh w-dvw place-items-center bg-gray-950/20 px-4 backdrop-blur-[2px]" @click.self="closePasswordReveal">
             <section class="dashboard-password-dialog max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-[var(--radius)] bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.24)]">
