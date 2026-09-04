@@ -150,6 +150,18 @@
         scroll-snap-type: none;
     }
 
+    .client-services-loop-copy {
+        visibility: hidden;
+    }
+
+    .client-services-carousel.is-looping {
+        scroll-snap-type: none;
+    }
+
+    .client-services-carousel.has-loop-copy .client-services-loop-copy {
+        visibility: visible;
+    }
+
     .section-title {
         @apply flex items-center gap-2 text-base font-semibold text-gray-950;
     }

@@ -2085,6 +2085,54 @@ const clientServicesDrag = {
     scrollLeft: 0,
     dragged: false,
 };
+const clientServicesAutoScroll = {
+    element: null,
+    frame: null,
+    lastTime: 0,
+    loopPoint: 0,
+};
+
+function stopClientServicesAutoScroll() {
+    if (clientServicesAutoScroll.frame) {
+        window.cancelAnimationFrame(clientServicesAutoScroll.frame);
+    }
+    clientServicesAutoScroll.element?.classList.remove('is-looping');
+    clientServicesAutoScroll.element = null;
+    clientServicesAutoScroll.frame = null;
+    clientServicesAutoScroll.lastTime = 0;
+    clientServicesAutoScroll.loopPoint = 0;
+}
+
+function animateClientServices(time) {
+    const state = clientServicesAutoScroll;
+    if (!state.element) return;
+
+    if (!state.lastTime) state.lastTime = time;
+    if (clientServicesDrag.element !== state.element) {
+        state.element.scrollLeft += ((time - state.lastTime) / 1000) * 22;
+        if (state.element.scrollLeft >= state.loopPoint) {
+            state.element.scrollLeft -= state.loopPoint;
+        }
+    }
+    state.lastTime = time;
+    state.frame = window.requestAnimationFrame(animateClientServices);
+}
+
+function startClientServicesAutoScroll(event) {
+    const element = event.currentTarget.querySelector('.client-services-carousel');
+    const repeatedStart = element?.querySelector('[data-services-loop-copy]');
+    const firstService = element?.querySelector('[data-services-original]');
+    if (!element || !repeatedStart || !firstService) return;
+
+    const loopPoint = repeatedStart.offsetLeft - firstService.offsetLeft;
+    if (loopPoint <= element.clientWidth) return;
+
+    stopClientServicesAutoScroll();
+    clientServicesAutoScroll.element = element;
+    clientServicesAutoScroll.loopPoint = loopPoint;
+    element.classList.add('has-loop-copy', 'is-looping');
+    clientServicesAutoScroll.frame = window.requestAnimationFrame(animateClientServices);
+}
 
 function canScrollClientServices(element) {
     return element && element.scrollWidth > element.clientWidth;
@@ -2129,6 +2177,15 @@ function stopClientServicesDrag(event) {
     document.removeEventListener('pointercancel', stopClientServicesDrag);
     clientServicesDrag.element = null;
     clientServicesDrag.pointerId = null;
+
+    const repeatedStart = element.querySelector('[data-services-loop-copy]');
+    const firstService = element.querySelector('[data-services-original]');
+    const loopPoint = repeatedStart && firstService
+        ? repeatedStart.offsetLeft - firstService.offsetLeft
+        : 0;
+    if (loopPoint && element.scrollLeft >= loopPoint) {
+        element.scrollLeft -= loopPoint;
+    }
 }
 
 function cancelClientServicesDrag() {
@@ -3146,6 +3203,7 @@ onUnmounted(() => {
     window.removeEventListener('centro:close-floating-ui', closeCentroIndexFloatingUi);
     window.clearTimeout(calendarScrollTimer);
     cancelClientServicesDrag();
+    stopClientServicesAutoScroll();
 });
 
 function toggleTaskDone(task) {
@@ -5028,6 +5086,8 @@ function calendarDayStyle(sectionMonth, cell) {
                             v-for="client in clientRows"
                             :key="client.id"
                             class="content-card group relative rounded-md border border-gray-200 bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md"
+                            @mouseenter="startClientServicesAutoScroll"
+                            @mouseleave="stopClientServicesAutoScroll"
                         >
                             <Link :href="route('clients.show', client.id)" class="block h-full p-5 pr-14">
                                 <div class="min-w-0">
@@ -5051,7 +5111,19 @@ function calendarDayStyle(sectionMonth, cell) {
                                     <span
                                         v-for="service in client.services || []"
                                         :key="service.id"
+                                        data-services-original
                                         class="inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium"
+                                        :style="{ borderColor: `${service.color || '#64748b'}55`, color: service.color || '#64748b', backgroundColor: `${service.color || '#64748b'}18` }"
+                                    >
+                                        <span class="h-1.5 w-1.5 rounded-full" :style="{ backgroundColor: service.color || '#64748b' }"></span>
+                                        {{ service.name }}
+                                    </span>
+                                    <span
+                                        v-for="service in client.services || []"
+                                        :key="`loop-${service.id}`"
+                                        data-services-loop-copy
+                                        aria-hidden="true"
+                                        class="client-services-loop-copy inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium"
                                         :style="{ borderColor: `${service.color || '#64748b'}55`, color: service.color || '#64748b', backgroundColor: `${service.color || '#64748b'}18` }"
                                     >
                                         <span class="h-1.5 w-1.5 rounded-full" :style="{ backgroundColor: service.color || '#64748b' }"></span>
