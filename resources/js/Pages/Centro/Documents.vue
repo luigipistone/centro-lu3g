@@ -1003,8 +1003,12 @@ function deleteLabel(type) {
                                 <span v-if="selectedDocumentYear === group.year" class="text-xs font-medium text-gray-400">{{ group.total }} {{ group.total === 1 ? 'documento' : 'documenti' }}</span>
                             </button>
 
-                            <Transition name="document-year-expand">
-                                <div v-if="selectedDocumentYear === group.year" class="mt-5 space-y-4 pb-7">
+                            <div
+                                :class="['document-year-expand', selectedDocumentYear === group.year ? 'is-open' : '']"
+                                :aria-hidden="selectedDocumentYear !== group.year"
+                            >
+                                <div class="document-year-expand-inner">
+                                    <div class="mt-5 space-y-4 pb-7">
                                     <div v-if="filteredDocumentsForYear(group).length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                                         <article
                                             v-for="document in visibleDocumentsForYear(group)"
@@ -1047,8 +1051,9 @@ function deleteLabel(type) {
                                     <div v-if="filteredDocumentsForYear(group).length > visibleDocumentsForYear(group).length" class="flex justify-center">
                                         <button type="button" class="btn btn-outline" @click="showMoreYearDocuments(group.year)">Carica altri</button>
                                     </div>
+                                    </div>
                                 </div>
-                            </Transition>
+                            </div>
                         </section>
                     </div>
                     <div v-else class="surface px-5 py-12 text-center text-sm text-gray-500">
@@ -1114,22 +1119,33 @@ function deleteLabel(type) {
     outline-offset: 4px;
 }
 
-.document-year-expand-enter-active,
-.document-year-expand-leave-active {
-    transition: opacity 220ms ease, transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
-    transform-origin: top left;
+.document-year-expand {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transform: translateY(-6px);
+    pointer-events: none;
+    transition:
+        grid-template-rows 360ms cubic-bezier(0.22, 1, 0.36, 1),
+        opacity 220ms ease,
+        transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.document-year-expand-enter-from,
-.document-year-expand-leave-to {
-    opacity: 0;
-    transform: translateY(-8px) scale(0.985);
+.document-year-expand.is-open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+.document-year-expand-inner {
+    min-height: 0;
+    overflow: hidden;
 }
 
 @media (prefers-reduced-motion: reduce) {
     .document-year-button,
-    .document-year-expand-enter-active,
-    .document-year-expand-leave-active {
+    .document-year-expand {
         transition: none;
     }
 }
