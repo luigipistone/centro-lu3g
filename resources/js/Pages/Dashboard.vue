@@ -221,7 +221,6 @@ const widgetMeta = {
 };
 
 const compactWidgetKinds = new Set(['stat', 'clock', 'links', 'calculator', 'weather']);
-const utilityWidgetKinds = new Set(['clock', 'links', 'calculator', 'weather']);
 
 const noteToolbar = [
     ['bold', Bold, 'Grassetto'],
@@ -305,10 +304,6 @@ function rowSpanClass(widget) {
 
 function showsWidgetNumber(widget) {
     return ['stat', 'list', 'password', 'attendance'].includes(metaFor(widget)?.kind);
-}
-
-function isUtilityWidget(widget) {
-    return utilityWidgetKinds.has(metaFor(widget)?.kind);
 }
 
 function commitWidgets(nextWidgets, persist = true) {
@@ -951,7 +946,7 @@ watch(
                             </div>
                         </div>
 
-                        <div v-if="!isUtilityWidget(widget)" class="mt-10 flex items-start justify-between gap-4 rounded-2xl px-1 pb-3 pr-4">
+                        <div class="mt-10 flex items-start justify-between gap-4 rounded-2xl px-1 pb-3 pr-4">
                             <span class="flex min-w-0 items-start gap-3">
                                 <span :class="['metric-icon', metaFor(widget).iconClass]">
                                     <component :is="metaFor(widget).icon" class="h-5 w-5" :stroke-width="1.7" />
