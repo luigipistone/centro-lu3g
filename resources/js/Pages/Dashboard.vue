@@ -299,7 +299,6 @@ function colSpanClass(widget) {
 function rowSpanClass(widget) {
     const kind = metaFor(widget)?.kind;
     if (compactWidgetKinds.has(kind)) return 'lg:row-span-2';
-    if (['note', 'attendance'].includes(kind)) return 'lg:row-span-5';
     return 'lg:row-span-4';
 }
 
