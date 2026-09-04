@@ -433,7 +433,8 @@ function deleteLabel(type) {
                     {{ page.props.flash.status }}
                 </div>
 
-                <nav v-if="canManage" class="flex flex-wrap items-center gap-3">
+                <nav v-if="canManage" class="flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex flex-wrap items-center gap-3">
                         <Link
                             :href="route('documents.list')"
                             :class="['btn', activeAdminSection === 'documents' ? 'btn-primary' : 'btn-outline']"
@@ -465,6 +466,19 @@ function deleteLabel(type) {
                             <Table2 class="h-4 w-4" :stroke-width="1.7" />
                             Report e dati
                         </Link>
+                    </div>
+                    <button v-if="activeAdminSection === 'documents'" type="button" class="btn btn-primary" @click="createModal = 'document'">
+                        <Plus class="h-4 w-4" :stroke-width="1.7" />
+                        Nuovo documento
+                    </button>
+                    <button v-else-if="activeAdminSection === 'messages'" type="button" class="btn btn-primary" @click="createModal = 'message'">
+                        <Plus class="h-4 w-4" :stroke-width="1.7" />
+                        Nuovo messaggio
+                    </button>
+                    <button v-else-if="activeAdminSection === 'groups'" type="button" class="btn btn-primary" @click="createModal = 'group'">
+                        <Plus class="h-4 w-4" :stroke-width="1.7" />
+                        Nuovo gruppo
+                    </button>
                 </nav>
 
                 <Teleport to="body">
@@ -743,10 +757,6 @@ function deleteLabel(type) {
                             <h3 class="text-base font-semibold text-gray-900">{{ canManage ? 'Tutti i messaggi' : 'Messaggi da leggere' }}</h3>
                             <p class="mt-1 text-sm text-gray-500">Comunicazioni con conferma di lettura.</p>
                         </div>
-                        <button v-if="canManage" type="button" class="btn btn-primary" @click="createModal = 'message'">
-                            <Plus class="h-4 w-4" :stroke-width="1.7" />
-                            Nuovo messaggio
-                        </button>
                     </div>
 
                     <div v-if="visibleMessages.length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -800,10 +810,6 @@ function deleteLabel(type) {
                             <h3 class="text-base font-semibold text-gray-900">Gruppi documenti</h3>
                             <p class="mt-1 text-sm text-gray-500">Gruppi di persone utilizzabili come destinatari di documenti e messaggi.</p>
                         </div>
-                        <button type="button" class="btn btn-primary" @click="createModal = 'group'">
-                            <Plus class="h-4 w-4" :stroke-width="1.7" />
-                            Nuovo gruppo
-                        </button>
                     </div>
 
                     <div v-if="groups.length" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -959,10 +965,6 @@ function deleteLabel(type) {
                             <h3 class="text-base font-semibold text-gray-900">{{ canManage ? 'Tutti i documenti' : 'I miei documenti' }}</h3>
                             <p class="mt-1 text-sm text-gray-500">Documenti {{ currentYear }} in evidenza e archivio diviso per anno.</p>
                         </div>
-                        <button v-if="canManage" type="button" class="btn btn-primary" @click="createModal = 'document'">
-                            <Plus class="h-4 w-4" :stroke-width="1.7" />
-                            Nuovo documento
-                        </button>
                     </div>
 
                     <div v-if="visibleDocuments.length" class="space-y-6">
