@@ -4,7 +4,7 @@ import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { dateIt } from '@/utils/formatters';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { Bold, Check, ChevronLeft, Download, FileText, Heading3, Italic, Link2, List, ListOrdered, MessageSquare, Plus, Quote, Send, Table2, Trash2, Underline, Upload, Users } from '@lucide/vue';
+import { Bold, Check, ChevronLeft, Download, FileText, Heading3, Italic, Link2, List, ListOrdered, MessageSquare, Plus, Quote, Send, Table2, Trash2, Underline, Upload, Users, X } from '@lucide/vue';
 import { computed, nextTick, ref } from 'vue';
 
 const props = defineProps({
@@ -25,6 +25,7 @@ const confirmDeleteText = ref('');
 const currentYearVisibleCount = ref(5);
 const documentDescriptionEditor = ref(null);
 const messageBodyEditor = ref(null);
+const createModal = ref(null);
 const categoryFilters = ref({});
 const isSuperadmin = computed(() => page.props.auth?.user?.role === 'superadmin');
 const activeAdminSection = computed(() => props.activeAdminSection || null);
@@ -159,12 +160,19 @@ function resetDocumentForm() {
     });
 }
 
+function closeCreateModal() {
+    createModal.value = null;
+}
+
 function submitDocument() {
     updateDocumentDescriptionFromEditor();
     documentForm.post(route('documents.store'), {
         preserveScroll: true,
         forceFormData: true,
-        onSuccess: resetDocumentForm,
+        onSuccess: () => {
+            resetDocumentForm();
+            closeCreateModal();
+        },
     });
 }
 
@@ -188,7 +196,10 @@ function addDocumentEditorLink() {
 function submitGroup() {
     groupForm.post(route('document-groups.store'), {
         preserveScroll: true,
-        onSuccess: () => groupForm.reset(),
+        onSuccess: () => {
+            groupForm.reset();
+            closeCreateModal();
+        },
     });
 }
 
@@ -206,7 +217,10 @@ function submitMessage() {
     updateMessageBodyFromEditor();
     messageForm.post(route('document-messages.store'), {
         preserveScroll: true,
-        onSuccess: resetMessageForm,
+        onSuccess: () => {
+            resetMessageForm();
+            closeCreateModal();
+        },
     });
 }
 
@@ -385,7 +399,7 @@ function deleteLabel(type) {
     <AuthenticatedLayout>
         <template #header>
             <div class="flex flex-col gap-2">
-                <Link v-if="activeAdminSection" :href="route('documents.index')" class="inline-flex items-center gap-1 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]">
+                <Link v-if="activeAdminSection && activeAdminSection !== 'documents'" :href="route('documents.index')" class="inline-flex items-center gap-1 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]">
                     <ChevronLeft class="h-4 w-4" :stroke-width="1.7" />
                     Documenti
                 </Link>
@@ -419,8 +433,7 @@ function deleteLabel(type) {
                     {{ page.props.flash.status }}
                 </div>
 
-                <section v-if="canManage" class="surface p-5">
-                    <div class="flex flex-wrap items-center gap-3">
+                <nav v-if="canManage" class="flex flex-wrap items-center gap-3">
                         <Link
                             :href="route('documents.list')"
                             :class="['btn', activeAdminSection === 'documents' ? 'btn-primary' : 'btn-outline']"
@@ -438,23 +451,31 @@ function deleteLabel(type) {
                             <span class="rounded-full bg-white/20 px-2 py-0.5 text-xs">{{ visibleMessages.length }}</span>
                         </Link>
                         <Link
+                            :href="route('documents.groups')"
+                            :class="['btn', activeAdminSection === 'groups' ? 'btn-primary' : 'btn-outline']"
+                        >
+                            <Users class="h-4 w-4" :stroke-width="1.7" />
+                            Gruppi
+                            <span class="rounded-full bg-white/20 px-2 py-0.5 text-xs">{{ groups.length }}</span>
+                        </Link>
+                        <Link
                             :href="route('documents.reports')"
                             :class="['btn', activeAdminSection === 'reports' ? 'btn-primary' : 'btn-outline']"
                         >
                             <Table2 class="h-4 w-4" :stroke-width="1.7" />
                             Report e dati
                         </Link>
-                    </div>
-                </section>
+                </nav>
 
-                <section v-if="canManage && !activeAdminSection" class="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-                    <form class="surface space-y-5 p-5" @submit.prevent="submitDocument">
+                <Teleport to="body">
+                    <div v-if="canManage && createModal === 'document'" class="fixed inset-0 z-[8000] flex items-center justify-center bg-black/15 px-4 py-6 backdrop-blur-sm" @click.self="closeCreateModal">
+                    <form class="surface max-h-[calc(100dvh-3rem)] w-full max-w-3xl space-y-5 overflow-y-auto bg-white p-5" @submit.prevent="submitDocument">
                         <div class="flex items-start justify-between gap-4">
                             <div>
                                 <h3 class="text-base font-semibold text-gray-900">Nuovo documento</h3>
                                 <p class="mt-1 text-sm text-gray-500">Carica un PDF e scegli chi deve leggerlo.</p>
                             </div>
-                            <FileText class="h-5 w-5 text-[hsl(var(--primary-app))]" :stroke-width="1.7" />
+                            <button type="button" class="icon-btn" aria-label="Chiudi" @click="closeCreateModal"><X class="h-4 w-4" :stroke-width="1.7" /></button>
                         </div>
 
                         <div class="grid gap-4 md:grid-cols-2">
@@ -571,10 +592,15 @@ function deleteLabel(type) {
                             Pubblica documento
                         </button>
                     </form>
+                    </div>
 
-                    <form class="surface space-y-4 p-5" @submit.prevent="submitGroup">
+                    <div v-if="canManage && createModal === 'group'" class="fixed inset-0 z-[8000] flex items-center justify-center bg-black/15 px-4 py-6 backdrop-blur-sm" @click.self="closeCreateModal">
+                    <form class="surface max-h-[calc(100dvh-3rem)] w-full max-w-xl space-y-4 overflow-y-auto bg-white p-5" @submit.prevent="submitGroup">
                         <div>
-                            <h3 class="text-base font-semibold text-gray-900">Gruppi documenti</h3>
+                            <div class="flex items-start justify-between gap-4">
+                                <h3 class="text-base font-semibold text-gray-900">Nuovo gruppo</h3>
+                                <button type="button" class="icon-btn" aria-label="Chiudi" @click="closeCreateModal"><X class="h-4 w-4" :stroke-width="1.7" /></button>
+                            </div>
                             <p class="mt-1 text-sm text-gray-500">Raggruppa gli utenti per invii mirati.</p>
                         </div>
                         <input v-model="groupForm.name" class="form-control" required placeholder="Nome gruppo" />
@@ -597,28 +623,17 @@ function deleteLabel(type) {
                             Crea gruppo
                         </button>
 
-                        <div class="space-y-2 border-t border-gray-100 pt-4">
-                            <article v-for="group in groups" :key="group.id" class="flex items-center justify-between gap-3 rounded-[var(--radius-sm)] bg-white/70 px-3 py-2">
-                                <div class="min-w-0">
-                                    <p class="truncate text-sm font-semibold text-gray-900">{{ group.name }}</p>
-                                    <p class="text-xs text-gray-500">{{ group.members_count }} utenti</p>
-                                </div>
-                                <button type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina gruppo" @click="removeGroup(group)">
-                                    <Trash2 class="h-4 w-4" :stroke-width="1.7" />
-                                </button>
-                            </article>
-                        </div>
                     </form>
-                </section>
+                    </div>
 
-                <section v-if="canManage && !activeAdminSection" class="surface p-5">
-                    <form class="space-y-5" @submit.prevent="submitMessage">
+                    <div v-if="canManage && createModal === 'message'" class="fixed inset-0 z-[8000] flex items-center justify-center bg-black/15 px-4 py-6 backdrop-blur-sm" @click.self="closeCreateModal">
+                    <form class="surface max-h-[calc(100dvh-3rem)] w-full max-w-3xl space-y-5 overflow-y-auto bg-white p-5" @submit.prevent="submitMessage">
                         <div class="flex items-start justify-between gap-4">
                             <div>
                                 <h3 class="text-base font-semibold text-gray-900">Nuovo messaggio</h3>
                                 <p class="mt-1 text-sm text-gray-500">Invia una comunicazione a tutti, a un gruppo o a persone specifiche.</p>
                             </div>
-                            <MessageSquare class="h-5 w-5 text-[hsl(var(--primary-app))]" :stroke-width="1.7" />
+                            <button type="button" class="icon-btn" aria-label="Chiudi" @click="closeCreateModal"><X class="h-4 w-4" :stroke-width="1.7" /></button>
                         </div>
 
                         <div class="grid gap-4 md:grid-cols-2">
@@ -719,7 +734,8 @@ function deleteLabel(type) {
                             Pubblica messaggio
                         </button>
                     </form>
-                </section>
+                    </div>
+                </Teleport>
 
                 <section v-if="!canManage || activeAdminSection === 'messages'" class="space-y-4">
                     <div class="flex items-center justify-between gap-4">
@@ -727,6 +743,10 @@ function deleteLabel(type) {
                             <h3 class="text-base font-semibold text-gray-900">{{ canManage ? 'Tutti i messaggi' : 'Messaggi da leggere' }}</h3>
                             <p class="mt-1 text-sm text-gray-500">Comunicazioni con conferma di lettura.</p>
                         </div>
+                        <button v-if="canManage" type="button" class="btn btn-primary" @click="createModal = 'message'">
+                            <Plus class="h-4 w-4" :stroke-width="1.7" />
+                            Nuovo messaggio
+                        </button>
                     </div>
 
                     <div v-if="visibleMessages.length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -772,6 +792,35 @@ function deleteLabel(type) {
                     <div v-else class="surface px-5 py-8 text-center text-sm text-gray-500">
                         Nessun messaggio disponibile.
                     </div>
+                </section>
+
+                <section v-if="canManage && activeAdminSection === 'groups'" class="space-y-4">
+                    <div class="flex items-center justify-between gap-4">
+                        <div>
+                            <h3 class="text-base font-semibold text-gray-900">Gruppi documenti</h3>
+                            <p class="mt-1 text-sm text-gray-500">Gruppi di persone utilizzabili come destinatari di documenti e messaggi.</p>
+                        </div>
+                        <button type="button" class="btn btn-primary" @click="createModal = 'group'">
+                            <Plus class="h-4 w-4" :stroke-width="1.7" />
+                            Nuovo gruppo
+                        </button>
+                    </div>
+
+                    <div v-if="groups.length" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        <article v-for="group in groups" :key="group.id" class="surface flex min-h-28 items-start justify-between gap-3 p-4">
+                            <div class="min-w-0">
+                                <span class="mb-3 flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]">
+                                    <Users class="h-4 w-4" :stroke-width="1.7" />
+                                </span>
+                                <p class="truncate text-sm font-semibold text-gray-900">{{ group.name }}</p>
+                                <p class="mt-1 text-xs text-gray-500">{{ group.members_count }} utenti</p>
+                            </div>
+                            <button type="button" class="icon-btn h-8 w-8 shrink-0 text-red-600 hover:bg-red-50" title="Elimina gruppo" @click="removeGroup(group)">
+                                <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                            </button>
+                        </article>
+                    </div>
+                    <div v-else class="surface px-5 py-12 text-center text-sm text-gray-500">Nessun gruppo creato.</div>
                 </section>
 
                 <section v-if="canManage && activeAdminSection === 'reports'" class="space-y-6">
@@ -910,6 +959,10 @@ function deleteLabel(type) {
                             <h3 class="text-base font-semibold text-gray-900">{{ canManage ? 'Tutti i documenti' : 'I miei documenti' }}</h3>
                             <p class="mt-1 text-sm text-gray-500">Documenti {{ currentYear }} in evidenza e archivio diviso per anno.</p>
                         </div>
+                        <button v-if="canManage" type="button" class="btn btn-primary" @click="createModal = 'document'">
+                            <Plus class="h-4 w-4" :stroke-width="1.7" />
+                            Nuovo documento
+                        </button>
                     </div>
 
                     <div v-if="visibleDocuments.length" class="space-y-6">

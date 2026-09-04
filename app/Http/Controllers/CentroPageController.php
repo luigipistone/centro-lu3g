@@ -846,7 +846,7 @@ class CentroPageController extends Controller
 
         return Inertia::render('Centro/Documents', [
             'canManage' => $canManage,
-            'activeAdminSection' => $canManage ? $request->route('documentView') : null,
+            'activeAdminSection' => $canManage ? ($request->route('documentView') ?: 'documents') : null,
             'documents' => $this->companyDocumentRows($canManage ? null : $userId, $canManage),
             'messages' => $this->companyMessageRows($canManage ? null : $userId, $canManage),
             'attendanceReport' => $canManage ? $this->attendanceReportData($reportYear, $reportMonth, $reportUserId) : null,
@@ -996,7 +996,7 @@ class CentroPageController extends Controller
             $documentId,
         );
 
-        return redirect()->route('documents.index')->with('status', 'Documento pubblicato.');
+        return redirect()->route('documents.list')->with('status', 'Documento pubblicato.');
     }
 
     public function showCompanyDocument(Request $request, string $id): Response
@@ -1169,7 +1169,7 @@ class CentroPageController extends Controller
             $messageId,
         );
 
-        return redirect()->route('documents.index')->with('status', 'Messaggio pubblicato.');
+        return redirect()->route('documents.messages')->with('status', 'Messaggio pubblicato.');
     }
 
     public function showCompanyMessage(Request $request, string $id): Response
@@ -1263,7 +1263,7 @@ class CentroPageController extends Controller
             $this->syncDocumentGroupUsers($groupId, $payload['user_ids'] ?? []);
         });
 
-        return back()->with('status', 'Gruppo creato.');
+        return redirect()->route('documents.groups')->with('status', 'Gruppo creato.');
     }
 
     public function updateDocumentGroup(Request $request, string $id): RedirectResponse
