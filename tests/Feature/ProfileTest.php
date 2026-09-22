@@ -86,33 +86,36 @@ class ProfileTest extends TestCase
         Storage::disk('local')->assertExists('avatars/'.basename($avatarUrl));
     }
 
-    public function test_user_can_delete_their_account(): void
+    public function test_user_can_request_account_archival(): void
     {
         $user = User::factory()->create();
 
         $response = $this
             ->actingAs($user)
-            ->delete('/profile', [
+            ->post('/profile/archive-request', [
                 'password' => 'password',
+                'reason' => 'Richiedo la chiusura del mio account aziendale.',
             ]);
 
         $response
             ->assertSessionHasNoErrors()
-            ->assertRedirect('/');
+            ->assertRedirect();
 
-        $this->assertGuest();
-        $this->assertNull($user->fresh());
+        $this->assertAuthenticated();
+        $this->assertNotNull($user->fresh());
+        $this->assertDatabaseHas('account_archive_requests', ['user_id' => $user->id, 'status' => 'pending']);
     }
 
-    public function test_correct_password_must_be_provided_to_delete_account(): void
+    public function test_correct_password_must_be_provided_to_request_archival(): void
     {
         $user = User::factory()->create();
 
         $response = $this
             ->actingAs($user)
             ->from('/profile')
-            ->delete('/profile', [
+            ->post('/profile/archive-request', [
                 'password' => 'wrong-password',
+                'reason' => 'Richiedo la chiusura del mio account aziendale.',
             ]);
 
         $response
