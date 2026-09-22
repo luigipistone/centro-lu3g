@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\ProfileUpdateRequest;
 use App\Services\CentroNotificationService;
+use App\Services\AccountArchiveService;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -32,6 +33,7 @@ class ProfileController extends Controller
                 ->latest('start_date')
                 ->limit(30)
                 ->get(),
+            'archiveRequest' => DB::table('account_archive_requests')->where('user_id', $request->user()->id)->latest()->first(),
         ]);
     }
 
@@ -269,24 +271,17 @@ class ProfileController extends Controller
             ->all();
     }
 
-    /**
-     * Delete the user's account.
-     */
-    public function destroy(Request $request): RedirectResponse
+    public function requestArchive(Request $request): RedirectResponse
     {
         $request->validate([
             'password' => ['required', 'current_password'],
+            'reason' => ['required', 'string', 'min:10', 'max:2000'],
         ]);
-
         $user = $request->user();
+        app(AccountArchiveService::class)->create($user, $user, $request->string('reason')->toString());
+        $superadmins = DB::table('user_roles')->where('role', 'superadmin')->where('user_id', '!=', $user->id)->pluck('user_id');
+        app(CentroNotificationService::class)->notifyUsers($superadmins, $user->id, 'account_archive_requested', $user->name.' ha richiesto l’archiviazione del proprio account.');
 
-        Auth::logout();
-
-        $user->delete();
-
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
-
-        return Redirect::to('/');
+        return back()->with('status', 'Richiesta inviata all’amministrazione.');
     }
 }

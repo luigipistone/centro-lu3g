@@ -48,12 +48,6 @@ Schedule::call(function () {
     app(CentroNotificationService::class)->notifyUsers($superadminIds, null, $type, $message);
 })->dailyAt('09:00')->timezone('Europe/Rome')->name('figma-token-expiry-warning');
 
-Schedule::call(function () {
-    if (Schema::hasTable('audit_logs')) {
-        DB::table('audit_logs')->where('created_at', '<', now()->subDays(3))->delete();
-    }
-})->dailyAt('02:40')->timezone('Europe/Rome')->name('purge-audit-logs');
-
 Artisan::command('centro:backup {frequency=manual}', function (CentroBackupService $backupService) {
     $frequency = $this->argument('frequency');
 

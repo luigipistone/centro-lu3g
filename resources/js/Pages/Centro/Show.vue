@@ -816,6 +816,8 @@ const userAvatarPreview = ref(null);
 const userAvatarForm = useForm({ avatar: null });
 const userAccountStatus = ref(props.record.account_status || 'active');
 const userStatusSaving = ref(false);
+const physicalDeleteOpen = ref(false);
+const physicalDeleteForm = useForm({ reason: '', confirmation: '' });
 const clientFiscalOpen = ref(false);
 const absenceForm = useForm({
     type: props.record.type || 'vacation',
@@ -2277,6 +2279,13 @@ function setUserAccountStatus(status) {
         preserveScroll: true,
         onSuccess: () => { userAccountStatus.value = status; },
         onFinish: () => { userStatusSaving.value = false; },
+    });
+}
+
+function physicallyDeleteUser() {
+    physicalDeleteForm.delete(route('users.physical-destroy', props.record.id), {
+        preserveScroll: true,
+        onSuccess: () => { physicalDeleteOpen.value = false; },
     });
 }
 
@@ -5670,11 +5679,33 @@ onUnmounted(() => {
                                 <p class="mt-1 text-xs text-gray-500">Sospensione e archiviazione conservano dati e storico dell’utente.</p>
                             </div>
                             <div class="flex flex-wrap gap-2">
-                                <button v-for="option in [{ value: 'active', label: 'Attivo' }, { value: 'suspended', label: 'Sospeso' }, { value: 'archived', label: 'Archiviato' }]" :key="option.value" type="button" :disabled="userStatusSaving || page.props.auth?.user?.id === record.id" :title="page.props.auth?.user?.id === record.id ? 'Non puoi modificare lo stato del tuo account' : ''" :class="['btn', userAccountStatus === option.value ? 'btn-primary' : 'btn-outline']" @click="setUserAccountStatus(option.value)">
+                                <button v-for="option in [{ value: 'active', label: 'Attivo' }, { value: 'suspended', label: 'Sospeso' }]" :key="option.value" type="button" :disabled="userStatusSaving || page.props.auth?.user?.id === record.id || userAccountStatus === 'archived'" :title="page.props.auth?.user?.id === record.id ? 'Non puoi modificare lo stato del tuo account' : ''" :class="['btn', userAccountStatus === option.value ? 'btn-primary' : 'btn-outline']" @click="setUserAccountStatus(option.value)">
                                     {{ option.label }}
                                 </button>
+                                <span v-if="userAccountStatus === 'archived'" class="btn btn-outline cursor-default">Archiviato</span>
                             </div>
                         </div>
+                        <section class="mb-5 rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <p class="text-sm font-semibold text-gray-900">Elementi collegati all’account</p>
+                                    <p class="mt-1 text-xs text-gray-500">Lo storico resterà attribuito all’utente dopo l’archiviazione.</p>
+                                </div>
+                                <span v-if="related.archiveRequests?.[0]?.status === 'pending'" class="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">Archiviazione in attesa</span>
+                            </div>
+                            <div class="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                                <div v-for="(label, key) in { tasks: 'Task', projects: 'Progetti', clients: 'Clienti', documents: 'Documenti', passwords: 'Password condivise', requests: 'Richieste', messages: 'Messaggi', logs: 'Log' }" :key="key" class="rounded bg-white px-3 py-2 text-sm">
+                                    <span class="text-gray-600">{{ label }}</span><span class="float-right font-semibold text-gray-900">{{ related.linkedAccountSummary?.[key]?.count || 0 }}</span>
+                                    <p v-if="related.linkedAccountSummary?.[key]?.items?.length" class="mt-1 line-clamp-2 text-xs text-gray-400">{{ related.linkedAccountSummary[key].items.map(item => item.label).join(', ') }}</p>
+                                </div>
+                            </div>
+                        </section>
+                        <section v-if="userAccountStatus === 'archived'" class="mb-5 rounded-[var(--radius-sm)] border border-red-100 bg-red-50/40 p-4">
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                                <div><p class="text-sm font-semibold text-red-800">Eliminazione fisica eccezionale</p><p class="mt-1 text-xs text-red-700">Usala soltanto dopo le verifiche legali e privacy.</p></div>
+                                <button type="button" class="btn bg-red-600 text-white hover:bg-red-500" @click="physicalDeleteOpen = true">Elimina definitivamente</button>
+                            </div>
+                        </section>
                         <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
                             <div>
                                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Informazioni profilo</h3>
@@ -7002,5 +7033,21 @@ onUnmounted(() => {
                 </aside>
             </div>
         </Transition>
+
+        <div v-if="physicalDeleteOpen" class="fixed inset-0 z-[8000] flex items-center justify-center bg-transparent px-4 py-6" @click.self="physicalDeleteOpen = false">
+            <form class="w-full max-w-lg rounded-md bg-white p-5 shadow-xl" @submit.prevent="physicallyDeleteUser">
+                <h3 class="text-base font-semibold text-red-800">Eliminazione fisica eccezionale</h3>
+                <p class="mt-2 text-sm text-gray-600">L’operazione è irreversibile. Indica la base legale o privacy verificata; motivazione e riepilogo dei collegamenti resteranno nel log permanente.</p>
+                <label class="mt-4 block text-sm font-medium text-gray-700">Motivazione obbligatoria</label>
+                <textarea v-model="physicalDeleteForm.reason" rows="4" class="form-control mt-1" placeholder="Descrivi il motivo e le verifiche effettuate"></textarea>
+                <p v-if="physicalDeleteForm.errors.reason" class="mt-1 text-sm text-red-600">{{ physicalDeleteForm.errors.reason }}</p>
+                <label class="mt-4 block text-sm font-medium text-gray-700">Digita ELIMINA DEFINITIVAMENTE</label>
+                <input v-model="physicalDeleteForm.confirmation" class="form-control mt-1 font-mono" autocomplete="off" />
+                <div class="mt-5 flex justify-end gap-2">
+                    <button type="button" class="btn btn-outline" @click="physicalDeleteOpen = false">Annulla</button>
+                    <button type="submit" class="btn bg-red-600 text-white hover:bg-red-500" :disabled="physicalDeleteForm.processing || physicalDeleteForm.confirmation !== 'ELIMINA DEFINITIVAMENTE' || physicalDeleteForm.reason.trim().length < 20">Elimina definitivamente</button>
+                </div>
+            </form>
+        </div>
     </AuthenticatedLayout>
 </template>

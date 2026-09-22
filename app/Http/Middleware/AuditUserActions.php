@@ -18,7 +18,7 @@ class AuditUserActions
         $name = $route?->getName();
         if ($user && $this->shouldAudit($request, $name) && Schema::hasTable('audit_logs')) {
             $subjectId = collect($route?->parameters() ?? [])->first(fn ($value, $key) => in_array($key, ['id', 'user', 'project', 'task'], true));
-            $recent = DB::table('audit_logs')
+            $recent = Str::startsWith((string) $name, ['users.', 'settings.roles']) ? null : DB::table('audit_logs')
                 ->where('user_id', $user->id)
                 ->where('route_name', $name)
                 ->where('method', $request->method())
@@ -26,6 +26,15 @@ class AuditUserActions
                 ->where('created_at', '>=', now()->subMinute())
                 ->latest('created_at')
                 ->first();
+            $metadata = ['path' => '/'.ltrim($request->path(), '/')];
+            if (Str::startsWith((string) $name, 'users.')) {
+                $metadata += array_filter([
+                    'status' => $request->input('status'),
+                    'decision' => $request->input('decision'),
+                    'role' => $request->input('role'),
+                    'reason' => $request->input('reason'),
+                ], fn ($value) => $value !== null && $value !== '');
+            }
             $values = [
                 'id' => (string) Str::uuid(),
                 'user_id' => $user->id,
@@ -39,16 +48,13 @@ class AuditUserActions
                 'status_code' => $response->getStatusCode(),
                 'ip_address' => $request->ip(),
                 'user_agent' => Str::limit((string) $request->userAgent(), 1000, ''),
-                'metadata' => json_encode(['path' => '/'.ltrim($request->path(), '/')]),
+                'metadata' => json_encode($metadata),
                 'created_at' => now(), 'updated_at' => now(),
             ];
             if ($recent) {
                 DB::table('audit_logs')->where('id', $recent->id)->update(collect($values)->except(['id'])->all());
             } else {
                 DB::table('audit_logs')->insert($values);
-            }
-            if (random_int(1, 50) === 1) {
-                DB::table('audit_logs')->where('created_at', '<', now()->subDays(3))->delete();
             }
         }
 

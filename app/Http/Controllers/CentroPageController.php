@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Services\CentroBackupService;
 use App\Services\CentroNotificationService;
+use App\Services\AccountArchiveService;
 use App\Services\RolePermissionService;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
@@ -652,6 +653,17 @@ class CentroPageController extends Controller
             'rolePermissionMatrix' => $section === 'settings' ? app(RolePermissionService::class)->matrix() : null,
             'auditLogs' => $section === 'settings' && Schema::hasTable('audit_logs')
                 ? $this->readableAuditLogsQuery()->latest('created_at')->limit(50)->get()
+                : [],
+            'archiveRequests' => $section === 'users' && Schema::hasTable('account_archive_requests')
+                ? DB::table('account_archive_requests')
+                    ->leftJoin('users as requesters', 'requesters.id', '=', 'account_archive_requests.requested_by')
+                    ->where('account_archive_requests.status', 'pending')
+                    ->latest('account_archive_requests.created_at')
+                    ->get(['account_archive_requests.*', 'requesters.name as requester_name'])
+                    ->map(function ($row) {
+                        $row->linked_summary = json_decode($row->linked_summary ?: '{}', true);
+                        return $row;
+                    })
                 : [],
             'clients' => $this->isGuest($request)
                 ? DB::table('clients')
@@ -1968,6 +1980,13 @@ class CentroPageController extends Controller
             'users' => [
                 'roleOptions' => ['superadmin', 'admin', 'editor', 'guest'],
                 'performance' => $this->userPerformanceStats($id),
+                'linkedAccountSummary' => app(AccountArchiveService::class)->summary($id),
+                'archiveRequests' => Schema::hasTable('account_archive_requests')
+                    ? DB::table('account_archive_requests')->where('user_id', $id)->latest()->get()->map(function ($row) {
+                        $row->linked_summary = json_decode($row->linked_summary ?: '{}', true);
+                        return $row;
+                    })
+                    : collect(),
             ],
             'absences' => [
                 'user' => [
@@ -2195,13 +2214,6 @@ class CentroPageController extends Controller
         $section = $request->route('section');
         $this->ensureRoleCanDestroyRecord($request, $section, $id);
 
-        if ($section === 'users') {
-            $this->ensureSuperadmin($request);
-            User::query()->whereKey($id)->delete();
-
-            return back()->with('status', 'Utente eliminato.');
-        }
-
         $task = null;
         if ($section === 'tasks') {
             $task = DB::table('tasks')->where('id', $id)->first();
@@ -2234,12 +2246,12 @@ class CentroPageController extends Controller
         $this->ensureSuperadmin($request);
         abort_if($request->user()->id === $id, 422, 'Non puoi sospendere o archiviare il tuo account.');
         $user = User::query()->findOrFail($id);
-        $payload = $request->validate(['status' => ['required', Rule::in(['active', 'suspended', 'archived'])]]);
+        $payload = $request->validate(['status' => ['required', Rule::in(['active', 'suspended'])]]);
         $status = $payload['status'];
         $user->forceFill([
             'account_status' => $status,
             'suspended_at' => $status === 'suspended' ? now() : null,
-            'archived_at' => $status === 'archived' ? now() : null,
+            'archived_at' => null,
         ])->save();
 
         if ($status !== 'active') {
@@ -2248,9 +2260,80 @@ class CentroPageController extends Controller
 
         return back()->with('status', match ($status) {
             'suspended' => 'Utente sospeso.',
-            'archived' => 'Utente archiviato.',
             default => 'Utente riattivato.',
         });
+    }
+
+    public function requestUserArchive(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureSuperadmin($request);
+        abort_if($request->user()->id === $id, 422, 'Non puoi richiedere l’archiviazione del tuo account da qui.');
+        $payload = $request->validate(['reason' => ['required', 'string', 'min:10', 'max:2000']]);
+        $user = User::query()->findOrFail($id);
+        app(AccountArchiveService::class)->create($user, $request->user(), $payload['reason']);
+        $superadmins = DB::table('user_roles')->where('role', 'superadmin')->where('user_id', '!=', $request->user()->id)->pluck('user_id');
+        app(CentroNotificationService::class)->notifyUsers($superadmins, $request->user()->id, 'account_archive_requested', $request->user()->name.' ha richiesto l’archiviazione di '.$user->name.'.');
+
+        return back()->with('status', 'Richiesta di archiviazione inviata.');
+    }
+
+    public function reviewUserArchive(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureSuperadmin($request);
+        $payload = $request->validate([
+            'decision' => ['required', Rule::in(['approved', 'rejected'])],
+            'note' => ['nullable', 'string', 'max:2000'],
+        ]);
+        $archiveRequest = DB::table('account_archive_requests')->where('id', $id)->where('status', 'pending')->first();
+        abort_if(! $archiveRequest, 404);
+
+        DB::transaction(function () use ($archiveRequest, $payload, $request) {
+            DB::table('account_archive_requests')->where('id', $archiveRequest->id)->update([
+                'status' => $payload['decision'],
+                'reviewed_by' => $request->user()->id,
+                'review_note' => $payload['note'] ?? null,
+                'reviewed_at' => now(),
+                'updated_at' => now(),
+            ]);
+            if ($payload['decision'] === 'approved' && $archiveRequest->user_id) {
+                DB::table('users')->where('id', $archiveRequest->user_id)->update([
+                    'account_status' => 'archived', 'suspended_at' => null, 'archived_at' => now(), 'updated_at' => now(),
+                ]);
+                DB::table('sessions')->where('user_id', $archiveRequest->user_id)->delete();
+            }
+        });
+
+        if ($archiveRequest->user_id) {
+            app(CentroNotificationService::class)->notifyUsers(
+                [$archiveRequest->user_id], $request->user()->id, 'account_archive_reviewed',
+                $payload['decision'] === 'approved' ? 'La richiesta di archiviazione del tuo account è stata approvata.' : 'La richiesta di archiviazione del tuo account è stata rifiutata.'
+            );
+        }
+
+        return back()->with('status', $payload['decision'] === 'approved' ? 'Account archiviato.' : 'Richiesta rifiutata.');
+    }
+
+    public function physicallyDeleteUser(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureSuperadmin($request);
+        abort_if($request->user()->id === $id, 422, 'Non puoi eliminare il tuo account.');
+        $payload = $request->validate([
+            'reason' => ['required', 'string', 'min:20', 'max:3000'],
+            'confirmation' => ['required', 'in:ELIMINA DEFINITIVAMENTE'],
+        ]);
+        $user = User::query()->where('account_status', 'archived')->findOrFail($id);
+        $summary = app(AccountArchiveService::class)->summary($id);
+        DB::table('audit_logs')->insert([
+            'id' => (string) str()->uuid(), 'user_id' => $request->user()->id, 'user_name' => $request->user()->name,
+            'user_role' => 'superadmin', 'action' => 'eliminazione_fisica_utente', 'area' => 'users',
+            'route_name' => 'users.physical-destroy', 'method' => 'DELETE', 'subject_id' => $id, 'status_code' => 200,
+            'ip_address' => $request->ip(), 'user_agent' => $request->userAgent(),
+            'metadata' => json_encode(['target' => ['name' => $user->name, 'email' => $user->email], 'reason' => $payload['reason'], 'linked_summary' => $summary], JSON_THROW_ON_ERROR),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $user->delete();
+
+        return redirect()->route('users.index')->with('status', 'Account eliminato definitivamente e operazione registrata.');
     }
 
     public function updateRolePermissions(Request $request): RedirectResponse
@@ -2292,7 +2375,13 @@ class CentroPageController extends Controller
     {
         $this->ensureSuperadmin($request);
         abort_unless(Schema::hasTable('audit_logs'), 404);
-        $rows = $this->readableAuditLogsQuery()->where('created_at', '>=', now()->subDays(3))->oldest('created_at')->get();
+        $payload = $request->validate([
+            'from' => ['required', 'date'],
+            'to' => ['required', 'date', 'after_or_equal:from'],
+        ]);
+        $rows = $this->readableAuditLogsQuery()
+            ->whereBetween('created_at', [Carbon::parse($payload['from'])->startOfDay(), Carbon::parse($payload['to'])->endOfDay()])
+            ->oldest('created_at')->get();
 
         return response()->streamDownload(function () use ($rows) {
             $handle = fopen('php://output', 'wb');
@@ -2301,7 +2390,7 @@ class CentroPageController extends Controller
                 fputcsv($handle, [$row->created_at, $row->user_name, $row->user_role, $row->action, $row->area, $row->route_name, $row->subject_id, $row->status_code, $row->ip_address]);
             }
             fclose($handle);
-        }, 'log-centro-'.now('Europe/Rome')->format('Y-m-d-His').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+        }, 'log-centro-'.$payload['from'].'-'.$payload['to'].'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function updateDocumentSettings(Request $request): RedirectResponse

@@ -89,6 +89,7 @@ const props = defineProps({
     backupRuns: Array,
     rolePermissionMatrix: Object,
     auditLogs: Array,
+    archiveRequests: Array,
     serviceName: String,
 });
 
@@ -103,6 +104,12 @@ const formOpen = ref(false);
 const deleteTarget = ref(null);
 const deleteTargetAction = ref(null);
 const deleteConfirmText = ref('');
+const archiveReason = ref('');
+const archiveReviewTarget = ref(null);
+const archiveReviewDecision = ref('approved');
+const archiveReviewNote = ref('');
+const auditTo = ref(new Date().toISOString().slice(0, 10));
+const auditFrom = ref(new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10));
 const restoreTarget = ref(null);
 const restoreConfirmText = ref('');
 const updateDrafts = ref({});
@@ -556,6 +563,9 @@ function auditActivityText(log) {
     const route = String(log.route_name || '');
     const exact = {
         'users.status.update': 'ha aggiornato lo stato di un utente',
+        'users.archive-requests.store': 'ha richiesto l’archiviazione di un utente',
+        'users.archive-requests.review': 'ha valutato una richiesta di archiviazione',
+        'users.physical-destroy': 'ha eliminato fisicamente un account archiviato',
         'settings.roles.update': 'ha aggiornato i permessi dei ruoli',
         'settings.backup.run': 'ha creato un backup',
         'settings.backup.restore': 'ha ripristinato un backup',
@@ -1567,7 +1577,7 @@ function fileSize(value) {
 
 function remove(row, action = null) {
     if (!canDeleteRow(row)) return;
-    if (isSuperadmin.value) {
+    if (isSuperadmin.value && props.section !== 'users') {
         executeDelete(row, action);
         return;
     }
@@ -1575,6 +1585,7 @@ function remove(row, action = null) {
     deleteTarget.value = row;
     deleteTargetAction.value = action;
     deleteConfirmText.value = '';
+    archiveReason.value = '';
 }
 
 function canDeleteRow(row) {
@@ -1595,12 +1606,37 @@ function cancelDelete() {
     deleteTarget.value = null;
     deleteTargetAction.value = null;
     deleteConfirmText.value = '';
+    archiveReason.value = '';
 }
 
 function confirmDelete() {
+    if (props.section === 'users') {
+        if (!deleteTarget.value || archiveReason.value.trim().length < 10) return;
+        router.post(route('users.archive-requests.store', deleteTarget.value.id), { reason: archiveReason.value }, {
+            preserveScroll: true,
+            onFinish: cancelDelete,
+        });
+        return;
+    }
     if (!deleteTarget.value || deleteConfirmText.value !== 'ELIMINA') return;
     executeDelete(deleteTarget.value, deleteTargetAction.value);
 }
+
+function reviewArchiveRequest() {
+    if (!archiveReviewTarget.value) return;
+    router.patch(route('users.archive-requests.review', archiveReviewTarget.value.id), {
+        decision: archiveReviewDecision.value,
+        note: archiveReviewNote.value,
+    }, {
+        preserveScroll: true,
+        onFinish: () => {
+            archiveReviewTarget.value = null;
+            archiveReviewNote.value = '';
+        },
+    });
+}
+
+const auditDownloadUrl = computed(() => route('settings.logs.download', { from: auditFrom.value, to: auditTo.value }));
 
 function executeDelete(row, action = null) {
     if (action) {
@@ -3871,12 +3907,16 @@ function calendarDayStyle(sectionMonth, cell) {
 
         <div v-if="deleteTarget" class="fixed inset-0 z-[7000] flex items-center justify-center bg-transparent px-4 py-6" @click.self="cancelDelete">
             <div class="w-full max-w-md rounded-md bg-white p-5 shadow-xl">
-                <h3 class="text-base font-semibold text-gray-900">Conferma eliminazione</h3>
-                <p class="mt-2 text-sm text-gray-600">
+                <h3 class="text-base font-semibold text-gray-900">{{ section === 'users' ? 'Richiedi archiviazione' : 'Conferma eliminazione' }}</h3>
+                <p v-if="section === 'users'" class="mt-2 text-sm text-gray-600">
+                    Nessun dato verrà eliminato. La richiesta per <span class="font-medium text-gray-900">{{ deleteTargetName() }}</span> dovrà essere approvata da un Superadmin.
+                </p>
+                <p v-else class="mt-2 text-sm text-gray-600">
                     Questa azione e' irreversibile: <span class="font-medium text-gray-900">{{ deleteTargetName() }}</span>.
                     Digita <span class="font-mono font-semibold text-gray-900">ELIMINA</span> per confermare.
                 </p>
-                <input v-model="deleteConfirmText" class="form-control font-mono" placeholder="ELIMINA" autocomplete="off" />
+                <textarea v-if="section === 'users'" v-model="archiveReason" rows="4" class="form-control mt-4" placeholder="Motivazione della richiesta"></textarea>
+                <input v-else v-model="deleteConfirmText" class="form-control font-mono" placeholder="ELIMINA" autocomplete="off" />
                 <div class="mt-5 flex justify-end gap-2">
                     <button type="button" class="btn btn-outline" @click="cancelDelete">
                         <X class="h-4 w-4" :stroke-width="1.7" />
@@ -3885,11 +3925,27 @@ function calendarDayStyle(sectionMonth, cell) {
                     <button
                         type="button"
                         class="btn bg-red-600 text-white hover:bg-red-500"
-                        :disabled="deleteConfirmText !== 'ELIMINA'"
+                        :disabled="section === 'users' ? archiveReason.trim().length < 10 : deleteConfirmText !== 'ELIMINA'"
                         @click="confirmDelete"
                     >
                         <Trash2 class="h-4 w-4" :stroke-width="1.7" />
-                        Elimina
+                        {{ section === 'users' ? 'Invia richiesta' : 'Elimina' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="archiveReviewTarget" class="fixed inset-0 z-[7100] flex items-center justify-center bg-transparent px-4 py-6" @click.self="archiveReviewTarget = null">
+            <div class="w-full max-w-md rounded-md bg-white p-5 shadow-xl">
+                <h3 class="text-base font-semibold text-gray-900">{{ archiveReviewDecision === 'approved' ? 'Approva archiviazione' : 'Rifiuta richiesta' }}</h3>
+                <p class="mt-2 text-sm text-gray-600">
+                    {{ archiveReviewDecision === 'approved' ? 'L’account non potrà più accedere, ma storico e identità resteranno conservati.' : 'La persona riceverà una notifica con l’esito.' }}
+                </p>
+                <textarea v-model="archiveReviewNote" rows="3" class="form-control mt-4" placeholder="Nota facoltativa"></textarea>
+                <div class="mt-5 flex justify-end gap-2">
+                    <button type="button" class="btn btn-outline" @click="archiveReviewTarget = null">Annulla</button>
+                    <button type="button" :class="['btn', archiveReviewDecision === 'approved' ? 'btn-primary' : 'bg-red-600 text-white hover:bg-red-500']" @click="reviewArchiveRequest">
+                        {{ archiveReviewDecision === 'approved' ? 'Approva' : 'Rifiuta' }}
                     </button>
                 </div>
             </div>
@@ -5084,6 +5140,38 @@ function calendarDayStyle(sectionMonth, cell) {
                     </button>
                 </div>
 
+                <section v-if="(archiveRequests || []).length" class="surface mb-6 rounded-md p-5">
+                    <div class="mb-4">
+                        <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Richieste di archiviazione</h3>
+                        <p class="mt-1 text-sm text-gray-500">Controlla motivazione e collegamenti prima di decidere.</p>
+                    </div>
+                    <div class="space-y-3">
+                        <article v-for="request in archiveRequests" :key="request.id" class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/60 p-4">
+                            <div class="flex flex-wrap items-start justify-between gap-4">
+                                <div>
+                                    <p class="font-semibold text-gray-900">{{ request.user_name }}</p>
+                                    <p class="text-sm text-gray-500">{{ request.user_email }} · richiesta da {{ request.requester_name || request.user_name }}</p>
+                                    <p class="mt-2 text-sm text-gray-700">{{ request.reason }}</p>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button type="button" class="btn btn-outline" @click="archiveReviewTarget = request; archiveReviewDecision = 'rejected'">Rifiuta</button>
+                                    <button type="button" class="btn btn-primary" @click="archiveReviewTarget = request; archiveReviewDecision = 'approved'">Approva</button>
+                                </div>
+                            </div>
+                            <details class="mt-4 rounded-[var(--radius-sm)] border border-gray-100 bg-white px-4 py-3">
+                                <summary class="cursor-pointer text-sm font-semibold text-gray-700">Elementi collegati</summary>
+                                <div class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                                    <div v-for="(label, key) in { tasks: 'Task', projects: 'Progetti', clients: 'Clienti', documents: 'Documenti', passwords: 'Password condivise', requests: 'Richieste', messages: 'Messaggi', logs: 'Log' }" :key="key" class="rounded bg-gray-50 px-3 py-2 text-sm">
+                                        <span class="font-medium text-gray-700">{{ label }}</span>
+                                        <span class="float-right font-semibold text-gray-900">{{ request.linked_summary?.[key]?.count || 0 }}</span>
+                                        <p v-if="request.linked_summary?.[key]?.items?.length" class="mt-1 line-clamp-2 text-xs text-gray-500">{{ request.linked_summary[key].items.map(item => item.label).join(', ') }}</p>
+                                    </div>
+                                </div>
+                            </details>
+                        </article>
+                    </div>
+                </section>
+
                 <div v-if="usersByRole.length" class="space-y-6">
                     <section v-for="group in usersByRole" :key="group.role" class="space-y-3">
                         <div class="flex items-center gap-3">
@@ -5097,7 +5185,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                 :key="user.id"
                                 class="content-card relative overflow-hidden rounded-[var(--radius-sm)] border border-white/70 bg-white/82 p-4 text-center shadow-[0_18px_45px_rgba(15,23,42,0.08)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-[0_22px_55px_rgba(79,70,229,0.14)]"
                             >
-                                <button type="button" class="icon-btn absolute right-3 top-3 h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-500" title="Elimina utente" :aria-label="`Elimina ${user.name || user.email}`" @click="remove(user)">
+                                <button type="button" class="icon-btn absolute right-3 top-3 h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-500" title="Richiedi archiviazione" :aria-label="`Richiedi archiviazione di ${user.name || user.email}`" @click="remove(user)">
                                     <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                 </button>
                                 <Link :href="route('users.show', user.id)" class="block p-2">
@@ -5906,9 +5994,13 @@ function calendarDayStyle(sectionMonth, cell) {
                     <div class="flex flex-wrap items-start justify-between gap-4">
                         <div>
                             <h3 class="section-title"><span class="section-icon"><FileText class="h-4 w-4" :stroke-width="1.7" /></span>Log attività</h3>
-                            <p class="mt-2 text-sm text-gray-500">Ultime 50 operazioni importanti. I log vengono eliminati automaticamente dopo 3 giorni.</p>
+                            <p class="mt-2 text-sm text-gray-500">Ultime 50 operazioni importanti. Lo storico completo viene conservato ed è esportabile per intervallo.</p>
                         </div>
-                        <a :href="route('settings.logs.download')" class="btn btn-outline">Scarica tutti i log</a>
+                        <div class="flex flex-wrap items-end gap-2">
+                            <div><label class="mb-1 block text-xs font-semibold text-gray-500">Dal</label><AppDateInput v-model="auditFrom" /></div>
+                            <div><label class="mb-1 block text-xs font-semibold text-gray-500">Al</label><AppDateInput v-model="auditTo" /></div>
+                            <a :href="auditDownloadUrl" class="btn btn-outline">Scarica log</a>
+                        </div>
                     </div>
                     <div class="mt-6 overflow-x-auto rounded-[var(--radius-sm)] border border-gray-100">
                         <table class="min-w-[760px] w-full divide-y divide-gray-100 text-sm">

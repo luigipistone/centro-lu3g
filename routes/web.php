@@ -189,7 +189,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/users/{id}', [CentroPageController::class, 'show'])->defaults('section', 'users')->name('users.show');
     Route::put('/users/{id}', [CentroPageController::class, 'update'])->defaults('section', 'users')->name('users.update');
     Route::post('/users/{id}/avatar', [CentroPageController::class, 'updateUserAvatar'])->name('users.avatar.update');
-    Route::delete('/users/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'users')->name('users.destroy');
+    Route::post('/users/{id}/archive-requests', [CentroPageController::class, 'requestUserArchive'])->name('users.archive-requests.store');
+    Route::patch('/users/archive-requests/{id}', [CentroPageController::class, 'reviewUserArchive'])->name('users.archive-requests.review');
+    Route::delete('/users/{id}/physical', [CentroPageController::class, 'physicallyDeleteUser'])->name('users.physical-destroy');
     Route::patch('/users/{id}/status', [CentroPageController::class, 'updateUserStatus'])->name('users.status.update');
     Route::get('/settings', [CentroPageController::class, 'index'])->defaults('section', 'settings')->name('settings.index');
     Route::post('/settings/services', [CentroPageController::class, 'store'])->defaults('section', 'settings')->name('settings.store');
@@ -214,7 +216,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/profile/absences', [ProfileController::class, 'storeAbsence'])->name('profile.absences.store');
     Route::delete('/profile/absences/{id}', [ProfileController::class, 'destroyAbsence'])->name('profile.absences.destroy');
     Route::get('/avatars/{filename}', [ProfileController::class, 'avatar'])->name('profile.avatar');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::post('/profile/archive-request', [ProfileController::class, 'requestArchive'])->name('profile.archive-request');
 });
 
 require __DIR__.'/auth.php';

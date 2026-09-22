@@ -28,6 +28,7 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    archiveRequest: Object,
 });
 
 const absenceTypes = [
@@ -325,7 +326,7 @@ watch(() => absenceForm.type, () => {
                 </div>
 
                 <div class="surface p-4 sm:p-8">
-                    <DeleteUserForm class="max-w-xl" />
+                    <DeleteUserForm :request="archiveRequest" class="max-w-xl" />
                 </div>
             </div>
         </div>

@@ -8,11 +8,14 @@ import TextInput from '@/Components/TextInput.vue';
 import { useForm } from '@inertiajs/vue3';
 import { nextTick, ref } from 'vue';
 
+defineProps({ request: Object });
+
 const confirmingUserDeletion = ref(false);
 const passwordInput = ref(null);
 
 const form = useForm({
     password: '',
+    reason: '',
 });
 
 const confirmUserDeletion = () => {
@@ -22,7 +25,7 @@ const confirmUserDeletion = () => {
 };
 
 const deleteUser = () => {
-    form.delete(route('profile.destroy'), {
+    form.post(route('profile.archive-request'), {
         preserveScroll: true,
         onSuccess: () => closeModal(),
         onError: () => passwordInput.value.focus(),
@@ -42,27 +45,35 @@ const closeModal = () => {
     <section class="space-y-6">
         <header>
             <h2 class="text-lg font-medium text-gray-900">
-                Elimina account
+                Archiviazione account
             </h2>
 
             <p class="mt-1 text-sm text-gray-600">
-                Eliminando l'account verranno rimossi in modo permanente i dati collegati. Procedi solo se sei sicuro.
+                Puoi inviare una richiesta motivata all’amministrazione. Fino all’approvazione il tuo account resta attivo e nessun dato viene eliminato.
             </p>
         </header>
 
-        <DangerButton @click="confirmUserDeletion">Elimina account</DangerButton>
+        <div v-if="request?.status === 'pending'" class="rounded-[var(--radius-sm)] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">Richiesta inviata e in attesa di approvazione.</div>
+        <div v-else-if="request?.status === 'rejected'" class="rounded-[var(--radius-sm)] border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">L’ultima richiesta è stata rifiutata. Puoi inviarne una nuova con maggiori informazioni.</div>
+        <DangerButton v-if="request?.status !== 'pending'" @click="confirmUserDeletion">Richiedi archiviazione</DangerButton>
 
         <Modal :show="confirmingUserDeletion" @close="closeModal">
             <div class="p-6">
                 <h2
                     class="text-lg font-medium text-gray-900"
                 >
-                    Sei sicuro di voler eliminare il tuo account?
+                    Richiedi l’archiviazione dell’account
                 </h2>
 
                 <p class="mt-1 text-sm text-gray-600">
-                    L'operazione è permanente. Inserisci la password per confermare l'eliminazione definitiva.
+                    Spiega il motivo della richiesta. Un Superadmin controllerà gli elementi collegati prima di approvarla.
                 </p>
+
+                <div class="mt-5">
+                    <InputLabel for="archive-reason" value="Motivazione" />
+                    <textarea id="archive-reason" v-model="form.reason" rows="4" class="form-control mt-1" placeholder="Descrivi perché desideri archiviare l’account"></textarea>
+                    <InputError :message="form.errors.reason" class="mt-2" />
+                </div>
 
                 <div class="mt-6">
                     <InputLabel
@@ -95,7 +106,7 @@ const closeModal = () => {
                         :disabled="form.processing"
                         @click="deleteUser"
                     >
-                        Elimina account
+                        Invia richiesta
                     </DangerButton>
                 </div>
             </div>
