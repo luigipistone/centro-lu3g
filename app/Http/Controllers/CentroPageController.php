@@ -651,7 +651,7 @@ class CentroPageController extends Controller
             'backupRuns' => $section === 'settings' ? $this->backupRuns() : [],
             'rolePermissionMatrix' => $section === 'settings' ? app(RolePermissionService::class)->matrix() : null,
             'auditLogs' => $section === 'settings' && Schema::hasTable('audit_logs')
-                ? DB::table('audit_logs')->latest('created_at')->limit(50)->get()
+                ? $this->readableAuditLogsQuery()->latest('created_at')->limit(50)->get()
                 : [],
             'clients' => $this->isGuest($request)
                 ? DB::table('clients')
@@ -2292,7 +2292,7 @@ class CentroPageController extends Controller
     {
         $this->ensureSuperadmin($request);
         abort_unless(Schema::hasTable('audit_logs'), 404);
-        $rows = DB::table('audit_logs')->where('created_at', '>=', now()->subDays(3))->oldest('created_at')->get();
+        $rows = $this->readableAuditLogsQuery()->where('created_at', '>=', now()->subDays(3))->oldest('created_at')->get();
 
         return response()->streamDownload(function () use ($rows) {
             $handle = fopen('php://output', 'wb');
@@ -3753,6 +3753,13 @@ class CentroPageController extends Controller
     private function currentUserRole(Request $request): string
     {
         return (string) (DB::table('user_roles')->where('user_id', $request->user()->id)->value('role') ?: 'guest');
+    }
+
+    private function readableAuditLogsQuery()
+    {
+        return DB::table('audit_logs')
+            ->where('route_name', 'not like', 'generated::%')
+            ->whereNotIn('route_name', ['push-subscriptions.store', 'push.test']);
     }
 
     private function isGuest(Request $request): bool
