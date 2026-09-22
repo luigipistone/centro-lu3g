@@ -1125,18 +1125,20 @@ if (props.selectedGroup) {
                             searchable
                         />
                     </label>
-                    <label class="block">
-                        <span class="block text-sm font-medium text-gray-700">Sito web</span>
-                        <input v-model="itemForm.url" class="form-control" name="centro_password_item_url" autocomplete="off" />
-                    </label>
-                    <label class="block">
-                        <span class="block text-sm font-medium text-gray-700">Cliente</span>
-                        <AppSelect v-model="itemForm.client_id" :options="[{ value: '', label: 'Nessuno' }, ...clients.map((client) => ({ value: client.id, label: client.name }))]" searchable />
-                    </label>
-                    <label class="block">
-                        <span class="block text-sm font-medium text-gray-700">Stato</span>
-                        <AppSelect v-model="itemForm.credential_status" :options="[{ value: 'active', label: 'Attiva' }, { value: 'suspended', label: 'Sospesa' }, { value: 'rotation_due', label: 'Da ruotare' }]" />
-                    </label>
+                    <div class="grid gap-4 md:grid-cols-3">
+                        <label class="block min-w-0">
+                            <span class="block text-sm font-medium text-gray-700">Sito web</span>
+                            <input v-model="itemForm.url" class="form-control" name="centro_password_item_url" autocomplete="off" />
+                        </label>
+                        <label class="block min-w-0">
+                            <span class="block text-sm font-medium text-gray-700">Cliente</span>
+                            <AppSelect v-model="itemForm.client_id" :options="[{ value: '', label: 'Nessuno' }, ...clients.map((client) => ({ value: client.id, label: client.name }))]" searchable />
+                        </label>
+                        <label class="block min-w-0">
+                            <span class="block text-sm font-medium text-gray-700">Stato</span>
+                            <AppSelect v-model="itemForm.credential_status" :options="[{ value: 'active', label: 'Attiva' }, { value: 'suspended', label: 'Sospesa' }, { value: 'rotation_due', label: 'Da ruotare' }]" />
+                        </label>
+                    </div>
                     <section class="overflow-hidden rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70">
                         <button type="button" class="flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition hover:bg-gray-100/70" :aria-expanded="customFieldsOpen" @click="customFieldsOpen = !customFieldsOpen">
                             <span>
