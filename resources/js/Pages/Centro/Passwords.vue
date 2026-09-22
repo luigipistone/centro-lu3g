@@ -4,7 +4,7 @@ import AppSelect from '@/Components/AppSelect.vue';
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, Bold, Building2, Copy, ExternalLink, Italic, KeyRound, List, ListOrdered, Pencil, Plus, Quote, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
+import { ArrowLeft, Bold, Building2, ChevronDown, Copy, ExternalLink, Italic, KeyRound, List, ListOrdered, Pencil, Plus, Quote, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -51,6 +51,7 @@ const editPasswordLoaded = ref(false);
 const editPasswordVisible = ref(false);
 const editPasswordError = ref('');
 const newCustomFieldLabel = ref('');
+const customFieldsOpen = ref(false);
 const generator = ref({
     length: 20,
     uppercase: true,
@@ -366,6 +367,7 @@ function resetItemForm() {
     editPasswordVisible.value = false;
     editPasswordError.value = '';
     newCustomFieldLabel.value = '';
+    customFieldsOpen.value = false;
 }
 
 function openCreateItem() {
@@ -1123,11 +1125,16 @@ if (props.selectedGroup) {
                         <span class="block text-sm font-medium text-gray-700">Stato</span>
                         <AppSelect v-model="itemForm.credential_status" :options="[{ value: 'active', label: 'Attiva' }, { value: 'suspended', label: 'Sospesa' }, { value: 'rotation_due', label: 'Da ruotare' }]" />
                     </label>
-                    <section class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
-                        <div>
-                            <h4 class="text-sm font-semibold text-gray-900">Campi personalizzati</h4>
-                            <p class="mt-1 text-xs text-gray-500">Aggiungi un campo già usato in questa categoria oppure creane uno nuovo.</p>
-                        </div>
+                    <section class="overflow-hidden rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70">
+                        <button type="button" class="flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition hover:bg-gray-100/70" :aria-expanded="customFieldsOpen" @click="customFieldsOpen = !customFieldsOpen">
+                            <span>
+                                <span class="block text-sm font-semibold text-gray-900">Campi personalizzati</span>
+                                <span class="mt-0.5 block text-xs text-gray-500">{{ itemForm.custom_fields.length ? `${itemForm.custom_fields.length} campi presenti` : 'Aggiungi informazioni facoltative' }}</span>
+                            </span>
+                            <ChevronDown :class="['h-4 w-4 shrink-0 text-gray-400 transition-transform', customFieldsOpen ? 'rotate-180' : '']" :stroke-width="1.8" />
+                        </button>
+                        <div v-if="customFieldsOpen" class="border-t border-gray-100 px-4 pb-4 pt-3">
+                            <p class="text-xs text-gray-500">Aggiungi un campo già usato in questa categoria oppure creane uno nuovo.</p>
                         <div v-if="availableCategoryFields.length" class="mt-3 flex flex-wrap gap-2">
                             <button v-for="field in availableCategoryFields" :key="field.id" type="button" class="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:border-[hsl(var(--primary-app)/0.35)] hover:text-[hsl(var(--primary-app))]" @click="addExistingCustomField(field)">
                                 <Plus class="mr-1 inline h-3.5 w-3.5" />{{ field.label }}
@@ -1153,6 +1160,7 @@ if (props.selectedGroup) {
                             <button type="button" class="btn btn-outline h-[38px] shrink-0" :disabled="!newCustomFieldLabel.trim()" @click="addNewCustomField">
                                 <Plus class="h-4 w-4" />Aggiungi
                             </button>
+                        </div>
                         </div>
                     </section>
                     <div v-if="editingItem" class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/80 p-4">
