@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\RolePermissionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -50,6 +51,7 @@ class HandleInertiaRequests extends Middleware
                     ...$user->only(['id', 'name', 'email', 'email_verified_at']),
                     'avatar_url' => $profile?->avatar_url,
                     'role' => $role ?: 'guest',
+                    'permissions' => app(RolePermissionService::class)->permissionsForRole($role ?: 'guest'),
                     'completion_effect' => $completionEffect,
                 ] : null,
             ],

@@ -63,18 +63,20 @@ const isGuest = computed(() => page.props.auth?.user?.role === 'guest');
 const isEditor = computed(() => currentRole.value === 'editor');
 const isSuperadmin = computed(() => currentRole.value === 'superadmin');
 const isAdmin = computed(() => ['admin', 'superadmin'].includes(currentRole.value));
-const canEditClient = computed(() => !isGuest.value && !isEditor.value);
-const canEditProject = computed(() => !isGuest.value);
-const canDeleteProject = computed(() => !isGuest.value && !isEditor.value);
+const permissions = computed(() => page.props.auth?.user?.permissions || []);
+const hasPermission = (permission) => isSuperadmin.value || permissions.value.includes(permission);
+const canEditClient = computed(() => hasPermission('clients.update'));
+const canEditProject = computed(() => hasPermission('projects.update'));
+const canDeleteProject = computed(() => hasPermission('projects.delete'));
 const canDeleteCurrentTask = computed(() => {
-    if (isGuest.value) return false;
+    if (!hasPermission('tasks.delete')) return false;
     if (!isEditor.value) return true;
 
     return props.record?.created_by === page.props.auth?.user?.id;
 });
 
 function canDeleteTaskRecord(task) {
-    if (isGuest.value) return false;
+    if (!hasPermission('tasks.delete')) return false;
     if (!isEditor.value) return true;
 
     return task?.created_by === page.props.auth?.user?.id;

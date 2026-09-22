@@ -112,17 +112,44 @@ const currentRole = computed(() => page.props.auth?.user?.role || 'guest');
 const isGuest = computed(() => page.props.auth?.user?.role === 'guest');
 const isEditor = computed(() => currentRole.value === 'editor');
 const isSuperadmin = computed(() => currentRole.value === 'superadmin');
-const canWrite = computed(() => {
-    if (!props.fields.length || isGuest.value) return false;
-    if (!isEditor.value) return true;
+const permissions = computed(() => page.props.auth?.user?.permissions || []);
 
-    return props.section === 'projects' || props.section === 'tasks' || props.section.startsWith('updates-');
+function hasPermission(permission) {
+    return isSuperadmin.value || permissions.value.includes(permission);
+}
+
+function sectionPermission(action) {
+    if (props.section.startsWith('updates-')) {
+        return `updates.${action === 'view' ? 'view' : 'manage'}`;
+    }
+
+    const area = {
+        clients: 'clients',
+        projects: 'projects',
+        tasks: 'tasks',
+        calendar: 'tasks',
+        billing: 'billing',
+        users: 'users',
+        absences: 'absences',
+        modules: 'modules',
+    }[props.section];
+
+    if (!area) return null;
+    if (['billing', 'users', 'absences', 'modules'].includes(area)) {
+        return `${area}.${action === 'view' ? 'view' : 'manage'}`;
+    }
+
+    return `${area}.${action}`;
+}
+
+const canWrite = computed(() => {
+    if (!props.fields.length) return false;
+    const permission = sectionPermission('update');
+    return permission ? hasPermission(permission) : false;
 });
 const canCreate = computed(() => {
-    if (!canWrite.value) return false;
-    if (!isEditor.value) return true;
-
-    return props.section === 'tasks' || props.section.startsWith('updates-');
+    const permission = sectionPermission('create');
+    return permission ? hasPermission(permission) : false;
 });
 const billingSearch = ref('');
 const billingType = ref('all');
@@ -1551,13 +1578,13 @@ function remove(row, action = null) {
 }
 
 function canDeleteRow(row) {
-    if (isGuest.value) return false;
-    if (!isEditor.value) return true;
+    const permission = sectionPermission('delete');
+    if (!permission || !hasPermission(permission)) return false;
     if (props.section === 'tasks' || props.section === 'calendar') {
-        return row?.created_by === page.props.auth?.user?.id;
+        return !isEditor.value || row?.created_by === page.props.auth?.user?.id;
     }
 
-    return props.section.startsWith('updates-');
+    return true;
 }
 
 function deleteTargetName() {
@@ -5827,6 +5854,25 @@ function calendarDayStyle(sectionMonth, cell) {
                             {{ rolePermissionsSaving ? 'Salvataggio...' : 'Salva permessi' }}
                         </button>
                     </div>
+                    <div class="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        <div class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/60 p-4">
+                            <p class="font-semibold text-gray-900">Superadmin</p>
+                            <p class="mt-1 text-sm leading-6 text-gray-500">Controllo completo, impostazioni, ruoli, log e gestione degli utenti.</p>
+                        </div>
+                        <div class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/60 p-4">
+                            <p class="font-semibold text-gray-900">Manager</p>
+                            <p class="mt-1 text-sm leading-6 text-gray-500">Gestione operativa limitata ai permessi assegnati dalla matrice.</p>
+                        </div>
+                        <div class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/60 p-4">
+                            <p class="font-semibold text-gray-900">Dipendente</p>
+                            <p class="mt-1 text-sm leading-6 text-gray-500">Operatività personale, dati propri e risorse aziendali autorizzate.</p>
+                        </div>
+                        <div class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/60 p-4">
+                            <p class="font-semibold text-gray-900">Cliente</p>
+                            <p class="mt-1 text-sm leading-6 text-gray-500">Accesso alle sole aree e attività in cui è direttamente coinvolto.</p>
+                        </div>
+                    </div>
+                    <p class="mt-4 text-sm text-gray-500">La matrice abilita aree e azioni. Assegnazioni, proprietà dei dati e contenuti sensibili continuano ad applicare i controlli sul singolo elemento.</p>
                     <div class="mt-6 overflow-x-auto rounded-[var(--radius-sm)] border border-gray-100">
                         <table class="min-w-[780px] w-full divide-y divide-gray-100 text-sm">
                             <thead class="bg-gray-50/80">

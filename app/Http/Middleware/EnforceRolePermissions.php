@@ -24,6 +24,9 @@ class EnforceRolePermissions
     private function permissionFor(Request $request): ?string
     {
         $name = (string) ($request->route()?->getName() ?? '');
+        if (Str::startsWith($name, 'profile.absences.')) {
+            return 'absences.request';
+        }
         if ($name === '' || Str::startsWith($name, ['profile.', 'notifications.', 'push.', 'push-subscriptions.'])) {
             return null;
         }

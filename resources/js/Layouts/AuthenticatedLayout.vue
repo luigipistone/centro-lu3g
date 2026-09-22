@@ -91,10 +91,12 @@ const notificationBadgeCount = computed(() => page.props.notifications?.unread |
 const notificationStorageKey = computed(() => `centro:last-browser-notification:${page.props.auth?.user?.id || 'guest'}`);
 const themeStorageKey = 'centro:theme';
 const currentRole = computed(() => page.props.auth?.user?.role || 'guest');
-const isGuest = computed(() => currentRole.value === 'guest');
-const isEditor = computed(() => currentRole.value === 'editor');
 const isSuperadmin = computed(() => currentRole.value === 'superadmin');
-const canManageAbsences = computed(() => ['admin', 'superadmin'].includes(page.props.auth?.user?.role));
+const permissions = computed(() => page.props.auth?.user?.permissions || []);
+
+function can(permission) {
+    return isSuperadmin.value || permissions.value.includes(permission);
+}
 
 function isGroupOpen(group) {
     return !group.collapsible || !collapsedGroups.value[group.label];
@@ -295,86 +297,48 @@ onUnmounted(() => {
 });
 
 const groups = computed(() => {
-    if (isGuest.value) {
-        return [
-            {
-                label: 'Menu',
-                links: [
-                    ['dashboard', 'Dashboard', LayoutDashboard],
-                    ['projects.index', 'Progetti', Briefcase],
-                    ['tasks.index', 'Task', CheckSquare],
-                    ['calendar.index', 'Calendario', Calendar],
-                    ['notifications.index', 'Notifiche', Bell],
-                ],
-            },
-        ];
-    }
-
-    if (isEditor.value) {
-        return [
-            {
-                label: 'Menu',
-                links: [
-                    ['dashboard', 'Dashboard', LayoutDashboard],
-                    ['clients.index', 'Clienti', Users],
-                    ['projects.index', 'Progetti', Briefcase],
-                    ['tasks.index', 'Task', CheckSquare],
-                    ['calendar.index', 'Calendario', Calendar],
-                    ['documents.index', 'Documenti', FileText],
-                    ['passwords.index', 'Password', KeyRound],
-                    ['notifications.index', 'Notifiche', Bell],
-                ],
-            },
-            {
-                label: 'Aggiornamenti',
-                collapsible: true,
-                links: [
-                    ['updates.social', 'Social', Megaphone],
-                    ['updates.newsletter', 'Newsletter', Mail],
-                    ['updates.seo', 'SEO', Search],
-                    ['updates.adv', 'ADV', Target],
-                ],
-            },
-        ];
-    }
+    const permitted = (routeName, label, icon, permission = null) => (
+        !permission || can(permission) ? [routeName, label, icon] : null
+    );
+    const compact = (links) => links.filter(Boolean);
 
     return [
         {
             label: 'Menu',
-            links: [
-                ['dashboard', 'Dashboard', LayoutDashboard],
-                ['clients.index', 'Clienti', Users],
-                ['projects.index', 'Progetti', Briefcase],
-                ['tasks.index', 'Task', CheckSquare],
-                ['calendar.index', 'Calendario', Calendar],
-                ['documents.index', 'Documenti', FileText],
-                ['passwords.index', 'Password', KeyRound],
-                ...(canManageAbsences.value ? [['absences.index', 'Assenze', CalendarX]] : []),
-                ...(isSuperadmin.value ? [['settings.index', 'Impostazioni', Settings]] : []),
-            ],
+            links: compact([
+                permitted('dashboard', 'Dashboard', LayoutDashboard, 'dashboard.view'),
+                permitted('clients.index', 'Clienti', Users, 'clients.view'),
+                permitted('projects.index', 'Progetti', Briefcase, 'projects.view'),
+                permitted('tasks.index', 'Task', CheckSquare, 'tasks.view'),
+                permitted('calendar.index', 'Calendario', Calendar, 'calendar.view'),
+                permitted('documents.index', 'Documenti', FileText, 'documents.view'),
+                permitted('passwords.index', 'Password', KeyRound, 'passwords.view'),
+                permitted('absences.index', 'Assenze', CalendarX, 'absences.manage'),
+                permitted('settings.index', 'Impostazioni', Settings, 'settings.manage'),
+            ]),
         },
         {
             label: 'Aggiornamenti',
             collapsible: true,
-            links: [
+            links: can('updates.view') ? [
                 ['updates.social', 'Social', Megaphone],
                 ['updates.newsletter', 'Newsletter', Mail],
                 ['updates.seo', 'SEO', Search],
                 ['updates.adv', 'ADV', Target],
-            ],
+            ] : [],
         },
         {
             label: 'Amministrazione',
             collapsible: true,
-            links: [
-                ['notifications.index', 'Notifiche', Bell],
-                ['billing.index', 'Fatturazione', Receipt],
-                ['users.index', 'Utenti', UserCog],
-                ['modules.index', 'Moduli', PackageOpen],
-                ['ai-agency.index', 'Agenzia AI', WandSparkles],
-            ],
+            links: compact([
+                permitted('notifications.index', 'Notifiche', Bell),
+                permitted('billing.index', 'Fatturazione', Receipt, 'billing.view'),
+                permitted('users.index', 'Utenti', UserCog, 'users.view'),
+                permitted('modules.index', 'Moduli', PackageOpen, 'modules.view'),
+                permitted('ai-agency.index', 'Agenzia AI', WandSparkles, 'ai_agency.view'),
+            ]),
         },
-    ];
+    ].filter((group) => group.links.length);
 });
 </script>
 

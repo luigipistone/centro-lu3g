@@ -57,13 +57,35 @@ class RolePermissionService
 
     public function allows(string $role, string $permission): bool
     {
+        if ($role === 'superadmin') {
+            return true;
+        }
+
         if (! Schema::hasTable('role_permissions')) {
-            return $role === 'superadmin';
+            return false;
         }
 
         return (bool) DB::table('role_permissions')
             ->where('role', $role)
             ->where('permission', $permission)
             ->value('allowed');
+    }
+
+    public function permissionsForRole(string $role): array
+    {
+        if ($role === 'superadmin') {
+            return array_column(self::definitions(), 'key');
+        }
+
+        if (! Schema::hasTable('role_permissions')) {
+            return [];
+        }
+
+        return DB::table('role_permissions')
+            ->where('role', $role)
+            ->where('allowed', true)
+            ->pluck('permission')
+            ->values()
+            ->all();
     }
 }
