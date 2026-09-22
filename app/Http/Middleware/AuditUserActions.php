@@ -14,9 +14,9 @@ class AuditUserActions
     {
         $response = $next($request);
         $user = $request->user();
-        if ($user && ! in_array($request->method(), ['GET', 'HEAD', 'OPTIONS'], true) && Schema::hasTable('audit_logs')) {
-            $route = $request->route();
-            $name = $route?->getName();
+        $route = $request->route();
+        $name = $route?->getName();
+        if ($user && $this->shouldAudit($request, $name) && Schema::hasTable('audit_logs')) {
             $subjectId = collect($route?->parameters() ?? [])->first(fn ($value, $key) => in_array($key, ['id', 'user', 'project', 'task'], true));
             $recent = DB::table('audit_logs')
                 ->where('user_id', $user->id)
@@ -60,5 +60,18 @@ class AuditUserActions
         return match ($method) {
             'POST' => 'creazione', 'PUT', 'PATCH' => 'modifica', 'DELETE' => 'eliminazione', default => strtolower($method)
         };
+    }
+
+    private function shouldAudit(Request $request, ?string $routeName): bool
+    {
+        if (in_array($request->method(), ['GET', 'HEAD', 'OPTIONS'], true) || ! $routeName || Str::startsWith($routeName, 'generated::')) {
+            return false;
+        }
+
+        return Str::startsWith($routeName, [
+            'clients.', 'projects.', 'tasks.', 'absences.', 'documents.', 'document-messages.',
+            'document-groups.', 'passwords.', 'modules.', 'ai-agency.', 'updates.', 'updates-',
+            'billing.', 'users.', 'settings.', 'profile.',
+        ]);
     }
 }
