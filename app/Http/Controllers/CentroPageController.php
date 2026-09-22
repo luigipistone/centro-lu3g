@@ -1657,12 +1657,34 @@ class CentroPageController extends Controller
         abort_unless($this->canEditPasswordItem($request, $item), 403);
 
         $payload = $this->validatedPasswordItemPayload($request, true);
+        $passwordRotated = false;
+        if (filled($payload['password'] ?? null)) {
+            try {
+                $currentPassword = $item->encrypted_password ? Crypt::decryptString($item->encrypted_password) : '';
+            } catch (\Throwable) {
+                $currentPassword = '';
+            }
+            $passwordRotated = ! hash_equals($currentPassword, (string) $payload['password']);
+            if (! $passwordRotated) {
+                unset($payload['password']);
+            }
+        }
 
-        DB::transaction(function () use ($payload, $id, $request) {
+        DB::transaction(function () use ($payload, $id, $request, $passwordRotated) {
             DB::table('password_items')->where('id', $id)->update($this->passwordItemPayloadForDatabase($payload, [
                 'updated_by' => $request->user()->id,
                 'updated_at' => now(),
             ], true));
+
+            if ($passwordRotated) {
+                DB::table('password_rotation_logs')->insert([
+                    'id' => (string) Str::uuid(),
+                    'password_item_id' => $id,
+                    'user_id' => $request->user()->id,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
 
             $this->syncPasswordItemShares($id, $payload['user_ids'] ?? [], $payload['group_ids'] ?? [], $payload['share_permission'] ?? 'view');
             $this->rememberPasswordCategoryFields($payload['category'], $payload['custom_fields'] ?? [], $request->user()->id);
@@ -4747,6 +4769,12 @@ class CentroPageController extends Controller
             ->whereIn('password_item_id', $itemIds)
             ->get(['password_item_id', 'password_group_id', 'permission'])
             ->groupBy('password_item_id');
+        $rotationHistory = DB::table('password_rotation_logs')
+            ->leftJoin('users', 'users.id', '=', 'password_rotation_logs.user_id')
+            ->whereIn('password_rotation_logs.password_item_id', $itemIds)
+            ->orderByDesc('password_rotation_logs.created_at')
+            ->get(['password_rotation_logs.id', 'password_rotation_logs.password_item_id', 'password_rotation_logs.created_at', 'users.name as user_name'])
+            ->groupBy('password_item_id');
 
         $security = $items->mapWithKeys(function ($item) {
             try {
@@ -4763,7 +4791,7 @@ class CentroPageController extends Controller
         });
         $reuseCounts = $security->pluck('fingerprint')->filter()->countBy();
 
-        return $items->map(function ($item) use ($request, $role, $manageable, $visibleVaultIds, $currentUserGroupIds, $userShares, $groupShares, $security, $reuseCounts) {
+        return $items->map(function ($item) use ($request, $role, $manageable, $visibleVaultIds, $currentUserGroupIds, $userShares, $groupShares, $rotationHistory, $security, $reuseCounts) {
             $item->has_password = filled($item->encrypted_password);
             unset($item->encrypted_password);
             $item->tags = $item->tags ? json_decode($item->tags, true) : [];
@@ -4792,6 +4820,8 @@ class CentroPageController extends Controller
             $item->risk_flags = $this->passwordRiskFlags($item);
             $item->risk_level = $this->passwordRiskLevel($item);
             $item->rotation_priority = $this->passwordRotationPriority($item);
+            $item->rotation_history = ($rotationHistory[$item->id] ?? collect())->values();
+            $item->rotation_count = $item->rotation_history->count();
 
             return $item;
         });

@@ -52,6 +52,7 @@ const editPasswordVisible = ref(false);
 const editPasswordError = ref('');
 const newCustomFieldLabel = ref('');
 const customFieldsOpen = ref(false);
+const rotationHistoryExpanded = ref(false);
 const generator = ref({
     length: 20,
     uppercase: true,
@@ -129,6 +130,10 @@ const strengthPreview = computed(() => {
     if (/[a-z]/.test(value) && /[A-Z]/.test(value)) score++;
     if (/\d/.test(value) && /[^a-zA-Z\d]/.test(value)) score++;
     return { score: Math.min(4, score), length: value.length, label: ['Molto debole', 'Debole', 'Discreta', 'Buona', 'Forte'][Math.min(4, score)] };
+});
+const visibleRotationHistory = computed(() => {
+    const history = editingItem.value?.rotation_history || [];
+    return rotationHistoryExpanded.value ? history : history.slice(0, 3);
 });
 const itemFormErrorMessages = computed(() => Object.values(itemForm.errors || {}).filter(Boolean));
 
@@ -251,6 +256,11 @@ function categoryLabel(value) {
     return (props.credentialCategories || []).find((category) => category.value === value)?.label || 'Altro';
 }
 
+function rotationDate(value) {
+    if (!value) return '';
+    return new Intl.DateTimeFormat('it-IT', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
+}
+
 function handleCategoryChange(value) {
     if (itemForm.category !== value) {
         itemForm.category = value;
@@ -368,6 +378,7 @@ function resetItemForm() {
     editPasswordError.value = '';
     newCustomFieldLabel.value = '';
     customFieldsOpen.value = false;
+    rotationHistoryExpanded.value = false;
 }
 
 function openCreateItem() {
@@ -379,6 +390,7 @@ function openCreateItem() {
 
 function openEditItem(item) {
     editingItem.value = item;
+    rotationHistoryExpanded.value = false;
     itemForm.defaults({
         ...defaultItemForm(),
         password_vault_id: item.password_vault_id || '',
@@ -1169,6 +1181,22 @@ if (props.selectedGroup) {
                             <p><span class="text-gray-400">Età password</span><br><strong class="text-gray-700">{{ editingItem.password_age_days ?? 0 }} giorni</strong></p>
                             <p><span class="text-gray-400">Possibile riuso</span><br><strong class="text-gray-700">{{ editingItem.reused_count > 1 ? `${editingItem.reused_count} credenziali` : 'Non rilevato' }}</strong></p>
                             <p><span class="text-gray-400">Priorità rotazione</span><br><strong class="text-gray-700">{{ editingItem.rotation_priority }}</strong></p>
+                        </div>
+                        <div class="mt-4 border-t border-gray-200/80 pt-3">
+                            <div class="flex items-center justify-between gap-3">
+                                <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Storico rotazioni</p>
+                                <span class="text-[11px] font-semibold text-gray-400">{{ editingItem.rotation_count || 0 }}</span>
+                            </div>
+                            <div v-if="visibleRotationHistory.length" class="mt-2 divide-y divide-gray-200/70">
+                                <div v-for="rotation in visibleRotationHistory" :key="rotation.id" class="flex items-center justify-between gap-3 py-2 text-xs">
+                                    <span class="truncate font-medium text-gray-700">{{ rotation.user_name || 'Utente non disponibile' }}</span>
+                                    <time class="shrink-0 text-gray-400">{{ rotationDate(rotation.created_at) }}</time>
+                                </div>
+                            </div>
+                            <p v-else class="mt-2 text-xs text-gray-400">Nessuna rotazione registrata.</p>
+                            <button v-if="editingItem.rotation_count > 3" type="button" class="mt-2 text-xs font-semibold text-[hsl(var(--primary-app))] hover:underline" @click="rotationHistoryExpanded = !rotationHistoryExpanded">
+                                {{ rotationHistoryExpanded ? 'Mostra meno' : `Mostra tutte (${editingItem.rotation_count})` }}
+                            </button>
                         </div>
                     </div>
                     <div>

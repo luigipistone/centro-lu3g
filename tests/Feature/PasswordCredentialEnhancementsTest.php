@@ -46,6 +46,34 @@ class PasswordCredentialEnhancementsTest extends TestCase
         $this->assertSame(19, $item->password_length);
         $this->assertNotNull($item->password_fingerprint);
         $this->assertSame('PasswordSicura!2026', Crypt::decryptString($item->encrypted_password));
+
+        $this->actingAs($user)->put(route('passwords.items.update', $item->id), [
+            'password_vault_id' => $vaultId,
+            'title' => 'WordPress cliente',
+            'category' => 'wordpress',
+            'subcategory' => 'WordPress',
+            'custom_fields' => [['label' => 'Ruolo', 'value' => 'Amministratore']],
+            'username' => 'admin',
+            'password' => 'NuovaPassword!2027',
+            'credential_status' => 'active',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('password_rotation_logs', [
+            'password_item_id' => $item->id,
+            'user_id' => $user->id,
+        ]);
+
+        $this->actingAs($user)->put(route('passwords.items.update', $item->id), [
+            'password_vault_id' => $vaultId,
+            'title' => 'WordPress cliente aggiornato',
+            'category' => 'wordpress',
+            'subcategory' => 'WordPress',
+            'username' => 'admin',
+            'password' => 'NuovaPassword!2027',
+            'credential_status' => 'active',
+        ])->assertRedirect();
+
+        $this->assertSame(1, DB::table('password_rotation_logs')->where('password_item_id', $item->id)->count());
     }
 
     public function test_administration_vault_is_exclusive_to_superadmin(): void
