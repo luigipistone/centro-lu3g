@@ -5668,7 +5668,7 @@ onUnmounted(() => {
                                 <p class="mt-1 text-xs text-gray-500">Sospensione e archiviazione conservano dati e storico dell’utente.</p>
                             </div>
                             <div class="flex flex-wrap gap-2">
-                                <button v-for="option in [{ value: 'active', label: 'Attivo' }, { value: 'suspended', label: 'Sospeso' }, { value: 'archived', label: 'Archiviato' }]" :key="option.value" type="button" :disabled="userStatusSaving" :class="['btn', userAccountStatus === option.value ? 'btn-primary' : 'btn-outline']" @click="setUserAccountStatus(option.value)">
+                                <button v-for="option in [{ value: 'active', label: 'Attivo' }, { value: 'suspended', label: 'Sospeso' }, { value: 'archived', label: 'Archiviato' }]" :key="option.value" type="button" :disabled="userStatusSaving || page.props.auth?.user?.id === record.id" :title="page.props.auth?.user?.id === record.id ? 'Non puoi modificare lo stato del tuo account' : ''" :class="['btn', userAccountStatus === option.value ? 'btn-primary' : 'btn-outline']" @click="setUserAccountStatus(option.value)">
                                     {{ option.label }}
                                 </button>
                             </div>
