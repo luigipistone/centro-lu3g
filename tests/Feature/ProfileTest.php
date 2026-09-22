@@ -66,7 +66,7 @@ class ProfileTest extends TestCase
 
     public function test_profile_avatar_can_be_uploaded(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
         $user = User::factory()->create();
 
         $response = $this
@@ -83,7 +83,7 @@ class ProfileTest extends TestCase
 
         $this->assertNotNull($avatarUrl);
         $this->assertStringStartsWith('/avatars/', $avatarUrl);
-        Storage::disk('public')->assertExists('avatars/'.basename($avatarUrl));
+        Storage::disk('local')->assertExists('avatars/'.basename($avatarUrl));
     }
 
     public function test_user_can_delete_their_account(): void
