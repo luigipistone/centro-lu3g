@@ -290,7 +290,7 @@ class ProfileController extends Controller
     private function dossierDocuments(string $userId): array
     {
         $groupIds = DB::table('document_group_user')->where('user_id', $userId)->pluck('document_group_id');
-        $ids = DB::table('company_documents')->where('audience_type', 'all')->pluck('id')
+        $ids = DB::table('company_documents')->where('audience', 'all')->pluck('id')
             ->merge(DB::table('company_document_user')->where('user_id', $userId)->pluck('company_document_id'))
             ->merge(DB::table('company_document_group')->whereIn('document_group_id', $groupIds)->pluck('company_document_id'))
             ->unique()->values();
