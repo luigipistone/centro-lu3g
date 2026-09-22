@@ -33,16 +33,16 @@ class PasswordCredentialEnhancementsTest extends TestCase
             'title' => 'WordPress cliente',
             'category' => 'wordpress',
             'subcategory' => 'WordPress',
-            'category_data' => ['role' => 'Amministratore', 'site' => 'Sito principale', 'ignored' => 'no'],
+            'custom_fields' => [['label' => 'Ruolo', 'value' => 'Amministratore']],
             'username' => 'admin',
             'password' => 'PasswordSicura!2026',
             'credential_status' => 'active',
-            'mfa_status' => 'enabled',
         ])->assertRedirect();
 
         $item = DB::table('password_items')->where('title', 'WordPress cliente')->first();
         $this->assertSame('wordpress', $item->category);
-        $this->assertSame(['role' => 'Amministratore', 'site' => 'Sito principale'], json_decode($item->category_data, true));
+        $this->assertSame([['label' => 'Ruolo', 'value' => 'Amministratore']], json_decode($item->custom_fields, true));
+        $this->assertDatabaseHas('password_category_fields', ['category' => 'wordpress', 'label' => 'Ruolo']);
         $this->assertSame(19, $item->password_length);
         $this->assertNotNull($item->password_fingerprint);
         $this->assertSame('PasswordSicura!2026', Crypt::decryptString($item->encrypted_password));

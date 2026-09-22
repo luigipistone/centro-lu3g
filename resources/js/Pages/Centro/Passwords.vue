@@ -16,8 +16,8 @@ const props = defineProps({
     items: Array,
     users: Array,
     clients: Array,
-    projects: Array,
     credentialCategories: Array,
+    passwordCategoryFields: Array,
     nav: Array,
     selectedVault: Object,
     selectedGroup: Object,
@@ -40,11 +40,7 @@ const vaultEditor = ref(null);
 const groupEditor = ref(null);
 const initialClientId = new URLSearchParams(String(page.url || '').split('?')[1] || '').get('client_id') || 'all';
 const activeClientId = ref(initialClientId);
-const activeProjectId = ref('all');
-const activeCategory = ref('all');
-const activeSubcategory = ref('all');
-const activeStatus = ref('all');
-const activeRisk = ref('all');
+const activeCategoryFilters = ref([]);
 const localItems = ref([...(props.items || [])]);
 const compromiseChecking = ref(false);
 const compromiseProgress = ref({ done: 0, total: 0 });
@@ -54,6 +50,7 @@ const generatedPassword = ref('');
 const editPasswordLoaded = ref(false);
 const editPasswordVisible = ref(false);
 const editPasswordError = ref('');
+const newCustomFieldLabel = ref('');
 const generator = ref({
     length: 20,
     uppercase: true,
@@ -94,14 +91,14 @@ const baseFilteredItems = computed(() => {
     const q = search.value.trim().toLowerCase();
     return localItems.value.filter((item) => {
         const clientMatch = activeClientId.value === 'all' || item.client_id === activeClientId.value;
-        const projectMatch = activeProjectId.value === 'all' || item.project_id === activeProjectId.value;
-        const categoryMatch = activeCategory.value === 'all' || item.category === activeCategory.value;
-        const subcategoryMatch = activeSubcategory.value === 'all' || item.subcategory === activeSubcategory.value;
-        const statusMatch = activeStatus.value === 'all' || item.credential_status === activeStatus.value;
-        const riskMatch = activeRisk.value === 'all' || item.risk_level === activeRisk.value;
+        const categoryMatch = !activeCategoryFilters.value.length || activeCategoryFilters.value.some((filter) => {
+            if (filter.startsWith('category:')) return item.category === filter.slice(9);
+            const [, category, subcategory] = filter.split('::');
+            return item.category === category && item.subcategory === subcategory;
+        });
         const textMatch = !q || String(item.title || '').toLowerCase().includes(q);
 
-        return clientMatch && projectMatch && categoryMatch && subcategoryMatch && statusMatch && riskMatch && textMatch;
+        return clientMatch && categoryMatch && textMatch;
     });
 });
 
@@ -116,14 +113,13 @@ const hiddenVisibleItemsCount = computed(() => Math.max(visibleItems.value.lengt
 const hasMoreVisibleItems = computed(() => hiddenVisibleItemsCount.value > 0);
 const nextVisibleItemsCount = computed(() => Math.min(PASSWORD_BATCH_SIZE, hiddenVisibleItemsCount.value));
 const compromisedItems = computed(() => localItems.value.filter((item) => item.risk_flags?.length));
-const selectedCategoryDefinition = computed(() => (props.credentialCategories || []).find((category) => category.value === itemForm.category) || { fields: [], subcategories: [] });
-const categoryOptions = computed(() => [{ value: 'all', label: 'Tutte le categorie' }, ...(props.credentialCategories || []).map(({ value, label }) => ({ value, label }))]);
-const subcategoryFilterOptions = computed(() => {
-    const values = [...new Set(localItems.value.filter((item) => activeCategory.value === 'all' || item.category === activeCategory.value).map((item) => item.subcategory).filter(Boolean))];
-    return [{ value: 'all', label: 'Tutte le sottocategorie' }, ...values.map((value) => ({ value, label: value }))];
-});
+const selectedCategoryDefinition = computed(() => (props.credentialCategories || []).find((category) => category.value === itemForm.category) || { subcategories: [] });
+const categoryFilterOptions = computed(() => (props.credentialCategories || []).flatMap((category) => [
+    { value: `category:${category.value}`, label: category.label },
+    ...(category.subcategories || []).map((subcategory) => ({ value: `subcategory::${category.value}::${subcategory}`, label: `↳ ${subcategory}` })),
+]));
 const formSubcategoryOptions = computed(() => [{ value: '', label: 'Nessuna' }, ...(selectedCategoryDefinition.value.subcategories || []).map((value) => ({ value, label: value }))]);
-const filteredProjects = computed(() => (props.projects || []).filter((project) => !itemForm.client_id || project.client_id === itemForm.client_id));
+const availableCategoryFields = computed(() => (props.passwordCategoryFields || []).filter((field) => field.category === itemForm.category && !itemForm.custom_fields.some((selected) => selected.label.toLowerCase() === field.label.toLowerCase())));
 const strengthPreview = computed(() => {
     const value = itemForm.password || '';
     let score = value.length >= 12 ? 1 : 0;
@@ -144,18 +140,10 @@ function loadMorePasswordItems() {
     visibleItemLimit.value = Math.min(visibleItemLimit.value + PASSWORD_BATCH_SIZE, visibleItems.value.length);
 }
 
-watch([search, activeClientId, activeProjectId, activeCategory, activeSubcategory, activeStatus, activeRisk, activeVaultId], resetVisibleItemLimit);
+watch([search, activeClientId, activeCategoryFilters, activeVaultId], resetVisibleItemLimit, { deep: true });
 watch(() => props.items, (items) => {
     localItems.value = [...(items || [])];
 }, { deep: true });
-watch(activeCategory, () => {
-    if (!subcategoryFilterOptions.value.some((option) => option.value === activeSubcategory.value)) activeSubcategory.value = 'all';
-});
-watch(() => itemForm.client_id, (clientId) => {
-    if (itemForm.project_id && !(props.projects || []).some((project) => project.id === itemForm.project_id && (!clientId || project.client_id === clientId))) {
-        itemForm.project_id = '';
-    }
-});
 watch(passwordListSentinel, (element, previousElement) => {
     if (!passwordListObserver) return;
     if (previousElement) passwordListObserver.unobserve(previousElement);
@@ -265,8 +253,31 @@ function handleCategoryChange(value) {
     if (itemForm.category !== value) {
         itemForm.category = value;
         itemForm.subcategory = '';
-        itemForm.category_data = {};
+        itemForm.custom_fields = [];
     }
+}
+
+function categoryFilterLabel(value) {
+    return categoryFilterOptions.value.find((option) => option.value === value)?.label.replace(/^↳\s*/, '') || value;
+}
+
+function removeCategoryFilter(value) {
+    activeCategoryFilters.value = activeCategoryFilters.value.filter((selected) => selected !== value);
+}
+
+function addExistingCustomField(field) {
+    itemForm.custom_fields = [...itemForm.custom_fields, { label: field.label, value: '' }];
+}
+
+function addNewCustomField() {
+    const label = newCustomFieldLabel.value.trim();
+    if (!label || itemForm.custom_fields.some((field) => field.label.toLowerCase() === label.toLowerCase())) return;
+    itemForm.custom_fields = [...itemForm.custom_fields, { label, value: '' }];
+    newCustomFieldLabel.value = '';
+}
+
+function removeCustomField(index) {
+    itemForm.custom_fields = itemForm.custom_fields.filter((_, fieldIndex) => fieldIndex !== index);
 }
 
 function riskLabel(value) {
@@ -289,11 +300,10 @@ function refreshLocalSecurity(item) {
     if (Number(item.reused_count || 0) > 1) flags.push('Password riutilizzata');
     if (Number(item.strength_score || 0) < 3) flags.push('Password debole');
     if (Number(item.password_age_days || 0) > 365) flags.push('Password datata');
-    if (item.mfa_status === 'disabled') flags.push('MFA non attiva');
     item.risk_flags = flags;
     item.risk_level = Number(item.compromised_count || 0) > 0 ? 'critical'
         : (Number(item.reused_count || 0) > 1 || Number(item.strength_score || 0) <= 1 ? 'high'
-            : (Number(item.password_age_days || 0) > 365 || item.mfa_status === 'disabled' ? 'medium' : 'low'));
+            : (Number(item.password_age_days || 0) > 365 ? 'medium' : 'low'));
     item.rotation_priority = { critical: 'Immediata', high: 'Alta', medium: 'Programmata', low: 'Nessuna urgenza' }[item.risk_level];
 }
 
@@ -330,15 +340,13 @@ function defaultItemForm() {
         title: '',
         category: 'other',
         subcategory: '',
-        category_data: {},
+        custom_fields: [],
         username: '',
         password: '',
         url: '',
         notes: '',
         client_id: '',
-        project_id: '',
         credential_status: 'active',
-        mfa_status: 'unknown',
     };
 }
 
@@ -351,6 +359,7 @@ function resetItemForm() {
     editPasswordLoaded.value = false;
     editPasswordVisible.value = false;
     editPasswordError.value = '';
+    newCustomFieldLabel.value = '';
 }
 
 function openCreateItem() {
@@ -368,14 +377,12 @@ function openEditItem(item) {
         title: item.title || '',
         category: item.category || 'other',
         subcategory: item.subcategory || '',
-        category_data: item.category_data || {},
+        custom_fields: item.custom_fields || [],
         username: item.username || '',
         url: item.url || '',
         notes: item.notes || '',
         client_id: item.client_id || '',
-        project_id: item.project_id || '',
         credential_status: item.credential_status || 'active',
-        mfa_status: item.mfa_status || 'unknown',
     });
     itemForm.reset();
     itemForm.has_password = item.has_password;
@@ -693,7 +700,7 @@ if (props.selectedGroup) {
                 <section v-if="currentView === 'items'" class="space-y-5">
                     <div class="surface p-4">
                         <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                            <div class="grid flex-1 items-center gap-3 md:grid-cols-2 xl:grid-cols-3">
+                            <div class="grid flex-1 items-center gap-3 md:grid-cols-3">
                                 <ClearableSearchInput v-model="search" input-class="h-[38px]" placeholder="Cerca password" />
                                 <AppSelect
                                     v-model="activeClientId"
@@ -702,9 +709,11 @@ if (props.selectedGroup) {
                                     searchable
                                 />
                                 <AppSelect
-                                    v-model="activeProjectId"
+                                    v-model="activeCategoryFilters"
                                     class="password-filter-control"
-                                    :options="[{ value: 'all', label: 'Tutti i progetti' }, ...projects.filter((project) => activeClientId === 'all' || project.client_id === activeClientId).map((project) => ({ value: project.id, label: project.name }))]"
+                                    :options="categoryFilterOptions"
+                                    placeholder="Categorie"
+                                    multiple
                                     searchable
                                 />
                             </div>
@@ -713,11 +722,11 @@ if (props.selectedGroup) {
                                 Password
                             </button>
                         </div>
-                        <div class="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                            <AppSelect v-model="activeCategory" class="password-filter-control" :options="categoryOptions" />
-                            <AppSelect v-model="activeSubcategory" class="password-filter-control" :options="subcategoryFilterOptions" />
-                            <AppSelect v-model="activeStatus" class="password-filter-control" :options="[{ value: 'all', label: 'Tutti gli stati' }, { value: 'active', label: 'Attive' }, { value: 'suspended', label: 'Sospese' }, { value: 'rotation_due', label: 'Da ruotare' }]" />
-                            <AppSelect v-model="activeRisk" class="password-filter-control" :options="[{ value: 'all', label: 'Tutti i rischi' }, { value: 'critical', label: 'Rischio critico' }, { value: 'high', label: 'Rischio alto' }, { value: 'medium', label: 'Rischio medio' }, { value: 'low', label: 'Rischio basso' }]" />
+                        <div v-if="activeCategoryFilters.length" class="mt-3 flex flex-wrap gap-2">
+                            <button v-for="filter in activeCategoryFilters" :key="filter" type="button" class="inline-flex items-center gap-1.5 rounded-full bg-[hsl(var(--primary-app)/0.10)] px-3 py-1.5 text-xs font-semibold text-[hsl(var(--primary-app-dark))]" @click="removeCategoryFilter(filter)">
+                                {{ categoryFilterLabel(filter) }}
+                                <X class="h-3.5 w-3.5" :stroke-width="1.8" />
+                            </button>
                         </div>
                     </div>
 
@@ -1100,32 +1109,46 @@ if (props.selectedGroup) {
                         <span class="block text-sm font-medium text-gray-700">Sito web</span>
                         <input v-model="itemForm.url" class="form-control" name="centro_password_item_url" autocomplete="off" />
                     </label>
-                    <div v-if="selectedCategoryDefinition.fields?.length" class="grid gap-4 sm:grid-cols-2">
-                        <label v-for="field in selectedCategoryDefinition.fields" :key="field.key" class="block">
-                            <span class="block text-sm font-medium text-gray-700">{{ field.label }}</span>
-                            <input v-model="itemForm.category_data[field.key]" class="form-control" autocomplete="off" />
-                        </label>
-                    </div>
-                    <div class="grid gap-4 sm:grid-cols-2">
-                        <label class="block">
-                            <span class="block text-sm font-medium text-gray-700">Cliente</span>
-                            <AppSelect v-model="itemForm.client_id" :options="[{ value: '', label: 'Nessuno' }, ...clients.map((client) => ({ value: client.id, label: client.name }))]" searchable />
-                        </label>
-                        <label class="block">
-                            <span class="block text-sm font-medium text-gray-700">Progetto</span>
-                            <AppSelect v-model="itemForm.project_id" :options="[{ value: '', label: 'Nessuno' }, ...filteredProjects.map((project) => ({ value: project.id, label: project.name }))]" searchable />
-                        </label>
-                    </div>
-                    <div class="grid gap-4 sm:grid-cols-2">
-                        <label class="block">
-                            <span class="block text-sm font-medium text-gray-700">Stato</span>
-                            <AppSelect v-model="itemForm.credential_status" :options="[{ value: 'active', label: 'Attiva' }, { value: 'suspended', label: 'Sospesa' }, { value: 'rotation_due', label: 'Da ruotare' }]" />
-                        </label>
-                        <label class="block">
-                            <span class="block text-sm font-medium text-gray-700">Autenticazione MFA</span>
-                            <AppSelect v-model="itemForm.mfa_status" :options="[{ value: 'unknown', label: 'Non verificata' }, { value: 'enabled', label: 'Attiva' }, { value: 'disabled', label: 'Non attiva' }]" />
-                        </label>
-                    </div>
+                    <label class="block">
+                        <span class="block text-sm font-medium text-gray-700">Cliente</span>
+                        <AppSelect v-model="itemForm.client_id" :options="[{ value: '', label: 'Nessuno' }, ...clients.map((client) => ({ value: client.id, label: client.name }))]" searchable />
+                    </label>
+                    <label class="block">
+                        <span class="block text-sm font-medium text-gray-700">Stato</span>
+                        <AppSelect v-model="itemForm.credential_status" :options="[{ value: 'active', label: 'Attiva' }, { value: 'suspended', label: 'Sospesa' }, { value: 'rotation_due', label: 'Da ruotare' }]" />
+                    </label>
+                    <section class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
+                        <div>
+                            <h4 class="text-sm font-semibold text-gray-900">Campi personalizzati</h4>
+                            <p class="mt-1 text-xs text-gray-500">Aggiungi un campo già usato in questa categoria oppure creane uno nuovo.</p>
+                        </div>
+                        <div v-if="availableCategoryFields.length" class="mt-3 flex flex-wrap gap-2">
+                            <button v-for="field in availableCategoryFields" :key="field.id" type="button" class="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:border-[hsl(var(--primary-app)/0.35)] hover:text-[hsl(var(--primary-app))]" @click="addExistingCustomField(field)">
+                                <Plus class="mr-1 inline h-3.5 w-3.5" />{{ field.label }}
+                            </button>
+                        </div>
+                        <div v-if="itemForm.custom_fields.length" class="mt-4 space-y-3">
+                            <div v-for="(field, index) in itemForm.custom_fields" :key="`${field.label}-${index}`" class="grid items-end gap-2 sm:grid-cols-[minmax(0,180px)_minmax(0,1fr)_36px]">
+                                <label class="block">
+                                    <span class="block text-xs font-medium text-gray-600">Nome campo</span>
+                                    <input v-model="field.label" class="form-control" autocomplete="off" />
+                                </label>
+                                <label class="block">
+                                    <span class="block text-xs font-medium text-gray-600">Valore</span>
+                                    <input v-model="field.value" class="form-control" autocomplete="off" />
+                                </label>
+                                <button type="button" class="icon-btn h-9 w-9 text-red-600 hover:bg-red-50" title="Rimuovi campo" @click="removeCustomField(index)">
+                                    <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mt-4 flex gap-2">
+                            <input v-model="newCustomFieldLabel" class="form-control mt-0" placeholder="Nome del nuovo campo" @keydown.enter.prevent="addNewCustomField" />
+                            <button type="button" class="btn btn-outline h-[38px] shrink-0" :disabled="!newCustomFieldLabel.trim()" @click="addNewCustomField">
+                                <Plus class="h-4 w-4" />Aggiungi
+                            </button>
+                        </div>
+                    </section>
                     <div v-if="editingItem" class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/80 p-4">
                         <div class="grid gap-3 text-xs sm:grid-cols-2">
                             <p><span class="text-gray-400">Ultima verifica</span><br><strong class="text-gray-700">{{ editingItem.compromised_checked_at ? new Date(editingItem.compromised_checked_at).toLocaleDateString('it-IT') : 'Mai' }}</strong></p>

@@ -1433,8 +1433,8 @@ class CentroPageController extends Controller
             'clients' => ! $needsItems ? [] : ($this->isGuest($request)
                 ? DB::table('clients')->whereIn('id', $this->visibleClientIdsForUser($request->user()->id))->orderBy('name')->get(['id', 'name'])
                 : DB::table('clients')->orderBy('name')->get(['id', 'name'])),
-            'projects' => $needsItems ? DB::table('projects')->orderBy('name')->get(['id', 'name', 'client_id']) : [],
             'credentialCategories' => $this->passwordCredentialCategories(),
+            'passwordCategoryFields' => $needsItems ? DB::table('password_category_fields')->orderBy('label')->get(['id', 'category', 'label']) : [],
             'selectedVault' => $selectedVault,
             'selectedGroup' => $selectedGroup,
             'nav' => [
@@ -1642,6 +1642,7 @@ class CentroPageController extends Controller
             ]));
 
             $this->syncPasswordItemShares($itemId, $payload['user_ids'] ?? [], $payload['group_ids'] ?? [], $payload['share_permission'] ?? 'view');
+            $this->rememberPasswordCategoryFields($payload['category'], $payload['custom_fields'] ?? [], $request->user()->id);
             $this->logPasswordAction($itemId, $request->user()->id, 'created', 'Elemento password creato.');
         });
 
@@ -1664,6 +1665,7 @@ class CentroPageController extends Controller
             ], true));
 
             $this->syncPasswordItemShares($id, $payload['user_ids'] ?? [], $payload['group_ids'] ?? [], $payload['share_permission'] ?? 'view');
+            $this->rememberPasswordCategoryFields($payload['category'], $payload['custom_fields'] ?? [], $request->user()->id);
             $this->logPasswordAction($id, $request->user()->id, 'updated', 'Elemento password aggiornato.');
         });
 
@@ -4869,19 +4871,19 @@ class CentroPageController extends Controller
     private function passwordCredentialCategories(): array
     {
         return [
-            ['value' => 'website', 'label' => 'Sito web', 'subcategories' => ['Area riservata', 'E-commerce', 'Altro'], 'fields' => []],
-            ['value' => 'wordpress', 'label' => 'WordPress / CMS', 'subcategories' => ['WordPress', 'Shopify', 'PrestaShop', 'Altro CMS'], 'fields' => [['key' => 'role', 'label' => 'Ruolo'], ['key' => 'site', 'label' => 'Sito']]],
-            ['value' => 'hosting', 'label' => 'Hosting o pannello server', 'subcategories' => ['Plesk', 'cPanel', 'Cloud', 'Altro'], 'fields' => [['key' => 'provider', 'label' => 'Provider'], ['key' => 'host', 'label' => 'Host'], ['key' => 'protocol', 'label' => 'Protocollo'], ['key' => 'port', 'label' => 'Porta']]],
-            ['value' => 'server_access', 'label' => 'FTP / SFTP / SSH', 'subcategories' => ['FTP', 'SFTP', 'SSH'], 'fields' => [['key' => 'host', 'label' => 'Host'], ['key' => 'protocol', 'label' => 'Protocollo'], ['key' => 'port', 'label' => 'Porta'], ['key' => 'key_reference', 'label' => 'Riferimento chiave']]],
-            ['value' => 'database', 'label' => 'Database', 'subcategories' => ['MySQL', 'PostgreSQL', 'SQL Server', 'Altro'], 'fields' => [['key' => 'host', 'label' => 'Host'], ['key' => 'port', 'label' => 'Porta'], ['key' => 'database_name', 'label' => 'Nome database']]],
-            ['value' => 'domain_dns', 'label' => 'Dominio / DNS', 'subcategories' => ['Registrar', 'DNS', 'CDN'], 'fields' => [['key' => 'provider', 'label' => 'Provider'], ['key' => 'domain', 'label' => 'Dominio']]],
-            ['value' => 'email', 'label' => 'SMTP / PEC / Email', 'subcategories' => ['SMTP', 'PEC', 'Casella email'], 'fields' => [['key' => 'host', 'label' => 'Host'], ['key' => 'port', 'label' => 'Porta'], ['key' => 'encryption', 'label' => 'Cifratura'], ['key' => 'sender', 'label' => 'Mittente']]],
-            ['value' => 'social', 'label' => 'Social network', 'subcategories' => ['Facebook', 'Instagram', 'LinkedIn', 'TikTok', 'YouTube', 'Altro'], 'fields' => [['key' => 'platform', 'label' => 'Piattaforma'], ['key' => 'account_owner', 'label' => 'Proprietario account']]],
-            ['value' => 'advertising', 'label' => 'Advertising', 'subcategories' => ['Google Ads', 'Meta Ads', 'LinkedIn Ads', 'Altro'], 'fields' => [['key' => 'platform', 'label' => 'Piattaforma'], ['key' => 'account_id', 'label' => 'ID account']]],
-            ['value' => 'analytics_seo', 'label' => 'Analytics / SEO', 'subcategories' => ['Google Analytics', 'Search Console', 'Tag Manager', 'SEO tool', 'Altro'], 'fields' => [['key' => 'platform', 'label' => 'Piattaforma'], ['key' => 'property_id', 'label' => 'ID proprietà']]],
-            ['value' => 'saas', 'label' => 'Software o servizio SaaS', 'subcategories' => ['Produttività', 'CRM', 'Design', 'Sviluppo', 'Altro'], 'fields' => [['key' => 'provider', 'label' => 'Servizio'], ['key' => 'plan', 'label' => 'Piano']]],
-            ['value' => 'network_device', 'label' => 'Rete o dispositivo', 'subcategories' => ['Router', 'Wi-Fi', 'NAS', 'Dispositivo', 'Altro'], 'fields' => [['key' => 'host', 'label' => 'Host o IP'], ['key' => 'device', 'label' => 'Dispositivo']]],
-            ['value' => 'other', 'label' => 'Altro', 'subcategories' => [], 'fields' => []],
+            ['value' => 'website', 'label' => 'Sito web', 'subcategories' => ['Area riservata', 'E-commerce', 'Altro']],
+            ['value' => 'wordpress', 'label' => 'WordPress / CMS', 'subcategories' => ['WordPress', 'Shopify', 'PrestaShop', 'Altro CMS']],
+            ['value' => 'hosting', 'label' => 'Hosting o pannello server', 'subcategories' => ['Plesk', 'cPanel', 'Cloud', 'Altro']],
+            ['value' => 'server_access', 'label' => 'FTP / SFTP / SSH', 'subcategories' => ['FTP', 'SFTP', 'SSH']],
+            ['value' => 'database', 'label' => 'Database', 'subcategories' => ['MySQL', 'PostgreSQL', 'SQL Server', 'Altro']],
+            ['value' => 'domain_dns', 'label' => 'Dominio / DNS', 'subcategories' => ['Registrar', 'DNS', 'CDN']],
+            ['value' => 'email', 'label' => 'SMTP / PEC / Email', 'subcategories' => ['SMTP', 'PEC', 'Casella email']],
+            ['value' => 'social', 'label' => 'Social network', 'subcategories' => ['Facebook', 'Instagram', 'LinkedIn', 'TikTok', 'YouTube', 'Altro']],
+            ['value' => 'advertising', 'label' => 'Advertising', 'subcategories' => ['Google Ads', 'Meta Ads', 'LinkedIn Ads', 'Altro']],
+            ['value' => 'analytics_seo', 'label' => 'Analytics / SEO', 'subcategories' => ['Google Analytics', 'Search Console', 'Tag Manager', 'SEO tool', 'Altro']],
+            ['value' => 'saas', 'label' => 'Software o servizio SaaS', 'subcategories' => ['Produttività', 'CRM', 'Design', 'Sviluppo', 'Altro']],
+            ['value' => 'network_device', 'label' => 'Rete o dispositivo', 'subcategories' => ['Router', 'Wi-Fi', 'NAS', 'Dispositivo', 'Altro']],
+            ['value' => 'other', 'label' => 'Altro', 'subcategories' => []],
         ];
     }
 
@@ -4902,9 +4904,6 @@ class CentroPageController extends Controller
         }
         if ((int) ($item->password_age_days ?? 0) > 365) {
             $flags[] = 'Password datata';
-        }
-        if (($item->mfa_status ?? 'unknown') === 'disabled') {
-            $flags[] = 'MFA non attiva';
         }
 
         return $flags;
@@ -4937,7 +4936,7 @@ class CentroPageController extends Controller
         if ((int) ($item->reused_count ?? 0) > 1 || (int) ($item->strength_score ?? 0) <= 1) {
             return 'high';
         }
-        if ((int) ($item->password_age_days ?? 0) > 365 || ($item->mfa_status ?? 'unknown') === 'disabled') {
+        if ((int) ($item->password_age_days ?? 0) > 365) {
             return 'medium';
         }
 
@@ -5061,8 +5060,6 @@ class CentroPageController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'category' => ['required', Rule::in(array_column($this->passwordCredentialCategories(), 'value'))],
             'subcategory' => ['nullable', 'string', 'max:100'],
-            'category_data' => ['nullable', 'array'],
-            'category_data.*' => ['nullable', 'string', 'max:1000'],
             'url' => ['nullable', 'string', 'max:1000'],
             'username' => ['nullable', 'string', 'max:255'],
             'password' => [$updating ? 'nullable' : 'required', 'string', 'max:2000'],
@@ -5071,9 +5068,7 @@ class CentroPageController extends Controller
             'expires_at' => ['nullable', 'date'],
             'favorite' => ['boolean'],
             'credential_status' => ['required', Rule::in(['active', 'suspended', 'rotation_due'])],
-            'mfa_status' => ['required', Rule::in(['enabled', 'disabled', 'unknown'])],
             'client_id' => ['nullable', 'uuid', 'exists:clients,id'],
-            'project_id' => ['nullable', 'uuid', 'exists:projects,id'],
             'share_permission' => ['nullable', Rule::in(['view', 'edit'])],
             'user_ids' => ['nullable', 'array'],
             'user_ids.*' => ['uuid', 'exists:users,id'],
@@ -5089,12 +5084,6 @@ class CentroPageController extends Controller
         if (filled($payload['subcategory'] ?? null) && ! $allowedSubcategories->contains($payload['subcategory'])) {
             throw ValidationException::withMessages(['subcategory' => 'La sottocategoria selezionata non appartiene alla categoria scelta.']);
         }
-
-        $allowedFields = collect($category['fields'] ?? [])->pluck('key');
-        $payload['category_data'] = collect($payload['category_data'] ?? [])
-            ->only($allowedFields)
-            ->filter(fn ($value) => filled($value))
-            ->all();
 
         if (! $this->canManagePasswords($request)) {
             abort_unless(blank($payload['password_vault_id'] ?? null) || $this->visiblePasswordVaultIds($request)->contains($payload['password_vault_id']), 403);
@@ -5134,13 +5123,10 @@ class CentroPageController extends Controller
                 ->filter(fn ($field) => filled($field['label'] ?? null) || filled($field['value'] ?? null))
                 ->values()
                 ->all()),
-            'category_data' => json_encode($payload['category_data'] ?? []),
             'expires_at' => $payload['expires_at'] ?? null,
             'favorite' => (bool) ($payload['favorite'] ?? false),
             'credential_status' => $payload['credential_status'] ?? 'active',
-            'mfa_status' => $payload['mfa_status'] ?? 'unknown',
             'client_id' => $payload['client_id'] ?? null,
-            'project_id' => $payload['project_id'] ?? null,
         ];
 
         if (! $updating || filled($payload['password'] ?? null)) {
@@ -5191,6 +5177,32 @@ class CentroPageController extends Controller
         if ($groupRows) {
             DB::table('password_item_group')->insert($groupRows);
         }
+    }
+
+    private function rememberPasswordCategoryFields(string $category, array $fields, string $userId): void
+    {
+        collect($fields)
+            ->pluck('label')
+            ->filter()
+            ->map(fn ($label) => trim((string) $label))
+            ->filter()
+            ->unique(fn ($label) => Str::lower($label))
+            ->each(function ($label) use ($category, $userId) {
+                $fieldKey = Str::slug($label, '_');
+                if ($fieldKey === '') {
+                    return;
+                }
+
+                DB::table('password_category_fields')->insertOrIgnore([
+                    'id' => (string) Str::uuid(),
+                    'category' => $category,
+                    'field_key' => $fieldKey,
+                    'label' => $label,
+                    'created_by' => $userId,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            });
     }
 
     private function syncPasswordVaultShares(string $vaultId, array $userIds, array $groupIds): void
