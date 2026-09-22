@@ -4524,6 +4524,13 @@ onUnmounted(() => {
 
             <div v-else :class="['mx-auto grid max-w-[1600px] gap-6 px-4 sm:px-6 lg:px-8', section === 'users' ? 'lg:grid-cols-1' : 'lg:grid-cols-[1fr_360px]']">
                 <section v-if="section === 'clients'" class="space-y-6">
+                    <div v-if="related.passwordCredentialsCount !== null && related.passwordCredentialsCount !== undefined" class="flex justify-end">
+                        <Link :href="route('passwords.index', { client_id: record.id })" class="btn btn-outline">
+                            <KeyRound class="h-4 w-4" :stroke-width="1.7" />
+                            Credenziali
+                            <span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">{{ related.passwordCredentialsCount }}</span>
+                        </Link>
+                    </div>
                     <section v-if="canEditClient" class="surface rounded-md p-5">
                         <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
                             <div>

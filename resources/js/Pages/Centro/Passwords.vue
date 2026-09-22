@@ -16,6 +16,8 @@ const props = defineProps({
     items: Array,
     users: Array,
     clients: Array,
+    projects: Array,
+    credentialCategories: Array,
     nav: Array,
     selectedVault: Object,
     selectedGroup: Object,
@@ -36,7 +38,16 @@ const deleteTarget = ref(null);
 const deleteText = ref('');
 const vaultEditor = ref(null);
 const groupEditor = ref(null);
-const activeClientId = ref('all');
+const initialClientId = new URLSearchParams(String(page.url || '').split('?')[1] || '').get('client_id') || 'all';
+const activeClientId = ref(initialClientId);
+const activeProjectId = ref('all');
+const activeCategory = ref('all');
+const activeSubcategory = ref('all');
+const activeStatus = ref('all');
+const activeRisk = ref('all');
+const localItems = ref([...(props.items || [])]);
+const compromiseChecking = ref(false);
+const compromiseProgress = ref({ done: 0, total: 0 });
 const noteEditor = ref(null);
 const generatorOpen = ref(false);
 const generatedPassword = ref('');
@@ -81,11 +92,16 @@ const groupForm = useForm({ name: '', description: '', user_ids: [] });
 
 const baseFilteredItems = computed(() => {
     const q = search.value.trim().toLowerCase();
-    return (props.items || []).filter((item) => {
+    return localItems.value.filter((item) => {
         const clientMatch = activeClientId.value === 'all' || item.client_id === activeClientId.value;
+        const projectMatch = activeProjectId.value === 'all' || item.project_id === activeProjectId.value;
+        const categoryMatch = activeCategory.value === 'all' || item.category === activeCategory.value;
+        const subcategoryMatch = activeSubcategory.value === 'all' || item.subcategory === activeSubcategory.value;
+        const statusMatch = activeStatus.value === 'all' || item.credential_status === activeStatus.value;
+        const riskMatch = activeRisk.value === 'all' || item.risk_level === activeRisk.value;
         const textMatch = !q || String(item.title || '').toLowerCase().includes(q);
 
-        return clientMatch && textMatch;
+        return clientMatch && projectMatch && categoryMatch && subcategoryMatch && statusMatch && riskMatch && textMatch;
     });
 });
 
@@ -99,7 +115,23 @@ const pagedVisibleItems = computed(() => visibleItems.value.slice(0, visibleItem
 const hiddenVisibleItemsCount = computed(() => Math.max(visibleItems.value.length - pagedVisibleItems.value.length, 0));
 const hasMoreVisibleItems = computed(() => hiddenVisibleItemsCount.value > 0);
 const nextVisibleItemsCount = computed(() => Math.min(PASSWORD_BATCH_SIZE, hiddenVisibleItemsCount.value));
-const compromisedItems = computed(() => (props.items || []).filter((item) => item.risk_flags?.length));
+const compromisedItems = computed(() => localItems.value.filter((item) => item.risk_flags?.length));
+const selectedCategoryDefinition = computed(() => (props.credentialCategories || []).find((category) => category.value === itemForm.category) || { fields: [], subcategories: [] });
+const categoryOptions = computed(() => [{ value: 'all', label: 'Tutte le categorie' }, ...(props.credentialCategories || []).map(({ value, label }) => ({ value, label }))]);
+const subcategoryFilterOptions = computed(() => {
+    const values = [...new Set(localItems.value.filter((item) => activeCategory.value === 'all' || item.category === activeCategory.value).map((item) => item.subcategory).filter(Boolean))];
+    return [{ value: 'all', label: 'Tutte le sottocategorie' }, ...values.map((value) => ({ value, label: value }))];
+});
+const formSubcategoryOptions = computed(() => [{ value: '', label: 'Nessuna' }, ...(selectedCategoryDefinition.value.subcategories || []).map((value) => ({ value, label: value }))]);
+const filteredProjects = computed(() => (props.projects || []).filter((project) => !itemForm.client_id || project.client_id === itemForm.client_id));
+const strengthPreview = computed(() => {
+    const value = itemForm.password || '';
+    let score = value.length >= 12 ? 1 : 0;
+    if (value.length >= 16) score++;
+    if (/[a-z]/.test(value) && /[A-Z]/.test(value)) score++;
+    if (/\d/.test(value) && /[^a-zA-Z\d]/.test(value)) score++;
+    return { score: Math.min(4, score), length: value.length, label: ['Molto debole', 'Debole', 'Discreta', 'Buona', 'Forte'][Math.min(4, score)] };
+});
 const itemFormErrorMessages = computed(() => Object.values(itemForm.errors || {}).filter(Boolean));
 
 function resetVisibleItemLimit() {
@@ -112,7 +144,18 @@ function loadMorePasswordItems() {
     visibleItemLimit.value = Math.min(visibleItemLimit.value + PASSWORD_BATCH_SIZE, visibleItems.value.length);
 }
 
-watch([search, activeClientId, activeVaultId], resetVisibleItemLimit);
+watch([search, activeClientId, activeProjectId, activeCategory, activeSubcategory, activeStatus, activeRisk, activeVaultId], resetVisibleItemLimit);
+watch(() => props.items, (items) => {
+    localItems.value = [...(items || [])];
+}, { deep: true });
+watch(activeCategory, () => {
+    if (!subcategoryFilterOptions.value.some((option) => option.value === activeSubcategory.value)) activeSubcategory.value = 'all';
+});
+watch(() => itemForm.client_id, (clientId) => {
+    if (itemForm.project_id && !(props.projects || []).some((project) => project.id === itemForm.project_id && (!clientId || project.client_id === clientId))) {
+        itemForm.project_id = '';
+    }
+});
 watch(passwordListSentinel, (element, previousElement) => {
     if (!passwordListObserver) return;
     if (previousElement) passwordListObserver.unobserve(previousElement);
@@ -120,6 +163,7 @@ watch(passwordListSentinel, (element, previousElement) => {
 });
 
 onMounted(() => {
+    if (currentView.value === 'compromised') runCompromiseChecks();
     if (typeof IntersectionObserver === 'undefined') return;
 
     passwordListObserver = new IntersectionObserver(([entry]) => {
@@ -213,15 +257,88 @@ function vaultFilterCount(vaultId = 'all') {
     return baseFilteredItems.value.filter((item) => item.password_vault_id === vaultId).length;
 }
 
+function categoryLabel(value) {
+    return (props.credentialCategories || []).find((category) => category.value === value)?.label || 'Altro';
+}
+
+function handleCategoryChange(value) {
+    if (itemForm.category !== value) {
+        itemForm.category = value;
+        itemForm.subcategory = '';
+        itemForm.category_data = {};
+    }
+}
+
+function riskLabel(value) {
+    return { critical: 'Critico', high: 'Alto', medium: 'Medio', low: 'Basso' }[value] || 'Basso';
+}
+
+function riskClass(value) {
+    return {
+        critical: 'bg-red-100 text-red-700',
+        high: 'bg-orange-100 text-orange-700',
+        medium: 'bg-amber-100 text-amber-700',
+        low: 'bg-emerald-100 text-emerald-700',
+    }[value] || 'bg-gray-100 text-gray-600';
+}
+
+function refreshLocalSecurity(item) {
+    const flags = [];
+    if (!item.has_password) flags.push('Senza password salvata');
+    if (Number(item.compromised_count || 0) > 0) flags.push('Password compromessa');
+    if (Number(item.reused_count || 0) > 1) flags.push('Password riutilizzata');
+    if (Number(item.strength_score || 0) < 3) flags.push('Password debole');
+    if (Number(item.password_age_days || 0) > 365) flags.push('Password datata');
+    if (item.mfa_status === 'disabled') flags.push('MFA non attiva');
+    item.risk_flags = flags;
+    item.risk_level = Number(item.compromised_count || 0) > 0 ? 'critical'
+        : (Number(item.reused_count || 0) > 1 || Number(item.strength_score || 0) <= 1 ? 'high'
+            : (Number(item.password_age_days || 0) > 365 || item.mfa_status === 'disabled' ? 'medium' : 'low'));
+    item.rotation_priority = { critical: 'Immediata', high: 'Alta', medium: 'Programmata', low: 'Nessuna urgenza' }[item.risk_level];
+}
+
+async function runCompromiseChecks() {
+    if (compromiseChecking.value) return;
+    const pending = localItems.value.filter((item) => item.has_password && item.needs_compromise_check);
+    compromiseProgress.value = { done: 0, total: pending.length };
+    if (!pending.length) return;
+    compromiseChecking.value = true;
+    for (const item of pending) {
+        try {
+            const response = await window.axios.post(route('passwords.items.compromise-check', item.id));
+            item.compromised_count = response.data.count || 0;
+            item.compromised_checked_at = response.data.checked_at;
+            item.needs_compromise_check = false;
+            refreshLocalSecurity(item);
+        } catch (error) {
+            // Un errore su una credenziale non interrompe il controllo delle successive.
+        }
+        compromiseProgress.value.done++;
+    }
+    compromiseChecking.value = false;
+}
+
+function startRotation(item) {
+    openEditItem(item);
+    generatorOpen.value = true;
+    refreshGeneratedPassword();
+}
+
 function defaultItemForm() {
     return {
         password_vault_id: '',
         title: '',
+        category: 'other',
+        subcategory: '',
+        category_data: {},
         username: '',
         password: '',
         url: '',
         notes: '',
         client_id: '',
+        project_id: '',
+        credential_status: 'active',
+        mfa_status: 'unknown',
     };
 }
 
@@ -249,10 +366,16 @@ function openEditItem(item) {
         ...defaultItemForm(),
         password_vault_id: item.password_vault_id || '',
         title: item.title || '',
+        category: item.category || 'other',
+        subcategory: item.subcategory || '',
+        category_data: item.category_data || {},
         username: item.username || '',
         url: item.url || '',
         notes: item.notes || '',
         client_id: item.client_id || '',
+        project_id: item.project_id || '',
+        credential_status: item.credential_status || 'active',
+        mfa_status: item.mfa_status || 'unknown',
     });
     itemForm.reset();
     itemForm.has_password = item.has_password;
@@ -570,7 +693,7 @@ if (props.selectedGroup) {
                 <section v-if="currentView === 'items'" class="space-y-5">
                     <div class="surface p-4">
                         <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                            <div class="grid flex-1 items-center gap-3 md:grid-cols-[minmax(0,1fr)_230px]">
+                            <div class="grid flex-1 items-center gap-3 md:grid-cols-2 xl:grid-cols-3">
                                 <ClearableSearchInput v-model="search" input-class="h-[38px]" placeholder="Cerca password" />
                                 <AppSelect
                                     v-model="activeClientId"
@@ -578,11 +701,23 @@ if (props.selectedGroup) {
                                     :options="[{ value: 'all', label: 'Tutti i clienti' }, ...clients.map((client) => ({ value: client.id, label: client.name }))]"
                                     searchable
                                 />
+                                <AppSelect
+                                    v-model="activeProjectId"
+                                    class="password-filter-control"
+                                    :options="[{ value: 'all', label: 'Tutti i progetti' }, ...projects.filter((project) => activeClientId === 'all' || project.client_id === activeClientId).map((project) => ({ value: project.id, label: project.name }))]"
+                                    searchable
+                                />
                             </div>
                             <button type="button" class="btn btn-primary h-[38px]" @click="openCreateItem">
                                 <Plus class="h-4 w-4" :stroke-width="1.7" />
                                 Password
                             </button>
+                        </div>
+                        <div class="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            <AppSelect v-model="activeCategory" class="password-filter-control" :options="categoryOptions" />
+                            <AppSelect v-model="activeSubcategory" class="password-filter-control" :options="subcategoryFilterOptions" />
+                            <AppSelect v-model="activeStatus" class="password-filter-control" :options="[{ value: 'all', label: 'Tutti gli stati' }, { value: 'active', label: 'Attive' }, { value: 'suspended', label: 'Sospese' }, { value: 'rotation_due', label: 'Da ruotare' }]" />
+                            <AppSelect v-model="activeRisk" class="password-filter-control" :options="[{ value: 'all', label: 'Tutti i rischi' }, { value: 'critical', label: 'Rischio critico' }, { value: 'high', label: 'Rischio alto' }, { value: 'medium', label: 'Rischio medio' }, { value: 'low', label: 'Rischio basso' }]" />
                         </div>
                     </div>
 
@@ -641,6 +776,8 @@ if (props.selectedGroup) {
                                     <Building2 class="h-3.5 w-3.5" :stroke-width="1.8" />
                                     {{ item.client_name }}
                                 </span>
+                                <span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">{{ categoryLabel(item.category) }}</span>
+                                <span :class="['inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold', riskClass(item.risk_level)]">{{ riskLabel(item.risk_level) }}</span>
                             </div>
                         </article>
                     </div>
@@ -830,6 +967,18 @@ if (props.selectedGroup) {
                 </section>
 
                 <section v-if="currentView === 'compromised'" class="space-y-4">
+                    <div class="surface flex flex-wrap items-center justify-between gap-3 p-4">
+                        <div>
+                            <p class="text-sm font-semibold text-gray-900">Controllo sicurezza</p>
+                            <p class="mt-1 text-xs text-gray-500">
+                                <template v-if="compromiseChecking">Controllate {{ compromiseProgress.done }} di {{ compromiseProgress.total }} credenziali. La pagina resta utilizzabile.</template>
+                                <template v-else>Il controllo viene eseguito progressivamente e memorizzato per sette giorni.</template>
+                            </p>
+                        </div>
+                        <button type="button" class="btn btn-outline" :disabled="compromiseChecking" @click="runCompromiseChecks">
+                            {{ compromiseChecking ? 'Controllo in corso' : 'Controlla ora' }}
+                        </button>
+                    </div>
                     <article v-for="item in compromisedItems" :key="item.id" class="surface flex items-center justify-between gap-4 p-4">
                         <div class="flex min-w-0 items-center gap-3">
                             <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-red-50 text-red-600">
@@ -838,9 +987,10 @@ if (props.selectedGroup) {
                             <div class="min-w-0">
                                 <p class="truncate text-sm font-semibold text-gray-900">{{ item.url || item.title }}</p>
                                 <p class="truncate text-xs text-gray-500">{{ item.risk_flags.join(', ') }}</p>
+                                <p class="mt-1 text-xs text-gray-400">{{ categoryLabel(item.category) }} · {{ item.password_length }} caratteri · {{ item.password_age_days ?? 0 }} giorni · priorità {{ item.rotation_priority }}</p>
                             </div>
                         </div>
-                        <button v-if="item.can_edit" type="button" class="text-sm font-semibold text-[hsl(var(--primary-app))]" @click="openEditItem(item)">Sistema</button>
+                        <button v-if="item.can_edit" type="button" class="text-sm font-semibold text-[hsl(var(--primary-app))]" @click="startRotation(item)">Ruota</button>
                     </article>
                     <div v-if="!compromisedItems.length" class="surface px-6 py-12 text-center text-sm text-gray-500">Nessuna password da controllare.</div>
                 </section>
@@ -860,6 +1010,16 @@ if (props.selectedGroup) {
                         <span class="block text-sm font-medium text-gray-700">Titolo</span>
                         <input v-model="itemForm.title" class="form-control" name="centro_password_item_title" autocomplete="off" placeholder="Es. Accesso Aruba, Gmail cliente..." />
                     </label>
+                    <div class="grid gap-4 sm:grid-cols-2">
+                        <label class="block">
+                            <span class="block text-sm font-medium text-gray-700">Categoria *</span>
+                            <AppSelect :model-value="itemForm.category" :options="credentialCategories.map(({ value, label }) => ({ value, label }))" @update:model-value="handleCategoryChange" />
+                        </label>
+                        <label class="block">
+                            <span class="block text-sm font-medium text-gray-700">Sottocategoria</span>
+                            <AppSelect v-model="itemForm.subcategory" :options="formSubcategoryOptions" />
+                        </label>
+                    </div>
                     <label class="block">
                         <span class="block text-sm font-medium text-gray-700">Nome utente</span>
                         <input v-model="itemForm.username" class="form-control" name="centro_password_item_username" autocomplete="off" />
@@ -883,6 +1043,12 @@ if (props.selectedGroup) {
                             <button type="button" class="btn btn-outline h-[38px] shrink-0" @click="openGenerator">Genera</button>
                         </div>
                         <p v-if="editPasswordError" class="mt-2 text-sm text-red-600">{{ editPasswordError }}</p>
+                        <div v-if="editPasswordLoaded || !editingItem" class="mt-2 flex items-center gap-3">
+                            <div class="grid flex-1 grid-cols-4 gap-1">
+                                <span v-for="index in 4" :key="index" :class="['h-1.5 rounded-full', index <= strengthPreview.score ? (strengthPreview.score >= 3 ? 'bg-emerald-500' : strengthPreview.score === 2 ? 'bg-amber-500' : 'bg-red-500') : 'bg-gray-200']"></span>
+                            </div>
+                            <span class="shrink-0 text-xs font-semibold text-gray-500">{{ strengthPreview.length }} caratteri · {{ strengthPreview.label }}</span>
+                        </div>
                         <div v-if="generatorOpen" class="rounded-[var(--radius)] bg-gray-50/80 p-4">
                             <div class="mb-4 flex items-center gap-2 rounded-[var(--radius-sm)] border border-gray-200 bg-white px-3 py-2">
                                 <code class="min-w-0 flex-1 truncate text-sm font-semibold text-gray-800">{{ generatedPassword }}</code>
@@ -934,10 +1100,40 @@ if (props.selectedGroup) {
                         <span class="block text-sm font-medium text-gray-700">Sito web</span>
                         <input v-model="itemForm.url" class="form-control" name="centro_password_item_url" autocomplete="off" />
                     </label>
-                    <label class="block">
-                        <span class="block text-sm font-medium text-gray-700">Cliente</span>
-                        <AppSelect v-model="itemForm.client_id" :options="[{ value: '', label: 'Nessuno' }, ...clients.map((client) => ({ value: client.id, label: client.name }))]" searchable />
-                    </label>
+                    <div v-if="selectedCategoryDefinition.fields?.length" class="grid gap-4 sm:grid-cols-2">
+                        <label v-for="field in selectedCategoryDefinition.fields" :key="field.key" class="block">
+                            <span class="block text-sm font-medium text-gray-700">{{ field.label }}</span>
+                            <input v-model="itemForm.category_data[field.key]" class="form-control" autocomplete="off" />
+                        </label>
+                    </div>
+                    <div class="grid gap-4 sm:grid-cols-2">
+                        <label class="block">
+                            <span class="block text-sm font-medium text-gray-700">Cliente</span>
+                            <AppSelect v-model="itemForm.client_id" :options="[{ value: '', label: 'Nessuno' }, ...clients.map((client) => ({ value: client.id, label: client.name }))]" searchable />
+                        </label>
+                        <label class="block">
+                            <span class="block text-sm font-medium text-gray-700">Progetto</span>
+                            <AppSelect v-model="itemForm.project_id" :options="[{ value: '', label: 'Nessuno' }, ...filteredProjects.map((project) => ({ value: project.id, label: project.name }))]" searchable />
+                        </label>
+                    </div>
+                    <div class="grid gap-4 sm:grid-cols-2">
+                        <label class="block">
+                            <span class="block text-sm font-medium text-gray-700">Stato</span>
+                            <AppSelect v-model="itemForm.credential_status" :options="[{ value: 'active', label: 'Attiva' }, { value: 'suspended', label: 'Sospesa' }, { value: 'rotation_due', label: 'Da ruotare' }]" />
+                        </label>
+                        <label class="block">
+                            <span class="block text-sm font-medium text-gray-700">Autenticazione MFA</span>
+                            <AppSelect v-model="itemForm.mfa_status" :options="[{ value: 'unknown', label: 'Non verificata' }, { value: 'enabled', label: 'Attiva' }, { value: 'disabled', label: 'Non attiva' }]" />
+                        </label>
+                    </div>
+                    <div v-if="editingItem" class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/80 p-4">
+                        <div class="grid gap-3 text-xs sm:grid-cols-2">
+                            <p><span class="text-gray-400">Ultima verifica</span><br><strong class="text-gray-700">{{ editingItem.compromised_checked_at ? new Date(editingItem.compromised_checked_at).toLocaleDateString('it-IT') : 'Mai' }}</strong></p>
+                            <p><span class="text-gray-400">Età password</span><br><strong class="text-gray-700">{{ editingItem.password_age_days ?? 0 }} giorni</strong></p>
+                            <p><span class="text-gray-400">Possibile riuso</span><br><strong class="text-gray-700">{{ editingItem.reused_count > 1 ? `${editingItem.reused_count} credenziali` : 'Non rilevato' }}</strong></p>
+                            <p><span class="text-gray-400">Priorità rotazione</span><br><strong class="text-gray-700">{{ editingItem.rotation_priority }}</strong></p>
+                        </div>
+                    </div>
                     <div>
                         <span class="block text-sm font-medium text-gray-700">Note</span>
                         <div class="overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white">

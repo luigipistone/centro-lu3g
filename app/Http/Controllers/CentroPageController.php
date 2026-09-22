@@ -3,9 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\AccountArchiveService;
 use App\Services\CentroBackupService;
 use App\Services\CentroNotificationService;
-use App\Services\AccountArchiveService;
 use App\Services\RolePermissionService;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
@@ -32,6 +32,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 use Minishlink\WebPush\Subscription;
 use Minishlink\WebPush\WebPush;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class CentroPageController extends Controller
 {
@@ -662,6 +663,7 @@ class CentroPageController extends Controller
                     ->get(['account_archive_requests.*', 'requesters.name as requester_name'])
                     ->map(function ($row) {
                         $row->linked_summary = json_decode($row->linked_summary ?: '{}', true);
+
                         return $row;
                     })
                 : [],
@@ -1426,11 +1428,13 @@ class CentroPageController extends Controller
             'canCreateVaults' => ! $this->isGuest($request),
             'vaults' => $vaults,
             'groups' => $groups,
-            'items' => $needsItems ? $this->passwordItemRows($request, $view === 'compromised') : [],
+            'items' => $needsItems ? $this->passwordItemRows($request) : [],
             'users' => $needsUsers ? $this->userOptions() : [],
             'clients' => ! $needsItems ? [] : ($this->isGuest($request)
                 ? DB::table('clients')->whereIn('id', $this->visibleClientIdsForUser($request->user()->id))->orderBy('name')->get(['id', 'name'])
                 : DB::table('clients')->orderBy('name')->get(['id', 'name'])),
+            'projects' => $needsItems ? DB::table('projects')->orderBy('name')->get(['id', 'name', 'client_id']) : [],
+            'credentialCategories' => $this->passwordCredentialCategories(),
             'selectedVault' => $selectedVault,
             'selectedGroup' => $selectedGroup,
             'nav' => [
@@ -1456,6 +1460,7 @@ class CentroPageController extends Controller
             'group_ids' => ['nullable', 'array'],
             'group_ids.*' => ['uuid', 'exists:password_groups,id'],
         ]);
+        abort_if(Str::lower(trim($payload['name'])) === 'amministrazione' && $this->currentUserRole($request) !== 'superadmin', 403);
         if (! empty($payload['user_ids']) && ! empty($payload['group_ids'])) {
             return back()->withErrors(['group_ids' => 'Scegli gruppi oppure utenti singoli, non entrambi.'])->withInput();
         }
@@ -1505,6 +1510,7 @@ class CentroPageController extends Controller
             'group_ids' => ['nullable', 'array'],
             'group_ids.*' => ['uuid', 'exists:password_groups,id'],
         ]);
+        abort_if((Str::lower(trim($payload['name'])) === 'amministrazione' || $this->isAdministrationVault($vault)) && $this->currentUserRole($request) !== 'superadmin', 403);
         if (! empty($payload['user_ids']) && ! empty($payload['group_ids'])) {
             return back()->withErrors(['group_ids' => 'Scegli gruppi oppure utenti singoli, non entrambi.'])->withInput();
         }
@@ -1676,6 +1682,21 @@ class CentroPageController extends Controller
         return response()->json([
             'username' => $item->username ?? '',
             'password' => $item->encrypted_password ? Crypt::decryptString($item->encrypted_password) : '',
+        ]);
+    }
+
+    public function checkPasswordItemCompromise(Request $request, string $id): JsonResponse
+    {
+        abort_if($this->isGuest($request), 403);
+        $item = DB::table('password_items')->where('id', $id)->first();
+        abort_if(! $item, 404);
+        abort_unless($this->canViewPasswordItem($request, $item), 403);
+        $count = filled($item->encrypted_password) ? $this->passwordCompromiseCount($item, $item->encrypted_password, true) : 0;
+
+        return response()->json([
+            'count' => $count,
+            'checked_at' => now('Europe/Rome')->toIso8601String(),
+            'compromised' => $count > 0,
         ]);
     }
 
@@ -1910,6 +1931,9 @@ class CentroPageController extends Controller
                 'clientServices' => DB::table('client_services')->where('client_id', $id)->pluck('service_id'),
                 'services' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name', 'color']),
                 'subscriptions' => DB::table('subscriptions')->where('client_id', $id)->latest()->get(),
+                'passwordCredentialsCount' => app(RolePermissionService::class)->allows($this->currentUserRole($request), 'passwords.view')
+                    ? $this->passwordItemsQuery($request)->where('password_items.client_id', $id)->count()
+                    : null,
             ],
             'projects' => [
                 'sections' => $this->projectSections($id),
@@ -1997,6 +2021,7 @@ class CentroPageController extends Controller
                 'archiveRequests' => Schema::hasTable('account_archive_requests')
                     ? DB::table('account_archive_requests')->where('user_id', $id)->latest()->get()->map(function ($row) {
                         $row->linked_summary = json_decode($row->linked_summary ?: '{}', true);
+
                         return $row;
                     })
                     : collect(),
@@ -3834,27 +3859,44 @@ class CentroPageController extends Controller
 
         if ($section === 'security') {
             $oldRole = DB::table('user_roles')->where('user_id', $id)->value('role');
-            if ($oldRole !== $payload['role']) $changed['role'] = ['from' => $oldRole, 'to' => $payload['role']];
-            if (! empty($payload['password'])) $changed['password'] = ['from' => null, 'to' => 'aggiornata'];
+            if ($oldRole !== $payload['role']) {
+                $changed['role'] = ['from' => $oldRole, 'to' => $payload['role']];
+            }
+            if (! empty($payload['password'])) {
+                $changed['password'] = ['from' => null, 'to' => 'aggiornata'];
+            }
             DB::table('user_roles')->where('user_id', $id)->delete();
             DB::table('user_roles')->insert([
                 'id' => (string) str()->uuid(),
                 'user_id' => $id,
                 'role' => $payload['role'],
             ]);
-            if (! empty($payload['password'])) { $user->password = Hash::make($payload['password']); $user->save(); }
+            if (! empty($payload['password'])) {
+                $user->password = Hash::make($payload['password']);
+                $user->save();
+            }
         } else {
             $fields = array_keys($rules);
             $updates = [];
             foreach ($fields as $field) {
-                if (str_contains($field, '*')) continue;
+                if (str_contains($field, '*')) {
+                    continue;
+                }
                 $value = $payload[$field] ?? null;
-                if ($field === 'smartworking_days') $value = json_encode($value ?: []);
-                if ($field === 'part_time') $value = (bool) $value;
-                if (($profile[$field] ?? null) != $value) $changed[$field] = ['from' => $profile[$field] ?? null, 'to' => $value];
+                if ($field === 'smartworking_days') {
+                    $value = json_encode($value ?: []);
+                }
+                if ($field === 'part_time') {
+                    $value = (bool) $value;
+                }
+                if (($profile[$field] ?? null) != $value) {
+                    $changed[$field] = ['from' => $profile[$field] ?? null, 'to' => $value];
+                }
                 $updates[$field] = $value;
             }
-            if ($section === 'operational') $updates['smartworking_day'] = collect($payload['smartworking_days'] ?? [])->first();
+            if ($section === 'operational') {
+                $updates['smartworking_day'] = collect($payload['smartworking_days'] ?? [])->first();
+            }
             $updates['updated_at'] = now();
             if (DB::table('profiles')->where('user_id', $id)->exists()) {
                 DB::table('profiles')->where('user_id', $id)->update($updates);
@@ -3951,7 +3993,9 @@ class CentroPageController extends Controller
 
         $file = $request->file('file');
         $path = $file?->store('employee-dossier/'.$id, 'local');
-        if ($path) Storage::disk('local')->setVisibility($path, 'private');
+        if ($path) {
+            Storage::disk('local')->setVisibility($path, 'private');
+        }
         $itemId = (string) str()->uuid();
 
         DB::transaction(function () use ($payload, $classification, $replaced, $file, $path, $itemId, $id, $request) {
@@ -4012,7 +4056,9 @@ class CentroPageController extends Controller
         $item = DB::table('employee_dossier_items')->where('id', $itemId)->where('user_id', $id)->first();
         abort_if(! $item, 404);
         $this->ensureEmployeeDossierManageAccess($request, $item->classification);
-        if ($item->file_path) Storage::disk('local')->delete($item->file_path);
+        if ($item->file_path) {
+            Storage::disk('local')->delete($item->file_path);
+        }
         DB::table('employee_dossier_items')->where('id', $itemId)->delete();
         DB::table('audit_logs')->insert([
             'id' => (string) str()->uuid(), 'user_id' => $request->user()->id, 'user_name' => $request->user()->name,
@@ -4043,7 +4089,9 @@ class CentroPageController extends Controller
 
     private function employeeDossierData(Request $request, string $userId): array
     {
-        if (! Schema::hasTable('employee_dossier_items')) return ['items' => [], 'summary' => [], 'types' => [], 'access' => []];
+        if (! Schema::hasTable('employee_dossier_items')) {
+            return ['items' => [], 'summary' => [], 'types' => [], 'access' => []];
+        }
         $types = $this->employeeDossierTypes();
         $role = $this->currentUserRole($request);
         $self = (string) $request->user()->id === $userId;
@@ -4056,9 +4104,14 @@ class CentroPageController extends Controller
         ];
         $rows = DB::table('employee_dossier_items')->where('user_id', $userId)->orderByDesc('created_at')->get();
         $visible = $rows->filter(function ($item) use ($request, $userId) {
-            try { $this->ensureEmployeeDossierViewAccess($request, $userId, $item->classification, true); return true; }
-            catch (\Symfony\Component\HttpKernel\Exception\HttpException) { return false; }
-        })->map(function ($item) use ($role, $self, $types, $access) {
+            try {
+                $this->ensureEmployeeDossierViewAccess($request, $userId, $item->classification, true);
+
+                return true;
+            } catch (HttpException) {
+                return false;
+            }
+        })->map(function ($item) use ($self, $types, $access) {
             $medicalSummaryOnly = $item->classification === 'medical' && ! $self && ! $access['medical_manage'];
             $item->type_label = $types[$item->type]['label'] ?? $item->type;
             $item->status = $this->employeeDossierStatus($item);
@@ -4072,12 +4125,14 @@ class CentroPageController extends Controller
                 $item->file_name = null;
                 $item->issued_at = null;
             }
+
             return $item;
         })->values();
 
         $activeByType = $rows->whereNull('replaced_at')->groupBy('type');
         $summary = collect($types)->filter(fn ($config) => $config['required'])->map(function ($config, $type) use ($activeByType) {
             $item = $activeByType->get($type)?->sortByDesc('created_at')->first();
+
             return [
                 'type' => $type,
                 'label' => $config['label'],
@@ -4095,11 +4150,20 @@ class CentroPageController extends Controller
 
     private function employeeDossierStatus(object $item): string
     {
-        if ($item->replaced_at) return 'replaced';
-        if (! $item->expires_at) return 'valid';
+        if ($item->replaced_at) {
+            return 'replaced';
+        }
+        if (! $item->expires_at) {
+            return 'valid';
+        }
         $expires = Carbon::parse($item->expires_at)->startOfDay();
-        if ($expires->isPast()) return 'expired';
-        if ($expires->lte(now('Europe/Rome')->addDays(30)->endOfDay())) return 'expiring';
+        if ($expires->isPast()) {
+            return 'expired';
+        }
+        if ($expires->lte(now('Europe/Rome')->addDays(30)->endOfDay())) {
+            return 'expiring';
+        }
+
         return 'valid';
     }
 
@@ -4116,7 +4180,9 @@ class CentroPageController extends Controller
 
     private function ensureEmployeeDossierViewAccess(Request $request, string $userId, string $classification, bool $allowMedicalSummary): void
     {
-        if ((string) $request->user()->id === $userId && $classification !== 'admin') return;
+        if ((string) $request->user()->id === $userId && $classification !== 'admin') {
+            return;
+        }
         $permission = match ($classification) {
             'contract' => 'users.dossier.contract.view',
             'medical' => $allowMedicalSummary ? 'users.dossier.medical.status' : 'users.dossier.medical.manage',
@@ -4649,7 +4715,7 @@ class CentroPageController extends Controller
         });
     }
 
-    private function passwordItemRows(Request $request, bool $withCompromiseCheck = false)
+    private function passwordItemRows(Request $request)
     {
         $role = $this->currentUserRole($request);
         $manageable = in_array($role, ['superadmin', 'admin'], true);
@@ -4680,12 +4746,27 @@ class CentroPageController extends Controller
             ->get(['password_item_id', 'password_group_id', 'permission'])
             ->groupBy('password_item_id');
 
-        return $items->map(function ($item) use ($request, $role, $manageable, $visibleVaultIds, $currentUserGroupIds, $userShares, $groupShares, $withCompromiseCheck) {
+        $security = $items->mapWithKeys(function ($item) {
+            try {
+                $plain = $item->encrypted_password ? Crypt::decryptString($item->encrypted_password) : '';
+            } catch (\Throwable) {
+                $plain = '';
+            }
+
+            return [$item->id => [
+                'length' => mb_strlen($plain),
+                'score' => $this->passwordStrengthScore($plain),
+                'fingerprint' => $plain !== '' ? hash_hmac('sha256', $plain, (string) config('app.key')) : null,
+            ]];
+        });
+        $reuseCounts = $security->pluck('fingerprint')->filter()->countBy();
+
+        return $items->map(function ($item) use ($request, $role, $manageable, $visibleVaultIds, $currentUserGroupIds, $userShares, $groupShares, $security, $reuseCounts) {
             $item->has_password = filled($item->encrypted_password);
-            $encryptedPassword = $item->encrypted_password;
             unset($item->encrypted_password);
             $item->tags = $item->tags ? json_decode($item->tags, true) : [];
             $item->custom_fields = $item->custom_fields ? json_decode($item->custom_fields, true) : [];
+            $item->category_data = $item->category_data ? json_decode($item->category_data, true) : [];
             $item->user_ids = ($userShares[$item->id] ?? collect())->pluck('user_id')->values();
             $item->group_ids = ($groupShares[$item->id] ?? collect())->pluck('password_group_id')->values();
             $item->share_permission = ($userShares[$item->id] ?? collect())->first()?->permission
@@ -4700,7 +4781,15 @@ class CentroPageController extends Controller
                 || $directShare?->permission === 'edit'
                 || (bool) $editableGroupShare;
             $item->can_delete = $manageable;
-            $item->risk_flags = $this->passwordRiskFlags($item, $encryptedPassword, $withCompromiseCheck);
+            $metrics = $security[$item->id] ?? ['length' => 0, 'score' => 0, 'fingerprint' => null];
+            $item->password_length = (int) ($item->password_length ?: $metrics['length']);
+            $item->strength_score = (int) ($item->strength_score ?? $metrics['score']);
+            $item->reused_count = $metrics['fingerprint'] ? (int) ($reuseCounts[$metrics['fingerprint']] ?? 0) : 0;
+            $item->password_age_days = $item->password_changed_at ? Carbon::parse($item->password_changed_at)->diffInDays(now()) : null;
+            $item->needs_compromise_check = ! $item->compromised_checked_at || Carbon::parse($item->compromised_checked_at)->lte(now()->subDays(7));
+            $item->risk_flags = $this->passwordRiskFlags($item);
+            $item->risk_level = $this->passwordRiskLevel($item);
+            $item->rotation_priority = $this->passwordRotationPriority($item);
 
             return $item;
         });
@@ -4711,6 +4800,13 @@ class CentroPageController extends Controller
         $query = DB::table('password_items');
         if ($this->currentUserRole($request) === 'superadmin') {
             return $query;
+        }
+
+        $administrationVaultIds = DB::table('password_vaults')
+            ->whereRaw('LOWER(name) = ?', ['amministrazione'])
+            ->pluck('id');
+        if ($administrationVaultIds->isNotEmpty()) {
+            $query->whereNotIn('password_items.password_vault_id', $administrationVaultIds);
         }
 
         $groupIds = DB::table('password_group_user')->where('user_id', $request->user()->id)->pluck('password_group_id');
@@ -4732,6 +4828,7 @@ class CentroPageController extends Controller
         $groupIds = DB::table('password_group_user')->where('user_id', $request->user()->id)->pluck('password_group_id');
 
         return DB::table('password_vaults')
+            ->whereRaw('LOWER(name) != ?', ['amministrazione'])
             ->where(function ($query) use ($request, $groupIds) {
                 $query->where('created_by', $request->user()->id)
                     ->orWhereIn('id', DB::table('password_vault_user')->where('user_id', $request->user()->id)->pluck('password_vault_id'))
@@ -4749,6 +4846,9 @@ class CentroPageController extends Controller
 
     private function canEditPasswordVault(Request $request, object $vault): bool
     {
+        if ($this->isAdministrationVault($vault) && $this->currentUserRole($request) !== 'superadmin') {
+            return false;
+        }
         if ($this->currentUserRole($request) === 'superadmin') {
             return true;
         }
@@ -4761,29 +4861,103 @@ class CentroPageController extends Controller
             && ($vault->visibility ?? 'personal') === 'shared';
     }
 
-    private function passwordRiskFlags(object $item, ?string $encryptedPassword = null, bool $withCompromiseCheck = false): array
+    private function isAdministrationVault(object $vault): bool
+    {
+        return Str::lower(trim((string) ($vault->name ?? ''))) === 'amministrazione';
+    }
+
+    private function passwordCredentialCategories(): array
+    {
+        return [
+            ['value' => 'website', 'label' => 'Sito web', 'subcategories' => ['Area riservata', 'E-commerce', 'Altro'], 'fields' => []],
+            ['value' => 'wordpress', 'label' => 'WordPress / CMS', 'subcategories' => ['WordPress', 'Shopify', 'PrestaShop', 'Altro CMS'], 'fields' => [['key' => 'role', 'label' => 'Ruolo'], ['key' => 'site', 'label' => 'Sito']]],
+            ['value' => 'hosting', 'label' => 'Hosting o pannello server', 'subcategories' => ['Plesk', 'cPanel', 'Cloud', 'Altro'], 'fields' => [['key' => 'provider', 'label' => 'Provider'], ['key' => 'host', 'label' => 'Host'], ['key' => 'protocol', 'label' => 'Protocollo'], ['key' => 'port', 'label' => 'Porta']]],
+            ['value' => 'server_access', 'label' => 'FTP / SFTP / SSH', 'subcategories' => ['FTP', 'SFTP', 'SSH'], 'fields' => [['key' => 'host', 'label' => 'Host'], ['key' => 'protocol', 'label' => 'Protocollo'], ['key' => 'port', 'label' => 'Porta'], ['key' => 'key_reference', 'label' => 'Riferimento chiave']]],
+            ['value' => 'database', 'label' => 'Database', 'subcategories' => ['MySQL', 'PostgreSQL', 'SQL Server', 'Altro'], 'fields' => [['key' => 'host', 'label' => 'Host'], ['key' => 'port', 'label' => 'Porta'], ['key' => 'database_name', 'label' => 'Nome database']]],
+            ['value' => 'domain_dns', 'label' => 'Dominio / DNS', 'subcategories' => ['Registrar', 'DNS', 'CDN'], 'fields' => [['key' => 'provider', 'label' => 'Provider'], ['key' => 'domain', 'label' => 'Dominio']]],
+            ['value' => 'email', 'label' => 'SMTP / PEC / Email', 'subcategories' => ['SMTP', 'PEC', 'Casella email'], 'fields' => [['key' => 'host', 'label' => 'Host'], ['key' => 'port', 'label' => 'Porta'], ['key' => 'encryption', 'label' => 'Cifratura'], ['key' => 'sender', 'label' => 'Mittente']]],
+            ['value' => 'social', 'label' => 'Social network', 'subcategories' => ['Facebook', 'Instagram', 'LinkedIn', 'TikTok', 'YouTube', 'Altro'], 'fields' => [['key' => 'platform', 'label' => 'Piattaforma'], ['key' => 'account_owner', 'label' => 'Proprietario account']]],
+            ['value' => 'advertising', 'label' => 'Advertising', 'subcategories' => ['Google Ads', 'Meta Ads', 'LinkedIn Ads', 'Altro'], 'fields' => [['key' => 'platform', 'label' => 'Piattaforma'], ['key' => 'account_id', 'label' => 'ID account']]],
+            ['value' => 'analytics_seo', 'label' => 'Analytics / SEO', 'subcategories' => ['Google Analytics', 'Search Console', 'Tag Manager', 'SEO tool', 'Altro'], 'fields' => [['key' => 'platform', 'label' => 'Piattaforma'], ['key' => 'property_id', 'label' => 'ID proprietà']]],
+            ['value' => 'saas', 'label' => 'Software o servizio SaaS', 'subcategories' => ['Produttività', 'CRM', 'Design', 'Sviluppo', 'Altro'], 'fields' => [['key' => 'provider', 'label' => 'Servizio'], ['key' => 'plan', 'label' => 'Piano']]],
+            ['value' => 'network_device', 'label' => 'Rete o dispositivo', 'subcategories' => ['Router', 'Wi-Fi', 'NAS', 'Dispositivo', 'Altro'], 'fields' => [['key' => 'host', 'label' => 'Host o IP'], ['key' => 'device', 'label' => 'Dispositivo']]],
+            ['value' => 'other', 'label' => 'Altro', 'subcategories' => [], 'fields' => []],
+        ];
+    }
+
+    private function passwordRiskFlags(object $item): array
     {
         $flags = [];
         if (! $item->has_password) {
             $flags[] = 'Senza password salvata';
         }
-        if ($withCompromiseCheck && filled($encryptedPassword)) {
-            $count = $this->passwordCompromiseCount($item, $encryptedPassword);
-            if ($count > 0) {
-                $flags[] = "Presente in {$count} violazioni note";
-            }
+        if ((int) ($item->compromised_count ?? 0) > 0) {
+            $flags[] = 'Password compromessa';
+        }
+        if ((int) ($item->reused_count ?? 0) > 1) {
+            $flags[] = 'Password riutilizzata';
+        }
+        if ((int) ($item->strength_score ?? 0) < 3) {
+            $flags[] = 'Password debole';
+        }
+        if ((int) ($item->password_age_days ?? 0) > 365) {
+            $flags[] = 'Password datata';
+        }
+        if (($item->mfa_status ?? 'unknown') === 'disabled') {
+            $flags[] = 'MFA non attiva';
         }
 
         return $flags;
     }
 
-    private function passwordCompromiseCount(object $item, string $encryptedPassword): int
+    private function passwordStrengthScore(string $password): int
+    {
+        if ($password === '') {
+            return 0;
+        }
+        $score = mb_strlen($password) >= 12 ? 1 : 0;
+        if (mb_strlen($password) >= 16) {
+            $score++;
+        }
+        if (preg_match('/[a-z]/', $password) && preg_match('/[A-Z]/', $password)) {
+            $score++;
+        }
+        if (preg_match('/\d/', $password) && preg_match('/[^a-zA-Z\d]/', $password)) {
+            $score++;
+        }
+
+        return min(4, $score);
+    }
+
+    private function passwordRiskLevel(object $item): string
+    {
+        if ((int) ($item->compromised_count ?? 0) > 0) {
+            return 'critical';
+        }
+        if ((int) ($item->reused_count ?? 0) > 1 || (int) ($item->strength_score ?? 0) <= 1) {
+            return 'high';
+        }
+        if ((int) ($item->password_age_days ?? 0) > 365 || ($item->mfa_status ?? 'unknown') === 'disabled') {
+            return 'medium';
+        }
+
+        return 'low';
+    }
+
+    private function passwordRotationPriority(object $item): string
+    {
+        return match ($this->passwordRiskLevel($item)) {
+            'critical' => 'Immediata', 'high' => 'Alta', 'medium' => 'Programmata', default => 'Nessuna urgenza',
+        };
+    }
+
+    private function passwordCompromiseCount(object $item, string $encryptedPassword, bool $force = false): int
     {
         $hasCacheColumns = Schema::hasColumn('password_items', 'compromised_count')
             && Schema::hasColumn('password_items', 'compromised_checked_at');
 
         if (
-            $hasCacheColumns
+            ! $force && $hasCacheColumns
             && $item->compromised_checked_at
             && Carbon::parse($item->compromised_checked_at)->greaterThan(now()->subDays(7))
         ) {
@@ -4835,6 +5009,13 @@ class CentroPageController extends Controller
 
     private function canViewPasswordItem(Request $request, object $item): bool
     {
+        $vault = $item->password_vault_id
+            ? DB::table('password_vaults')->where('id', $item->password_vault_id)->first()
+            : null;
+        if ($vault && $this->isAdministrationVault($vault) && $this->currentUserRole($request) !== 'superadmin') {
+            return false;
+        }
+
         if ($this->currentUserRole($request) === 'superadmin' || $item->created_by === $request->user()->id) {
             return true;
         }
@@ -4848,6 +5029,13 @@ class CentroPageController extends Controller
 
     private function canEditPasswordItem(Request $request, object $item): bool
     {
+        $vault = $item->password_vault_id
+            ? DB::table('password_vaults')->where('id', $item->password_vault_id)->first()
+            : null;
+        if ($vault && $this->isAdministrationVault($vault) && $this->currentUserRole($request) !== 'superadmin') {
+            return false;
+        }
+
         if ($this->currentUserRole($request) === 'superadmin' || $item->created_by === $request->user()->id || $this->visiblePasswordVaultIds($request)->contains($item->password_vault_id)) {
             return true;
         }
@@ -4871,6 +5059,10 @@ class CentroPageController extends Controller
         $payload = $request->validate([
             'password_vault_id' => ['nullable', 'uuid', 'exists:password_vaults,id'],
             'title' => ['required', 'string', 'max:255'],
+            'category' => ['required', Rule::in(array_column($this->passwordCredentialCategories(), 'value'))],
+            'subcategory' => ['nullable', 'string', 'max:100'],
+            'category_data' => ['nullable', 'array'],
+            'category_data.*' => ['nullable', 'string', 'max:1000'],
             'url' => ['nullable', 'string', 'max:1000'],
             'username' => ['nullable', 'string', 'max:255'],
             'password' => [$updating ? 'nullable' : 'required', 'string', 'max:2000'],
@@ -4878,6 +5070,8 @@ class CentroPageController extends Controller
             'tags_text' => ['nullable', 'string', 'max:1000'],
             'expires_at' => ['nullable', 'date'],
             'favorite' => ['boolean'],
+            'credential_status' => ['required', Rule::in(['active', 'suspended', 'rotation_due'])],
+            'mfa_status' => ['required', Rule::in(['enabled', 'disabled', 'unknown'])],
             'client_id' => ['nullable', 'uuid', 'exists:clients,id'],
             'project_id' => ['nullable', 'uuid', 'exists:projects,id'],
             'share_permission' => ['nullable', Rule::in(['view', 'edit'])],
@@ -4890,6 +5084,18 @@ class CentroPageController extends Controller
             'custom_fields.*.value' => ['nullable', 'string', 'max:1000'],
         ]);
 
+        $category = collect($this->passwordCredentialCategories())->firstWhere('value', $payload['category']);
+        $allowedSubcategories = collect($category['subcategories'] ?? []);
+        if (filled($payload['subcategory'] ?? null) && ! $allowedSubcategories->contains($payload['subcategory'])) {
+            throw ValidationException::withMessages(['subcategory' => 'La sottocategoria selezionata non appartiene alla categoria scelta.']);
+        }
+
+        $allowedFields = collect($category['fields'] ?? [])->pluck('key');
+        $payload['category_data'] = collect($payload['category_data'] ?? [])
+            ->only($allowedFields)
+            ->filter(fn ($value) => filled($value))
+            ->all();
+
         if (! $this->canManagePasswords($request)) {
             abort_unless(blank($payload['password_vault_id'] ?? null) || $this->visiblePasswordVaultIds($request)->contains($payload['password_vault_id']), 403);
             $payload['user_ids'] = [];
@@ -4900,6 +5106,10 @@ class CentroPageController extends Controller
         if (blank($payload['password_vault_id'] ?? null)) {
             $payload['password_vault_id'] = $this->visiblePasswordVaultIds($request)->first();
         }
+        if (! blank($payload['password_vault_id'] ?? null)) {
+            $vault = DB::table('password_vaults')->where('id', $payload['password_vault_id'])->first();
+            abort_if($vault && $this->isAdministrationVault($vault) && $this->currentUserRole($request) !== 'superadmin', 403);
+        }
 
         return $payload;
     }
@@ -4909,6 +5119,8 @@ class CentroPageController extends Controller
         $data = [
             'password_vault_id' => $payload['password_vault_id'] ?? null,
             'title' => $payload['title'],
+            'category' => $payload['category'],
+            'subcategory' => $payload['subcategory'] ?? null,
             'url' => $payload['url'] ?? null,
             'username' => $payload['username'] ?? null,
             'notes' => $payload['notes'] ?? null,
@@ -4922,14 +5134,22 @@ class CentroPageController extends Controller
                 ->filter(fn ($field) => filled($field['label'] ?? null) || filled($field['value'] ?? null))
                 ->values()
                 ->all()),
+            'category_data' => json_encode($payload['category_data'] ?? []),
             'expires_at' => $payload['expires_at'] ?? null,
             'favorite' => (bool) ($payload['favorite'] ?? false),
+            'credential_status' => $payload['credential_status'] ?? 'active',
+            'mfa_status' => $payload['mfa_status'] ?? 'unknown',
             'client_id' => $payload['client_id'] ?? null,
             'project_id' => $payload['project_id'] ?? null,
         ];
 
         if (! $updating || filled($payload['password'] ?? null)) {
-            $data['encrypted_password'] = Crypt::encryptString($payload['password'] ?? '');
+            $plainPassword = $payload['password'] ?? '';
+            $data['encrypted_password'] = Crypt::encryptString($plainPassword);
+            $data['password_length'] = mb_strlen($plainPassword);
+            $data['strength_score'] = $this->passwordStrengthScore($plainPassword);
+            $data['password_fingerprint'] = $plainPassword !== '' ? hash_hmac('sha256', $plainPassword, (string) config('app.key')) : null;
+            $data['password_changed_at'] = now();
             if (Schema::hasColumn('password_items', 'compromised_count')) {
                 $data['compromised_count'] = 0;
             }

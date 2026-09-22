@@ -122,6 +122,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/passwords/items', [CentroPageController::class, 'storePasswordItem'])->name('passwords.items.store');
     Route::put('/passwords/items/{id}', [CentroPageController::class, 'updatePasswordItem'])->name('passwords.items.update');
     Route::post('/passwords/items/{id}/reveal', [CentroPageController::class, 'revealPasswordItem'])->name('passwords.items.reveal');
+    Route::post('/passwords/items/{id}/compromise-check', [CentroPageController::class, 'checkPasswordItemCompromise'])->name('passwords.items.compromise-check');
     Route::delete('/passwords/items/{id}', [CentroPageController::class, 'destroyPasswordItem'])->name('passwords.items.destroy');
     Route::get('/notifications', [CentroPageController::class, 'notifications'])->name('notifications.index');
     Route::get('/push/enable', [CentroPageController::class, 'enablePush'])->name('push.enable');
