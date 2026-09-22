@@ -790,6 +790,7 @@ const userDetailTab = ref('personal');
 const userDetailTabs = [
     { value: 'personal', label: 'Dati personali' }, { value: 'employment', label: 'Rapporto di lavoro' },
     { value: 'schedule', label: 'Orario e smart working' }, { value: 'dossier', label: 'Fascicolo digitale' },
+    { value: 'performance', label: 'Andamento' },
 ];
 const parsedSmartworkingDays = (() => { try { return JSON.parse(props.record.smartworking_days || '[]'); } catch { return []; } })();
 const userForm = useForm({
@@ -4385,7 +4386,7 @@ onUnmounted(() => {
                 </div>
             </div>
 
-            <div v-else class="mx-auto grid max-w-[1600px] gap-6 px-4 sm:px-6 lg:grid-cols-[1fr_360px] lg:px-8">
+            <div v-else :class="['mx-auto grid max-w-[1600px] gap-6 px-4 sm:px-6 lg:px-8', section === 'users' ? 'lg:grid-cols-1' : 'lg:grid-cols-[1fr_360px]']">
                 <section v-if="section === 'clients'" class="space-y-6">
                     <section v-if="canEditClient" class="surface rounded-md p-5">
                         <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -5665,8 +5666,8 @@ onUnmounted(() => {
                 </section>
 
                 <section v-if="section === 'users'" class="space-y-6 lg:order-1">
-                    <nav class="settings-tabs flex w-full gap-1 overflow-x-auto" aria-label="Sezioni utente">
-                        <button v-for="tab in userDetailTabs" :key="tab.value" type="button" :class="['settings-tab shrink-0', userDetailTab === tab.value ? 'is-active' : '']" @click="userDetailTab = tab.value">{{ tab.label }}</button>
+                    <nav class="surface flex w-full gap-2 overflow-x-auto p-2" aria-label="Sezioni utente">
+                        <button v-for="tab in userDetailTabs" :key="tab.value" type="button" :class="['settings-tab shrink-0', userDetailTab === tab.value ? 'settings-tab-active' : '']" @click="userDetailTab = tab.value">{{ tab.label }}</button>
                     </nav>
                     <section v-if="userDetailTab === 'personal'" class="surface rounded-md p-5">
                         <div class="flex flex-wrap items-center gap-4 rounded-md border border-gray-100 bg-gray-50 p-4">
@@ -5857,7 +5858,7 @@ onUnmounted(() => {
                     </section>
                 </section>
 
-                <section v-if="section === 'users'" class="surface rounded-md p-5 lg:order-3 lg:col-span-2">
+                <section v-if="section === 'users' && userDetailTab === 'performance'" class="surface rounded-md p-5 lg:order-3 lg:col-span-2">
                         <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
                             <div>
                                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Andamento persona</h3>
@@ -6259,7 +6260,7 @@ onUnmounted(() => {
                         </div>
                     </section>
 
-                    <section v-if="section === 'users'" class="surface rounded-md p-5">
+                    <section v-if="section === 'users' && userDetailTab === 'personal'" class="surface rounded-md p-5">
                         <h3 class="text-sm font-semibold text-gray-900">Profilo</h3>
                         <dl class="mt-4 space-y-3 text-sm">
                             <div class="flex items-center justify-between gap-3">

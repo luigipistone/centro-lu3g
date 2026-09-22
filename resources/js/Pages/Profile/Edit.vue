@@ -186,8 +186,8 @@ watch(() => absenceForm.type, () => {
 
         <div class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 sm:px-6 lg:px-8">
-                <nav class="settings-tabs flex w-full gap-1 overflow-x-auto" aria-label="Sezioni profilo">
-                    <button v-for="tab in profileTabs" :key="tab.value" type="button" :class="['settings-tab shrink-0', profileTab === tab.value ? 'is-active' : '']" @click="profileTab = tab.value">
+                <nav class="surface flex w-full gap-2 overflow-x-auto p-2" aria-label="Sezioni profilo">
+                    <button v-for="tab in profileTabs" :key="tab.value" type="button" :class="['settings-tab shrink-0', profileTab === tab.value ? 'settings-tab-active' : '']" @click="profileTab = tab.value">
                         {{ tab.label }}
                     </button>
                 </nav>
