@@ -7197,7 +7197,7 @@ onUnmounted(() => {
             </div>
         </Transition>
 
-        <div v-if="dossierModalOpen" class="fixed inset-0 z-[7900] flex items-center justify-center bg-gray-950/20 px-4 py-6 backdrop-blur-[2px]" @click.self="dossierModalOpen = false">
+        <div v-if="dossierModalOpen" class="fixed inset-0 z-[6900] flex items-center justify-center bg-gray-950/20 px-4 py-6 backdrop-blur-[2px]" @click.self="dossierModalOpen = false">
             <form class="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-md bg-white p-6 shadow-xl" @submit.prevent="dossierConfirmOpen = true">
                 <div class="flex items-start justify-between gap-4"><div><h3 class="text-lg font-semibold text-gray-900">{{ dossierForm.replaces_id ? 'Nuova versione' : 'Nuova voce del fascicolo' }}</h3><p class="mt-1 text-sm text-gray-500">Il salvataggio è esplicito e l’operazione viene registrata nel log.</p></div><button type="button" class="icon-btn h-9 w-9" @click="dossierModalOpen = false"><X class="h-4 w-4" /></button></div>
                 <div class="mt-6 grid gap-5 md:grid-cols-2">

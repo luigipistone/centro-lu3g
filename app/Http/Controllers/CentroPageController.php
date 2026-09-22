@@ -4088,7 +4088,7 @@ class CentroPageController extends Controller
         return [
             'items' => $visible,
             'summary' => $summary,
-            'types' => collect($types)->map(fn ($config, $value) => ['value' => $value, ...$config])->values(),
+            'types' => collect($types)->map(fn ($config, $value) => ['value' => $value, ...$config])->values()->all(),
             'access' => $access,
         ];
     }
