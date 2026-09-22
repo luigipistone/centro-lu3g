@@ -57,7 +57,7 @@ class UserManagementTest extends TestCase
             );
     }
 
-    public function test_non_superadmin_cannot_open_a_user_profile_page(): void
+    public function test_manager_can_open_a_user_profile_page_with_field_permissions(): void
     {
         $admin = User::factory()->create();
         $target = User::factory()->create();
@@ -67,10 +67,17 @@ class UserManagementTest extends TestCase
         $this
             ->actingAs($admin)
             ->get(route('users.show', $target->id))
-            ->assertForbidden();
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Centro/Show')
+                ->where('related.fieldAccess.operational_update', true)
+                ->where('related.fieldAccess.contract_view', true)
+                ->where('related.fieldAccess.contract_update', false)
+                ->where('related.fieldAccess.security_update', false)
+            );
     }
 
-    public function test_superadmin_can_autosave_user_profile_fields(): void
+    public function test_autosave_updates_only_personal_profile_fields(): void
     {
         $superadmin = User::factory()->create();
         $target = User::factory()->create();
@@ -96,20 +103,20 @@ class UserManagementTest extends TestCase
         $this->assertSame('marco.rossi@example.test', $target->email);
         $this->assertDatabaseHas('user_roles', [
             'user_id' => $target->id,
-            'role' => 'editor',
+            'role' => 'guest',
         ]);
         $this->assertDatabaseHas('profiles', [
             'user_id' => $target->id,
             'full_name' => 'Marco Rossi',
-            'job_title' => 'Project manager',
             'phone' => '+39 02 123456',
             'bio' => 'Profilo operativo interno.',
         ]);
+        $this->assertNull(DB::table('profiles')->where('user_id', $target->id)->value('job_title'));
     }
 
     public function test_superadmin_can_upload_an_avatar_for_another_user(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
 
         $superadmin = User::factory()->create();
         $target = User::factory()->create();
@@ -127,7 +134,7 @@ class UserManagementTest extends TestCase
 
         $this->assertNotNull($avatarUrl);
         $this->assertStringStartsWith('/avatars/', $avatarUrl);
-        Storage::disk('public')->assertExists('avatars/'.basename($avatarUrl));
+        Storage::disk('local')->assertExists('avatars/'.basename($avatarUrl));
     }
 
     private function role(User $user, string $role): void

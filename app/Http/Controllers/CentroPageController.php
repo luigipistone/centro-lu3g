@@ -1861,7 +1861,7 @@ class CentroPageController extends Controller
     {
         $section = $request->route('section');
         if ($section === 'users') {
-            $this->ensureSuperadmin($request);
+            $this->ensurePermission($request, 'users.view');
         }
         if ($section === 'absences') {
             $this->ensureAdmin($request);
@@ -1886,6 +1886,15 @@ class CentroPageController extends Controller
         abort_if(! $record, 404);
         $this->ensureRoleCanViewRecord($request, $section, $id);
         $this->ensureGuestCanViewRecord($request, $section, $id);
+
+        if ($section === 'users') {
+            $fieldAccess = $this->userProfileFieldAccess($request);
+            if (! $fieldAccess['contract_view']) {
+                foreach (['employee_code', 'employment_status', 'hire_date', 'termination_date'] as $field) {
+                    $record->{$field} = null;
+                }
+            }
+        }
 
         $related = match ($section) {
             'clients' => [
@@ -1979,6 +1988,7 @@ class CentroPageController extends Controller
             ],
             'users' => [
                 'roleOptions' => ['superadmin', 'admin', 'editor', 'guest'],
+                'fieldAccess' => $this->userProfileFieldAccess($request),
                 'managerOptions' => $this->userOptions()->where('id', '!=', $id)->values(),
                 'dossierDocuments' => $this->companyDocumentRows($id, false),
                 'performance' => $this->userPerformanceStats($id),
@@ -2110,11 +2120,10 @@ class CentroPageController extends Controller
     public function update(Request $request, string $id): RedirectResponse
     {
         $section = $request->route('section');
-        $this->ensureRoleCanUpdateRecord($request, $section, $id);
-
         if ($section === 'users') {
             return $this->updateUser($request, $id);
         }
+        $this->ensureRoleCanUpdateRecord($request, $section, $id);
 
         if ($section === 'billing') {
             return $this->updateDocument($request, $id);
@@ -2245,7 +2254,7 @@ class CentroPageController extends Controller
 
     public function updateUserStatus(Request $request, string $id): RedirectResponse
     {
-        $this->ensureSuperadmin($request);
+        $this->ensurePermission($request, 'users.profile.security.update');
         abort_if($request->user()->id === $id, 422, 'Non puoi sospendere o archiviare il tuo account.');
         $user = User::query()->findOrFail($id);
         $payload = $request->validate(['status' => ['required', Rule::in(['active', 'suspended'])]]);
@@ -3755,47 +3764,23 @@ class CentroPageController extends Controller
 
     private function updateUser(Request $request, string $id): RedirectResponse
     {
-        $this->ensureSuperadmin($request);
+        $this->ensurePermission($request, 'users.profile.personal.update');
 
         $user = User::query()->findOrFail($id);
         $payload = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
-            'role' => ['required', Rule::in(['superadmin', 'admin', 'editor', 'guest'])],
-            'password' => ['nullable', 'string', 'min:8'],
-            'employee_code' => ['nullable', 'string', 'max:64'],
-            'job_title' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:255'],
             'bio' => ['nullable', 'string'],
             'completion_effect' => ['nullable', Rule::in(['balloons', 'fireworks', 'snow', 'glitch'])],
-            'smartworking_day' => ['nullable', Rule::in(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'none'])],
             'first_name' => ['nullable', 'string', 'max:120'],
             'last_name' => ['nullable', 'string', 'max:120'],
-            'department' => ['nullable', 'string', 'max:255'],
-            'manager_user_id' => ['nullable', 'uuid', 'exists:users,id'],
-            'office' => ['nullable', 'string', 'max:255'],
-            'employment_status' => ['nullable', Rule::in(['active', 'suspended', 'ended'])],
-            'hire_date' => ['nullable', 'date'],
-            'termination_date' => ['nullable', 'date', 'after_or_equal:hire_date'],
-            'weekly_hours' => ['nullable', 'numeric', 'min:0', 'max:168'],
-            'part_time' => ['nullable', 'boolean'],
-            'part_time_percentage' => ['nullable', 'integer', 'min:1', 'max:100'],
-            'smartworking_days' => ['nullable', 'array'],
-            'smartworking_days.*' => [Rule::in(['monday', 'tuesday', 'wednesday', 'thursday', 'friday'])],
-            'smartworking_rules' => ['nullable', 'string', 'max:4000'],
         ]);
 
         $user->name = trim(($payload['first_name'] ?? '').' '.($payload['last_name'] ?? '')) ?: $payload['name'];
         $user->email = $payload['email'];
-        $previousSmartworkingDay = DB::table('profiles')->where('user_id', $user->id)->value('smartworking_day');
-        $nextSmartworkingDay = collect($payload['smartworking_days'] ?? [])->first()
-            ?: (($payload['smartworking_day'] ?? null) === 'none' ? null : ($payload['smartworking_day'] ?? null));
-        if (! empty($payload['password'])) {
-            $user->password = Hash::make($payload['password']);
-        }
         $user->save();
 
-        $this->syncProfileAndRole($user, $payload['role']);
         DB::table('profiles')->updateOrInsert(
             ['user_id' => $user->id],
             [
@@ -3803,43 +3788,110 @@ class CentroPageController extends Controller
                 'full_name' => $user->name,
                 'first_name' => ($payload['first_name'] ?? null) ?: null,
                 'last_name' => ($payload['last_name'] ?? null) ?: null,
-                'employee_code' => $payload['employee_code'] ?? null,
-                'job_title' => $payload['job_title'] ?? null,
-                'department' => $payload['department'] ?? null,
-                'manager_user_id' => $payload['manager_user_id'] ?? null,
-                'office' => $payload['office'] ?? null,
-                'employment_status' => $payload['employment_status'] ?? 'active',
-                'hire_date' => $payload['hire_date'] ?? null,
-                'termination_date' => $payload['termination_date'] ?? null,
-                'weekly_hours' => $payload['weekly_hours'] ?? null,
-                'part_time' => (bool) ($payload['part_time'] ?? false),
-                'part_time_percentage' => ! empty($payload['part_time']) ? ($payload['part_time_percentage'] ?? null) : null,
                 'phone' => $payload['phone'] ?? null,
                 'bio' => $payload['bio'] ?? null,
                 'completion_effect' => $payload['completion_effect'] ?? 'balloons',
-                'smartworking_day' => $nextSmartworkingDay,
-                'smartworking_days' => json_encode($payload['smartworking_days'] ?? ($nextSmartworkingDay ? [$nextSmartworkingDay] : [])),
-                'smartworking_rules' => $payload['smartworking_rules'] ?? null,
                 'updated_at' => now(),
                 'created_at' => now(),
             ],
         );
 
-        if ($previousSmartworkingDay !== $nextSmartworkingDay) {
-            $this->notifyUsers(
-                [$user->id],
-                $request->user()->id,
-                'profile_smartworking_updated',
-                $request->user()->name.' ha aggiornato il tuo giorno di smart working: '.$this->smartworkingDayLabel($nextSmartworkingDay).'.',
-            );
+        return back()->with('status', 'Utente aggiornato.');
+    }
+
+    public function updateUserSensitive(Request $request, string $id): RedirectResponse
+    {
+        $user = User::query()->findOrFail($id);
+        $section = $request->validate([
+            'section' => ['required', Rule::in(['operational', 'contract', 'security'])],
+            'confirmed' => ['accepted'],
+        ])['section'];
+        $permission = 'users.profile.'.($section === 'operational' ? 'operational' : $section).'.update';
+        $this->ensurePermission($request, $permission);
+
+        $rules = match ($section) {
+            'operational' => [
+                'job_title' => ['nullable', 'string', 'max:255'], 'department' => ['nullable', 'string', 'max:255'],
+                'manager_user_id' => ['nullable', 'uuid', 'exists:users,id'], 'office' => ['nullable', 'string', 'max:255'],
+                'weekly_hours' => ['nullable', 'numeric', 'min:0', 'max:168'], 'part_time' => ['nullable', 'boolean'],
+                'part_time_percentage' => ['nullable', 'integer', 'min:1', 'max:100'], 'smartworking_days' => ['nullable', 'array'],
+                'smartworking_days.*' => [Rule::in(['monday', 'tuesday', 'wednesday', 'thursday', 'friday'])],
+                'smartworking_rules' => ['nullable', 'string', 'max:4000'],
+            ],
+            'contract' => [
+                'employee_code' => ['nullable', 'string', 'max:64'], 'employment_status' => ['required', Rule::in(['active', 'suspended', 'ended'])],
+                'hire_date' => ['nullable', 'date'], 'termination_date' => ['nullable', 'date', 'after_or_equal:hire_date'],
+            ],
+            'security' => [
+                'role' => ['required', Rule::in(['superadmin', 'admin', 'editor', 'guest'])],
+                'password' => ['nullable', 'string', 'min:8'],
+            ],
+        };
+        $payload = $request->validate($rules + ['section' => ['required'], 'confirmed' => ['accepted']]);
+        $profile = (array) (DB::table('profiles')->where('user_id', $id)->first() ?: []);
+        $changed = [];
+
+        if ($section === 'security') {
+            $oldRole = DB::table('user_roles')->where('user_id', $id)->value('role');
+            if ($oldRole !== $payload['role']) $changed['role'] = ['from' => $oldRole, 'to' => $payload['role']];
+            if (! empty($payload['password'])) $changed['password'] = ['from' => null, 'to' => 'aggiornata'];
+            DB::table('user_roles')->where('user_id', $id)->delete();
+            DB::table('user_roles')->insert([
+                'id' => (string) str()->uuid(),
+                'user_id' => $id,
+                'role' => $payload['role'],
+            ]);
+            if (! empty($payload['password'])) { $user->password = Hash::make($payload['password']); $user->save(); }
+        } else {
+            $fields = array_keys($rules);
+            $updates = [];
+            foreach ($fields as $field) {
+                if (str_contains($field, '*')) continue;
+                $value = $payload[$field] ?? null;
+                if ($field === 'smartworking_days') $value = json_encode($value ?: []);
+                if ($field === 'part_time') $value = (bool) $value;
+                if (($profile[$field] ?? null) != $value) $changed[$field] = ['from' => $profile[$field] ?? null, 'to' => $value];
+                $updates[$field] = $value;
+            }
+            if ($section === 'operational') $updates['smartworking_day'] = collect($payload['smartworking_days'] ?? [])->first();
+            $updates['updated_at'] = now();
+            if (DB::table('profiles')->where('user_id', $id)->exists()) {
+                DB::table('profiles')->where('user_id', $id)->update($updates);
+            } else {
+                DB::table('profiles')->insert([
+                    'id' => (string) str()->uuid(),
+                    'user_id' => $id,
+                    'full_name' => $user->name,
+                    'created_at' => now(),
+                    ...$updates,
+                ]);
+            }
+
+            if ($section === 'operational' && array_key_exists('smartworking_day', $updates) && ($profile['smartworking_day'] ?? null) !== $updates['smartworking_day']) {
+                $this->notifyUsers(
+                    [$user->id],
+                    $request->user()->id,
+                    'profile_smartworking_updated',
+                    $request->user()->name.' ha aggiornato il tuo giorno di smart working: '.$this->smartworkingDayLabel($updates['smartworking_day']).'.',
+                );
+            }
         }
 
-        return back()->with('status', 'Utente aggiornato.');
+        DB::table('audit_logs')->insert([
+            'id' => (string) str()->uuid(), 'user_id' => $request->user()->id, 'user_name' => $request->user()->name,
+            'user_role' => $this->currentUserRole($request), 'action' => 'modifica_profilo_riservato', 'area' => 'users',
+            'route_name' => 'users.sensitive.update', 'method' => 'PUT', 'subject_id' => $id, 'status_code' => 200,
+            'ip_address' => $request->ip(), 'user_agent' => $request->userAgent(),
+            'metadata' => json_encode(['section' => $section, 'changed_fields' => $changed], JSON_THROW_ON_ERROR),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        return back()->with('status', 'Modifiche confermate e registrate nel log.');
     }
 
     public function updateUserAvatar(Request $request, string $id): RedirectResponse
     {
-        $this->ensureSuperadmin($request);
+        $this->ensurePermission($request, 'users.profile.personal.update');
 
         $request->validate([
             'avatar' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
@@ -3872,6 +3924,20 @@ class CentroPageController extends Controller
     private function currentUserRole(Request $request): string
     {
         return (string) (DB::table('user_roles')->where('user_id', $request->user()->id)->value('role') ?: 'guest');
+    }
+
+    private function userProfileFieldAccess(Request $request): array
+    {
+        $permissions = app(RolePermissionService::class);
+        $role = $this->currentUserRole($request);
+
+        return [
+            'personal_update' => $permissions->allows($role, 'users.profile.personal.update'),
+            'operational_update' => $permissions->allows($role, 'users.profile.operational.update'),
+            'contract_view' => $permissions->allows($role, 'users.profile.contract.view') || $permissions->allows($role, 'users.profile.contract.update'),
+            'contract_update' => $permissions->allows($role, 'users.profile.contract.update'),
+            'security_update' => $permissions->allows($role, 'users.profile.security.update'),
+        ];
     }
 
     private function readableAuditLogsQuery()

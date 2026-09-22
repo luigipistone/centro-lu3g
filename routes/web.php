@@ -188,6 +188,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/users', [CentroPageController::class, 'store'])->defaults('section', 'users')->name('users.store');
     Route::get('/users/{id}', [CentroPageController::class, 'show'])->defaults('section', 'users')->name('users.show');
     Route::put('/users/{id}', [CentroPageController::class, 'update'])->defaults('section', 'users')->name('users.update');
+    Route::put('/users/{id}/sensitive', [CentroPageController::class, 'updateUserSensitive'])->name('users.sensitive.update');
     Route::post('/users/{id}/avatar', [CentroPageController::class, 'updateUserAvatar'])->name('users.avatar.update');
     Route::post('/users/{id}/archive-requests', [CentroPageController::class, 'requestUserArchive'])->name('users.archive-requests.store');
     Route::patch('/users/archive-requests/{id}', [CentroPageController::class, 'reviewUserArchive'])->name('users.archive-requests.review');

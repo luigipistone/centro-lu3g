@@ -791,7 +791,9 @@ const userDetailTabs = [
     { value: 'personal', label: 'Dati personali' }, { value: 'employment', label: 'Rapporto di lavoro' },
     { value: 'schedule', label: 'Orario e smart working' }, { value: 'dossier', label: 'Fascicolo digitale' },
     { value: 'performance', label: 'Andamento' },
+    { value: 'security', label: 'Sicurezza' },
 ];
+const userFieldAccess = computed(() => props.related?.fieldAccess || {});
 const parsedSmartworkingDays = (() => { try { return JSON.parse(props.record.smartworking_days || '[]'); } catch { return []; } })();
 const userForm = useForm({
     name: props.record.name || '',
@@ -829,8 +831,21 @@ const userAvatarPreview = ref(null);
 const userAvatarForm = useForm({ avatar: null });
 const userAccountStatus = ref(props.record.account_status || 'active');
 const userStatusSaving = ref(false);
+const pendingUserAccountStatus = ref('');
 const physicalDeleteOpen = ref(false);
 const physicalDeleteForm = useForm({ reason: '', confirmation: '' });
+const sensitiveConfirmOpen = ref(false);
+const sensitiveConfirmSection = ref('');
+const sensitiveSaving = ref(false);
+const sensitiveSavedSignatures = ref({
+    operational: '', contract: '', security: '',
+});
+const sensitiveSectionLabels = {
+    operational: 'organizzazione, orario e smart working',
+    contract: 'dati contrattuali',
+    security: 'ruolo e sicurezza',
+    account_status: 'stato dell’account',
+};
 const clientFiscalOpen = ref(false);
 const absenceForm = useForm({
     type: props.record.type || 'vacation',
@@ -2230,27 +2245,77 @@ function fileSize(size) {
 }
 
 function userPayload() {
+    const composedName = `${userForm.first_name || ''} ${userForm.last_name || ''}`.trim();
     return {
-        name: userForm.name,
+        name: composedName || userForm.name,
         email: userForm.email,
-        role: userForm.role,
-        employee_code: userForm.employee_code,
-        job_title: userForm.job_title,
         phone: userForm.phone,
         bio: userForm.bio,
         completion_effect: userForm.completion_effect,
-        smartworking_day: userForm.smartworking_day,
-        first_name: userForm.first_name, last_name: userForm.last_name, department: userForm.department,
-        manager_user_id: userForm.manager_user_id || null, office: userForm.office, employment_status: userForm.employment_status,
-        hire_date: userForm.hire_date || null, termination_date: userForm.termination_date || null,
-        weekly_hours: userForm.weekly_hours || null, part_time: userForm.part_time, part_time_percentage: userForm.part_time_percentage || null,
-        smartworking_days: userForm.smartworking_days, smartworking_rules: userForm.smartworking_rules,
-        password: userForm.password,
+        first_name: userForm.first_name, last_name: userForm.last_name,
     };
+}
+
+function sensitivePayload(section) {
+    if (section === 'operational') return {
+        section, confirmed: true, job_title: userForm.job_title, department: userForm.department,
+        manager_user_id: userForm.manager_user_id || null, office: userForm.office,
+        weekly_hours: userForm.weekly_hours || null, part_time: userForm.part_time,
+        part_time_percentage: userForm.part_time ? (userForm.part_time_percentage || null) : null,
+        smartworking_days: userForm.smartworking_days, smartworking_rules: userForm.smartworking_rules,
+    };
+    if (section === 'contract') return {
+        section, confirmed: true, employee_code: userForm.employee_code,
+        employment_status: userForm.employment_status, hire_date: userForm.hire_date || null,
+        termination_date: userForm.termination_date || null,
+    };
+    return { section, confirmed: true, role: userForm.role, password: userForm.password };
+}
+
+function sensitiveSignature(section) {
+    return JSON.stringify(sensitivePayload(section));
+}
+
+function sensitiveChanged(section) {
+    return sensitiveSignature(section) !== sensitiveSavedSignatures.value[section];
+}
+
+function requestSensitiveSave(section) {
+    if (!sensitiveChanged(section)) return;
+    sensitiveConfirmSection.value = section;
+    sensitiveConfirmOpen.value = true;
+}
+
+function confirmSensitiveSave() {
+    const section = sensitiveConfirmSection.value;
+    if (section === 'account_status') {
+        userStatusSaving.value = true;
+        router.patch(route('users.status.update', props.record.id), { status: pendingUserAccountStatus.value }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                userAccountStatus.value = pendingUserAccountStatus.value;
+                sensitiveConfirmOpen.value = false;
+                pendingUserAccountStatus.value = '';
+            },
+            onFinish: () => { userStatusSaving.value = false; },
+        });
+        return;
+    }
+    sensitiveSaving.value = true;
+    userForm.transform(() => sensitivePayload(section)).put(route('users.sensitive.update', props.record.id), {
+        preserveScroll: true, preserveState: true,
+        onSuccess: () => {
+            if (section === 'security') userForm.password = '';
+            sensitiveSavedSignatures.value[section] = sensitiveSignature(section);
+            sensitiveConfirmOpen.value = false;
+        },
+        onFinish: () => { sensitiveSaving.value = false; userForm.transform((data) => data); },
+    });
 }
 
 function saveUserInline(delay = AUTOSAVE_IDLE_DELAY) {
     if (props.section !== 'users') return;
+    if (!userFieldAccess.value.personal_update) return;
     if (!String(userForm.name).trim() || !String(userForm.email).trim()) return;
 
     window.clearTimeout(userAutosaveTimer);
@@ -2287,17 +2352,13 @@ function saveUserInline(delay = AUTOSAVE_IDLE_DELAY) {
 
 function selectSmartworkingDay(day) {
     userForm.smartworking_day = userForm.smartworking_day === day ? 'none' : day;
-    saveUserInline(0);
 }
 
 function setUserAccountStatus(status) {
     if (userStatusSaving.value || status === userAccountStatus.value) return;
-    userStatusSaving.value = true;
-    router.patch(route('users.status.update', props.record.id), { status }, {
-        preserveScroll: true,
-        onSuccess: () => { userAccountStatus.value = status; },
-        onFinish: () => { userStatusSaving.value = false; },
-    });
+    pendingUserAccountStatus.value = status;
+    sensitiveConfirmSection.value = 'account_status';
+    sensitiveConfirmOpen.value = true;
 }
 
 function physicallyDeleteUser() {
@@ -3882,6 +3943,9 @@ watch(
 );
 
 onMounted(() => {
+    sensitiveSavedSignatures.value = {
+        operational: sensitiveSignature('operational'), contract: sensitiveSignature('contract'), security: sensitiveSignature('security'),
+    };
     document.addEventListener('pointerdown', closeSubtaskAssigneeMenuOnOutside, true);
     window.addEventListener('centro:close-floating-ui', closeCentroShowFloatingUi);
     refreshProjectDescriptionEditor();
@@ -3996,6 +4060,18 @@ onUnmounted(() => {
                         <Check v-else class="h-4 w-4" :stroke-width="1.7" />
                         {{ confirmAction.button }}
                     </button>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="sensitiveConfirmOpen" class="fixed inset-0 z-[7200] flex items-center justify-center bg-gray-950/20 px-4 py-6 backdrop-blur-[2px]" @click.self="sensitiveConfirmOpen = false; pendingUserAccountStatus = ''">
+            <div class="w-full max-w-md rounded-[var(--radius)] bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.24)]">
+                <h3 class="text-base font-semibold text-gray-900">Confermare le modifiche?</h3>
+                <p class="mt-2 text-sm leading-6 text-gray-600">Stai aggiornando <strong>{{ sensitiveSectionLabels[sensitiveConfirmSection] }}</strong> di {{ userForm.name }}. L’operazione verrà registrata nel log.</p>
+                <p v-if="sensitiveConfirmSection === 'security' && userForm.password" class="mt-3 rounded-[var(--radius-sm)] bg-amber-50 px-3 py-2 text-sm text-amber-800">La password dell’utente verrà sostituita.</p>
+                <div class="mt-5 flex justify-end gap-2">
+                    <button type="button" class="btn btn-outline" :disabled="sensitiveSaving || userStatusSaving" @click="sensitiveConfirmOpen = false; pendingUserAccountStatus = ''">Annulla</button>
+                    <button type="button" class="btn btn-primary" :disabled="sensitiveSaving || userStatusSaving" @click="confirmSensitiveSave"><Check class="h-4 w-4" />{{ sensitiveSaving || userStatusSaving ? 'Salvataggio...' : 'Conferma e salva' }}</button>
                 </div>
             </div>
         </div>
@@ -5678,26 +5754,26 @@ onUnmounted(() => {
                                 <div v-if="userAvatarForm.errors.avatar" class="mt-2 text-sm text-red-600">{{ userAvatarForm.errors.avatar }}</div>
                             </div>
                             <input ref="userAvatarInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" @change="uploadUserAvatar" />
-                            <button type="button" class="btn btn-outline" :disabled="userAvatarForm.processing" @click="chooseUserAvatar">
+                            <button v-if="userFieldAccess.personal_update" type="button" class="btn btn-outline" :disabled="userAvatarForm.processing" @click="chooseUserAvatar">
                                 {{ userAvatarForm.processing ? 'Caricamento...' : 'Carica foto' }}
                             </button>
                         </div>
                     </section>
 
-                    <section v-if="userDetailTab === 'personal'" class="surface rounded-md p-5">
-                        <div class="mb-5 flex flex-wrap items-center justify-between gap-4 rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/80 p-4">
+                    <section v-if="userDetailTab === 'personal' || userDetailTab === 'security'" class="surface rounded-md p-5">
+                        <div v-if="userDetailTab === 'security'" class="mb-5 flex flex-wrap items-center justify-between gap-4 rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/80 p-4">
                             <div>
                                 <div class="text-sm font-semibold text-gray-900">Stato account</div>
                                 <p class="mt-1 text-xs text-gray-500">Sospensione e archiviazione conservano dati e storico dell’utente.</p>
                             </div>
                             <div class="flex flex-wrap gap-2">
-                                <button v-for="option in [{ value: 'active', label: 'Attivo' }, { value: 'suspended', label: 'Sospeso' }]" :key="option.value" type="button" :disabled="userStatusSaving || page.props.auth?.user?.id === record.id || userAccountStatus === 'archived'" :title="page.props.auth?.user?.id === record.id ? 'Non puoi modificare lo stato del tuo account' : ''" :class="['btn', userAccountStatus === option.value ? 'btn-primary' : 'btn-outline']" @click="setUserAccountStatus(option.value)">
+                                <button v-for="option in [{ value: 'active', label: 'Attivo' }, { value: 'suspended', label: 'Sospeso' }]" :key="option.value" type="button" :disabled="!userFieldAccess.security_update || userStatusSaving || page.props.auth?.user?.id === record.id || userAccountStatus === 'archived'" :title="page.props.auth?.user?.id === record.id ? 'Non puoi modificare lo stato del tuo account' : ''" :class="['btn', userAccountStatus === option.value ? 'btn-primary' : 'btn-outline']" @click="setUserAccountStatus(option.value)">
                                     {{ option.label }}
                                 </button>
                                 <span v-if="userAccountStatus === 'archived'" class="btn btn-outline cursor-default">Archiviato</span>
                             </div>
                         </div>
-                        <section class="mb-5 rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
+                        <section v-if="userDetailTab === 'security'" class="mb-5 rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
                             <div class="flex flex-wrap items-center justify-between gap-3">
                                 <div>
                                     <p class="text-sm font-semibold text-gray-900">Elementi collegati all’account</p>
@@ -5712,13 +5788,13 @@ onUnmounted(() => {
                                 </div>
                             </div>
                         </section>
-                        <section v-if="userAccountStatus === 'archived'" class="mb-5 rounded-[var(--radius-sm)] border border-red-100 bg-red-50/40 p-4">
+                        <section v-if="userDetailTab === 'security' && userAccountStatus === 'archived'" class="mb-5 rounded-[var(--radius-sm)] border border-red-100 bg-red-50/40 p-4">
                             <div class="flex flex-wrap items-center justify-between gap-3">
                                 <div><p class="text-sm font-semibold text-red-800">Eliminazione fisica eccezionale</p><p class="mt-1 text-xs text-red-700">Usala soltanto dopo le verifiche legali e privacy.</p></div>
                                 <button type="button" class="btn bg-red-600 text-white hover:bg-red-500" @click="physicalDeleteOpen = true">Elimina definitivamente</button>
                             </div>
                         </section>
-                        <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+                        <div v-if="userDetailTab === 'personal'" class="mb-5 flex flex-wrap items-center justify-between gap-3">
                             <div>
                                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Informazioni profilo</h3>
                                 <p class="mt-1 text-sm text-gray-500">Le modifiche si salvano automaticamente mentre lavori.</p>
@@ -5739,115 +5815,69 @@ onUnmounted(() => {
                             </div>
                         </div>
 
-                        <div class="grid gap-4 md:grid-cols-2">
-                            <div><label class="block text-sm font-medium text-gray-700">Nome</label><input v-model="userForm.first_name" class="form-control" /></div>
-                            <div><label class="block text-sm font-medium text-gray-700">Cognome</label><input v-model="userForm.last_name" class="form-control" /></div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Nome</label>
-                                <input v-model="userForm.name" class="form-control" required />
-                                <div v-if="userForm.errors.name" class="mt-1 text-sm text-red-600">{{ userForm.errors.name }}</div>
-                            </div>
+                        <div v-if="userDetailTab === 'personal'" class="grid gap-4 md:grid-cols-2">
+                            <div><label class="block text-sm font-medium text-gray-700">Nome</label><input v-model="userForm.first_name" class="form-control" :disabled="!userFieldAccess.personal_update" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Cognome</label><input v-model="userForm.last_name" class="form-control" :disabled="!userFieldAccess.personal_update" /></div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Email</label>
-                                <input v-model="userForm.email" type="email" class="form-control" required />
+                                <input v-model="userForm.email" type="email" class="form-control" required :disabled="!userFieldAccess.personal_update" />
                                 <div v-if="userForm.errors.email" class="mt-1 text-sm text-red-600">{{ userForm.errors.email }}</div>
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700">Ruolo</label>
-                                <AppSelect v-model="userForm.role" :options="primitiveOptions(related.roleOptions)" />
-                                <div v-if="userForm.errors.role" class="mt-1 text-sm text-red-600">{{ userForm.errors.role }}</div>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Qualifica</label>
-                                <input v-model="userForm.job_title" class="form-control" placeholder="Es. Account manager" />
-                                <div v-if="userForm.errors.job_title" class="mt-1 text-sm text-red-600">{{ userForm.errors.job_title }}</div>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Matricola</label>
-                                <input v-model="userForm.employee_code" class="form-control" placeholder="Es. 0001" />
-                                <div v-if="userForm.errors.employee_code" class="mt-1 text-sm text-red-600">{{ userForm.errors.employee_code }}</div>
-                            </div>
-                            <div>
                                 <label class="block text-sm font-medium text-gray-700">Telefono</label>
-                                <input v-model="userForm.phone" class="form-control" />
+                                <input v-model="userForm.phone" class="form-control" :disabled="!userFieldAccess.personal_update" />
                                 <div v-if="userForm.errors.phone" class="mt-1 text-sm text-red-600">{{ userForm.errors.phone }}</div>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Animazione completamento</label>
-                                <AppSelect v-model="userForm.completion_effect" :options="completionEffectOptions" @change="saveUserInline(0)" />
+                                <AppSelect v-model="userForm.completion_effect" :options="completionEffectOptions" :disabled="!userFieldAccess.personal_update" @change="saveUserInline(0)" />
                                 <div v-if="userForm.errors.completion_effect" class="mt-1 text-sm text-red-600">{{ userForm.errors.completion_effect }}</div>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Giorno smart working</label>
-                                <div class="mt-2 flex flex-wrap items-center gap-2">
-                                    <button
-                                        v-for="day in smartworkingWeekdayOptions"
-                                        :key="`smartworking-day-${day.value}`"
-                                        type="button"
-                                        :class="[
-                                            'inline-flex h-10 w-10 items-center justify-center rounded-full border text-xs font-bold transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary-app)/0.24)]',
-                                            userForm.smartworking_day === day.value
-                                                ? 'border-[hsl(var(--primary-app))] bg-[hsl(var(--primary-app))] text-white shadow-[0_10px_24px_rgba(37,99,235,0.22)]'
-                                                : 'border-gray-200 bg-white text-gray-500 hover:border-[hsl(var(--primary-app)/0.45)] hover:text-[hsl(var(--primary-app))]',
-                                        ]"
-                                        :aria-pressed="userForm.smartworking_day === day.value"
-                                        :title="day.label"
-                                        @click="selectSmartworkingDay(day.value)"
-                                    >
-                                        {{ smartworkingDayShortLabel(day.value) }}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        :class="[
-                                            'ml-1 inline-flex h-10 items-center rounded-full border px-3 text-xs font-semibold transition hover:-translate-y-0.5',
-                                            userForm.smartworking_day === 'none'
-                                                ? 'border-gray-300 bg-gray-100 text-gray-700'
-                                                : 'border-gray-200 bg-white text-gray-400 hover:text-gray-700',
-                                        ]"
-                                        @click="selectSmartworkingDay('none')"
-                                    >
-                                        Nessuno
-                                    </button>
-                                </div>
-                                <div v-if="userForm.errors.smartworking_day" class="mt-1 text-sm text-red-600">{{ userForm.errors.smartworking_day }}</div>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Nuova password</label>
-                                <input v-model="userForm.password" type="password" autocomplete="new-password" class="form-control" placeholder="Lascia vuoto per non cambiarla" />
-                                <div v-if="userForm.errors.password" class="mt-1 text-sm text-red-600">{{ userForm.errors.password }}</div>
                             </div>
                             <div class="md:col-span-2">
                                 <label class="block text-sm font-medium text-gray-700">Bio</label>
-                                <textarea v-model="userForm.bio" rows="5" class="form-control" placeholder="Note interne sul profilo..."></textarea>
+                                <textarea v-model="userForm.bio" rows="5" class="form-control" :disabled="!userFieldAccess.personal_update" placeholder="Note interne sul profilo..."></textarea>
                                 <div v-if="userForm.errors.bio" class="mt-1 text-sm text-red-600">{{ userForm.errors.bio }}</div>
                             </div>
+                        </div>
+                        <div v-if="userDetailTab === 'security'" class="space-y-5">
+                            <div><h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Ruolo e sicurezza</h3><p class="mt-1 text-sm text-gray-500">Questi dati richiedono conferma esplicita e vengono registrati nel log.</p></div>
+                            <div class="grid gap-4 md:grid-cols-2">
+                                <div><label class="block text-sm font-medium text-gray-700">Ruolo</label><AppSelect v-model="userForm.role" :options="primitiveOptions(related.roleOptions)" :disabled="!userFieldAccess.security_update" /></div>
+                                <div><label class="block text-sm font-medium text-gray-700">Nuova password</label><input v-model="userForm.password" type="password" autocomplete="new-password" class="form-control" :disabled="!userFieldAccess.security_update" placeholder="Lascia vuoto per non cambiarla" /></div>
+                            </div>
+                            <div class="flex justify-end"><button v-if="userFieldAccess.security_update" type="button" class="btn btn-primary" :disabled="!sensitiveChanged('security')" @click="requestSensitiveSave('security')">Salva modifiche</button><span v-else class="text-sm text-gray-500">Informazioni in sola lettura.</span></div>
                         </div>
                     </section>
 
                     <section v-if="userDetailTab === 'employment'" class="surface rounded-md p-5">
                         <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Rapporto di lavoro</h3>
-                        <p class="mt-1 text-sm text-gray-500">Le modifiche vengono salvate automaticamente.</p>
+                        <p class="mt-1 text-sm text-gray-500">Le modifiche richiedono conferma e vengono registrate nel log.</p>
                         <div class="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                            <div><label class="block text-sm font-medium text-gray-700">Matricola</label><input v-model="userForm.employee_code" class="form-control" /></div>
-                            <div><label class="block text-sm font-medium text-gray-700">Qualifica</label><input v-model="userForm.job_title" class="form-control" /></div>
-                            <div><label class="block text-sm font-medium text-gray-700">Reparto</label><input v-model="userForm.department" class="form-control" /></div>
-                            <div><label class="block text-sm font-medium text-gray-700">Responsabile</label><AppSelect v-model="userForm.manager_user_id" :options="[{ value: '', label: 'Nessuno' }, ...related.managerOptions.map(user => ({ value: user.id, label: user.name }))]" /></div>
-                            <div><label class="block text-sm font-medium text-gray-700">Sede</label><input v-model="userForm.office" class="form-control" /></div>
-                            <div><label class="block text-sm font-medium text-gray-700">Stato del rapporto</label><AppSelect v-model="userForm.employment_status" :options="[{ value: 'active', label: 'Attivo' }, { value: 'suspended', label: 'Sospeso' }, { value: 'ended', label: 'Terminato' }]" /></div>
-                            <div><label class="block text-sm font-medium text-gray-700">Data di ingresso</label><AppDateInput v-model="userForm.hire_date" /></div>
-                            <div><label class="block text-sm font-medium text-gray-700">Data di uscita</label><AppDateInput v-model="userForm.termination_date" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Qualifica</label><input v-model="userForm.job_title" class="form-control" :disabled="!userFieldAccess.operational_update" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Reparto</label><input v-model="userForm.department" class="form-control" :disabled="!userFieldAccess.operational_update" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Responsabile</label><AppSelect v-model="userForm.manager_user_id" :disabled="!userFieldAccess.operational_update" :options="[{ value: '', label: 'Nessuno' }, ...related.managerOptions.map(user => ({ value: user.id, label: user.name }))]" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Sede</label><input v-model="userForm.office" class="form-control" :disabled="!userFieldAccess.operational_update" /></div>
                         </div>
+                        <div class="mt-5 flex justify-end"><button v-if="userFieldAccess.operational_update" type="button" class="btn btn-primary" :disabled="!sensitiveChanged('operational')" @click="requestSensitiveSave('operational')">Salva organizzazione</button></div>
+                        <div v-if="userFieldAccess.contract_view" class="mt-7 border-t border-gray-100 pt-6"><h4 class="text-sm font-semibold text-gray-900">Dati contrattuali riservati</h4><div class="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                            <div><label class="block text-sm font-medium text-gray-700">Matricola</label><input v-model="userForm.employee_code" class="form-control" :disabled="!userFieldAccess.contract_update" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Stato del rapporto</label><AppSelect v-model="userForm.employment_status" :disabled="!userFieldAccess.contract_update" :options="[{ value: 'active', label: 'Attivo' }, { value: 'suspended', label: 'Sospeso' }, { value: 'ended', label: 'Terminato' }]" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Data di ingresso</label><AppDateInput v-model="userForm.hire_date" :disabled="!userFieldAccess.contract_update" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Data di uscita</label><AppDateInput v-model="userForm.termination_date" :disabled="!userFieldAccess.contract_update" /></div>
+                        </div><div class="mt-5 flex justify-end"><button v-if="userFieldAccess.contract_update" type="button" class="btn btn-primary" :disabled="!sensitiveChanged('contract')" @click="requestSensitiveSave('contract')">Salva dati contrattuali</button><span v-else class="text-sm text-gray-500">Dati visibili in sola lettura.</span></div></div>
+                        <p v-else class="mt-6 rounded-[var(--radius-sm)] bg-gray-50 px-4 py-3 text-sm text-gray-500">I dati contrattuali sono riservati.</p>
                     </section>
 
                     <section v-if="userDetailTab === 'schedule'" class="surface rounded-md p-5">
                         <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Orario e smart working</h3>
                         <div class="mt-5 grid gap-4 md:grid-cols-2">
-                            <div><label class="block text-sm font-medium text-gray-700">Ore settimanali</label><input v-model.number="userForm.weekly_hours" type="number" min="0" max="168" step="0.5" class="form-control" /></div>
-                            <div class="flex items-end"><label class="flex min-h-[44px] items-center gap-3"><input v-model="userForm.part_time" type="checkbox" class="rounded border-gray-300" /><span class="text-sm font-medium text-gray-700">Contratto part-time</span></label></div>
-                            <div v-if="userForm.part_time"><label class="block text-sm font-medium text-gray-700">Percentuale part-time</label><input v-model.number="userForm.part_time_percentage" type="number" min="1" max="100" class="form-control" /></div>
-                            <div class="md:col-span-2"><label class="block text-sm font-medium text-gray-700">Giorni di smart working</label><div class="mt-2 flex gap-2"><button v-for="day in smartworkingWeekdayOptions" :key="day.value" type="button" :class="['h-10 w-10 rounded-full border text-xs font-bold transition', userForm.smartworking_days.includes(day.value) ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-200 bg-white text-gray-500']" @click="userForm.smartworking_days = userForm.smartworking_days.includes(day.value) ? userForm.smartworking_days.filter(value => value !== day.value) : [...userForm.smartworking_days, day.value]">{{ smartworkingDayShortLabel(day.value) }}</button></div></div>
-                            <div class="md:col-span-2"><label class="block text-sm font-medium text-gray-700">Regole smart working</label><textarea v-model="userForm.smartworking_rules" rows="4" class="form-control" placeholder="Indicazioni, alternanze o condizioni particolari..."></textarea></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Ore settimanali</label><input v-model.number="userForm.weekly_hours" type="number" min="0" max="168" step="0.5" class="form-control" :disabled="!userFieldAccess.operational_update" /></div>
+                            <div class="flex items-end"><label class="flex min-h-[44px] items-center gap-3"><input v-model="userForm.part_time" type="checkbox" class="rounded border-gray-300" :disabled="!userFieldAccess.operational_update" /><span class="text-sm font-medium text-gray-700">Contratto part-time</span></label></div>
+                            <div v-if="userForm.part_time"><label class="block text-sm font-medium text-gray-700">Percentuale part-time</label><input v-model.number="userForm.part_time_percentage" type="number" min="1" max="100" class="form-control" :disabled="!userFieldAccess.operational_update" /></div>
+                            <div class="md:col-span-2"><label class="block text-sm font-medium text-gray-700">Giorni di smart working</label><div class="mt-2 flex gap-2"><button v-for="day in smartworkingWeekdayOptions" :key="day.value" type="button" :disabled="!userFieldAccess.operational_update" :class="['h-10 w-10 rounded-full border text-xs font-bold transition', userForm.smartworking_days.includes(day.value) ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-200 bg-white text-gray-500']" @click="userForm.smartworking_days = userForm.smartworking_days.includes(day.value) ? userForm.smartworking_days.filter(value => value !== day.value) : [...userForm.smartworking_days, day.value]">{{ smartworkingDayShortLabel(day.value) }}</button></div></div>
+                            <div class="md:col-span-2"><label class="block text-sm font-medium text-gray-700">Regole smart working</label><textarea v-model="userForm.smartworking_rules" rows="4" class="form-control" :disabled="!userFieldAccess.operational_update" placeholder="Indicazioni, alternanze o condizioni particolari..."></textarea></div>
                         </div>
+                        <div class="mt-5 flex justify-end"><button v-if="userFieldAccess.operational_update" type="button" class="btn btn-primary" :disabled="!sensitiveChanged('operational')" @click="requestSensitiveSave('operational')">Salva orario e smart working</button><span v-else class="text-sm text-gray-500">Informazioni in sola lettura.</span></div>
                     </section>
 
                     <section v-if="userDetailTab === 'dossier'" class="surface rounded-md p-5">

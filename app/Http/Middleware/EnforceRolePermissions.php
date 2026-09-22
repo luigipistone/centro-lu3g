@@ -63,6 +63,20 @@ class EnforceRolePermissions
         if (Str::startsWith($name, 'billing.')) {
             return 'billing.'.($request->isMethod('GET') ? 'view' : 'manage');
         }
+        if ($name === 'users.update' || $name === 'users.avatar.update') {
+            return 'users.profile.personal.update';
+        }
+        if ($name === 'users.sensitive.update') {
+            return match ($request->input('section')) {
+                'operational' => 'users.profile.operational.update',
+                'contract' => 'users.profile.contract.update',
+                'security' => 'users.profile.security.update',
+                default => 'users.manage',
+            };
+        }
+        if ($name === 'users.status.update') {
+            return 'users.profile.security.update';
+        }
         if (Str::startsWith($name, 'users.')) {
             return 'users.'.($request->isMethod('GET') ? 'view' : 'manage');
         }

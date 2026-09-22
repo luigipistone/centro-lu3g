@@ -121,6 +121,82 @@ class AdministrationGovernanceTest extends TestCase
         $this->actingAs($employee)->get(route('clients.index'))->assertForbidden();
     }
 
+    public function test_manager_can_explicitly_save_operational_fields_but_not_contract_fields(): void
+    {
+        $manager = User::factory()->create();
+        $employee = User::factory()->create();
+        $this->role($manager, 'admin');
+        $this->role($employee, 'editor');
+        $this->assertTrue(app(RolePermissionService::class)->allows('admin', 'users.profile.operational.update'));
+
+        $this->actingAs($manager)->put(route('users.sensitive.update', $employee), [
+            'section' => 'operational',
+            'confirmed' => true,
+            'job_title' => 'Designer',
+            'department' => 'Creativo',
+            'weekly_hours' => 32,
+            'part_time' => true,
+            'part_time_percentage' => 80,
+            'smartworking_days' => ['monday'],
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('profiles', [
+            'user_id' => $employee->id,
+            'job_title' => 'Designer',
+            'department' => 'Creativo',
+            'weekly_hours' => 32,
+        ]);
+
+        $this->actingAs($manager)->put(route('users.sensitive.update', $employee), [
+            'section' => 'contract',
+            'confirmed' => true,
+            'employment_status' => 'active',
+            'employee_code' => 'RISERVATO',
+        ])->assertForbidden();
+    }
+
+    public function test_superadmin_sensitive_save_is_logged_with_changed_fields(): void
+    {
+        $superadmin = User::factory()->create();
+        $employee = User::factory()->create();
+        $this->role($superadmin, 'superadmin');
+        $this->role($employee, 'editor');
+
+        $this->actingAs($superadmin)->put(route('users.sensitive.update', $employee), [
+            'section' => 'contract',
+            'confirmed' => true,
+            'employee_code' => 'LU3G-001',
+            'employment_status' => 'active',
+            'hire_date' => '2026-01-12',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $log = DB::table('audit_logs')
+            ->where('action', 'modifica_profilo_riservato')
+            ->where('subject_id', $employee->id)
+            ->first();
+
+        $this->assertNotNull($log);
+        $metadata = json_decode($log->metadata, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('contract', $metadata['section']);
+        $this->assertArrayHasKey('employee_code', $metadata['changed_fields']);
+    }
+
+    public function test_sensitive_save_requires_explicit_confirmation(): void
+    {
+        $superadmin = User::factory()->create();
+        $employee = User::factory()->create();
+        $this->role($superadmin, 'superadmin');
+        $this->role($employee, 'editor');
+
+        $this->actingAs($superadmin)->put(route('users.sensitive.update', $employee), [
+            'section' => 'contract',
+            'employment_status' => 'active',
+            'employee_code' => 'LU3G-002',
+        ])->assertSessionHasErrors('confirmed');
+
+        $this->assertDatabaseMissing('profiles', ['user_id' => $employee->id, 'employee_code' => 'LU3G-002']);
+    }
+
     private function role(User $user, string $role): void
     {
         DB::table('user_roles')->insert([
