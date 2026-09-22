@@ -114,10 +114,11 @@ const hasMoreVisibleItems = computed(() => hiddenVisibleItemsCount.value > 0);
 const nextVisibleItemsCount = computed(() => Math.min(PASSWORD_BATCH_SIZE, hiddenVisibleItemsCount.value));
 const compromisedItems = computed(() => localItems.value.filter((item) => item.risk_flags?.length));
 const selectedCategoryDefinition = computed(() => (props.credentialCategories || []).find((category) => category.value === itemForm.category) || { subcategories: [] });
-const categoryFilterOptions = computed(() => (props.credentialCategories || []).flatMap((category) => [
-    { value: `category:${category.value}`, label: category.label },
-    ...(category.subcategories || []).map((subcategory) => ({ value: `subcategory::${category.value}::${subcategory}`, label: `↳ ${subcategory}` })),
-]));
+const categoryFilterOptions = computed(() => (props.credentialCategories || []).map((category) => ({
+    value: `category:${category.value}`,
+    label: category.label,
+    children: (category.subcategories || []).map((subcategory) => ({ value: `subcategory::${category.value}::${subcategory}`, label: subcategory })),
+})));
 const formSubcategoryOptions = computed(() => [{ value: '', label: 'Nessuna' }, ...(selectedCategoryDefinition.value.subcategories || []).map((value) => ({ value, label: value }))]);
 const availableCategoryFields = computed(() => (props.passwordCategoryFields || []).filter((field) => field.category === itemForm.category && !itemForm.custom_fields.some((selected) => selected.label.toLowerCase() === field.label.toLowerCase())));
 const strengthPreview = computed(() => {
@@ -258,7 +259,12 @@ function handleCategoryChange(value) {
 }
 
 function categoryFilterLabel(value) {
-    return categoryFilterOptions.value.find((option) => option.value === value)?.label.replace(/^↳\s*/, '') || value;
+    for (const option of categoryFilterOptions.value) {
+        if (option.value === value) return option.label;
+        const child = option.children?.find((item) => item.value === value);
+        if (child) return child.label;
+    }
+    return value;
 }
 
 function removeCategoryFilter(value) {
