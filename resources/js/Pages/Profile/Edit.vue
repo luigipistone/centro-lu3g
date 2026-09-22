@@ -30,6 +30,7 @@ const props = defineProps({
     },
     archiveRequest: Object,
     dossierDocuments: { type: Array, default: () => [] },
+    employeeDossier: { type: Object, default: () => ({ items: [], summary: [] }) },
 });
 
 const profileTab = ref('personal');
@@ -44,6 +45,9 @@ const profileTabs = [
 ];
 const employmentStatusLabels = { active: 'Attivo', suspended: 'Sospeso', ended: 'Terminato' };
 const documentCategoryLabels = { compensation: 'Compensi', contracts: 'Contratti', courses: 'Corsi e attestati', identity: "Documenti d'identità", other: 'Documenti vari' };
+const dossierStatusLabels = { missing: 'Mancante', valid: 'Valido', expiring: 'In scadenza', expired: 'Scaduto', replaced: 'Sostituito' };
+const dossierStatusClasses = { missing: 'bg-red-50 text-red-700', expired: 'bg-red-50 text-red-700', expiring: 'bg-amber-50 text-amber-700', valid: 'bg-emerald-50 text-emerald-700', replaced: 'bg-gray-100 text-gray-500' };
+const activeEmployeeDossierItems = computed(() => props.employeeDossier.items.filter((item) => !item.replaced_at));
 
 const absenceTypes = [
     { value: 'vacation', label: 'Ferie' },
@@ -236,7 +240,21 @@ watch(() => absenceForm.type, () => {
 
                 <section v-if="profileTab === 'dossier'" class="surface p-4 sm:p-8">
                     <h2 class="text-lg font-medium text-gray-900">Fascicolo digitale</h2>
-                    <p class="mt-1 text-sm text-gray-600">Documenti aziendali assegnati al tuo profilo.</p>
+                    <p class="mt-1 text-sm text-gray-600">Stato dei documenti personali, delle scadenze e degli attestati.</p>
+                    <div class="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <div v-for="item in employeeDossier.summary" :key="item.type" class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 px-4 py-3">
+                            <p class="text-sm font-semibold text-gray-900">{{ item.label }}</p>
+                            <span :class="['mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold', dossierStatusClasses[item.status]]">{{ dossierStatusLabels[item.status] }}</span>
+                        </div>
+                    </div>
+                    <div v-if="activeEmployeeDossierItems.length" class="mt-6 divide-y divide-gray-100 border-y border-gray-100">
+                        <div v-for="item in activeEmployeeDossierItems" :key="item.id" class="flex items-center gap-4 py-4">
+                            <div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2"><p class="truncate text-sm font-semibold text-gray-900">{{ item.title }}</p><span :class="['rounded-full px-2.5 py-1 text-xs font-semibold', dossierStatusClasses[item.status]]">{{ dossierStatusLabels[item.status] }}</span></div><p class="mt-1 text-xs text-gray-500">{{ item.type_label }}<template v-if="item.expires_at"> · scade {{ formatDate(item.expires_at) }}</template></p></div>
+                            <a v-if="item.file_path" :href="route('users.dossier-items.file', [profile.user_id, item.id])" target="_blank" class="icon-btn h-9 w-9" title="Apri allegato"><FileText class="h-4 w-4" /></a>
+                        </div>
+                    </div>
+                    <p v-else class="mt-6 text-sm text-gray-500">Il fascicolo personale non contiene ancora documenti strutturati.</p>
+                    <h3 class="mt-8 border-t border-gray-100 pt-6 text-sm font-semibold text-gray-900">Documenti aziendali assegnati</h3>
                     <div v-if="dossierDocuments.length" class="mt-6 divide-y divide-gray-100 rounded-[var(--radius-sm)] border border-gray-100">
                         <InertiaLink v-for="document in dossierDocuments" :key="document.id" :href="route('documents.show', document.id)" class="flex items-center justify-between gap-4 px-4 py-3 transition hover:bg-gray-50">
                             <div><p class="text-sm font-semibold text-gray-900">{{ document.title }}</p><p class="mt-1 text-xs text-gray-500">{{ documentCategoryLabels[document.category] || 'Documento' }} · {{ formatDate(String(document.created_at).slice(0, 10)) }}</p></div>

@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -45,6 +47,7 @@ class ProfileController extends Controller
                 ->get(),
             'archiveRequest' => DB::table('account_archive_requests')->where('user_id', $request->user()->id)->latest()->first(),
             'dossierDocuments' => $this->dossierDocuments($request->user()->id),
+            'employeeDossier' => $this->employeeDossier($request->user()->id),
         ]);
     }
 
@@ -303,6 +306,46 @@ class ProfileController extends Controller
             ->orderByDesc('d.created_at')
             ->select('d.id', 'd.title', 'd.category', 'd.created_at', 'r.read_at')
             ->get()->map(fn ($row) => (array) $row)->all();
+    }
+
+    private function employeeDossier(string $userId): array
+    {
+        if (! Schema::hasTable('employee_dossier_items')) return ['items' => [], 'summary' => []];
+
+        $labels = [
+            'identity_document' => ['Documento d’identità', true],
+            'tax_identifier' => ['Codice fiscale o identificativo', true],
+            'employment_contract' => ['Contratto di lavoro', true],
+            'contract_change' => ['Variazione contrattuale', false],
+            'medical_exam' => ['Visita medica e idoneità', true],
+            'safety_course' => ['Corso o attestato di sicurezza', true],
+            'equipment' => ['Dotazione aziendale', false],
+            'policy' => ['Policy o documento firmato', false],
+        ];
+        $rows = DB::table('employee_dossier_items')->where('user_id', $userId)->where('classification', '!=', 'admin')->orderByDesc('created_at')->get();
+        $status = function ($item): string {
+            if ($item->replaced_at) return 'replaced';
+            if (! $item->expires_at) return 'valid';
+            $expiry = Carbon::parse($item->expires_at)->startOfDay();
+            if ($expiry->isPast()) return 'expired';
+            return $expiry->lte(now('Europe/Rome')->addDays(30)->endOfDay()) ? 'expiring' : 'valid';
+        };
+        $items = $rows->map(function ($item) use ($labels, $status) {
+            $item->type_label = $labels[$item->type][0] ?? $item->type;
+            $item->status = $status($item);
+            if ($item->classification === 'medical') {
+                $item->identifier = null;
+                $item->notes = null;
+            }
+            return $item;
+        })->values();
+        $active = $rows->whereNull('replaced_at')->groupBy('type');
+        $summary = collect($labels)->filter(fn ($definition) => $definition[1])->map(function ($definition, $type) use ($active, $status) {
+            $item = $active->get($type)?->first();
+            return ['type' => $type, 'label' => $definition[0], 'status' => $item ? $status($item) : 'missing'];
+        })->values();
+
+        return ['items' => $items, 'summary' => $summary];
     }
 
     public function requestArchive(Request $request): RedirectResponse

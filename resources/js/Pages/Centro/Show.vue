@@ -846,6 +846,66 @@ const sensitiveSectionLabels = {
     security: 'ruolo e sicurezza',
     account_status: 'stato dell’account',
 };
+const employeeDossier = computed(() => props.related?.employeeDossier || { items: [], summary: [], types: [], access: {} });
+const dossierModalOpen = ref(false);
+const dossierConfirmOpen = ref(false);
+const dossierFileInput = ref(null);
+const dossierForm = useForm({
+    type: 'identity_document', title: '', identifier: '', issued_at: '', expires_at: '', level: '',
+    fitness_status: 'fit', notes: '', accepted: false, replaces_id: '', file: null,
+});
+const dossierStatusMeta = {
+    missing: { label: 'Mancante', class: 'bg-red-50 text-red-700' },
+    expired: { label: 'Scaduto', class: 'bg-red-50 text-red-700' },
+    expiring: { label: 'In scadenza', class: 'bg-amber-50 text-amber-700' },
+    valid: { label: 'Valido', class: 'bg-emerald-50 text-emerald-700' },
+    replaced: { label: 'Sostituito', class: 'bg-gray-100 text-gray-500' },
+};
+const dossierTypeOptions = computed(() => employeeDossier.value.types
+    .filter((type) => employeeDossier.value.access?.[`${type.classification}_manage`])
+    .map((type) => ({ value: type.value, label: type.label })));
+const selectedDossierType = computed(() => employeeDossier.value.types.find((type) => type.value === dossierForm.type) || {});
+const activeDossierItems = computed(() => employeeDossier.value.items.filter((item) => !item.replaced_at));
+const historicalDossierItems = computed(() => employeeDossier.value.items.filter((item) => item.replaced_at));
+const dossierHistoryOpen = ref(false);
+
+function openDossierForm(item = null) {
+    dossierForm.reset();
+    dossierForm.clearErrors();
+    dossierForm.type = item?.type || dossierTypeOptions.value[0]?.value || 'identity_document';
+    dossierForm.title = item?.title || '';
+    dossierForm.identifier = item?.identifier || '';
+    dossierForm.issued_at = item?.issued_at || '';
+    dossierForm.expires_at = item?.expires_at || '';
+    dossierForm.level = item?.level || '';
+    dossierForm.fitness_status = item?.fitness_status || 'fit';
+    dossierForm.notes = item?.notes || '';
+    dossierForm.accepted = Boolean(item?.accepted_at);
+    dossierForm.replaces_id = item?.id || '';
+    dossierForm.file = null;
+    dossierModalOpen.value = true;
+}
+
+function submitDossierItem() {
+    dossierForm.post(route('users.dossier-items.store', props.record.id), {
+        preserveScroll: true,
+        forceFormData: true,
+        onSuccess: () => { dossierConfirmOpen.value = false; dossierModalOpen.value = false; dossierForm.reset(); },
+    });
+}
+
+function removeDossierItem(item) {
+    openConfirm({
+        title: 'Eliminare questa voce dal fascicolo?',
+        description: `${item.title}. Lo storico delle operazioni resterà nel log.`,
+        keyword: 'ELIMINA', button: 'Elimina', danger: true,
+        action: () => router.delete(route('users.dossier-items.destroy', [props.record.id, item.id]), { preserveScroll: true, onFinish: closeConfirm }),
+    });
+}
+
+function dossierStatus(item) {
+    return dossierStatusMeta[item?.status] || dossierStatusMeta.valid;
+}
 const clientFiscalOpen = ref(false);
 const absenceForm = useForm({
     type: props.record.type || 'vacation',
@@ -5881,10 +5941,36 @@ onUnmounted(() => {
                     </section>
 
                     <section v-if="userDetailTab === 'dossier'" class="surface rounded-md p-5">
-                        <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Fascicolo digitale</h3>
-                        <div v-if="related.dossierDocuments?.length" class="mt-5 divide-y divide-gray-100 rounded-[var(--radius-sm)] border border-gray-100">
-                            <Link v-for="document in related.dossierDocuments" :key="document.id" :href="route('documents.show', document.id)" class="flex items-center justify-between gap-4 px-4 py-3 transition hover:bg-gray-50"><span class="text-sm font-semibold text-gray-900">{{ document.title }}</span><span :class="['rounded-full px-3 py-1 text-xs font-semibold', document.user_read_at ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700']">{{ document.user_read_at ? 'Letto' : 'Da leggere' }}</span></Link>
-                        </div><p v-else class="mt-5 text-sm text-gray-500">Nessun documento associato.</p>
+                        <div class="flex flex-wrap items-start justify-between gap-4">
+                            <div><h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Fascicolo digitale</h3><p class="mt-1 text-sm text-gray-500">Documenti, scadenze e storico amministrativo della persona.</p></div>
+                            <button v-if="dossierTypeOptions.length" type="button" class="btn btn-primary" @click="openDossierForm()"><Plus class="h-4 w-4" />Nuova voce</button>
+                        </div>
+                        <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            <div v-for="item in employeeDossier.summary" :key="item.type" class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 px-4 py-3">
+                                <p class="text-sm font-semibold text-gray-900">{{ item.label }}</p>
+                                <span :class="['mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold', dossierStatus(item).class]">{{ dossierStatus(item).label }}</span>
+                            </div>
+                        </div>
+                        <div class="mt-6 divide-y divide-gray-100 border-y border-gray-100">
+                            <div v-for="item in activeDossierItems" :key="item.id" class="flex flex-wrap items-center gap-3 py-4">
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex flex-wrap items-center gap-2"><p class="truncate text-sm font-semibold text-gray-900">{{ item.title }}</p><span :class="['rounded-full px-2.5 py-1 text-xs font-semibold', dossierStatus(item).class]">{{ dossierStatus(item).label }}</span><span class="text-xs text-gray-400">v{{ item.version }}</span></div>
+                                    <p class="mt-1 text-xs text-gray-500">{{ item.type_label }}<template v-if="item.identifier"> · {{ item.identifier }}</template><template v-if="item.level"> · {{ item.level }}</template><template v-if="item.expires_at"> · scade {{ dateIt(item.expires_at) }}</template></p>
+                                    <p v-if="item.notes" class="mt-1 line-clamp-2 text-sm text-gray-600">{{ item.notes }}</p>
+                                </div>
+                                <a v-if="item.file_path" :href="route('users.dossier-items.file', [record.id, item.id])" target="_blank" class="icon-btn h-9 w-9" title="Apri allegato"><FileText class="h-4 w-4" /></a>
+                                <button v-if="item.can_manage" type="button" class="icon-btn h-9 w-9" title="Carica nuova versione" @click="openDossierForm(item)"><RotateCcw class="h-4 w-4" /></button>
+                                <button v-if="item.can_manage" type="button" class="icon-btn h-9 w-9 text-red-600 hover:bg-red-50" title="Elimina" @click="removeDossierItem(item)"><Trash2 class="h-4 w-4" /></button>
+                            </div>
+                            <p v-if="!activeDossierItems.length" class="py-5 text-sm text-gray-500">Nessuna voce presente nel fascicolo.</p>
+                        </div>
+                        <div v-if="historicalDossierItems.length" class="mt-4">
+                            <button type="button" class="flex w-full items-center justify-between py-2 text-sm font-semibold text-gray-700" @click="dossierHistoryOpen = !dossierHistoryOpen"><span>Storico versioni ({{ historicalDossierItems.length }})</span><ChevronDown :class="['h-4 w-4 transition', dossierHistoryOpen ? 'rotate-180' : '']" /></button>
+                            <div v-if="dossierHistoryOpen" class="divide-y divide-gray-100 border-t border-gray-100">
+                                <div v-for="item in historicalDossierItems" :key="item.id" class="flex items-center gap-3 py-3 opacity-70"><div class="min-w-0 flex-1"><p class="truncate text-sm font-semibold text-gray-700">{{ item.title }} · v{{ item.version }}</p><p class="text-xs text-gray-500">{{ item.type_label }} · sostituito</p></div><a v-if="item.file_path" :href="route('users.dossier-items.file', [record.id, item.id])" target="_blank" class="icon-btn h-9 w-9"><FileText class="h-4 w-4" /></a></div>
+                            </div>
+                        </div>
+                        <div class="mt-7 border-t border-gray-100 pt-6"><h4 class="text-sm font-semibold text-gray-900">Documenti aziendali assegnati</h4><div v-if="related.dossierDocuments?.length" class="mt-3 divide-y divide-gray-100 rounded-[var(--radius-sm)] border border-gray-100"><Link v-for="document in related.dossierDocuments" :key="document.id" :href="route('documents.show', document.id)" class="flex items-center justify-between gap-4 px-4 py-3 transition hover:bg-gray-50"><span class="text-sm font-semibold text-gray-900">{{ document.title }}</span><span :class="['rounded-full px-3 py-1 text-xs font-semibold', document.user_read_at ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700']">{{ document.user_read_at ? 'Letto' : 'Da leggere' }}</span></Link></div><p v-else class="mt-3 text-sm text-gray-500">Nessun documento aziendale assegnato.</p></div>
                     </section>
                 </section>
 
@@ -7110,6 +7196,29 @@ onUnmounted(() => {
                 </aside>
             </div>
         </Transition>
+
+        <div v-if="dossierModalOpen" class="fixed inset-0 z-[7900] flex items-center justify-center bg-gray-950/20 px-4 py-6 backdrop-blur-[2px]" @click.self="dossierModalOpen = false">
+            <form class="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-md bg-white p-6 shadow-xl" @submit.prevent="dossierConfirmOpen = true">
+                <div class="flex items-start justify-between gap-4"><div><h3 class="text-lg font-semibold text-gray-900">{{ dossierForm.replaces_id ? 'Nuova versione' : 'Nuova voce del fascicolo' }}</h3><p class="mt-1 text-sm text-gray-500">Il salvataggio è esplicito e l’operazione viene registrata nel log.</p></div><button type="button" class="icon-btn h-9 w-9" @click="dossierModalOpen = false"><X class="h-4 w-4" /></button></div>
+                <div class="mt-6 grid gap-5 md:grid-cols-2">
+                    <div><label class="block text-sm font-medium text-gray-700">Tipo</label><AppSelect v-model="dossierForm.type" :options="dossierTypeOptions" :disabled="Boolean(dossierForm.replaces_id)" /><p v-if="dossierForm.errors.type" class="mt-1 text-sm text-red-600">{{ dossierForm.errors.type }}</p></div>
+                    <div><label class="block text-sm font-medium text-gray-700">Titolo</label><input v-model="dossierForm.title" class="form-control" required /><p v-if="dossierForm.errors.title" class="mt-1 text-sm text-red-600">{{ dossierForm.errors.title }}</p></div>
+                    <div><label class="block text-sm font-medium text-gray-700">Numero o identificativo</label><input v-model="dossierForm.identifier" class="form-control" /></div>
+                    <div v-if="['employment_contract', 'contract_change', 'safety_course', 'equipment'].includes(dossierForm.type)"><label class="block text-sm font-medium text-gray-700">Livello, inquadramento o dettaglio</label><input v-model="dossierForm.level" class="form-control" /></div>
+                    <div><label class="block text-sm font-medium text-gray-700">Data rilascio o decorrenza</label><AppDateInput v-model="dossierForm.issued_at" /></div>
+                    <div><label class="block text-sm font-medium text-gray-700">Data scadenza</label><AppDateInput v-model="dossierForm.expires_at" /></div>
+                    <div v-if="selectedDossierType.classification === 'medical'"><label class="block text-sm font-medium text-gray-700">Giudizio di idoneità</label><AppSelect v-model="dossierForm.fitness_status" :options="[{ value: 'fit', label: 'Idoneità valida' }, { value: 'fit_with_limits', label: 'Idoneità con limitazioni' }, { value: 'pending', label: 'Visita da programmare' }, { value: 'expired', label: 'Idoneità scaduta' }]" /></div>
+                    <label v-if="dossierForm.type === 'policy'" class="flex min-h-[44px] items-center gap-3 self-end"><input v-model="dossierForm.accepted" type="checkbox" class="rounded border-gray-300" /><span class="text-sm font-medium text-gray-700">Documento firmato o policy accettata</span></label>
+                    <div class="md:col-span-2"><label class="block text-sm font-medium text-gray-700">Note</label><textarea v-model="dossierForm.notes" rows="3" class="form-control" :placeholder="selectedDossierType.classification === 'medical' ? 'Solo informazioni amministrative necessarie, senza diagnosi.' : 'Dettagli utili...'" /></div>
+                    <div class="md:col-span-2"><label class="block text-sm font-medium text-gray-700">Allegato riservato</label><input ref="dossierFileInput" type="file" class="form-control file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-blue-700" @change="dossierForm.file = $event.target.files?.[0] || null" /><p v-if="dossierForm.replaces_id" class="mt-1 text-xs text-gray-500">La versione precedente verrà conservata nello storico.</p><p v-if="dossierForm.errors.file" class="mt-1 text-sm text-red-600">{{ dossierForm.errors.file }}</p></div>
+                </div>
+                <div class="mt-6 flex justify-end gap-2"><button type="button" class="btn btn-outline" @click="dossierModalOpen = false">Annulla</button><button type="submit" class="btn btn-primary" :disabled="dossierForm.processing">{{ dossierForm.replaces_id ? 'Salva nuova versione' : 'Salva nel fascicolo' }}</button></div>
+            </form>
+        </div>
+
+        <div v-if="dossierConfirmOpen" class="fixed inset-0 z-[7950] flex items-center justify-center bg-gray-950/20 px-4 py-6 backdrop-blur-[2px]" @click.self="dossierConfirmOpen = false">
+            <div class="w-full max-w-md rounded-md bg-white p-6 shadow-xl"><h3 class="text-base font-semibold text-gray-900">Confermare il salvataggio?</h3><p class="mt-2 text-sm text-gray-600">La voce sarà inserita nel fascicolo riservato e l’operazione verrà registrata nel log.</p><div class="mt-5 flex justify-end gap-2"><button type="button" class="btn btn-outline" @click="dossierConfirmOpen = false">Annulla</button><button type="button" class="btn btn-primary" :disabled="dossierForm.processing" @click="submitDossierItem">Conferma e salva</button></div></div>
+        </div>
 
         <div v-if="physicalDeleteOpen" class="fixed inset-0 z-[8000] flex items-center justify-center bg-transparent px-4 py-6" @click.self="physicalDeleteOpen = false">
             <form class="w-full max-w-lg rounded-md bg-white p-5 shadow-xl" @submit.prevent="physicallyDeleteUser">

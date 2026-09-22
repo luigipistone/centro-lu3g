@@ -77,6 +77,9 @@ class EnforceRolePermissions
         if ($name === 'users.status.update') {
             return 'users.profile.security.update';
         }
+        if (Str::startsWith($name, 'users.dossier-items.')) {
+            return null;
+        }
         if (Str::startsWith($name, 'users.')) {
             return 'users.'.($request->isMethod('GET') ? 'view' : 'manage');
         }

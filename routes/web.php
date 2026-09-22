@@ -190,6 +190,9 @@ Route::middleware('auth')->group(function () {
     Route::put('/users/{id}', [CentroPageController::class, 'update'])->defaults('section', 'users')->name('users.update');
     Route::put('/users/{id}/sensitive', [CentroPageController::class, 'updateUserSensitive'])->name('users.sensitive.update');
     Route::post('/users/{id}/avatar', [CentroPageController::class, 'updateUserAvatar'])->name('users.avatar.update');
+    Route::post('/users/{id}/dossier-items', [CentroPageController::class, 'storeEmployeeDossierItem'])->name('users.dossier-items.store');
+    Route::get('/users/{id}/dossier-items/{itemId}/file', [CentroPageController::class, 'downloadEmployeeDossierItem'])->name('users.dossier-items.file');
+    Route::delete('/users/{id}/dossier-items/{itemId}', [CentroPageController::class, 'destroyEmployeeDossierItem'])->name('users.dossier-items.destroy');
     Route::post('/users/{id}/archive-requests', [CentroPageController::class, 'requestUserArchive'])->name('users.archive-requests.store');
     Route::patch('/users/archive-requests/{id}', [CentroPageController::class, 'reviewUserArchive'])->name('users.archive-requests.review');
     Route::delete('/users/{id}/physical', [CentroPageController::class, 'physicallyDeleteUser'])->name('users.physical-destroy');

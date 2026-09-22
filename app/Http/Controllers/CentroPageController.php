@@ -1991,6 +1991,7 @@ class CentroPageController extends Controller
                 'fieldAccess' => $this->userProfileFieldAccess($request),
                 'managerOptions' => $this->userOptions()->where('id', '!=', $id)->values(),
                 'dossierDocuments' => $this->companyDocumentRows($id, false),
+                'employeeDossier' => $this->employeeDossierData($request, $id),
                 'performance' => $this->userPerformanceStats($id),
                 'linkedAccountSummary' => app(AccountArchiveService::class)->summary($id),
                 'archiveRequests' => Schema::hasTable('account_archive_requests')
@@ -3919,6 +3920,210 @@ class CentroPageController extends Controller
         );
 
         return back()->with('status', 'Foto profilo aggiornata.');
+    }
+
+    public function storeEmployeeDossierItem(Request $request, string $id): RedirectResponse
+    {
+        $user = User::query()->findOrFail($id);
+        $types = $this->employeeDossierTypes();
+        $payload = $request->validate([
+            'type' => ['required', Rule::in(array_keys($types))],
+            'title' => ['required', 'string', 'max:255'],
+            'identifier' => ['nullable', 'string', 'max:255'],
+            'issued_at' => ['nullable', 'date'],
+            'expires_at' => ['nullable', 'date', 'after_or_equal:issued_at'],
+            'level' => ['nullable', 'string', 'max:255'],
+            'fitness_status' => ['nullable', Rule::in(['fit', 'fit_with_limits', 'pending', 'expired'])],
+            'notes' => ['nullable', 'string', 'max:10000'],
+            'accepted' => ['nullable', 'boolean'],
+            'replaces_id' => ['nullable', 'uuid', 'exists:employee_dossier_items,id'],
+            'file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:20480'],
+        ]);
+        $classification = $types[$payload['type']]['classification'];
+        $this->ensureEmployeeDossierManageAccess($request, $classification);
+
+        $replaced = null;
+        if (! empty($payload['replaces_id'])) {
+            $replaced = DB::table('employee_dossier_items')->where('id', $payload['replaces_id'])->where('user_id', $id)->first();
+            abort_if(! $replaced, 422, 'La versione da sostituire non appartiene a questo fascicolo.');
+            abort_if($replaced->type !== $payload['type'], 422, 'La nuova versione deve avere la stessa tipologia.');
+        }
+
+        $file = $request->file('file');
+        $path = $file?->store('employee-dossier/'.$id, 'local');
+        if ($path) Storage::disk('local')->setVisibility($path, 'private');
+        $itemId = (string) str()->uuid();
+
+        DB::transaction(function () use ($payload, $classification, $replaced, $file, $path, $itemId, $id, $request) {
+            if ($replaced) {
+                DB::table('employee_dossier_items')->where('id', $replaced->id)->update(['replaced_at' => now(), 'updated_at' => now()]);
+            }
+            DB::table('employee_dossier_items')->insert([
+                'id' => $itemId,
+                'user_id' => $id,
+                'type' => $payload['type'],
+                'title' => $payload['title'],
+                'identifier' => $payload['identifier'] ?? null,
+                'issued_at' => $payload['issued_at'] ?? null,
+                'expires_at' => $payload['expires_at'] ?? null,
+                'level' => $payload['level'] ?? null,
+                'classification' => $classification,
+                'fitness_status' => $classification === 'medical' ? ($payload['fitness_status'] ?? 'pending') : null,
+                'notes' => $payload['notes'] ?? null,
+                'file_path' => $path,
+                'file_name' => $file?->getClientOriginalName(),
+                'file_mime' => $file?->getMimeType(),
+                'version' => $replaced ? ((int) $replaced->version + 1) : 1,
+                'replaces_id' => $replaced?->id,
+                'accepted_at' => ! empty($payload['accepted']) ? now() : null,
+                'created_by' => $request->user()->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        });
+
+        DB::table('audit_logs')->insert([
+            'id' => (string) str()->uuid(), 'user_id' => $request->user()->id, 'user_name' => $request->user()->name,
+            'user_role' => $this->currentUserRole($request), 'action' => $replaced ? 'nuova_versione_fascicolo' : 'aggiunta_fascicolo',
+            'area' => 'users', 'route_name' => 'users.dossier-items.store', 'method' => 'POST', 'subject_id' => $id,
+            'status_code' => 200, 'ip_address' => $request->ip(), 'user_agent' => $request->userAgent(),
+            'metadata' => json_encode(['item_id' => $itemId, 'type' => $payload['type'], 'version' => $replaced ? ((int) $replaced->version + 1) : 1], JSON_THROW_ON_ERROR),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        return back()->with('status', $replaced ? 'Nuova versione salvata.' : 'Voce aggiunta al fascicolo.');
+    }
+
+    public function downloadEmployeeDossierItem(Request $request, string $id, string $itemId)
+    {
+        $item = DB::table('employee_dossier_items')->where('id', $itemId)->where('user_id', $id)->first();
+        abort_if(! $item || ! $item->file_path, 404);
+        $this->ensureEmployeeDossierViewAccess($request, $id, $item->classification, false);
+        abort_unless(Storage::disk('local')->exists($item->file_path), 404);
+
+        return response()->file(Storage::disk('local')->path($item->file_path), [
+            'Content-Type' => $item->file_mime ?: 'application/octet-stream',
+            'Content-Disposition' => 'inline; filename="'.($item->file_name ?: 'documento').'"',
+        ]);
+    }
+
+    public function destroyEmployeeDossierItem(Request $request, string $id, string $itemId): RedirectResponse
+    {
+        $item = DB::table('employee_dossier_items')->where('id', $itemId)->where('user_id', $id)->first();
+        abort_if(! $item, 404);
+        $this->ensureEmployeeDossierManageAccess($request, $item->classification);
+        if ($item->file_path) Storage::disk('local')->delete($item->file_path);
+        DB::table('employee_dossier_items')->where('id', $itemId)->delete();
+        DB::table('audit_logs')->insert([
+            'id' => (string) str()->uuid(), 'user_id' => $request->user()->id, 'user_name' => $request->user()->name,
+            'user_role' => $this->currentUserRole($request), 'action' => 'eliminazione_voce_fascicolo',
+            'area' => 'users', 'route_name' => 'users.dossier-items.destroy', 'method' => 'DELETE', 'subject_id' => $id,
+            'status_code' => 200, 'ip_address' => $request->ip(), 'user_agent' => $request->userAgent(),
+            'metadata' => json_encode(['item_id' => $itemId, 'type' => $item->type, 'title' => $item->title, 'version' => $item->version], JSON_THROW_ON_ERROR),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        return back()->with('status', 'Voce eliminata dal fascicolo.');
+    }
+
+    private function employeeDossierTypes(): array
+    {
+        return [
+            'identity_document' => ['label' => 'Documento d’identità', 'classification' => 'standard', 'required' => true],
+            'tax_identifier' => ['label' => 'Codice fiscale o identificativo', 'classification' => 'standard', 'required' => true],
+            'employment_contract' => ['label' => 'Contratto di lavoro', 'classification' => 'contract', 'required' => true],
+            'contract_change' => ['label' => 'Variazione contrattuale', 'classification' => 'contract', 'required' => false],
+            'medical_exam' => ['label' => 'Visita medica e idoneità', 'classification' => 'medical', 'required' => true],
+            'safety_course' => ['label' => 'Corso o attestato di sicurezza', 'classification' => 'standard', 'required' => true],
+            'equipment' => ['label' => 'Dotazione aziendale', 'classification' => 'standard', 'required' => false],
+            'policy' => ['label' => 'Policy o documento firmato', 'classification' => 'standard', 'required' => false],
+            'administrative_note' => ['label' => 'Nota amministrativa riservata', 'classification' => 'admin', 'required' => false],
+        ];
+    }
+
+    private function employeeDossierData(Request $request, string $userId): array
+    {
+        if (! Schema::hasTable('employee_dossier_items')) return ['items' => [], 'summary' => [], 'types' => [], 'access' => []];
+        $types = $this->employeeDossierTypes();
+        $role = $this->currentUserRole($request);
+        $self = (string) $request->user()->id === $userId;
+        $permissions = app(RolePermissionService::class);
+        $access = [
+            'standard_manage' => $permissions->allows($role, 'users.dossier.standard.manage'),
+            'contract_manage' => $permissions->allows($role, 'users.dossier.contract.manage'),
+            'medical_manage' => $permissions->allows($role, 'users.dossier.medical.manage'),
+            'admin_manage' => $permissions->allows($role, 'users.dossier.admin.manage'),
+        ];
+        $rows = DB::table('employee_dossier_items')->where('user_id', $userId)->orderByDesc('created_at')->get();
+        $visible = $rows->filter(function ($item) use ($request, $userId) {
+            try { $this->ensureEmployeeDossierViewAccess($request, $userId, $item->classification, true); return true; }
+            catch (\Symfony\Component\HttpKernel\Exception\HttpException) { return false; }
+        })->map(function ($item) use ($role, $self, $types, $access) {
+            $medicalSummaryOnly = $item->classification === 'medical' && ! $self && ! $access['medical_manage'];
+            $item->type_label = $types[$item->type]['label'] ?? $item->type;
+            $item->status = $this->employeeDossierStatus($item);
+            $item->medical_summary_only = $medicalSummaryOnly;
+            $item->can_manage = (bool) ($access[$item->classification.'_manage'] ?? false);
+            if ($medicalSummaryOnly) {
+                $item->title = 'Sorveglianza sanitaria';
+                $item->identifier = null;
+                $item->notes = null;
+                $item->file_path = null;
+                $item->file_name = null;
+                $item->issued_at = null;
+            }
+            return $item;
+        })->values();
+
+        $activeByType = $rows->whereNull('replaced_at')->groupBy('type');
+        $summary = collect($types)->filter(fn ($config) => $config['required'])->map(function ($config, $type) use ($activeByType) {
+            $item = $activeByType->get($type)?->sortByDesc('created_at')->first();
+            return [
+                'type' => $type,
+                'label' => $config['label'],
+                'status' => $item ? $this->employeeDossierStatus($item) : 'missing',
+            ];
+        })->values()->all();
+
+        return [
+            'items' => $visible,
+            'summary' => $summary,
+            'types' => collect($types)->map(fn ($config, $value) => ['value' => $value, ...$config])->values(),
+            'access' => $access,
+        ];
+    }
+
+    private function employeeDossierStatus(object $item): string
+    {
+        if ($item->replaced_at) return 'replaced';
+        if (! $item->expires_at) return 'valid';
+        $expires = Carbon::parse($item->expires_at)->startOfDay();
+        if ($expires->isPast()) return 'expired';
+        if ($expires->lte(now('Europe/Rome')->addDays(30)->endOfDay())) return 'expiring';
+        return 'valid';
+    }
+
+    private function ensureEmployeeDossierManageAccess(Request $request, string $classification): void
+    {
+        $permission = match ($classification) {
+            'contract' => 'users.dossier.contract.manage',
+            'medical' => 'users.dossier.medical.manage',
+            'admin' => 'users.dossier.admin.manage',
+            default => 'users.dossier.standard.manage',
+        };
+        $this->ensurePermission($request, $permission);
+    }
+
+    private function ensureEmployeeDossierViewAccess(Request $request, string $userId, string $classification, bool $allowMedicalSummary): void
+    {
+        if ((string) $request->user()->id === $userId && $classification !== 'admin') return;
+        $permission = match ($classification) {
+            'contract' => 'users.dossier.contract.view',
+            'medical' => $allowMedicalSummary ? 'users.dossier.medical.status' : 'users.dossier.medical.manage',
+            'admin' => 'users.dossier.admin.view',
+            default => 'users.dossier.standard.view',
+        };
+        $this->ensurePermission($request, $permission);
     }
 
     private function currentUserRole(Request $request): string
