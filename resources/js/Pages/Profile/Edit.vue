@@ -5,7 +5,7 @@ import AppSelect from '@/Components/AppSelect.vue';
 import DeleteUserForm from './Partials/DeleteUserForm.vue';
 import UpdatePasswordForm from './Partials/UpdatePasswordForm.vue';
 import UpdateProfileInformationForm from './Partials/UpdateProfileInformationForm.vue';
-import { Head, router, useForm } from '@inertiajs/vue3';
+import { Head, Link as InertiaLink, router, useForm } from '@inertiajs/vue3';
 import { Bold, FileText, Heading3, Italic, Link2, List, ListOrdered, Paperclip, Quote, Underline } from '@lucide/vue';
 import { computed, nextTick, ref, watch } from 'vue';
 
@@ -29,7 +29,21 @@ const props = defineProps({
         default: () => [],
     },
     archiveRequest: Object,
+    dossierDocuments: { type: Array, default: () => [] },
 });
+
+const profileTab = ref('personal');
+const profileTabs = [
+    { value: 'personal', label: 'Dati personali' },
+    { value: 'employment', label: 'Rapporto di lavoro' },
+    { value: 'schedule', label: 'Orario e smart working' },
+    { value: 'notifications', label: 'Notifiche' },
+    { value: 'dossier', label: 'Fascicolo digitale' },
+    { value: 'absences', label: 'Assenze' },
+    { value: 'security', label: 'Sicurezza' },
+];
+const employmentStatusLabels = { active: 'Attivo', suspended: 'Sospeso', ended: 'Terminato' };
+const documentCategoryLabels = { compensation: 'Compensi', contracts: 'Contratti', courses: 'Corsi e attestati', identity: "Documenti d'identità", other: 'Documenti vari' };
 
 const absenceTypes = [
     { value: 'vacation', label: 'Ferie' },
@@ -172,17 +186,67 @@ watch(() => absenceForm.type, () => {
 
         <div class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 sm:px-6 lg:px-8">
+                <nav class="settings-tabs flex w-full gap-1 overflow-x-auto" aria-label="Sezioni profilo">
+                    <button v-for="tab in profileTabs" :key="tab.value" type="button" :class="['settings-tab shrink-0', profileTab === tab.value ? 'is-active' : '']" @click="profileTab = tab.value">
+                        {{ tab.label }}
+                    </button>
+                </nav>
                 <div
+                    v-if="profileTab === 'personal' || profileTab === 'notifications'"
                     class="surface p-4 sm:p-8"
                 >
                     <UpdateProfileInformationForm
                         :must-verify-email="mustVerifyEmail"
                         :status="status"
+                        :section="profileTab"
                         class="max-w-3xl"
                     />
                 </div>
 
-                <section class="surface p-4 sm:p-8">
+                <section v-if="profileTab === 'employment'" class="surface p-4 sm:p-8">
+                    <h2 class="text-lg font-medium text-gray-900">Rapporto di lavoro</h2>
+                    <p class="mt-1 text-sm text-gray-600">Dati organizzativi gestiti dall’amministrazione.</p>
+                    <dl class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        <div v-for="item in [
+                            ['Matricola', profile?.employee_code], ['Qualifica', profile?.job_title], ['Reparto', profile?.department],
+                            ['Responsabile', profile?.manager_name], ['Sede', profile?.office], ['Stato del rapporto', employmentStatusLabels[profile?.employment_status] || profile?.employment_status],
+                            ['Data di ingresso', formatDate(profile?.hire_date)], ['Data di uscita', formatDate(profile?.termination_date)],
+                        ]" :key="item[0]" class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 px-4 py-3">
+                            <dt class="text-xs font-semibold uppercase text-gray-400">{{ item[0] }}</dt><dd class="mt-1 text-sm font-semibold text-gray-900">{{ item[1] || 'Non impostato' }}</dd>
+                        </div>
+                    </dl>
+                </section>
+
+                <section v-if="profileTab === 'schedule'" class="surface p-4 sm:p-8">
+                    <h2 class="text-lg font-medium text-gray-900">Orario e smart working</h2>
+                    <p class="mt-1 text-sm text-gray-600">Configurazione definita dall’amministrazione.</p>
+                    <div class="mt-6 grid gap-5 lg:grid-cols-2">
+                        <div class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
+                            <span class="text-xs font-semibold uppercase text-gray-400">Orario settimanale</span>
+                            <p class="mt-2 text-xl font-bold text-gray-900">{{ profile?.weekly_hours || 40 }} ore</p>
+                            <p class="mt-1 text-sm text-gray-500">{{ profile?.part_time ? `Part-time ${profile?.part_time_percentage || ''}%` : 'Tempo pieno' }}</p>
+                        </div>
+                        <div class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
+                            <span class="text-xs font-semibold uppercase text-gray-400">Giorni di smart working</span>
+                            <div class="mt-3 flex flex-wrap gap-2"><span v-for="day in (profile?.smartworking_days || [])" :key="day" class="rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700">{{ smartworkingLabels[day] || day }}</span><span v-if="!profile?.smartworking_days?.length" class="text-sm text-gray-500">Non impostati</span></div>
+                            <p v-if="profile?.smartworking_rules" class="mt-3 text-sm text-gray-600">{{ profile.smartworking_rules }}</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section v-if="profileTab === 'dossier'" class="surface p-4 sm:p-8">
+                    <h2 class="text-lg font-medium text-gray-900">Fascicolo digitale</h2>
+                    <p class="mt-1 text-sm text-gray-600">Documenti aziendali assegnati al tuo profilo.</p>
+                    <div v-if="dossierDocuments.length" class="mt-6 divide-y divide-gray-100 rounded-[var(--radius-sm)] border border-gray-100">
+                        <InertiaLink v-for="document in dossierDocuments" :key="document.id" :href="route('documents.show', document.id)" class="flex items-center justify-between gap-4 px-4 py-3 transition hover:bg-gray-50">
+                            <div><p class="text-sm font-semibold text-gray-900">{{ document.title }}</p><p class="mt-1 text-xs text-gray-500">{{ documentCategoryLabels[document.category] || 'Documento' }} · {{ formatDate(String(document.created_at).slice(0, 10)) }}</p></div>
+                            <span :class="['rounded-full px-3 py-1 text-xs font-semibold', document.read_at ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700']">{{ document.read_at ? 'Letto' : 'Da leggere' }}</span>
+                        </InertiaLink>
+                    </div>
+                    <p v-else class="mt-6 text-sm text-gray-500">Nessun documento assegnato.</p>
+                </section>
+
+                <section v-if="profileTab === 'absences'" class="surface p-4 sm:p-8">
                     <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
                         <div>
                             <h2 class="text-lg font-medium text-gray-900">Assenze e disponibilità</h2>
@@ -321,11 +385,11 @@ watch(() => absenceForm.type, () => {
                     </div>
                 </section>
 
-                <div class="surface p-4 sm:p-8">
+                <div v-if="profileTab === 'security'" class="surface p-4 sm:p-8">
                     <UpdatePasswordForm class="max-w-xl" />
                 </div>
 
-                <div class="surface p-4 sm:p-8">
+                <div v-if="profileTab === 'security'" class="surface p-4 sm:p-8">
                     <DeleteUserForm :request="archiveRequest" class="max-w-xl" />
                 </div>
             </div>

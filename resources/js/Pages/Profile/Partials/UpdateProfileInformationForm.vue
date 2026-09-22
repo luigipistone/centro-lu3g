@@ -6,13 +6,14 @@ import UserAvatar from '@/Components/UserAvatar.vue';
 import { Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, onUnmounted, ref, watch } from 'vue';
 
-defineProps({
+const props = defineProps({
     mustVerifyEmail: {
         type: Boolean,
     },
     status: {
         type: String,
     },
+    section: { type: String, default: 'personal' },
 });
 
 const user = usePage().props.auth.user;
@@ -31,8 +32,10 @@ const currentCompletionEffect = completionEffectValues.includes(profile.completi
     : 'balloons';
 
 const form = useForm({
-    name: user.name,
+    first_name: profile.first_name || user.name?.split(' ')[0] || '',
+    last_name: profile.last_name || user.name?.split(' ').slice(1).join(' ') || '',
     email: user.email,
+    phone: profile.phone || '',
     completion_effect: currentCompletionEffect,
     notification_preferences: notificationPreferences.map((preference) => ({
         category: preference.category,
@@ -84,8 +87,10 @@ function channelLabel(channel) {
 
 function profilePayload() {
     return {
-        name: form.name,
+        first_name: form.first_name,
+        last_name: form.last_name,
         email: form.email,
+        phone: form.phone,
         completion_effect: form.completion_effect,
         notification_preferences: form.notification_preferences.map((preference) => ({
             category: preference.category,
@@ -156,15 +161,15 @@ onUnmounted(() => {
     <section>
         <header>
             <h2 class="text-lg font-medium text-gray-900">
-                Informazioni profilo
+                {{ props.section === 'notifications' ? 'Preferenze e notifiche' : 'Dati personali' }}
             </h2>
 
             <p class="mt-1 text-sm text-gray-600">
-                Aggiorna dati personali, email e foto profilo.
+                {{ props.section === 'notifications' ? 'Scegli come ricevere gli aggiornamenti e personalizza le attività.' : 'Aggiorna i tuoi recapiti e la foto profilo.' }}
             </p>
         </header>
 
-        <div class="mt-6 flex flex-wrap items-center gap-4 rounded-md border border-gray-100 bg-gray-50 p-4">
+        <div v-if="props.section === 'personal'" class="mt-6 flex flex-wrap items-center gap-4 rounded-md border border-gray-100 bg-gray-50 p-4">
             <UserAvatar :user="previewUser" size="lg" />
             <div class="min-w-0 flex-1">
                 <div class="text-sm font-semibold text-gray-900">Foto personale</div>
@@ -178,24 +183,31 @@ onUnmounted(() => {
         </div>
 
         <form class="mt-6 space-y-6" @submit.prevent>
-            <div>
-                <InputLabel for="name" value="Nome" />
+            <div v-if="props.section === 'personal'" class="grid gap-5 md:grid-cols-2">
+              <div>
+                <InputLabel for="first_name" value="Nome" />
 
                 <TextInput
-                    id="name"
+                    id="first_name"
                     type="text"
                     class="mt-1 block w-full"
-                    v-model="form.name"
+                    v-model="form.first_name"
                     required
                     autofocus
-                    autocomplete="name"
+                    autocomplete="given-name"
                 />
-
-                <InputError class="mt-2" :message="form.errors.name" />
+                <InputError class="mt-2" :message="form.errors.first_name" />
+              </div>
+              <div>
+                <InputLabel for="last_name" value="Cognome" />
+                <TextInput id="last_name" v-model="form.last_name" type="text" class="mt-1 block w-full" required autocomplete="family-name" />
+                <InputError class="mt-2" :message="form.errors.last_name" />
+              </div>
             </div>
 
-            <div>
-                <InputLabel for="email" value="Email" />
+            <div v-if="props.section === 'personal'" class="grid gap-5 md:grid-cols-2">
+              <div>
+                <InputLabel for="email" value="Email aziendale" />
 
                 <TextInput
                     id="email"
@@ -207,9 +219,15 @@ onUnmounted(() => {
                 />
 
                 <InputError class="mt-2" :message="form.errors.email" />
+              </div>
+              <div>
+                <InputLabel for="phone" value="Telefono" />
+                <TextInput id="phone" v-model="form.phone" type="tel" class="mt-1 block w-full" autocomplete="tel" />
+                <InputError class="mt-2" :message="form.errors.phone" />
+              </div>
             </div>
 
-            <div v-if="mustVerifyEmail && user.email_verified_at === null">
+            <div v-if="props.section === 'personal' && mustVerifyEmail && user.email_verified_at === null">
                 <p class="mt-2 text-sm text-gray-800">
                     Il tuo indirizzo email non e verificato.
                     <Link
@@ -230,7 +248,7 @@ onUnmounted(() => {
                 </div>
             </div>
 
-            <div>
+            <div v-if="props.section === 'notifications'">
                 <InputLabel for="completion_effect" value="Animazione completamento task" />
 
                 <select
@@ -247,7 +265,7 @@ onUnmounted(() => {
                 <InputError class="mt-2" :message="form.errors.completion_effect" />
             </div>
 
-            <div>
+            <div v-if="props.section === 'notifications'">
                 <div class="mb-3">
                     <h3 class="text-sm font-semibold text-gray-900">Preferenze notifiche</h3>
                     <p class="mt-1 text-xs text-gray-500">Scegli per ogni area quali canali usare per ricevere gli aggiornamenti.</p>

@@ -786,6 +786,12 @@ const projectTaskDropPlacement = ref(null);
 const projectTaskDropSectionId = ref(null);
 let projectTaskDrawerAutosaveTimer = null;
 const projectColors = ['#2563eb', '#7c3aed', '#db2777', '#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#475569'];
+const userDetailTab = ref('personal');
+const userDetailTabs = [
+    { value: 'personal', label: 'Dati personali' }, { value: 'employment', label: 'Rapporto di lavoro' },
+    { value: 'schedule', label: 'Orario e smart working' }, { value: 'dossier', label: 'Fascicolo digitale' },
+];
+const parsedSmartworkingDays = (() => { try { return JSON.parse(props.record.smartworking_days || '[]'); } catch { return []; } })();
 const userForm = useForm({
     name: props.record.name || '',
     email: props.record.email || '',
@@ -796,6 +802,12 @@ const userForm = useForm({
     bio: props.record.bio || '',
     completion_effect: completionEffectValues.includes(props.record.completion_effect) ? props.record.completion_effect : 'balloons',
     smartworking_day: props.record.smartworking_day || 'none',
+    first_name: props.record.first_name || String(props.record.name || '').split(' ')[0] || '',
+    last_name: props.record.last_name || String(props.record.name || '').split(' ').slice(1).join(' '),
+    department: props.record.department || '', manager_user_id: props.record.manager_user_id || '', office: props.record.office || '',
+    employment_status: props.record.employment_status || 'active', hire_date: props.record.hire_date || '', termination_date: props.record.termination_date || '',
+    weekly_hours: props.record.weekly_hours || 40, part_time: Boolean(props.record.part_time), part_time_percentage: props.record.part_time_percentage || '',
+    smartworking_days: parsedSmartworkingDays, smartworking_rules: props.record.smartworking_rules || '',
     password: '',
 });
 const userPerformance = computed(() => props.related?.performance || {
@@ -2227,6 +2239,11 @@ function userPayload() {
         bio: userForm.bio,
         completion_effect: userForm.completion_effect,
         smartworking_day: userForm.smartworking_day,
+        first_name: userForm.first_name, last_name: userForm.last_name, department: userForm.department,
+        manager_user_id: userForm.manager_user_id || null, office: userForm.office, employment_status: userForm.employment_status,
+        hire_date: userForm.hire_date || null, termination_date: userForm.termination_date || null,
+        weekly_hours: userForm.weekly_hours || null, part_time: userForm.part_time, part_time_percentage: userForm.part_time_percentage || null,
+        smartworking_days: userForm.smartworking_days, smartworking_rules: userForm.smartworking_rules,
         password: userForm.password,
     };
 }
@@ -3859,16 +3876,7 @@ watch(
 );
 
 watch(
-    () => [
-        userForm.name,
-        userForm.email,
-        userForm.role,
-        userForm.employee_code,
-        userForm.job_title,
-        userForm.phone,
-        userForm.bio,
-        userForm.password,
-    ],
+    () => JSON.stringify(userPayload()),
     () => saveUserInline(),
 );
 
@@ -5657,7 +5665,10 @@ onUnmounted(() => {
                 </section>
 
                 <section v-if="section === 'users'" class="space-y-6 lg:order-1">
-                    <section class="surface rounded-md p-5">
+                    <nav class="settings-tabs flex w-full gap-1 overflow-x-auto" aria-label="Sezioni utente">
+                        <button v-for="tab in userDetailTabs" :key="tab.value" type="button" :class="['settings-tab shrink-0', userDetailTab === tab.value ? 'is-active' : '']" @click="userDetailTab = tab.value">{{ tab.label }}</button>
+                    </nav>
+                    <section v-if="userDetailTab === 'personal'" class="surface rounded-md p-5">
                         <div class="flex flex-wrap items-center gap-4 rounded-md border border-gray-100 bg-gray-50 p-4">
                             <UserAvatar :user="userPreview()" size="lg" />
                             <div class="min-w-0 flex-1">
@@ -5672,7 +5683,7 @@ onUnmounted(() => {
                         </div>
                     </section>
 
-                    <section class="surface rounded-md p-5">
+                    <section v-if="userDetailTab === 'personal'" class="surface rounded-md p-5">
                         <div class="mb-5 flex flex-wrap items-center justify-between gap-4 rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/80 p-4">
                             <div>
                                 <div class="text-sm font-semibold text-gray-900">Stato account</div>
@@ -5728,6 +5739,8 @@ onUnmounted(() => {
                         </div>
 
                         <div class="grid gap-4 md:grid-cols-2">
+                            <div><label class="block text-sm font-medium text-gray-700">Nome</label><input v-model="userForm.first_name" class="form-control" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Cognome</label><input v-model="userForm.last_name" class="form-control" /></div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Nome</label>
                                 <input v-model="userForm.name" class="form-control" required />
@@ -5808,6 +5821,39 @@ onUnmounted(() => {
                                 <div v-if="userForm.errors.bio" class="mt-1 text-sm text-red-600">{{ userForm.errors.bio }}</div>
                             </div>
                         </div>
+                    </section>
+
+                    <section v-if="userDetailTab === 'employment'" class="surface rounded-md p-5">
+                        <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Rapporto di lavoro</h3>
+                        <p class="mt-1 text-sm text-gray-500">Le modifiche vengono salvate automaticamente.</p>
+                        <div class="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                            <div><label class="block text-sm font-medium text-gray-700">Matricola</label><input v-model="userForm.employee_code" class="form-control" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Qualifica</label><input v-model="userForm.job_title" class="form-control" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Reparto</label><input v-model="userForm.department" class="form-control" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Responsabile</label><AppSelect v-model="userForm.manager_user_id" :options="[{ value: '', label: 'Nessuno' }, ...related.managerOptions.map(user => ({ value: user.id, label: user.name }))]" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Sede</label><input v-model="userForm.office" class="form-control" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Stato del rapporto</label><AppSelect v-model="userForm.employment_status" :options="[{ value: 'active', label: 'Attivo' }, { value: 'suspended', label: 'Sospeso' }, { value: 'ended', label: 'Terminato' }]" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Data di ingresso</label><AppDateInput v-model="userForm.hire_date" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Data di uscita</label><AppDateInput v-model="userForm.termination_date" /></div>
+                        </div>
+                    </section>
+
+                    <section v-if="userDetailTab === 'schedule'" class="surface rounded-md p-5">
+                        <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Orario e smart working</h3>
+                        <div class="mt-5 grid gap-4 md:grid-cols-2">
+                            <div><label class="block text-sm font-medium text-gray-700">Ore settimanali</label><input v-model.number="userForm.weekly_hours" type="number" min="0" max="168" step="0.5" class="form-control" /></div>
+                            <div class="flex items-end"><label class="flex min-h-[44px] items-center gap-3"><input v-model="userForm.part_time" type="checkbox" class="rounded border-gray-300" /><span class="text-sm font-medium text-gray-700">Contratto part-time</span></label></div>
+                            <div v-if="userForm.part_time"><label class="block text-sm font-medium text-gray-700">Percentuale part-time</label><input v-model.number="userForm.part_time_percentage" type="number" min="1" max="100" class="form-control" /></div>
+                            <div class="md:col-span-2"><label class="block text-sm font-medium text-gray-700">Giorni di smart working</label><div class="mt-2 flex gap-2"><button v-for="day in smartworkingWeekdayOptions" :key="day.value" type="button" :class="['h-10 w-10 rounded-full border text-xs font-bold transition', userForm.smartworking_days.includes(day.value) ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-200 bg-white text-gray-500']" @click="userForm.smartworking_days = userForm.smartworking_days.includes(day.value) ? userForm.smartworking_days.filter(value => value !== day.value) : [...userForm.smartworking_days, day.value]">{{ smartworkingDayShortLabel(day.value) }}</button></div></div>
+                            <div class="md:col-span-2"><label class="block text-sm font-medium text-gray-700">Regole smart working</label><textarea v-model="userForm.smartworking_rules" rows="4" class="form-control" placeholder="Indicazioni, alternanze o condizioni particolari..."></textarea></div>
+                        </div>
+                    </section>
+
+                    <section v-if="userDetailTab === 'dossier'" class="surface rounded-md p-5">
+                        <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Fascicolo digitale</h3>
+                        <div v-if="related.dossierDocuments?.length" class="mt-5 divide-y divide-gray-100 rounded-[var(--radius-sm)] border border-gray-100">
+                            <Link v-for="document in related.dossierDocuments" :key="document.id" :href="route('documents.show', document.id)" class="flex items-center justify-between gap-4 px-4 py-3 transition hover:bg-gray-50"><span class="text-sm font-semibold text-gray-900">{{ document.title }}</span><span :class="['rounded-full px-3 py-1 text-xs font-semibold', document.user_read_at ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700']">{{ document.user_read_at ? 'Letto' : 'Da leggere' }}</span></Link>
+                        </div><p v-else class="mt-5 text-sm text-gray-500">Nessun documento associato.</p>
                     </section>
                 </section>
 

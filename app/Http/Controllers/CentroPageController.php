@@ -1873,7 +1873,7 @@ class CentroPageController extends Controller
                 ->leftJoin('user_roles', 'user_roles.user_id', '=', 'users.id')
                 ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
                 ->where('users.id', $id)
-                ->select('users.*', 'user_roles.role', 'profiles.avatar_url', 'profiles.employee_code', 'profiles.job_title', 'profiles.phone', 'profiles.bio', 'profiles.completion_effect', 'profiles.smartworking_day')
+                ->select('users.*', 'user_roles.role', 'profiles.avatar_url', 'profiles.employee_code', 'profiles.first_name', 'profiles.last_name', 'profiles.job_title', 'profiles.department', 'profiles.manager_user_id', 'profiles.office', 'profiles.employment_status', 'profiles.hire_date', 'profiles.termination_date', 'profiles.weekly_hours', 'profiles.part_time', 'profiles.part_time_percentage', 'profiles.work_schedule', 'profiles.phone', 'profiles.bio', 'profiles.completion_effect', 'profiles.smartworking_day', 'profiles.smartworking_days', 'profiles.smartworking_rules')
                 ->first(),
             'absences' => DB::table('absence_requests')
                 ->leftJoin('users', 'users.id', '=', 'absence_requests.user_id')
@@ -1979,6 +1979,8 @@ class CentroPageController extends Controller
             ],
             'users' => [
                 'roleOptions' => ['superadmin', 'admin', 'editor', 'guest'],
+                'managerOptions' => $this->userOptions()->where('id', '!=', $id)->values(),
+                'dossierDocuments' => $this->companyDocumentRows($id, false),
                 'performance' => $this->userPerformanceStats($id),
                 'linkedAccountSummary' => app(AccountArchiveService::class)->summary($id),
                 'archiveRequests' => Schema::hasTable('account_archive_requests')
@@ -3767,12 +3769,27 @@ class CentroPageController extends Controller
             'bio' => ['nullable', 'string'],
             'completion_effect' => ['nullable', Rule::in(['balloons', 'fireworks', 'snow', 'glitch'])],
             'smartworking_day' => ['nullable', Rule::in(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'none'])],
+            'first_name' => ['nullable', 'string', 'max:120'],
+            'last_name' => ['nullable', 'string', 'max:120'],
+            'department' => ['nullable', 'string', 'max:255'],
+            'manager_user_id' => ['nullable', 'uuid', 'exists:users,id'],
+            'office' => ['nullable', 'string', 'max:255'],
+            'employment_status' => ['nullable', Rule::in(['active', 'suspended', 'ended'])],
+            'hire_date' => ['nullable', 'date'],
+            'termination_date' => ['nullable', 'date', 'after_or_equal:hire_date'],
+            'weekly_hours' => ['nullable', 'numeric', 'min:0', 'max:168'],
+            'part_time' => ['nullable', 'boolean'],
+            'part_time_percentage' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'smartworking_days' => ['nullable', 'array'],
+            'smartworking_days.*' => [Rule::in(['monday', 'tuesday', 'wednesday', 'thursday', 'friday'])],
+            'smartworking_rules' => ['nullable', 'string', 'max:4000'],
         ]);
 
-        $user->name = $payload['name'];
+        $user->name = trim(($payload['first_name'] ?? '').' '.($payload['last_name'] ?? '')) ?: $payload['name'];
         $user->email = $payload['email'];
         $previousSmartworkingDay = DB::table('profiles')->where('user_id', $user->id)->value('smartworking_day');
-        $nextSmartworkingDay = ($payload['smartworking_day'] ?? null) === 'none' ? null : ($payload['smartworking_day'] ?? null);
+        $nextSmartworkingDay = collect($payload['smartworking_days'] ?? [])->first()
+            ?: (($payload['smartworking_day'] ?? null) === 'none' ? null : ($payload['smartworking_day'] ?? null));
         if (! empty($payload['password'])) {
             $user->password = Hash::make($payload['password']);
         }
@@ -3784,12 +3801,25 @@ class CentroPageController extends Controller
             [
                 'id' => (string) str()->uuid(),
                 'full_name' => $user->name,
+                'first_name' => ($payload['first_name'] ?? null) ?: null,
+                'last_name' => ($payload['last_name'] ?? null) ?: null,
                 'employee_code' => $payload['employee_code'] ?? null,
                 'job_title' => $payload['job_title'] ?? null,
+                'department' => $payload['department'] ?? null,
+                'manager_user_id' => $payload['manager_user_id'] ?? null,
+                'office' => $payload['office'] ?? null,
+                'employment_status' => $payload['employment_status'] ?? 'active',
+                'hire_date' => $payload['hire_date'] ?? null,
+                'termination_date' => $payload['termination_date'] ?? null,
+                'weekly_hours' => $payload['weekly_hours'] ?? null,
+                'part_time' => (bool) ($payload['part_time'] ?? false),
+                'part_time_percentage' => ! empty($payload['part_time']) ? ($payload['part_time_percentage'] ?? null) : null,
                 'phone' => $payload['phone'] ?? null,
                 'bio' => $payload['bio'] ?? null,
                 'completion_effect' => $payload['completion_effect'] ?? 'balloons',
                 'smartworking_day' => $nextSmartworkingDay,
+                'smartworking_days' => json_encode($payload['smartworking_days'] ?? ($nextSmartworkingDay ? [$nextSmartworkingDay] : [])),
+                'smartworking_rules' => $payload['smartworking_rules'] ?? null,
                 'updated_at' => now(),
                 'created_at' => now(),
             ],
