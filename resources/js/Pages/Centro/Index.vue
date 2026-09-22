@@ -501,8 +501,65 @@ function setRolePermission(role, permission, allowed) {
     rolePermissionDraft.value[role][permission] = allowed;
 }
 
-function auditActionLabel(action) {
-    return { creazione: 'Creazione', modifica: 'Modifica', eliminazione: 'Eliminazione' }[action] || action;
+const auditAreaLabels = {
+    clients: 'Clienti',
+    projects: 'Progetti',
+    tasks: 'Task',
+    absences: 'Assenze',
+    documents: 'Documenti',
+    'document-messages': 'Messaggi',
+    'document-groups': 'Gruppi documenti',
+    passwords: 'Password',
+    modules: 'Moduli',
+    'ai-agency': 'Agenzia AI',
+    updates: 'Aggiornamenti',
+    billing: 'Fatturazione',
+    users: 'Utenti',
+    settings: 'Impostazioni',
+    profile: 'Profilo',
+};
+
+function auditAreaLabel(log) {
+    const routeRoot = String(log.route_name || '').split('.')[0];
+    if (routeRoot.startsWith('updates-')) return 'Aggiornamenti';
+    return auditAreaLabels[routeRoot] || auditAreaLabels[log.area] || 'Sistema';
+}
+
+function auditActivityText(log) {
+    const route = String(log.route_name || '');
+    const exact = {
+        'users.status.update': 'ha aggiornato lo stato di un utente',
+        'settings.roles.update': 'ha aggiornato i permessi dei ruoli',
+        'settings.backup.run': 'ha creato un backup',
+        'settings.backup.restore': 'ha ripristinato un backup',
+        'settings.email.test': 'ha inviato un’email di prova',
+        'tasks.status.update': 'ha aggiornato lo stato di una task',
+        'tasks.people.sync': 'ha aggiornato le persone di una task',
+        'tasks.dependencies.sync': 'ha aggiornato le dipendenze di una task',
+        'absences.status.update': 'ha aggiornato una richiesta di assenza',
+        'documents.read': 'ha segnato un documento come letto',
+        'document-messages.read': 'ha segnato un messaggio come letto',
+    };
+    if (exact[route]) return exact[route];
+
+    const area = auditAreaLabel(log).toLocaleLowerCase('it-IT');
+    const verb = {
+        creazione: 'ha creato un elemento in',
+        modifica: 'ha modificato un elemento in',
+        eliminazione: 'ha eliminato un elemento da',
+    }[log.action] || 'ha eseguito un’operazione in';
+    return `${verb} ${area}`;
+}
+
+function auditDateLabel(value) {
+    if (!value) return '-';
+    const date = new Date(value);
+    const day = date.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' });
+    const today = new Date().toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' });
+    const yesterday = new Date(Date.now() - 86400000).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' });
+    const prefix = day === today ? 'Oggi' : day === yesterday ? 'Ieri' : day;
+    const time = date.toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' });
+    return `${prefix}, ${time}`;
 }
 
 const columnLabels = {
@@ -5808,20 +5865,18 @@ function calendarDayStyle(sectionMonth, cell) {
                         <a :href="route('settings.logs.download')" class="btn btn-outline">Scarica tutti i log</a>
                     </div>
                     <div class="mt-6 overflow-x-auto rounded-[var(--radius-sm)] border border-gray-100">
-                        <table class="min-w-[900px] w-full divide-y divide-gray-100 text-sm">
+                        <table class="min-w-[760px] w-full divide-y divide-gray-100 text-sm">
                             <thead class="bg-gray-50/80"><tr>
-                                <th class="px-4 py-3 text-left font-semibold text-gray-600">Data</th><th class="px-4 py-3 text-left font-semibold text-gray-600">Utente</th><th class="px-4 py-3 text-left font-semibold text-gray-600">Azione</th><th class="px-4 py-3 text-left font-semibold text-gray-600">Area</th><th class="px-4 py-3 text-left font-semibold text-gray-600">Esito</th><th class="px-4 py-3 text-left font-semibold text-gray-600">IP</th>
+                                <th class="px-4 py-3 text-left font-semibold text-gray-600">Quando</th><th class="px-4 py-3 text-left font-semibold text-gray-600">Attività</th><th class="px-4 py-3 text-left font-semibold text-gray-600">Area</th><th class="px-4 py-3 text-left font-semibold text-gray-600">Esito</th>
                             </tr></thead>
                             <tbody class="divide-y divide-gray-100">
                                 <tr v-for="log in auditLogs || []" :key="log.id" class="hover:bg-gray-50/70">
-                                    <td class="whitespace-nowrap px-4 py-3 text-gray-500">{{ dateTimeIt(log.created_at) }}</td>
-                                    <td class="px-4 py-3"><span class="block font-medium text-gray-900">{{ log.user_name || 'Sistema' }}</span><span class="text-xs text-gray-400">{{ roleLabels[log.user_role] || log.user_role }}</span></td>
-                                    <td class="px-4 py-3 font-medium text-gray-700">{{ auditActionLabel(log.action) }}</td>
-                                    <td class="px-4 py-3 text-gray-600">{{ log.area || '-' }}</td>
-                                    <td class="px-4 py-3"><span :class="['rounded-full px-2 py-1 text-xs font-semibold', Number(log.status_code) < 400 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700']">{{ log.status_code }}</span></td>
-                                    <td class="px-4 py-3 font-mono text-xs text-gray-500">{{ log.ip_address || '-' }}</td>
+                                    <td class="whitespace-nowrap px-4 py-3.5"><span class="block font-medium text-gray-700">{{ auditDateLabel(log.created_at) }}</span><span class="mt-0.5 block font-mono text-[11px] text-gray-400">{{ log.ip_address || 'IP non disponibile' }}</span></td>
+                                    <td class="px-4 py-3.5" :title="log.route_name || ''"><span class="block font-semibold text-gray-900">{{ log.user_name || 'Sistema' }}</span><span class="mt-0.5 block text-xs text-gray-500">{{ auditActivityText(log) }} · {{ roleLabels[log.user_role] || log.user_role || 'Sistema' }}</span></td>
+                                    <td class="px-4 py-3.5"><span class="inline-flex rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">{{ auditAreaLabel(log) }}</span></td>
+                                    <td class="px-4 py-3.5"><span :class="['inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold', Number(log.status_code) < 400 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700']"><span :class="['h-1.5 w-1.5 rounded-full', Number(log.status_code) < 400 ? 'bg-emerald-500' : 'bg-red-500']"></span>{{ Number(log.status_code) < 400 ? 'Riuscita' : 'Errore' }} <span class="font-normal opacity-70">{{ log.status_code }}</span></span></td>
                                 </tr>
-                                <tr v-if="!(auditLogs || []).length"><td colspan="6" class="px-4 py-10 text-center text-gray-500">Nessun log disponibile.</td></tr>
+                                <tr v-if="!(auditLogs || []).length"><td colspan="4" class="px-4 py-10 text-center text-gray-500">Nessun log disponibile.</td></tr>
                             </tbody>
                         </table>
                     </div>
