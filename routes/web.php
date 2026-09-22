@@ -190,6 +190,7 @@ Route::middleware('auth')->group(function () {
     Route::put('/users/{id}', [CentroPageController::class, 'update'])->defaults('section', 'users')->name('users.update');
     Route::post('/users/{id}/avatar', [CentroPageController::class, 'updateUserAvatar'])->name('users.avatar.update');
     Route::delete('/users/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'users')->name('users.destroy');
+    Route::patch('/users/{id}/status', [CentroPageController::class, 'updateUserStatus'])->name('users.status.update');
     Route::get('/settings', [CentroPageController::class, 'index'])->defaults('section', 'settings')->name('settings.index');
     Route::post('/settings/services', [CentroPageController::class, 'store'])->defaults('section', 'settings')->name('settings.store');
     Route::put('/settings/services/{id}', [CentroPageController::class, 'update'])->defaults('section', 'settings')->name('settings.update');
@@ -205,6 +206,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/settings/backup', [CentroPageController::class, 'runBackup'])->name('settings.backup.run');
     Route::post('/settings/backup/{id}/restore', [CentroPageController::class, 'restoreBackup'])->name('settings.backup.restore');
     Route::delete('/settings/backup/{id}', [CentroPageController::class, 'destroyBackup'])->name('settings.backup.destroy');
+    Route::put('/settings/roles', [CentroPageController::class, 'updateRolePermissions'])->name('settings.roles.update');
+    Route::get('/settings/logs/download', [CentroPageController::class, 'downloadAuditLogs'])->name('settings.logs.download');
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::post('/profile/avatar', [ProfileController::class, 'updateAvatar'])->name('profile.avatar.update');

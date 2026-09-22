@@ -812,6 +812,8 @@ let userAutosaveSequence = 0;
 const userAvatarInput = ref(null);
 const userAvatarPreview = ref(null);
 const userAvatarForm = useForm({ avatar: null });
+const userAccountStatus = ref(props.record.account_status || 'active');
+const userStatusSaving = ref(false);
 const clientFiscalOpen = ref(false);
 const absenceForm = useForm({
     type: props.record.type || 'vacation',
@@ -2264,6 +2266,16 @@ function saveUserInline(delay = AUTOSAVE_IDLE_DELAY) {
 function selectSmartworkingDay(day) {
     userForm.smartworking_day = userForm.smartworking_day === day ? 'none' : day;
     saveUserInline(0);
+}
+
+function setUserAccountStatus(status) {
+    if (userStatusSaving.value || status === userAccountStatus.value) return;
+    userStatusSaving.value = true;
+    router.patch(route('users.status.update', props.record.id), { status }, {
+        preserveScroll: true,
+        onSuccess: () => { userAccountStatus.value = status; },
+        onFinish: () => { userStatusSaving.value = false; },
+    });
 }
 
 function smartworkingDayShortLabel(day) {
@@ -5650,6 +5662,17 @@ onUnmounted(() => {
                     </section>
 
                     <section class="surface rounded-md p-5">
+                        <div class="mb-5 flex flex-wrap items-center justify-between gap-4 rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/80 p-4">
+                            <div>
+                                <div class="text-sm font-semibold text-gray-900">Stato account</div>
+                                <p class="mt-1 text-xs text-gray-500">Sospensione e archiviazione conservano dati e storico dell’utente.</p>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <button v-for="option in [{ value: 'active', label: 'Attivo' }, { value: 'suspended', label: 'Sospeso' }, { value: 'archived', label: 'Archiviato' }]" :key="option.value" type="button" :disabled="userStatusSaving" :class="['btn', userAccountStatus === option.value ? 'btn-primary' : 'btn-outline']" @click="setUserAccountStatus(option.value)">
+                                    {{ option.label }}
+                                </button>
+                            </div>
+                        </div>
                         <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
                             <div>
                                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Informazioni profilo</h3>

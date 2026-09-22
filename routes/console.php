@@ -3,9 +3,9 @@
 use App\Services\CentroBackupService;
 use App\Services\CentroNotificationService;
 use Illuminate\Foundation\Inspiring;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -48,6 +48,12 @@ Schedule::call(function () {
     app(CentroNotificationService::class)->notifyUsers($superadminIds, null, $type, $message);
 })->dailyAt('09:00')->timezone('Europe/Rome')->name('figma-token-expiry-warning');
 
+Schedule::call(function () {
+    if (Schema::hasTable('audit_logs')) {
+        DB::table('audit_logs')->where('created_at', '<', now()->subDays(3))->delete();
+    }
+})->dailyAt('02:40')->timezone('Europe/Rome')->name('purge-audit-logs');
+
 Artisan::command('centro:backup {frequency=manual}', function (CentroBackupService $backupService) {
     $frequency = $this->argument('frequency');
 
@@ -74,6 +80,7 @@ Artisan::command('centro:privatize-files', function () {
 
         if (! Storage::disk('public')->exists($file->path)) {
             $missing++;
+
             continue;
         }
 
@@ -95,6 +102,7 @@ Artisan::command('centro:privatize-files', function () {
 
         if (! Storage::disk('public')->exists($path)) {
             $missing++;
+
             continue;
         }
 
@@ -238,6 +246,7 @@ Artisan::command('centro:import-1password-csv
 
                 if ($title === '' || $password === '') {
                     $skipped++;
+
                     continue;
                 }
 
@@ -267,12 +276,14 @@ Artisan::command('centro:import-1password-csv
 
                     if ($exists) {
                         $duplicates++;
+
                         continue;
                     }
                 }
 
                 if ($dryRun) {
                     $imported++;
+
                     continue;
                 }
 

@@ -87,6 +87,8 @@ const props = defineProps({
     figmaSettings: Object,
     numberings: Array,
     backupRuns: Array,
+    rolePermissionMatrix: Object,
+    auditLogs: Array,
     serviceName: String,
 });
 
@@ -194,6 +196,8 @@ const taskSearchSelectQueries = ref({
 });
 const taskDescriptionEditor = ref(null);
 const settingsTab = ref('personalizzazione');
+const rolePermissionDraft = ref(JSON.parse(JSON.stringify(props.rolePermissionMatrix?.values || {})));
+const rolePermissionsSaving = ref(false);
 const userRoleFilter = ref('all');
 
 const calendarTypeOptions = [
@@ -475,8 +479,31 @@ const settingsTabs = [
     ['smtp', 'SMTP', Mail],
     ['figma', 'Figma', PanelsTopLeft],
     ['backup', 'Backup', DatabaseBackup],
+    ['ruoli', 'Ruoli', ShieldCheck],
+    ['log', 'Log', FileText],
     ['gestione', 'Gestione', Settings],
 ];
+
+function saveRolePermissions() {
+    rolePermissionsSaving.value = true;
+    router.put(route('settings.roles.update'), { permissions: rolePermissionDraft.value }, {
+        preserveScroll: true,
+        onFinish: () => { rolePermissionsSaving.value = false; },
+    });
+}
+
+function rolePermissionChecked(role, permission) {
+    return Boolean(rolePermissionDraft.value?.[role]?.[permission]);
+}
+
+function setRolePermission(role, permission, allowed) {
+    rolePermissionDraft.value[role] ||= {};
+    rolePermissionDraft.value[role][permission] = allowed;
+}
+
+function auditActionLabel(action) {
+    return { creazione: 'Creazione', modifica: 'Modifica', eliminazione: 'Eliminazione' }[action] || action;
+}
 
 const columnLabels = {
     name: 'Nome',
@@ -4996,8 +5023,11 @@ function calendarDayStyle(sectionMonth, cell) {
                                         <p class="mt-1 truncate text-xs text-gray-500">{{ user.email }}</p>
                                     </div>
                                 </Link>
-                                <div class="mt-3 flex items-center justify-center">
+                                <div class="mt-3 flex flex-wrap items-center justify-center gap-2">
                                     <span :class="['rounded-full px-2.5 py-1 text-[11px] font-semibold', roleClass(user.role || 'guest')]">{{ roleLabels[user.role || 'guest'] || user.role || 'Cliente' }}</span>
+                                    <span v-if="user.account_status && user.account_status !== 'active'" :class="['rounded-full px-2.5 py-1 text-[11px] font-semibold', user.account_status === 'suspended' ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-600']">
+                                        {{ user.account_status === 'suspended' ? 'Sospeso' : 'Archiviato' }}
+                                    </span>
                                 </div>
                             </article>
                         </div>
@@ -5726,6 +5756,74 @@ function calendarDayStyle(sectionMonth, cell) {
                                 </tbody>
                             </table>
                         </div>
+                    </div>
+                </section>
+
+                <section v-else-if="settingsTab === 'ruoli'" class="app-card">
+                    <div class="flex flex-wrap items-start justify-between gap-4">
+                        <div>
+                            <h3 class="section-title"><span class="section-icon"><ShieldCheck class="h-4 w-4" :stroke-width="1.7" /></span>Matrice permessi</h3>
+                            <p class="mt-2 text-sm text-gray-500">Configura le capacità associate ai quattro ruoli della piattaforma.</p>
+                        </div>
+                        <button type="button" class="btn btn-primary" :disabled="rolePermissionsSaving" @click="saveRolePermissions">
+                            <Save class="h-4 w-4" :stroke-width="1.7" />
+                            {{ rolePermissionsSaving ? 'Salvataggio...' : 'Salva permessi' }}
+                        </button>
+                    </div>
+                    <div class="mt-6 overflow-x-auto rounded-[var(--radius-sm)] border border-gray-100">
+                        <table class="min-w-[780px] w-full divide-y divide-gray-100 text-sm">
+                            <thead class="bg-gray-50/80">
+                                <tr>
+                                    <th class="px-4 py-3 text-left font-semibold text-gray-600">Permesso</th>
+                                    <th v-for="role in rolePermissionMatrix?.roles || []" :key="role" class="px-4 py-3 text-center font-semibold text-gray-600">{{ roleLabels[role] }}</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <tr v-for="permission in rolePermissionMatrix?.permissions || []" :key="permission.key" class="hover:bg-gray-50/70">
+                                    <td class="px-4 py-3">
+                                        <span class="block text-xs font-semibold uppercase text-gray-400">{{ permission.group }}</span>
+                                        <span class="font-medium text-gray-800">{{ permission.label }}</span>
+                                    </td>
+                                    <td v-for="role in rolePermissionMatrix?.roles || []" :key="`${role}-${permission.key}`" class="px-4 py-3 text-center">
+                                        <input
+                                            type="checkbox"
+                                            class="h-4 w-4 rounded border-gray-300 text-[hsl(var(--primary-app))] focus:ring-[hsl(var(--primary-app)/0.25)]"
+                                            :checked="rolePermissionChecked(role, permission.key)"
+                                            :disabled="role === 'superadmin'"
+                                            @change="setRolePermission(role, permission.key, $event.target.checked)"
+                                        />
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section v-else-if="settingsTab === 'log'" class="app-card">
+                    <div class="flex flex-wrap items-start justify-between gap-4">
+                        <div>
+                            <h3 class="section-title"><span class="section-icon"><FileText class="h-4 w-4" :stroke-width="1.7" /></span>Log attività</h3>
+                            <p class="mt-2 text-sm text-gray-500">Ultime 50 operazioni importanti. I log vengono eliminati automaticamente dopo 3 giorni.</p>
+                        </div>
+                        <a :href="route('settings.logs.download')" class="btn btn-outline">Scarica tutti i log</a>
+                    </div>
+                    <div class="mt-6 overflow-x-auto rounded-[var(--radius-sm)] border border-gray-100">
+                        <table class="min-w-[900px] w-full divide-y divide-gray-100 text-sm">
+                            <thead class="bg-gray-50/80"><tr>
+                                <th class="px-4 py-3 text-left font-semibold text-gray-600">Data</th><th class="px-4 py-3 text-left font-semibold text-gray-600">Utente</th><th class="px-4 py-3 text-left font-semibold text-gray-600">Azione</th><th class="px-4 py-3 text-left font-semibold text-gray-600">Area</th><th class="px-4 py-3 text-left font-semibold text-gray-600">Esito</th><th class="px-4 py-3 text-left font-semibold text-gray-600">IP</th>
+                            </tr></thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <tr v-for="log in auditLogs || []" :key="log.id" class="hover:bg-gray-50/70">
+                                    <td class="whitespace-nowrap px-4 py-3 text-gray-500">{{ dateTimeIt(log.created_at) }}</td>
+                                    <td class="px-4 py-3"><span class="block font-medium text-gray-900">{{ log.user_name || 'Sistema' }}</span><span class="text-xs text-gray-400">{{ roleLabels[log.user_role] || log.user_role }}</span></td>
+                                    <td class="px-4 py-3 font-medium text-gray-700">{{ auditActionLabel(log.action) }}</td>
+                                    <td class="px-4 py-3 text-gray-600">{{ log.area || '-' }}</td>
+                                    <td class="px-4 py-3"><span :class="['rounded-full px-2 py-1 text-xs font-semibold', Number(log.status_code) < 400 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700']">{{ log.status_code }}</span></td>
+                                    <td class="px-4 py-3 font-mono text-xs text-gray-500">{{ log.ip_address || '-' }}</td>
+                                </tr>
+                                <tr v-if="!(auditLogs || []).length"><td colspan="6" class="px-4 py-10 text-center text-gray-500">Nessun log disponibile.</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </section>
 

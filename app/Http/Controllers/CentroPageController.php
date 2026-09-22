@@ -5,12 +5,16 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Services\CentroBackupService;
 use App\Services\CentroNotificationService;
+use App\Services\RolePermissionService;
 use Carbon\Carbon;
+use Carbon\CarbonPeriod;
 use Dompdf\Dompdf;
 use Dompdf\Options;
+use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -21,8 +25,8 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use Minishlink\WebPush\Subscription;
@@ -243,7 +247,7 @@ class CentroPageController extends Controller
                 $row = $saved[$widget['widget_type']] ?? null;
                 $legacyProjectStat = $saved['stat_projects'] ?? null;
 
-                if ($widget['widget_type'] === 'active_projects' && $legacyProjectStat && !($row?->visible)) {
+                if ($widget['widget_type'] === 'active_projects' && $legacyProjectStat && ! ($row?->visible)) {
                     $row = (object) [
                         'position' => $legacyProjectStat->position,
                         'col_span' => max((int) ($legacyProjectStat->col_span ?? 1), (int) ($row->col_span ?? $widget['col_span'])),
@@ -645,6 +649,10 @@ class CentroPageController extends Controller
             'figmaSettings' => $section === 'settings' ? $this->figmaSettingsForView() : null,
             'numberings' => $section === 'settings' ? DB::table('document_numbering')->orderBy('doc_type')->orderByDesc('year')->get() : [],
             'backupRuns' => $section === 'settings' ? $this->backupRuns() : [],
+            'rolePermissionMatrix' => $section === 'settings' ? app(RolePermissionService::class)->matrix() : null,
+            'auditLogs' => $section === 'settings' && Schema::hasTable('audit_logs')
+                ? DB::table('audit_logs')->latest('created_at')->limit(50)->get()
+                : [],
             'clients' => $this->isGuest($request)
                 ? DB::table('clients')
                     ->whereIn('id', $this->visibleClientIdsForUser($request->user()->id))
@@ -1809,7 +1817,7 @@ class CentroPageController extends Controller
         return back()->with('status', 'Modulo eliminato.');
     }
 
-    public function enablePush(Request $request): \Illuminate\Contracts\View\View
+    public function enablePush(Request $request): View
     {
         return view('push-enable', [
             'vapidPublicKey' => config('services.webpush.public_key'),
@@ -2219,6 +2227,81 @@ class CentroPageController extends Controller
         }
 
         return back()->with('status', 'Eliminato.');
+    }
+
+    public function updateUserStatus(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureSuperadmin($request);
+        abort_if($request->user()->id === $id, 422, 'Non puoi sospendere o archiviare il tuo account.');
+        $user = User::query()->findOrFail($id);
+        $payload = $request->validate(['status' => ['required', Rule::in(['active', 'suspended', 'archived'])]]);
+        $status = $payload['status'];
+        $user->forceFill([
+            'account_status' => $status,
+            'suspended_at' => $status === 'suspended' ? now() : null,
+            'archived_at' => $status === 'archived' ? now() : null,
+        ])->save();
+
+        if ($status !== 'active') {
+            DB::table('sessions')->where('user_id', $user->id)->delete();
+        }
+
+        return back()->with('status', match ($status) {
+            'suspended' => 'Utente sospeso.',
+            'archived' => 'Utente archiviato.',
+            default => 'Utente riattivato.',
+        });
+    }
+
+    public function updateRolePermissions(Request $request): RedirectResponse
+    {
+        $this->ensureSuperadmin($request);
+        $definitions = collect(RolePermissionService::definitions())->pluck('key');
+        $payload = $request->validate([
+            'permissions' => ['required', 'array'],
+            'permissions.*' => ['array'],
+            'permissions.*.*' => ['boolean'],
+        ]);
+
+        DB::transaction(function () use ($payload, $definitions) {
+            foreach (RolePermissionService::ROLES as $role) {
+                foreach ($definitions as $permission) {
+                    $query = DB::table('role_permissions')->where('role', $role)->where('permission', $permission);
+                    $values = [
+                        'allowed' => $role === 'superadmin' || (bool) ($payload['permissions'][$role][$permission] ?? false),
+                        'updated_at' => now(),
+                    ];
+                    if ($query->exists()) {
+                        $query->update($values);
+                    } else {
+                        DB::table('role_permissions')->insert($values + [
+                            'id' => (string) str()->uuid(),
+                            'role' => $role,
+                            'permission' => $permission,
+                            'created_at' => now(),
+                        ]);
+                    }
+                }
+            }
+        });
+
+        return back()->with('status', 'Matrice dei permessi aggiornata.');
+    }
+
+    public function downloadAuditLogs(Request $request)
+    {
+        $this->ensureSuperadmin($request);
+        abort_unless(Schema::hasTable('audit_logs'), 404);
+        $rows = DB::table('audit_logs')->where('created_at', '>=', now()->subDays(3))->oldest('created_at')->get();
+
+        return response()->streamDownload(function () use ($rows) {
+            $handle = fopen('php://output', 'wb');
+            fputcsv($handle, ['Data', 'Utente', 'Ruolo', 'Azione', 'Area', 'Rotta', 'Risorsa', 'Esito', 'IP']);
+            foreach ($rows as $row) {
+                fputcsv($handle, [$row->created_at, $row->user_name, $row->user_role, $row->action, $row->area, $row->route_name, $row->subject_id, $row->status_code, $row->ip_address]);
+            }
+            fclose($handle);
+        }, 'log-centro-'.now('Europe/Rome')->format('Y-m-d-His').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function updateDocumentSettings(Request $request): RedirectResponse
@@ -3449,12 +3532,12 @@ class CentroPageController extends Controller
         $absenceDays = $absenceRows->sum(function ($absence) use ($yearStart) {
             $start = max($absence->start_date, $yearStart);
             $end = $absence->end_date ?: $absence->start_date;
-            $startDate = \Carbon\Carbon::parse($start)->startOfDay();
-            $endDate = \Carbon\Carbon::parse($end)->startOfDay();
+            $startDate = Carbon::parse($start)->startOfDay();
+            $endDate = Carbon::parse($end)->startOfDay();
             $days = max(1, $startDate->diffInDays($endDate) + 1);
 
             if ($absence->start_time && $absence->end_time && $startDate->equalTo($endDate)) {
-                return round(max(0.25, \Carbon\Carbon::parse($absence->start_time)->diffInMinutes(\Carbon\Carbon::parse($absence->end_time)) / 480), 2);
+                return round(max(0.25, Carbon::parse($absence->start_time)->diffInMinutes(Carbon::parse($absence->end_time)) / 480), 2);
             }
 
             return $days;
@@ -3694,25 +3777,7 @@ class CentroPageController extends Controller
 
     private function ensureRoleCanAccessIndex(Request $request, string $section): void
     {
-        if ($section === 'settings') {
-            $this->ensureSuperadmin($request);
-
-            return;
-        }
-
-        if ($this->isGuest($request)) {
-            abort_unless(in_array($section, ['projects', 'tasks', 'calendar'], true), 403);
-
-            return;
-        }
-
-        if ($this->isEditor($request)) {
-            abort_unless(
-                in_array($section, ['clients', 'projects', 'tasks', 'calendar'], true)
-                    || str_starts_with($section, 'updates-'),
-                403,
-            );
-        }
+        $this->ensurePermission($request, $this->permissionForSection($section, 'view'));
     }
 
     private function ensureGuestCanViewRecord(Request $request, string $section, string $id): void
@@ -3751,24 +3816,16 @@ class CentroPageController extends Controller
 
     private function ensureRoleCanStore(Request $request, string $section): void
     {
-        if ($section === 'settings') {
-            $this->ensureSuperadmin($request);
-        }
+        $this->ensurePermission($request, $this->permissionForSection($section, 'create'));
 
         if ($this->isGuest($request)) {
             abort(403);
-        }
-
-        if ($this->isEditor($request)) {
-            abort_unless($section === 'tasks' || str_starts_with($section, 'updates-'), 403);
         }
     }
 
     private function ensureRoleCanUpdateRecord(Request $request, string $section, string $id): void
     {
-        if ($section === 'settings') {
-            $this->ensureSuperadmin($request);
-        }
+        $this->ensurePermission($request, $this->permissionForSection($section, 'update'));
 
         if ($this->isGuest($request)) {
             abort_unless($section === 'tasks' && $this->isTaskParticipant($id, $request->user()->id), 403);
@@ -3776,36 +3833,40 @@ class CentroPageController extends Controller
             return;
         }
 
-        if ($this->isEditor($request)) {
-            abort_unless($section === 'projects' || $section === 'tasks' || str_starts_with($section, 'updates-'), 403);
-        }
     }
 
     private function ensureRoleCanDestroyRecord(Request $request, string $section, string $id): void
     {
-        if ($section === 'settings') {
-            $this->ensureSuperadmin($request);
-        }
+        $this->ensurePermission($request, $this->permissionForSection($section, 'delete'));
 
         if ($this->isGuest($request)) {
             abort(403);
         }
 
-        if (! $this->isEditor($request)) {
-            return;
-        }
-
-        if ($section === 'tasks') {
+        if ($this->isEditor($request) && $section === 'tasks') {
             abort_unless($this->canEditorDeleteTask($request, $id), 403);
-
-            return;
         }
+    }
 
+    private function ensurePermission(Request $request, string $permission): void
+    {
+        abort_unless(app(RolePermissionService::class)->allows($this->currentUserRole($request), $permission), 403);
+    }
+
+    private function permissionForSection(string $section, string $action): string
+    {
         if (str_starts_with($section, 'updates-')) {
-            return;
+            return 'updates.'.($action === 'view' ? 'view' : 'manage');
         }
 
-        abort(403);
+        return match ($section) {
+            'calendar' => 'calendar.view',
+            'absences' => 'absences.manage',
+            'settings' => 'settings.manage',
+            'billing' => 'billing.'.($action === 'view' ? 'view' : 'manage'),
+            'users' => 'users.'.($action === 'view' ? 'view' : 'manage'),
+            default => $section.'.'.$action,
+        };
     }
 
     private function ensureGuestCanEditTask(Request $request, string $taskId): void
@@ -3844,7 +3905,7 @@ class CentroPageController extends Controller
             ->exists();
     }
 
-    private function visibleTaskIdsForUser(string $userId): \Illuminate\Support\Collection
+    private function visibleTaskIdsForUser(string $userId): Collection
     {
         $directTaskIds = DB::table('task_assignees')
             ->where('user_id', $userId)
@@ -3900,7 +3961,7 @@ class CentroPageController extends Controller
             ->get(['projects.id', 'projects.name']);
     }
 
-    private function visibleClientIdsForUser(string $userId): \Illuminate\Support\Collection
+    private function visibleClientIdsForUser(string $userId): Collection
     {
         $taskClientIds = DB::table('tasks')
             ->whereIn('id', $this->visibleTaskIdsForUser($userId))
@@ -3934,7 +3995,7 @@ class CentroPageController extends Controller
 
     private function canManageDocuments(Request $request): bool
     {
-        return in_array($this->currentUserRole($request), ['superadmin', 'admin'], true);
+        return app(RolePermissionService::class)->allows($this->currentUserRole($request), 'documents.manage');
     }
 
     private function validatedModuleFolderPayload(Request $request): array
@@ -4221,6 +4282,7 @@ class CentroPageController extends Controller
             ->whereIn('password_item_id', $itemIds)
             ->get(['password_item_id', 'password_group_id', 'permission'])
             ->groupBy('password_item_id');
+
         return $items->map(function ($item) use ($request, $role, $manageable, $visibleVaultIds, $currentUserGroupIds, $userShares, $groupShares, $withCompromiseCheck) {
             $item->has_password = filled($item->encrypted_password);
             $encryptedPassword = $item->encrypted_password;
@@ -4264,7 +4326,7 @@ class CentroPageController extends Controller
         });
     }
 
-    private function visiblePasswordVaultIds(Request $request): \Illuminate\Support\Collection
+    private function visiblePasswordVaultIds(Request $request): Collection
     {
         if ($this->currentUserRole($request) === 'superadmin') {
             return DB::table('password_vaults')->pluck('id');
@@ -4326,7 +4388,7 @@ class CentroPageController extends Controller
         if (
             $hasCacheColumns
             && $item->compromised_checked_at
-            && \Carbon\Carbon::parse($item->compromised_checked_at)->greaterThan(now()->subDays(7))
+            && Carbon::parse($item->compromised_checked_at)->greaterThan(now()->subDays(7))
         ) {
             return max(0, (int) ($item->compromised_count ?? 0));
         }
@@ -4638,7 +4700,7 @@ class CentroPageController extends Controller
         $document->read_count = $readRows->filter(fn ($row) => filled($row->read_at))->count();
         $document->opened_count = $readRows->filter(fn ($row) => filled($row->opened_at))->count();
         $document->category = $document->category ?: 'documenti_vari';
-        $document->document_year = (int) ($document->document_year ?: optional($document->created_at ? \Carbon\Carbon::parse($document->created_at) : null)->year ?: now('Europe/Rome')->year);
+        $document->document_year = (int) ($document->document_year ?: optional($document->created_at ? Carbon::parse($document->created_at) : null)->year ?: now('Europe/Rome')->year);
         $document->user_is_recipient = $userId ? $recipientIds->contains($userId) : false;
         $document->user_read_at = $userId ? ($readRows[$userId]->read_at ?? null) : null;
         $document->user_opened_at = $userId ? ($readRows[$userId]->opened_at ?? null) : null;
@@ -4663,9 +4725,9 @@ class CentroPageController extends Controller
     {
         $year = max(2020, min(2100, $year));
         $month = max(1, min(12, $month));
-        $start = \Carbon\Carbon::create($year, $month, 1, 0, 0, 0, 'Europe/Rome')->startOfDay();
+        $start = Carbon::create($year, $month, 1, 0, 0, 0, 'Europe/Rome')->startOfDay();
         $end = $start->copy()->endOfMonth()->startOfDay();
-        $days = collect(\Carbon\CarbonPeriod::create($start, $end))->map(fn ($day) => [
+        $days = collect(CarbonPeriod::create($start, $end))->map(fn ($day) => [
             'iso' => $day->toDateString(),
             'day' => (int) $day->day,
             'weekday' => $this->shortItalianWeekday((int) $day->dayOfWeekIso),
@@ -4694,7 +4756,7 @@ class CentroPageController extends Controller
             ->whereRaw('DATE(COALESCE(end_date, start_date)) >= ?', [$start->toDateString()])
             ->get();
 
-        $rows = $users->map(function ($user, $index) use ($days, $absenceRows, $start, $end) {
+        $rows = $users->map(function ($user, $index) use ($days, $absenceRows) {
             $dayValues = [];
             $totals = [
                 'ordinary' => 0,
@@ -4709,6 +4771,7 @@ class CentroPageController extends Controller
             foreach ($days as $day) {
                 if ($day['is_weekend']) {
                     $dayValues[$day['iso']] = '';
+
                     continue;
                 }
 
@@ -4717,8 +4780,8 @@ class CentroPageController extends Controller
                 $dayAbsences = $absenceRows
                     ->where('user_id', $user->id)
                     ->filter(function ($absence) use ($day) {
-                        $startDate = \Carbon\Carbon::parse($absence->start_date)->toDateString();
-                        $endDate = \Carbon\Carbon::parse($absence->end_date ?: $absence->start_date)->toDateString();
+                        $startDate = Carbon::parse($absence->start_date)->toDateString();
+                        $endDate = Carbon::parse($absence->end_date ?: $absence->start_date)->toDateString();
 
                         return $startDate <= $day['iso'] && $endDate >= $day['iso'];
                     });
@@ -4781,10 +4844,10 @@ class CentroPageController extends Controller
 
     private function absenceMinutesForDay(object $absence, string $dayIso): int
     {
-        $startDate = \Carbon\Carbon::parse($absence->start_date)->toDateString();
-        $endDate = \Carbon\Carbon::parse($absence->end_date ?: $absence->start_date)->toDateString();
+        $startDate = Carbon::parse($absence->start_date)->toDateString();
+        $endDate = Carbon::parse($absence->end_date ?: $absence->start_date)->toDateString();
         if ($startDate === $endDate && $dayIso === $startDate && $absence->start_time && $absence->end_time) {
-            return min(480, max(0, \Carbon\Carbon::parse($absence->start_time)->diffInMinutes(\Carbon\Carbon::parse($absence->end_time))));
+            return min(480, max(0, Carbon::parse($absence->start_time)->diffInMinutes(Carbon::parse($absence->end_time))));
         }
 
         return 480;
@@ -4863,7 +4926,7 @@ class CentroPageController extends Controller
 
         $sheetXml = $this->attendanceSheetXml($rows);
         $tempPath = tempnam(sys_get_temp_dir(), 'centro-presenze-').'.xlsx';
-        $zip = new \ZipArchive();
+        $zip = new \ZipArchive;
         $zip->open($tempPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
         $zip->addFromString('[Content_Types].xml', $this->xlsxContentTypesXml());
         $zip->addFromString('_rels/.rels', $this->xlsxRootRelsXml());
@@ -5041,7 +5104,7 @@ class CentroPageController extends Controller
             ]);
     }
 
-    private function visibleCompanyMessageIdsForUser(string $userId): \Illuminate\Support\Collection
+    private function visibleCompanyMessageIdsForUser(string $userId): Collection
     {
         $groupIds = DB::table('document_group_user')->where('user_id', $userId)->pluck('document_group_id');
 
@@ -5055,7 +5118,7 @@ class CentroPageController extends Controller
             ->values();
     }
 
-    private function companyMessageRecipientIds(string $messageId): \Illuminate\Support\Collection
+    private function companyMessageRecipientIds(string $messageId): Collection
     {
         $message = DB::table('company_messages')->where('id', $messageId)->first(['audience']);
         if (! $message) {
@@ -5184,7 +5247,7 @@ class CentroPageController extends Controller
             ]);
     }
 
-    private function visibleCompanyDocumentIdsForUser(string $userId): \Illuminate\Support\Collection
+    private function visibleCompanyDocumentIdsForUser(string $userId): Collection
     {
         $groupIds = DB::table('document_group_user')->where('user_id', $userId)->pluck('document_group_id');
 
@@ -5198,7 +5261,7 @@ class CentroPageController extends Controller
             ->values();
     }
 
-    private function companyDocumentRecipientIds(string $documentId): \Illuminate\Support\Collection
+    private function companyDocumentRecipientIds(string $documentId): Collection
     {
         $document = DB::table('company_documents')->where('id', $documentId)->first(['audience']);
         if (! $document) {
@@ -5471,7 +5534,7 @@ class CentroPageController extends Controller
         return response()->json($this->hydrateTaskRow($task));
     }
 
-    private function taskDependencyRows($taskIds): \Illuminate\Support\Collection
+    private function taskDependencyRows($taskIds): Collection
     {
         $ids = collect($taskIds)->filter()->unique()->values();
         if ($ids->isEmpty()) {
@@ -5520,7 +5583,7 @@ class CentroPageController extends Controller
         ]);
     }
 
-    private function taskDependencyOptions(?string $currentTaskId = null): \Illuminate\Support\Collection
+    private function taskDependencyOptions(?string $currentTaskId = null): Collection
     {
         return DB::table('tasks')
             ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
@@ -5539,7 +5602,7 @@ class CentroPageController extends Controller
             ]);
     }
 
-    private function projectTemplateOptions(): \Illuminate\Support\Collection
+    private function projectTemplateOptions(): Collection
     {
         if (! Schema::hasTable('project_templates')) {
             return collect();
@@ -5551,7 +5614,7 @@ class CentroPageController extends Controller
             ->get(['id', 'name', 'color']);
     }
 
-    private function projectTemplateRows(): \Illuminate\Support\Collection
+    private function projectTemplateRows(): Collection
     {
         if (! Schema::hasTable('project_templates')) {
             return collect();
@@ -5638,7 +5701,7 @@ class CentroPageController extends Controller
             return;
         }
 
-        $baseDate = \Carbon\Carbon::parse($startDate, 'Europe/Rome')->startOfDay();
+        $baseDate = Carbon::parse($startDate, 'Europe/Rome')->startOfDay();
         $templateSections = DB::table('project_template_sections')
             ->where('project_template_id', $templateId)
             ->orderBy('position')
@@ -5794,7 +5857,7 @@ class CentroPageController extends Controller
         }
     }
 
-    private function projectSections(string $projectId): \Illuminate\Support\Collection
+    private function projectSections(string $projectId): Collection
     {
         $existing = DB::table('project_sections')
             ->where('project_id', $projectId)
@@ -5824,7 +5887,7 @@ class CentroPageController extends Controller
             ->get();
     }
 
-    private function projectTaskRows(string $projectId, ?string $visibleForUserId = null): \Illuminate\Support\Collection
+    private function projectTaskRows(string $projectId, ?string $visibleForUserId = null): Collection
     {
         $visibleTaskIds = $visibleForUserId ? $this->visibleTaskIdsForUser($visibleForUserId) : null;
 
@@ -5879,7 +5942,7 @@ class CentroPageController extends Controller
         });
     }
 
-    private function projectMessages(string $projectId): \Illuminate\Support\Collection
+    private function projectMessages(string $projectId): Collection
     {
         return DB::table('project_messages')
             ->leftJoin('users', 'users.id', '=', 'project_messages.user_id')
@@ -5895,7 +5958,7 @@ class CentroPageController extends Controller
             ]);
     }
 
-    private function projectFiles(string $projectId, string $kind): \Illuminate\Support\Collection
+    private function projectFiles(string $projectId, string $kind): Collection
     {
         return DB::table('project_files')
             ->leftJoin('users', 'users.id', '=', 'project_files.uploaded_by')
@@ -6236,7 +6299,7 @@ class CentroPageController extends Controller
 
     private function documentPdf(array $bundle): string
     {
-        $options = new Options();
+        $options = new Options;
         $options->set('isRemoteEnabled', true);
         $options->set('defaultFont', 'DejaVu Sans');
 
@@ -6996,8 +7059,8 @@ class CentroPageController extends Controller
         $nextStartDate = null;
 
         if ($task->start_date && $task->due_date && $task->start_date !== $task->due_date) {
-            $duration = \Carbon\Carbon::parse($task->start_date)->diffInDays(\Carbon\Carbon::parse($task->due_date));
-            $nextStartDate = \Carbon\Carbon::parse($nextDueDate)->subDays($duration)->toDateString();
+            $duration = Carbon::parse($task->start_date)->diffInDays(Carbon::parse($task->due_date));
+            $nextStartDate = Carbon::parse($nextDueDate)->subDays($duration)->toDateString();
         }
 
         $newTaskId = (string) str()->uuid();
@@ -7069,7 +7132,7 @@ class CentroPageController extends Controller
 
     private function nextRecurringTaskDate(object $task): string
     {
-        $base = \Carbon\Carbon::parse($task->due_date ?: now()->toDateString());
+        $base = Carbon::parse($task->due_date ?: now()->toDateString());
         $interval = max(1, (int) ($task->recurring_interval_value ?: 1));
 
         if ($task->recurring_interval_unit === 'month') {
@@ -7434,7 +7497,7 @@ class CentroPageController extends Controller
 
     private function nextSubscriptionDate(object $subscription): string
     {
-        $date = \Carbon\Carbon::parse($subscription->next_invoice_date ?: now());
+        $date = Carbon::parse($subscription->next_invoice_date ?: now());
         $frequency = max(1, (int) $subscription->frequency_value);
 
         return ($subscription->frequency_unit === 'year' ? $date->addYears($frequency) : $date->addMonths($frequency))->toDateString();
@@ -7708,7 +7771,7 @@ class CentroPageController extends Controller
         $this->notifyUsers($this->projectNotificationUserIds($projectId, $extraUserIds), $actorId, $type, $message);
     }
 
-    private function projectNotificationUserIds(string $projectId, ?array $extraUserIds = null): \Illuminate\Support\Collection
+    private function projectNotificationUserIds(string $projectId, ?array $extraUserIds = null): Collection
     {
         $project = DB::table('projects')->where('id', $projectId)->first(['created_by']);
 
@@ -7722,7 +7785,7 @@ class CentroPageController extends Controller
             ->values();
     }
 
-    private function taskNotificationUserIds(string $taskId): \Illuminate\Support\Collection
+    private function taskNotificationUserIds(string $taskId): Collection
     {
         $task = DB::table('tasks')->where('id', $taskId)->first(['id', 'parent_task_id']);
         if (! $task) {
