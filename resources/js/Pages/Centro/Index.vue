@@ -6,6 +6,7 @@ import AppTimeInput from '@/Components/AppTimeInput.vue';
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import {
+    ROLE_LABELS,
     activityText as formatActivityText,
     dateIt,
     dateTimeIt,
@@ -1659,12 +1660,7 @@ const projectRows = computed(() => props.rows.filter((row) => {
     return matchesSearch && matchesStatus && matchesUsers;
 }));
 
-const roleLabels = {
-    superadmin: 'Superadmin',
-    admin: 'Admin',
-    editor: 'Editor',
-    guest: 'Ospite',
-};
+const roleLabels = ROLE_LABELS;
 
 const roleOrder = ['superadmin', 'admin', 'editor', 'guest'];
 const absenceTypeLabels = {
@@ -5001,7 +4997,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                     </div>
                                 </Link>
                                 <div class="mt-3 flex items-center justify-center">
-                                    <span :class="['rounded-full px-2.5 py-1 text-[11px] font-semibold', roleClass(user.role || 'guest')]">{{ roleLabels[user.role || 'guest'] || user.role || 'Ospite' }}</span>
+                                    <span :class="['rounded-full px-2.5 py-1 text-[11px] font-semibold', roleClass(user.role || 'guest')]">{{ roleLabels[user.role || 'guest'] || user.role || 'Cliente' }}</span>
                                 </div>
                             </article>
                         </div>

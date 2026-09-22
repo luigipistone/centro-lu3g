@@ -1,5 +1,12 @@
 export const APP_TIME_ZONE = 'Europe/Rome';
 
+export const ROLE_LABELS = Object.freeze({
+    superadmin: 'Superadmin',
+    admin: 'Manager',
+    editor: 'Dipendente',
+    guest: 'Cliente',
+});
+
 export const valueLabels = {
     active: 'Attivo',
     completed: 'Completato',
@@ -67,10 +74,7 @@ export const valueLabels = {
     fuori_campo: 'Fuori campo IVA',
     forfettario: 'Regime forfettario',
     altro: 'Altro',
-    superadmin: 'Superadmin',
-    admin: 'Admin',
-    editor: 'Editor',
-    guest: 'Guest',
+    ...ROLE_LABELS,
     IT: 'Italia',
     SM: 'San Marino',
     VA: 'Citta del Vaticano',

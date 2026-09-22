@@ -2575,7 +2575,7 @@ class CentroPageController extends Controller
             'users' => [
                 'section' => 'users',
                 'title' => 'Utenti',
-                'description' => 'Profili e ruoli applicativi equivalenti a superadmin, admin, editor e guest.',
+                'description' => 'Profili e ruoli applicativi: Superadmin, Manager, Dipendente e Cliente.',
                 'table' => 'users',
                 'columns' => ['name', 'email', 'role', 'created_at'],
                 'fields' => [
