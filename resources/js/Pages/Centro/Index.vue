@@ -2483,6 +2483,10 @@ function calendarAttendanceForDay(date) {
 function calendarPresenceForDay(date) {
     return (attendanceCalendarByDay.value[date] || []).find((event) => event.type === 'presence_summary');
 }
+function calendarPreviewAssignees(task) {
+    const assigneeIds = task.assignee_ids || [];
+    return (props.users || []).filter((user) => assigneeIds.includes(user.id));
+}
 let attendanceRequestNumber = 0;
 async function loadCalendarAttendance() {
     if (props.section !== 'calendar') return;
@@ -4330,6 +4334,10 @@ function calendarDayStyle(sectionMonth, cell) {
                                                     <div class="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-gray-500">
                                                         <span class="truncate">{{ task.client_name || task.project_name || task.service_name || taskTypeLabel(task.task_type) }}</span>
                                                         <span class="inline-flex shrink-0 items-center gap-1 font-semibold text-gray-500">
+                                                            <span v-if="calendarPreviewAssignees(task).length" class="inline-flex shrink-0 items-center pl-1" :title="calendarPreviewAssignees(task).map((user) => user.name || user.email).join(', ')">
+                                                                <UserAvatar v-for="user in calendarPreviewAssignees(task).slice(0, 3)" :key="`${task.id}-assignee-${user.id}`" :user="user" size="xs" class="-ml-1 !h-5 !w-5 !text-[8px] ring-1 ring-white" />
+                                                                <span v-if="calendarPreviewAssignees(task).length > 3" class="ml-0.5 text-[9px]">+{{ calendarPreviewAssignees(task).length - 3 }}</span>
+                                                            </span>
                                                             <span v-if="blockedDependencyCount(task)" class="inline-flex h-3 w-3 items-center justify-center text-rose-700" :title="`Task bloccata da ${blockedDependencyCount(task)} dipendenze`">
                                                                 <GitBranch class="h-3 w-3" :stroke-width="2" />
                                                             </span>
