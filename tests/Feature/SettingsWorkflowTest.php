@@ -5,10 +5,12 @@ namespace Tests\Feature;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Tests\Concerns\ActsAsWorkflowAdmin;
 use Tests\TestCase;
 
 class SettingsWorkflowTest extends TestCase
 {
+    use ActsAsWorkflowAdmin;
     use RefreshDatabase;
 
     public function test_document_settings_can_be_saved(): void
@@ -16,7 +18,7 @@ class SettingsWorkflowTest extends TestCase
         $user = User::factory()->create();
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->put('/settings/document', [
                 'company_name' => 'Il Centro',
                 'legal_form' => 'SRL',

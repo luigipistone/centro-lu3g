@@ -6,10 +6,12 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Concerns\ActsAsWorkflowAdmin;
 use Tests\TestCase;
 
 class ClientWorkflowTest extends TestCase
 {
+    use ActsAsWorkflowAdmin;
     use RefreshDatabase;
 
     public function test_client_contact_can_be_updated_inline(): void
@@ -40,14 +42,13 @@ class ClientWorkflowTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->put("/clients/{$clientId}/contacts/{$contactId}", [
                 'first_name' => 'Luisa',
                 'last_name' => 'Verdi',
                 'email' => 'luisa@example.test',
                 'phone' => '',
                 'role' => 'Direzione',
-                'notes' => 'Referente principale',
             ])
             ->assertRedirect();
 
@@ -59,7 +60,7 @@ class ClientWorkflowTest extends TestCase
             'email' => 'luisa@example.test',
             'phone' => null,
             'role' => 'Direzione',
-            'notes' => 'Referente principale',
+            'notes' => 'Nota iniziale',
         ]);
     }
 }

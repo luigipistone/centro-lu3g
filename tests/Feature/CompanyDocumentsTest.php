@@ -23,17 +23,19 @@ class CompanyDocumentsTest extends TestCase
         $user = User::factory()->create(['name' => 'Mario Rossi']);
         $this->role($admin, 'admin');
         $this->role($user, 'editor');
+        DB::table('role_permissions')->where('role', 'admin')->where('permission', 'documents.manage')->update(['allowed' => true]);
 
         $this
             ->actingAs($admin)
             ->post(route('documents.store'), [
                 'title' => 'Policy interna',
                 'description' => 'Da leggere con attenzione.',
+                'category' => 'documenti_vari',
                 'audience' => 'users',
                 'user_ids' => [$user->id],
                 'file' => UploadedFile::fake()->create('policy.pdf', 120, 'application/pdf'),
             ])
-            ->assertRedirect(route('documents.index'))
+            ->assertRedirect(route('documents.list'))
             ->assertSessionHasNoErrors();
 
         $documentId = DB::table('company_documents')->value('id');

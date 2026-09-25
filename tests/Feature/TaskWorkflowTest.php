@@ -7,10 +7,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
+use Tests\Concerns\ActsAsWorkflowAdmin;
 use Tests\TestCase;
 
 class TaskWorkflowTest extends TestCase
 {
+    use ActsAsWorkflowAdmin;
     use RefreshDatabase;
 
     public function test_completing_recurring_task_creates_next_occurrence(): void
@@ -58,7 +60,7 @@ class TaskWorkflowTest extends TestCase
         ]);
 
         $response = $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->patch("/tasks/{$taskId}/status", ['status' => 'done']);
 
         $response->assertRedirect();
@@ -100,7 +102,7 @@ class TaskWorkflowTest extends TestCase
         $follower = User::factory()->create();
 
         $response = $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->post('/tasks', [
                 'title' => 'Preparare piano editoriale',
                 'task_type' => 'project',
@@ -143,7 +145,7 @@ class TaskWorkflowTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->get("/tasks/{$taskId}")
             ->assertOk();
     }
@@ -165,7 +167,7 @@ class TaskWorkflowTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->put("/tasks/{$taskId}", [
                 'title' => 'Task modificata',
                 'task_type' => 'ongoing',
@@ -210,7 +212,7 @@ class TaskWorkflowTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->put("/tasks/{$taskId}", [
                 'title' => 'Task notifiche aggiornata',
                 'task_type' => 'project',
@@ -221,7 +223,7 @@ class TaskWorkflowTest extends TestCase
             ->assertRedirect();
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->put("/tasks/{$taskId}", [
                 'title' => 'Task notifiche aggiornata',
                 'task_type' => 'project',
@@ -279,7 +281,7 @@ class TaskWorkflowTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->put("/tasks/{$taskId}", [
                 'title' => 'Task autosave aggiornata',
                 'task_type' => 'ongoing',
@@ -327,7 +329,7 @@ class TaskWorkflowTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->get('/tasks')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
@@ -378,7 +380,7 @@ class TaskWorkflowTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->post("/tasks/{$taskId}/duplicate")
             ->assertRedirect();
 
@@ -430,7 +432,7 @@ class TaskWorkflowTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->put("/tasks/{$subtaskId}", [
                 'title' => 'Sottoattivita aggiornata',
                 'task_type' => 'task',
@@ -477,7 +479,7 @@ class TaskWorkflowTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->put("/tasks/{$taskId}/comments/{$commentId}", [
                 'content' => 'Commento aggiornato inline',
             ])
@@ -494,7 +496,7 @@ class TaskWorkflowTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->delete("/tasks/{$taskId}/comments/{$commentId}")
             ->assertRedirect();
 
@@ -527,7 +529,7 @@ class TaskWorkflowTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->patch("/tasks/{$taskId}/schedule", [
                 'start_date' => '2026-06-20',
                 'due_date' => '2026-06-22',
@@ -571,7 +573,7 @@ class TaskWorkflowTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->put("/tasks/{$blockedTaskId}/dependencies", [
                 'dependency_ids' => [$dependencyTaskId],
             ])
@@ -584,7 +586,7 @@ class TaskWorkflowTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->patch("/tasks/{$blockedTaskId}/status", ['status' => 'done'])
             ->assertSessionHasErrors(['status']);
 
@@ -594,12 +596,12 @@ class TaskWorkflowTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->patch("/tasks/{$dependencyTaskId}/status", ['status' => 'done'])
             ->assertRedirect();
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->patch("/tasks/{$blockedTaskId}/status", ['status' => 'done'])
             ->assertRedirect()
             ->assertSessionHasNoErrors();
@@ -640,7 +642,7 @@ class TaskWorkflowTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->put("/tasks/{$blockingTaskId}/dependencies", [
                 'dependency_ids' => [],
                 'dependent_ids' => [$blockedTaskId],
@@ -654,7 +656,7 @@ class TaskWorkflowTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->patch("/tasks/{$blockedTaskId}/status", ['status' => 'done'])
             ->assertSessionHasErrors(['status']);
     }
@@ -676,7 +678,7 @@ class TaskWorkflowTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->post('/tasks', [
                 'title' => 'Completare approvazione',
                 'task_type' => 'project',

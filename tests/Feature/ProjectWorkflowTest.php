@@ -6,10 +6,12 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Concerns\ActsAsWorkflowAdmin;
 use Tests\TestCase;
 
 class ProjectWorkflowTest extends TestCase
 {
+    use ActsAsWorkflowAdmin;
     use RefreshDatabase;
 
     public function test_project_detail_can_update_main_fields(): void
@@ -37,7 +39,7 @@ class ProjectWorkflowTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->put("/projects/{$projectId}", [
                 'name' => 'Portale Centro LU3G',
                 'client_id' => $clientId,
@@ -83,7 +85,7 @@ class ProjectWorkflowTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->put("/projects/{$projectId}/followers", [
                 'user_ids' => [$member->id, $member->id],
             ])
@@ -126,7 +128,7 @@ class ProjectWorkflowTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->put("/projects/{$projectId}", [
                 'name' => 'Progetto membri aggiornato',
                 'client_id' => null,
@@ -172,7 +174,7 @@ class ProjectWorkflowTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->put("/projects/{$projectId}", [
                 'name' => 'Progetto senza membri nel payload',
                 'client_id' => null,
@@ -213,7 +215,7 @@ class ProjectWorkflowTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->put("/projects/{$projectId}", [
                 'name' => 'Progetto notifiche',
                 'client_id' => null,
@@ -224,7 +226,7 @@ class ProjectWorkflowTest extends TestCase
             ->assertRedirect();
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->put("/projects/{$projectId}", [
                 'name' => 'Progetto notifiche',
                 'client_id' => null,

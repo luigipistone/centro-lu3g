@@ -6,10 +6,12 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Concerns\ActsAsWorkflowAdmin;
 use Tests\TestCase;
 
 class BillingWorkflowTest extends TestCase
 {
+    use ActsAsWorkflowAdmin;
     use RefreshDatabase;
 
     private function createDocument(User $user): array
@@ -46,7 +48,7 @@ class BillingWorkflowTest extends TestCase
         [, $documentId] = $this->createDocument($user);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->put("/billing/{$documentId}/header", [
                 'issue_date' => '2026-06-15',
                 'due_date' => '2026-07-15',
@@ -99,7 +101,7 @@ class BillingWorkflowTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->put("/billing/{$documentId}/lines/{$lineId}", [
                 'description' => 'Consulenza aggiornata',
                 'quantity' => 2,
@@ -160,7 +162,7 @@ class BillingWorkflowTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->put("/billing/{$documentId}/payments/{$paymentId}", [
                 'amount' => 60.5,
                 'paid_at' => '2026-06-20',

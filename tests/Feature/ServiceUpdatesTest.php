@@ -6,10 +6,12 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Concerns\ActsAsWorkflowAdmin;
 use Tests\TestCase;
 
 class ServiceUpdatesTest extends TestCase
 {
+    use ActsAsWorkflowAdmin;
     use RefreshDatabase;
 
     public function test_service_update_routes_match_services_case_insensitively(): void
@@ -42,12 +44,12 @@ class ServiceUpdatesTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->get('/updates/social')
             ->assertOk();
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->post('/updates/social', [
                 'client_id' => $clientId,
                 'notes' => 'Nota social',
@@ -102,7 +104,7 @@ class ServiceUpdatesTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->put("/updates/newsletter/{$updateId}", [
                 'client_id' => $clientId,
                 'notes' => 'Nota aggiornata',
@@ -147,7 +149,7 @@ class ServiceUpdatesTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->post("/clients/{$clientId}/services/{$serviceId}")
             ->assertRedirect();
 
@@ -157,7 +159,7 @@ class ServiceUpdatesTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->get('/updates/seo')
             ->assertOk()
             ->assertSee('Cliente QA SEO');
@@ -193,7 +195,7 @@ class ServiceUpdatesTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->actingAsWorkflowAdmin($user)
             ->delete("/clients/{$clientId}/services/{$serviceId}")
             ->assertRedirect();
 
