@@ -101,6 +101,7 @@ const props = defineProps({
     attendanceAvailability: Array,
     attendanceTeamUsers: Array,
     attendanceEvents: Array,
+    calendarHolidays: Object,
     serviceName: String,
 });
 
@@ -2455,6 +2456,7 @@ const dayNames = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const calendarYear = computed(() => currentCalendarDate.value.getFullYear());
 const calendarMonth = computed(() => currentCalendarDate.value.getMonth());
 const attendanceCalendarEvents = ref(props.attendanceEvents || []);
+const calendarHolidays = ref(props.calendarHolidays || {});
 const attendanceCalendarByDay = computed(() => {
     const result = {};
     for (const event of attendanceCalendarEvents.value) {
@@ -2493,7 +2495,10 @@ async function loadCalendarAttendance() {
         const response = await fetch(route('calendar.attendance', { from, to }), { credentials: 'same-origin' });
         if (!response.ok) return;
         const data = await response.json();
-        if (number === attendanceRequestNumber) attendanceCalendarEvents.value = data.events || [];
+        if (number === attendanceRequestNumber) {
+            attendanceCalendarEvents.value = data.events || [];
+            calendarHolidays.value = data.holidays || {};
+        }
     } catch { /* Keep the currently visible data if offline. */ }
 }
 watch(() => `${calendarYear.value}-${calendarMonth.value}`, loadCalendarAttendance);
@@ -4204,6 +4209,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                     'group flex min-h-[170px] flex-col bg-white p-2 transition',
                                     cell.empty ? 'bg-white/70' : '',
                                     cell.today ? 'ring-2 ring-inset ring-indigo-500/70' : '',
+                                    calendarHolidays[cell.date] ? 'calendar-holiday-cell' : '',
                                     calendarDropDate === cell.date ? 'bg-indigo-50/80' : '',
                                     calendarDraggedTask && !cell.empty ? 'outline outline-1 outline-transparent transition hover:outline-indigo-200' : '',
                                     compactWeekend && cell.weekend ? 'min-h-[170px] px-1' : '',
@@ -4215,7 +4221,10 @@ function calendarDayStyle(sectionMonth, cell) {
                             >
                                 <template v-if="!cell.empty">
                                     <div class="mb-2 flex items-center justify-between">
-                                        <span :class="['text-sm font-semibold', cell.today ? 'text-indigo-600' : 'text-gray-500']">{{ cell.day }}</span>
+                                        <span class="flex min-w-0 items-center gap-1.5" :title="calendarHolidays[cell.date] || undefined">
+                                            <span :class="['text-sm font-semibold', cell.today ? 'text-indigo-600' : 'text-gray-500']">{{ cell.day }}</span>
+                                            <span v-if="calendarHolidays[cell.date]" class="truncate text-[10px] font-medium text-gray-500">{{ calendarHolidays[cell.date] }}</span>
+                                        </span>
                                         <div v-if="!isGuest && !(compactWeekend && cell.weekend)" class="relative" data-calendar-create-menu>
                                             <button
                                                 type="button"

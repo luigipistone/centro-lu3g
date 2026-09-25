@@ -145,6 +145,14 @@ class AttendanceManagementTest extends TestCase
         $this->assertDatabaseCount('attendance_holidays', 1);
         $this->assertDatabaseHas('attendance_holidays', ['day' => '2026-12-24', 'end_day' => '2026-12-28']);
         $this->assertSame(0, app(AttendanceService::class)->workingMinutes($employee->id, Carbon::parse('2026-12-28')));
+        $this->assertSame([
+            '2026-12-26' => 'Chiusura',
+            '2026-12-27' => 'Chiusura',
+            '2026-12-28' => 'Chiusura',
+        ], app(AttendanceService::class)->calendarHolidays('2026-12-26', '2026-12-30'));
+        $this->actingAs($admin)->get(route('calendar.attendance', [
+            'from' => '2026-12-26', 'to' => '2026-12-30',
+        ]))->assertOk()->assertJsonPath('holidays.2026-12-28', 'Chiusura');
 
         $this->actingAs($admin)->post(route('attendance.holidays.store'), [
             'start_day' => '2026-12-27', 'end_day' => '2026-12-30', 'name' => 'Doppione',

@@ -666,6 +666,9 @@ class CentroPageController extends Controller
                 $request->user()->id, $this->currentUserRole($request) === 'superadmin', $this->currentUserRole($request) === 'admin',
                 now('Europe/Rome')->subMonths(2)->startOfMonth()->toDateString(), now('Europe/Rome')->addMonths(2)->endOfMonth()->toDateString(),
             ) : [],
+            'calendarHolidays' => $section === 'calendar' ? app(AttendanceService::class)->calendarHolidays(
+                now('Europe/Rome')->subMonths(2)->startOfMonth()->toDateString(), now('Europe/Rome')->addMonths(2)->endOfMonth()->toDateString(),
+            ) : [],
             'attendanceSettings' => $section === 'absences' ? app(AttendanceService::class)->settings() : null,
             'attendanceHolidays' => $section === 'absences' ? DB::table('attendance_holidays')->orderBy('day')->get() : [],
             'attendanceCauses' => $section === 'absences' ? DB::table('attendance_causes')->orderBy('name')->get() : [],
@@ -734,7 +737,7 @@ class CentroPageController extends Controller
         return response()->json(['events' => app(AttendanceService::class)->calendarEvents(
             $request->user()->id, $this->currentUserRole($request) === 'superadmin', $this->currentUserRole($request) === 'admin',
             $data['from'], $data['to'],
-        )]);
+        ), 'holidays' => app(AttendanceService::class)->calendarHolidays($data['from'], $data['to'])]);
     }
 
     public function projectTemplates(Request $request): Response

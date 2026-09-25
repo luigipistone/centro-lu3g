@@ -1089,6 +1089,22 @@ html.dark .calendar-cell {
     background: hsl(222 26% 11% / 0.72);
 }
 
+.calendar-holiday-cell {
+    background-color: #f0f2f5 !important;
+}
+
+.calendar-holiday-cell > * {
+    opacity: 0.72;
+}
+
+.calendar-holiday-cell:hover > * {
+    opacity: 1;
+}
+
+html.dark .calendar-holiday-cell {
+    background-color: hsl(220 20% 15%) !important;
+}
+
 .completion-effect {
     position: fixed;
     inset: 0;

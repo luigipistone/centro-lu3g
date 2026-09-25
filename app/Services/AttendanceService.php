@@ -25,6 +25,21 @@ class AttendanceService
         ];
     }
 
+    public function calendarHolidays(string $from, string $to): array
+    {
+        $holidays = DB::table('attendance_holidays')->whereDate('day', '<=', $to)
+            ->whereRaw('DATE(COALESCE(end_day, day)) >= ?', [$from])
+            ->get(['day', 'end_day', 'name']);
+        $byDay = [];
+        foreach ($holidays as $holiday) {
+            foreach (CarbonPeriod::create(max($holiday->day, $from), min($holiday->end_day ?: $holiday->day, $to)) as $day) {
+                $byDay[$day->toDateString()] = $holiday->name;
+            }
+        }
+
+        return $byDay;
+    }
+
     public function workingMinutes(string $userId, Carbon $day, ?array $settings = null): int
     {
         $settings ??= $this->settings();
