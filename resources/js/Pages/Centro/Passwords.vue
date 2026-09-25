@@ -4,7 +4,7 @@ import AppSelect from '@/Components/AppSelect.vue';
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, Bold, Building2, ChevronDown, Copy, ExternalLink, Italic, KeyRound, List, ListOrdered, Pencil, Plus, Quote, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
+import { ArrowLeft, BarChart3, Bold, Boxes, Building2, Cable, ChevronDown, Copy, Database, ExternalLink, Globe2, Italic, KeyRound, List, ListOrdered, Mail, Megaphone, Network, PanelsTopLeft, Pencil, Plus, Quote, Router, Server, Share2, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -256,6 +256,24 @@ function categoryLabel(value) {
     return (props.credentialCategories || []).find((category) => category.value === value)?.label || 'Altro';
 }
 
+function categoryIcon(value) {
+    return {
+        website: Globe2,
+        wordpress: PanelsTopLeft,
+        hosting: Server,
+        server_access: Cable,
+        database: Database,
+        domain_dns: Network,
+        email: Mail,
+        social: Share2,
+        advertising: Megaphone,
+        analytics_seo: BarChart3,
+        saas: Boxes,
+        network_device: Router,
+        other: KeyRound,
+    }[value] || KeyRound;
+}
+
 function rotationDate(value) {
     if (!value) return '';
     return new Intl.DateTimeFormat('it-IT', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
@@ -301,13 +319,13 @@ function riskLabel(value) {
     return { critical: 'Critico', high: 'Alto', medium: 'Medio', low: 'Basso' }[value] || 'Basso';
 }
 
-function riskClass(value) {
+function riskDotClass(value) {
     return {
-        critical: 'bg-red-100 text-red-700',
-        high: 'bg-orange-100 text-orange-700',
-        medium: 'bg-amber-100 text-amber-700',
-        low: 'bg-emerald-100 text-emerald-700',
-    }[value] || 'bg-gray-100 text-gray-600';
+        critical: 'bg-red-500',
+        high: 'bg-orange-500',
+        medium: 'bg-amber-400',
+        low: 'bg-emerald-500',
+    }[value] || 'bg-gray-400';
 }
 
 function refreshLocalSecurity(item) {
@@ -777,8 +795,8 @@ if (props.selectedGroup) {
                         <article v-for="item in pagedVisibleItems" :key="item.id" class="surface group/password-card flex h-full min-h-[138px] cursor-pointer flex-col justify-between p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]" @click="openReveal(item)">
                             <div class="flex items-start justify-between gap-3">
                                 <div class="flex min-w-0 items-center gap-3">
-                                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]">
-                                        <KeyRound class="h-5 w-5" :stroke-width="1.7" />
+                                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]" :title="categoryLabel(item.category)" :aria-label="`Categoria: ${categoryLabel(item.category)}`">
+                                        <component :is="categoryIcon(item.category)" class="h-5 w-5" :stroke-width="1.7" />
                                     </span>
                                     <div class="min-w-0">
                                         <button type="button" class="line-clamp-2 min-h-10 text-left text-sm font-semibold leading-5 text-gray-900 hover:text-[hsl(var(--primary-app))]" @click.stop="openReveal(item)">
@@ -794,6 +812,7 @@ if (props.selectedGroup) {
                                     <button v-if="item.can_delete" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina" @click.stop="openDelete(item, 'item')">
                                         <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                     </button>
+                                    <span :class="['ml-1 h-2.5 w-2.5 shrink-0 rounded-full', riskDotClass(item.risk_level)]" :title="`Rischio ${riskLabel(item.risk_level).toLowerCase()}`" :aria-label="`Rischio ${riskLabel(item.risk_level)}`"></span>
                                 </div>
                             </div>
                             <div class="mt-4 flex flex-wrap gap-2">
@@ -805,8 +824,6 @@ if (props.selectedGroup) {
                                     <Building2 class="h-3.5 w-3.5" :stroke-width="1.8" />
                                     {{ item.client_name }}
                                 </span>
-                                <span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">{{ categoryLabel(item.category) }}</span>
-                                <span :class="['inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold', riskClass(item.risk_level)]">{{ riskLabel(item.risk_level) }}</span>
                             </div>
                         </article>
                     </div>
