@@ -5655,11 +5655,11 @@ onUnmounted(() => {
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Inizio</label>
-                                <AppDateInput v-model="taskForm.start_date" @change="saveTaskInline(0)" />
+                                <AppDateInput v-model="taskForm.start_date" :blocked-ranges="related.taskHolidayRanges" @change="saveTaskInline(0)" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Scadenza</label>
-                                <AppDateInput v-model="taskForm.due_date" @change="saveTaskInline(0)" />
+                                <AppDateInput v-model="taskForm.due_date" :blocked-ranges="related.taskHolidayRanges" @change="saveTaskInline(0)" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Ora</label>
@@ -6544,6 +6544,7 @@ onUnmounted(() => {
                         <div class="relative flex items-center justify-end">
                             <AppDateInput
                                 v-model="subtaskForm.due_date"
+                                :blocked-ranges="related.taskHolidayRanges"
                                 variant="token"
                                 :label="shortDateIt(subtaskForm.due_date)"
                                 placeholder="Scadenza"
@@ -6630,6 +6631,7 @@ onUnmounted(() => {
                             <div v-if="subtaskDrafts[subtask.id]" class="relative flex items-center justify-end">
                                 <AppDateInput
                                     v-model="subtaskDrafts[subtask.id].due_date"
+                                    :blocked-ranges="related.taskHolidayRanges"
                                     variant="token"
                                     :label="shortDateIt(subtaskDrafts[subtask.id].due_date)"
                                     placeholder="Scadenza"
@@ -6922,11 +6924,11 @@ onUnmounted(() => {
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Inizio</label>
-                                    <AppDateInput v-model="projectTaskDrawerForm.start_date" @change="saveProjectTaskDrawer(0)" />
+                                    <AppDateInput v-model="projectTaskDrawerForm.start_date" :blocked-ranges="related.taskHolidayRanges" @change="saveProjectTaskDrawer(0)" />
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Scadenza</label>
-                                    <AppDateInput v-model="projectTaskDrawerForm.due_date" @change="saveProjectTaskDrawer(0)" />
+                                    <AppDateInput v-model="projectTaskDrawerForm.due_date" :blocked-ranges="related.taskHolidayRanges" @change="saveProjectTaskDrawer(0)" />
                                 </div>
                                 <div v-if="projectTaskDrawerForm.task_type === 'meeting'">
                                     <label class="block text-sm font-medium text-gray-700">Ora</label>
@@ -7095,7 +7097,7 @@ onUnmounted(() => {
                                         </Teleport>
                                     </div>
                                     <div class="relative flex items-center justify-end">
-                                        <AppDateInput v-model="projectDrawerSubtaskForm.due_date" variant="token" :label="shortDateIt(projectDrawerSubtaskForm.due_date)" placeholder="Scadenza" />
+                                        <AppDateInput v-model="projectDrawerSubtaskForm.due_date" :blocked-ranges="related.taskHolidayRanges" variant="token" :label="shortDateIt(projectDrawerSubtaskForm.due_date)" placeholder="Scadenza" />
                                     </div>
                                     <button type="submit" class="btn btn-primary justify-center px-4" :disabled="projectDrawerSubtaskForm.processing">
                                         <Plus class="h-4 w-4" :stroke-width="1.7" />
@@ -7169,6 +7171,7 @@ onUnmounted(() => {
                                         <div v-if="subtaskDrafts[subtask.id]" class="relative flex items-center justify-end">
                                             <AppDateInput
                                                 v-model="subtaskDrafts[subtask.id].due_date"
+                                                :blocked-ranges="related.taskHolidayRanges"
                                                 variant="token"
                                                 :label="shortDateIt(subtaskDrafts[subtask.id].due_date)"
                                                 placeholder="Scadenza"

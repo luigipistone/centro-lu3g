@@ -25,6 +25,10 @@ const props = defineProps({
         type: String,
         default: '',
     },
+    blockedRanges: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 const emit = defineEmits(['update:modelValue', 'change', 'input']);
@@ -80,10 +84,15 @@ function toggle() {
 }
 
 function selectDay(day) {
+    if (blockedHoliday(day.value)) return;
     emit('update:modelValue', day.value);
     emit('change', day.value);
     emit('input', day.value);
     open.value = false;
+}
+
+function blockedHoliday(value) {
+    return props.blockedRanges.find((range) => range.day <= value && (range.end_day || range.day) >= value);
 }
 
 function moveMonth(amount) {
@@ -189,7 +198,10 @@ onUnmounted(() => {
                             'field-dropdown-option h-9 rounded-[var(--radius-sm)] text-sm font-medium transition hover:bg-indigo-50',
                             day.inMonth ? 'text-gray-700' : 'text-gray-300',
                             modelValue === day.value ? 'bg-indigo-50 text-indigo-700 font-semibold' : '',
+                            blockedHoliday(day.value) ? 'cursor-not-allowed bg-gray-100/70 text-gray-400 line-through hover:bg-gray-100/70' : '',
                         ]"
+                        :disabled="Boolean(blockedHoliday(day.value))"
+                        :title="blockedHoliday(day.value)?.name || undefined"
                         @click="selectDay(day)"
                     >
                         {{ day.label }}

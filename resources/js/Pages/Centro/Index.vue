@@ -102,6 +102,7 @@ const props = defineProps({
     attendanceTeamUsers: Array,
     attendanceEvents: Array,
     calendarHolidays: Object,
+    taskHolidayRanges: Array,
     serviceName: String,
 });
 
@@ -2478,6 +2479,7 @@ function attendanceEventLabel(event) {
     return event.type === 'sickness' && isSuperadmin.value ? 'Malattia' : (attendanceEventMeta[event.type]?.[0] || 'Non disponibile');
 }
 function calendarAttendanceForDay(date) {
+    if (calendarHolidays.value[date]) return [];
     return (attendanceCalendarByDay.value[date] || []).filter((event) => event.type !== 'presence_summary' && (!calendarUserIds.value.length || calendarUserIds.value.includes(event.user_id)));
 }
 function calendarPresenceForDay(date) {
@@ -2730,6 +2732,7 @@ async function refreshCalendarTaskPanelFromServer(taskId = calendarTaskPanel.val
 }
 
 function openCalendarTaskCreate(type, date) {
+    if (date && calendarHolidays.value[date]) return;
     const taskType = type === 'task' ? 'project' : type;
     calendarCreateDate.value = null;
     calendarTaskParentStack.value = [];
@@ -3412,6 +3415,7 @@ function setCalendarTaskStatusFromSelect(value) {
 }
 
 function openCalendarCreateMenu(date) {
+    if (calendarHolidays.value[date]) return;
     const nextDate = calendarCreateDate.value === date ? null : date;
     if (nextDate) requestFloatingUiClose();
     calendarCreateDate.value = nextDate;
@@ -3542,6 +3546,11 @@ function moveCalendarTask(date) {
         due_date: duration > 0 ? addDays(date, duration) : date,
         start_date: duration > 0 ? date : null,
     };
+
+    if (Object.keys(calendarHolidays.value).some((holiday) => holiday >= date && holiday <= payload.due_date)) {
+        endCalendarDrag();
+        return;
+    }
 
     if (payload.due_date === task.due_date && (payload.start_date || null) === (task.start_date || null)) {
         endCalendarDrag();
@@ -4214,14 +4223,14 @@ function calendarDayStyle(sectionMonth, cell) {
                                     cell.empty ? 'bg-white/70' : '',
                                     cell.today ? 'ring-2 ring-inset ring-indigo-500/70' : '',
                                     calendarHolidays[cell.date] ? 'calendar-holiday-cell' : '',
-                                    calendarDropDate === cell.date ? 'bg-indigo-50/80' : '',
-                                    calendarDraggedTask && !cell.empty ? 'outline outline-1 outline-transparent transition hover:outline-indigo-200' : '',
+                                    calendarDropDate === cell.date && !calendarHolidays[cell.date] ? 'bg-indigo-50/80' : '',
+                                    calendarDraggedTask && !cell.empty && !calendarHolidays[cell.date] ? 'outline outline-1 outline-transparent transition hover:outline-indigo-200' : '',
                                     compactWeekend && cell.weekend ? 'min-h-[170px] px-1' : '',
                                 ]"
                                 :style="calendarDayStyle(sectionMonth, cell)"
-                                @dragover.prevent="!cell.empty && (calendarDropDate = cell.date)"
+                                @dragover.prevent="!cell.empty && !calendarHolidays[cell.date] && (calendarDropDate = cell.date)"
                                 @dragleave="calendarDropDate === cell.date && (calendarDropDate = null)"
-                                @drop.prevent="!cell.empty && moveCalendarTask(cell.date)"
+                                @drop.prevent="!cell.empty && !calendarHolidays[cell.date] && moveCalendarTask(cell.date)"
                             >
                                 <template v-if="!cell.empty">
                                     <div class="mb-2 flex items-center justify-between">
@@ -4230,7 +4239,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                             <span v-if="calendarHolidays[cell.date]" class="truncate text-[10px] font-medium text-gray-500">{{ calendarHolidays[cell.date] }}</span>
                                         </span>
                                         <div class="flex shrink-0 items-center gap-1">
-                                        <div v-if="!isGuest && !(compactWeekend && cell.weekend)" class="relative" data-calendar-create-menu>
+                                        <div v-if="!isGuest && !calendarHolidays[cell.date] && !(compactWeekend && cell.weekend)" class="relative" data-calendar-create-menu>
                                             <button
                                                 type="button"
                                                 class="rounded-xl bg-white/58 px-2 py-1 text-[11px] font-semibold text-gray-400 opacity-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] transition hover:bg-indigo-50/90 hover:text-indigo-600 group-hover:opacity-100"
@@ -4269,7 +4278,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                                 </button>
                                             </div>
                                         </div>
-                                        <span v-if="calendarPresenceForDay(cell.date)" class="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500" :title="`${calendarPresenceForDay(cell.date).present} persone presenti`">
+                                        <span v-if="!calendarHolidays[cell.date] && calendarPresenceForDay(cell.date)" class="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500" :title="`${calendarPresenceForDay(cell.date).present} persone presenti`">
                                             <Users class="h-3.5 w-3.5" />{{ calendarPresenceForDay(cell.date).present }}
                                         </span>
                                         </div>
@@ -4497,11 +4506,11 @@ function calendarDayStyle(sectionMonth, cell) {
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Inizio</label>
-                                    <AppDateInput v-model="calendarTaskForm.start_date" @change="saveCalendarTaskInline(0)" />
+                                    <AppDateInput v-model="calendarTaskForm.start_date" :blocked-ranges="taskHolidayRanges" @change="saveCalendarTaskInline(0)" />
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Scadenza</label>
-                                    <AppDateInput v-model="calendarTaskForm.due_date" @change="saveCalendarTaskInline(0)" />
+                                    <AppDateInput v-model="calendarTaskForm.due_date" :blocked-ranges="taskHolidayRanges" @change="saveCalendarTaskInline(0)" />
                                 </div>
                                 <div v-if="calendarTaskForm.task_type === 'meeting'">
                                     <label class="block text-sm font-medium text-gray-700">Ora</label>
@@ -4740,6 +4749,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                     <div class="relative flex items-center justify-end">
                                         <AppDateInput
                                             v-model="calendarSubtaskForm.due_date"
+                                            :blocked-ranges="taskHolidayRanges"
                                             variant="token"
                                             :label="shortDateIt(calendarSubtaskForm.due_date)"
                                             placeholder="Scadenza"
@@ -4828,6 +4838,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                         <div v-if="calendarSubtaskDrafts[subtask.id]" class="relative flex items-center justify-end">
                                             <AppDateInput
                                                 v-model="calendarSubtaskDrafts[subtask.id].due_date"
+                                                :blocked-ranges="taskHolidayRanges"
                                                 variant="token"
                                                 :label="shortDateIt(calendarSubtaskDrafts[subtask.id].due_date)"
                                                 placeholder="Scadenza"

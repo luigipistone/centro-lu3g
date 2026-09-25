@@ -671,6 +671,8 @@ class CentroPageController extends Controller
             ) : [],
             'attendanceSettings' => $section === 'absences' ? app(AttendanceService::class)->settings() : null,
             'attendanceHolidays' => $section === 'absences' ? DB::table('attendance_holidays')->orderBy('day')->get() : [],
+            'taskHolidayRanges' => in_array($section, ['tasks', 'calendar'], true)
+                ? DB::table('attendance_holidays')->get(['day', 'end_day', 'name']) : [],
             'attendanceCauses' => $section === 'absences' ? DB::table('attendance_causes')->orderBy('name')->get() : [],
             'attendanceBalances' => $section === 'absences' && $this->currentUserRole($request) === 'superadmin'
                 ? $this->attendanceRegistryQuery($request, 'balances')->limit(10)->get() : [],
@@ -2319,6 +2321,7 @@ class CentroPageController extends Controller
                     : null,
             ],
             'projects' => [
+                'taskHolidayRanges' => DB::table('attendance_holidays')->get(['day', 'end_day', 'name']),
                 'sections' => $this->projectSections($id),
                 'tasks' => $this->projectTaskRows($id, $this->isGuest($request) ? $request->user()->id : null),
                 'messages' => $this->projectMessages($id),
@@ -2358,6 +2361,7 @@ class CentroPageController extends Controller
                     ]),
             ],
             'tasks' => [
+                'taskHolidayRanges' => DB::table('attendance_holidays')->get(['day', 'end_day', 'name']),
                 'comments' => DB::table('task_comments')
                     ->leftJoin('users', 'users.id', '=', 'task_comments.user_id')
                     ->where('task_id', $id)
@@ -2446,6 +2450,9 @@ class CentroPageController extends Controller
         }
 
         $payload = $this->validatedPayload($request, $section);
+        if ($section === 'tasks') {
+            $this->ensureTaskDatesAreWorkingDays($payload);
+        }
         if ($section === 'projects' && ! in_array($this->currentUserRole($request), ['admin', 'superadmin'], true)) {
             foreach (['figma_url', 'figma_project_id', 'figma_file_key', 'figma_file_name', 'figma_thumbnail_url', 'figma_last_modified_at'] as $field) {
                 unset($payload[$field]);
@@ -2546,6 +2553,12 @@ class CentroPageController extends Controller
         }
 
         $payload = $this->validatedPayload($request, $section);
+        if ($section === 'tasks') {
+            $oldSchedule = DB::table('tasks')->where('id', $id)->first(['start_date', 'due_date']);
+            if ($oldSchedule && ($oldSchedule->start_date !== ($payload['start_date'] ?? null) || $oldSchedule->due_date !== ($payload['due_date'] ?? null))) {
+                $this->ensureTaskDatesAreWorkingDays($payload);
+            }
+        }
         if ($section === 'projects' && ! in_array($this->currentUserRole($request), ['admin', 'superadmin'], true)) {
             foreach (['figma_url', 'figma_project_id', 'figma_file_key', 'figma_file_name', 'figma_thumbnail_url', 'figma_last_modified_at'] as $field) {
                 unset($payload[$field]);
@@ -3383,6 +3396,25 @@ class CentroPageController extends Controller
             'withOpenTasks' => DB::table('tasks')->where('status', '!=', 'done')->distinct('client_id')->count('client_id'),
             'withDocuments' => DB::table('documents')->distinct('client_id')->count('client_id'),
         ];
+    }
+
+    private function ensureTaskDatesAreWorkingDays(array $payload): void
+    {
+        $dueDate = $payload['due_date'] ?? null;
+        $startDate = $payload['start_date'] ?? null;
+        if (! $dueDate && ! $startDate) {
+            return;
+        }
+
+        $from = min($startDate ?: $dueDate, $dueDate ?: $startDate);
+        $to = max($startDate ?: $dueDate, $dueDate ?: $startDate);
+        $holiday = DB::table('attendance_holidays')->whereDate('day', '<=', $to)
+            ->whereRaw('DATE(COALESCE(end_day, day)) >= ?', [$from])->first(['name']);
+        if ($holiday) {
+            throw ValidationException::withMessages([
+                $dueDate ? 'due_date' : 'start_date' => 'Non puoi programmare una task durante la festività "'.$holiday->name.'".',
+            ]);
+        }
     }
 
     private function validatedPayload(Request $request, string $section): array
@@ -7775,6 +7807,7 @@ class CentroPageController extends Controller
             'assignee_ids' => ['array'],
             'assignee_ids.*' => ['uuid', 'exists:users,id'],
         ]);
+        $this->ensureTaskDatesAreWorkingDays($payload);
 
         foreach ($payload as $key => $value) {
             if ($value === '') {
@@ -8250,6 +8283,7 @@ class CentroPageController extends Controller
             'due_date' => ['required', 'date'],
             'start_date' => ['nullable', 'date'],
         ]);
+        $this->ensureTaskDatesAreWorkingDays($payload);
 
         DB::table('tasks')->where('id', $id)->update([
             'due_date' => $payload['due_date'],

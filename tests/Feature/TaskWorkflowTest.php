@@ -15,6 +15,35 @@ class TaskWorkflowTest extends TestCase
     use ActsAsWorkflowAdmin;
     use RefreshDatabase;
 
+    public function test_tasks_cannot_be_scheduled_during_a_holiday_range(): void
+    {
+        $user = User::factory()->create();
+        $taskId = (string) Str::uuid();
+        DB::table('tasks')->insert([
+            'id' => $taskId, 'title' => 'Task esistente', 'priority' => 'medium',
+            'status' => 'todo', 'task_type' => 'task', 'due_date' => '2026-12-23',
+            'created_by' => $user->id, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('attendance_holidays')->insert([
+            'id' => (string) Str::uuid(), 'name' => 'Chiusura aziendale',
+            'day' => '2026-12-24', 'end_day' => '2026-12-28',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->actingAsWorkflowAdmin($user)->post('/tasks', [
+            'title' => 'Nuova task', 'task_type' => 'task', 'status' => 'todo',
+            'priority' => 'medium', 'due_date' => '2026-12-26',
+        ])->assertSessionHasErrors('due_date');
+        $this->actingAsWorkflowAdmin($user)->patch("/tasks/{$taskId}/schedule", [
+            'start_date' => '2026-12-23', 'due_date' => '2026-12-29',
+        ])->assertSessionHasErrors('due_date');
+        $this->actingAsWorkflowAdmin($user)->post("/tasks/{$taskId}/subtasks", [
+            'title' => 'Sottoattività', 'due_date' => '2026-12-28',
+        ])->assertSessionHasErrors('due_date');
+        $this->assertDatabaseHas('tasks', ['id' => $taskId, 'due_date' => '2026-12-23']);
+        $this->assertDatabaseMissing('tasks', ['title' => 'Nuova task']);
+    }
+
     public function test_completing_recurring_task_creates_next_occurrence(): void
     {
         $user = User::factory()->create();
