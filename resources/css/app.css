@@ -1090,7 +1090,7 @@ html.dark .calendar-cell {
 }
 
 .calendar-holiday-cell {
-    background-color: #f0f2f5 !important;
+    background-color: #ffffffb3 !important;
 }
 
 .calendar-holiday-cell > * {
@@ -1102,7 +1102,7 @@ html.dark .calendar-cell {
 }
 
 html.dark .calendar-holiday-cell {
-    background-color: hsl(220 20% 15%) !important;
+    background-color: #ffffffb3 !important;
 }
 
 .completion-effect {
