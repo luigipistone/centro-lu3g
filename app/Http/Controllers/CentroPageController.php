@@ -1072,12 +1072,18 @@ class CentroPageController extends Controller
             'vacation_minutes' => ['required', 'integer', 'min:0'],
             'permission_minutes' => ['required', 'integer', 'min:0'],
         ]);
+        $changed = false;
         foreach (['vacation', 'permission'] as $type) {
             $existing = DB::table('attendance_balances')->where('user_id', $userId)->where('year', $data['year'])->where('type', $type)->first();
+            $changed = $changed || ! $existing || (int) $existing->allocated_minutes !== (int) $data[$type.'_minutes'];
             DB::table('attendance_balances')->updateOrInsert(['user_id' => $userId, 'year' => $data['year'], 'type' => $type], [
                 'id' => $existing->id ?? (string) Str::uuid(),
                 'allocated_minutes' => $data[$type.'_minutes'], 'updated_at' => now(), 'created_at' => $existing->created_at ?? now(),
             ]);
+        }
+        if ($changed) {
+            $this->notifyUsers([$userId], $request->user()->id, 'absence_balance_updated',
+                $request->user()->name.' ha aggiornato i tuoi saldi ferie e permessi per il '.$data['year'].'.');
         }
 
         return back()->with('status', 'Saldi aggiornati.');
@@ -1101,6 +1107,10 @@ class CentroPageController extends Controller
             'id' => $existing->id ?? (string) Str::uuid(), 'minutes' => $data['minutes'], 'note' => $data['note'] ?? null,
             'created_by' => $request->user()->id, 'updated_at' => now(), 'created_at' => $existing->created_at ?? now(),
         ]);
+        if (! $existing || (int) $existing->minutes !== (int) $data['minutes'] || (string) $existing->note !== (string) ($data['note'] ?? '')) {
+            $this->notifyUsers([$data['user_id']], $request->user()->id, 'absence_presence_updated',
+                $request->user()->name.' ha '.($existing ? 'aggiornato' : 'registrato').' una voce delle tue presenze del '.Carbon::parse($data['day'])->format('d/m/Y').'.');
+        }
 
         return back()->with('status', 'Presenza registrata.');
     }
@@ -1114,6 +1124,8 @@ class CentroPageController extends Controller
             abort_unless(DB::table('profiles')->where('user_id', $entry->user_id)->where('manager_user_id', $request->user()->id)->exists(), 403);
         }
         DB::table('attendance_entries')->where('id', $id)->delete();
+        $this->notifyUsers([$entry->user_id], $request->user()->id, 'absence_presence_removed',
+            $request->user()->name.' ha rimosso una voce delle tue presenze del '.Carbon::parse($entry->day)->format('d/m/Y').'.');
 
         return back()->with('status', 'Registrazione rimossa.');
     }
@@ -1338,7 +1350,8 @@ class CentroPageController extends Controller
     public function updateCompanyDocumentCategory(Request $request, string $id): RedirectResponse
     {
         $this->ensureAdmin($request);
-        DB::table('company_documents')->where('id', $id)->exists() || abort(404);
+        $document = DB::table('company_documents')->where('id', $id)->first();
+        abort_if(! $document, 404);
 
         $payload = $request->validate([
             'category' => ['required', Rule::in(array_keys($this->companyDocumentCategories()))],
@@ -1348,6 +1361,10 @@ class CentroPageController extends Controller
             'category' => $payload['category'],
             'updated_at' => now(),
         ]);
+
+        if ($document->category !== $payload['category']) {
+            $this->notifyUsers($this->companyDocumentRecipientIds($id), $request->user()->id, 'company_document_updated', 'La categoria di un documento a te destinato è stata aggiornata.', null, $id);
+        }
 
         return back()->with('status', 'Categoria documento aggiornata.');
     }
@@ -1409,8 +1426,11 @@ class CentroPageController extends Controller
         $document = DB::table('company_documents')->where('id', $id)->first();
         abort_if(! $document, 404);
 
+        $recipients = $this->companyDocumentRecipientIds($id);
+
         Storage::disk('local')->delete($document->file_path);
         DB::table('company_documents')->where('id', $id)->delete();
+        $this->notifyUsers($recipients, $request->user()->id, 'company_document_removed', 'Un documento a te destinato è stato rimosso.');
 
         return back()->with('status', 'Documento eliminato.');
     }
@@ -1545,7 +1565,9 @@ class CentroPageController extends Controller
     public function destroyCompanyMessage(Request $request, string $id): RedirectResponse
     {
         $this->ensureAdmin($request);
+        $recipients = $this->companyMessageRecipientIds($id);
         DB::table('company_messages')->where('id', $id)->delete();
+        $this->notifyUsers($recipients, $request->user()->id, 'company_message_removed', 'Un messaggio a te destinato è stato rimosso.');
 
         return back()->with('status', 'Messaggio eliminato.');
     }
@@ -1578,6 +1600,8 @@ class CentroPageController extends Controller
             $this->syncDocumentGroupUsers($groupId, $payload['user_ids'] ?? []);
         });
 
+        $this->notifyUsers($payload['user_ids'], $request->user()->id, 'company_document_group_added', 'Sei stato aggiunto a un gruppo documenti.');
+
         return redirect()->route('documents.groups')->with('status', 'Gruppo creato.');
     }
 
@@ -1585,6 +1609,7 @@ class CentroPageController extends Controller
     {
         $this->ensureAdmin($request);
         abort_unless(DB::table('document_groups')->where('id', $id)->exists(), 404);
+        $oldUserIds = DB::table('document_group_user')->where('document_group_id', $id)->pluck('user_id');
 
         $payload = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -1607,13 +1632,19 @@ class CentroPageController extends Controller
             $this->syncDocumentGroupUsers($id, $payload['user_ids'] ?? []);
         });
 
+        $newUserIds = collect($payload['user_ids']);
+        $this->notifyUsers($newUserIds->diff($oldUserIds), $request->user()->id, 'company_document_group_added', 'Sei stato aggiunto a un gruppo documenti.');
+        $this->notifyUsers($oldUserIds->diff($newUserIds), $request->user()->id, 'company_document_group_removed', 'Il tuo accesso a un gruppo documenti è stato rimosso.');
+
         return back()->with('status', 'Gruppo aggiornato.');
     }
 
     public function destroyDocumentGroup(Request $request, string $id): RedirectResponse
     {
         $this->ensureAdmin($request);
+        $userIds = DB::table('document_group_user')->where('document_group_id', $id)->pluck('user_id');
         DB::table('document_groups')->where('id', $id)->delete();
+        $this->notifyUsers($userIds, $request->user()->id, 'company_document_group_removed', 'Un gruppo documenti a cui appartenevi è stato rimosso.');
 
         return back()->with('status', 'Gruppo eliminato.');
     }
@@ -1875,6 +1906,8 @@ class CentroPageController extends Controller
             $this->logPasswordAction($itemId, $request->user()->id, 'created', 'Elemento password creato.');
         });
 
+        $this->notifyUsers($this->passwordItemNotificationUserIds($itemId)->reject(fn ($id) => $id === $request->user()->id), $request->user()->id, 'password_created', 'Una credenziale condivisa è stata aggiunta.');
+
         return back()->with('status', 'Password salvata.');
     }
 
@@ -1886,6 +1919,7 @@ class CentroPageController extends Controller
         abort_unless($this->canEditPasswordItem($request, $item), 403);
 
         $payload = $this->validatedPasswordItemPayload($request, true);
+        $previousRecipients = $this->passwordItemNotificationUserIds($id);
         $passwordRotated = false;
         if (filled($payload['password'] ?? null)) {
             try {
@@ -1919,6 +1953,9 @@ class CentroPageController extends Controller
             $this->rememberPasswordCategoryFields($payload['category'], $payload['custom_fields'] ?? [], $request->user()->id);
             $this->logPasswordAction($id, $request->user()->id, 'updated', 'Elemento password aggiornato.');
         });
+
+        $recipients = $previousRecipients->merge($this->passwordItemNotificationUserIds($id))->unique()->reject(fn ($userId) => $userId === $request->user()->id);
+        $this->notifyUsers($recipients, $request->user()->id, 'password_updated', $passwordRotated ? 'Una credenziale condivisa è stata ruotata.' : 'Una credenziale condivisa è stata aggiornata.');
 
         return back()->with('status', 'Password aggiornata.');
     }
@@ -1960,8 +1997,10 @@ class CentroPageController extends Controller
         abort_if(! $item, 404);
         abort_unless($this->canEditPasswordItem($request, $item), 403);
 
+        $recipients = $this->passwordItemNotificationUserIds($id)->reject(fn ($userId) => $userId === $request->user()->id);
         $this->logPasswordAction($id, $request->user()->id, 'deleted', 'Elemento password eliminato.');
         DB::table('password_items')->where('id', $id)->delete();
+        $this->notifyUsers($recipients, $request->user()->id, 'password_removed', 'Una credenziale condivisa è stata rimossa.');
 
         return back()->with('status', 'Password eliminata.');
     }
@@ -2382,6 +2421,7 @@ class CentroPageController extends Controller
                     $payload['client_id'] ?? null,
                 );
             }
+            $this->notifyProjectPeople($payload['id'], $request->user()->id, 'project_created', $request->user()->name.' ha creato il progetto "'.$payload['name'].'".');
         }
 
         if ($section === 'tasks') {
@@ -2523,6 +2563,13 @@ class CentroPageController extends Controller
             }
         }
 
+        if ($section === 'projects') {
+            $project = DB::table('projects')->where('id', $id)->first(['name']);
+            if ($project) {
+                $this->notifyProjectPeople($id, $request->user()->id, 'project_deleted', $request->user()->name.' ha eliminato il progetto "'.$project->name.'".');
+            }
+        }
+
         DB::table($this->config($section)['table'])->where('id', $id)->delete();
 
         if ($section === 'tasks') {
@@ -2554,6 +2601,11 @@ class CentroPageController extends Controller
             DB::table('sessions')->where('user_id', $user->id)->delete();
         }
 
+        if ($user->wasChanged('account_status')) {
+            $this->notifyUsers([$user->id], $request->user()->id, 'profile_status_updated',
+                'Il tuo account è stato '.($status === 'suspended' ? 'sospeso' : 'riattivato').'.');
+        }
+
         return back()->with('status', match ($status) {
             'suspended' => 'Utente sospeso.',
             default => 'Utente riattivato.',
@@ -2569,6 +2621,7 @@ class CentroPageController extends Controller
         app(AccountArchiveService::class)->create($user, $request->user(), $payload['reason']);
         $superadmins = DB::table('user_roles')->where('role', 'superadmin')->where('user_id', '!=', $request->user()->id)->pluck('user_id');
         app(CentroNotificationService::class)->notifyUsers($superadmins, $request->user()->id, 'account_archive_requested', $request->user()->name.' ha richiesto l’archiviazione di '.$user->name.'.');
+        $this->notifyUsers([$user->id], $request->user()->id, 'account_archive_requested', 'È stata richiesta l’archiviazione del tuo account.');
 
         return back()->with('status', 'Richiesta di archiviazione inviata.');
     }
@@ -4052,6 +4105,7 @@ class CentroPageController extends Controller
         $this->ensurePermission($request, 'users.profile.personal.update');
 
         $user = User::query()->findOrFail($id);
+        $previousProfile = DB::table('profiles')->where('user_id', $id)->first(['phone', 'bio', 'completion_effect', 'first_name', 'last_name']);
         $payload = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
@@ -4080,6 +4134,12 @@ class CentroPageController extends Controller
                 'created_at' => now(),
             ],
         );
+
+        $profileChanged = collect(['phone', 'bio', 'completion_effect', 'first_name', 'last_name'])
+            ->contains(fn ($field) => ($previousProfile?->$field ?? null) !== ($payload[$field] ?? ($field === 'completion_effect' ? 'balloons' : null)));
+        if ($request->user()->id !== $id && ($user->wasChanged(['name', 'email']) || $profileChanged)) {
+            $this->notifyUsers([$id], $request->user()->id, 'profile_updated', $request->user()->name.' ha aggiornato i tuoi dati personali.');
+        }
 
         return back()->with('status', 'Utente aggiornato.');
     }
@@ -4169,14 +4229,6 @@ class CentroPageController extends Controller
                 ]);
             }
 
-            if ($section === 'operational' && array_key_exists('smartworking_day', $updates) && ($profile['smartworking_day'] ?? null) !== $updates['smartworking_day']) {
-                $this->notifyUsers(
-                    [$user->id],
-                    $request->user()->id,
-                    'profile_smartworking_updated',
-                    $request->user()->name.' ha aggiornato il tuo giorno di smart working: '.$this->smartworkingDayLabel($updates['smartworking_day']).'.',
-                );
-            }
         }
 
         DB::table('audit_logs')->insert([
@@ -4187,6 +4239,15 @@ class CentroPageController extends Controller
             'metadata' => json_encode(['section' => $section, 'changed_fields' => $changed], JSON_THROW_ON_ERROR),
             'created_at' => now(), 'updated_at' => now(),
         ]);
+
+        if ($changed && $request->user()->id !== $id) {
+            $label = match ($section) {
+                'security' => 'le impostazioni di accesso',
+                'contract' => 'i dati contrattuali',
+                default => 'i dati lavorativi',
+            };
+            $this->notifyUsers([$id], $request->user()->id, 'profile_updated', $request->user()->name.' ha aggiornato '.$label.' del tuo profilo.');
+        }
 
         return back()->with('status', 'Modifiche confermate e registrate nel log.');
     }
@@ -4219,6 +4280,10 @@ class CentroPageController extends Controller
                 'created_at' => now(),
             ],
         );
+
+        if ($request->user()->id !== $id) {
+            $this->notifyUsers([$id], $request->user()->id, 'profile_updated', $request->user()->name.' ha aggiornato la tua foto profilo.');
+        }
 
         return back()->with('status', 'Foto profilo aggiornata.');
     }
@@ -4294,6 +4359,10 @@ class CentroPageController extends Controller
             'created_at' => now(), 'updated_at' => now(),
         ]);
 
+        if ($request->user()->id !== $id) {
+            $this->notifyUsers([$id], $request->user()->id, 'profile_dossier_updated', 'Il tuo fascicolo personale è stato aggiornato.');
+        }
+
         return back()->with('status', $replaced ? 'Nuova versione salvata.' : 'Voce aggiunta al fascicolo.');
     }
 
@@ -4327,6 +4396,10 @@ class CentroPageController extends Controller
             'metadata' => json_encode(['item_id' => $itemId, 'type' => $item->type, 'title' => $item->title, 'version' => $item->version], JSON_THROW_ON_ERROR),
             'created_at' => now(), 'updated_at' => now(),
         ]);
+
+        if ($request->user()->id !== $id) {
+            $this->notifyUsers([$id], $request->user()->id, 'profile_dossier_updated', 'Una voce del tuo fascicolo personale è stata rimossa.');
+        }
 
         return back()->with('status', 'Voce eliminata dal fascicolo.');
     }
@@ -7552,6 +7625,10 @@ class CentroPageController extends Controller
             'updated_at' => now(),
         ]);
 
+        if ($comment->content !== $payload['content']) {
+            $this->notifyTaskPeople($taskId, $request->user()->id, 'task_comment_updated', $request->user()->name.' ha modificato un commento in una task che ti riguarda.');
+        }
+
         return back()->with('status', 'Commento aggiornato.');
     }
 
@@ -7580,6 +7657,8 @@ class CentroPageController extends Controller
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        $this->notifyTaskPeople($taskId, $request->user()->id, 'task_comment_removed', $request->user()->name.' ha eliminato un commento in una task che ti riguarda.');
 
         return back()->with('status', 'Commento eliminato.');
     }
@@ -8839,10 +8918,9 @@ class CentroPageController extends Controller
         }
 
         $rootTaskId = $task->parent_task_id ?: $task->id;
-        $taskIds = DB::table('tasks')
-            ->where('id', $rootTaskId)
-            ->orWhere('parent_task_id', $rootTaskId)
-            ->pluck('id');
+        $taskIds = $task->parent_task_id
+            ? collect([$rootTaskId, $task->id])
+            : DB::table('tasks')->where('id', $rootTaskId)->orWhere('parent_task_id', $rootTaskId)->pluck('id');
 
         return DB::table('task_assignees')
             ->whereIn('task_id', $taskIds)
@@ -8853,17 +8931,38 @@ class CentroPageController extends Controller
             ->values();
     }
 
+    private function passwordItemNotificationUserIds(string $itemId): Collection
+    {
+        $item = DB::table('password_items')->where('id', $itemId)->first(['created_by', 'password_vault_id']);
+        if (! $item) {
+            return collect();
+        }
+
+        $vault = $item->password_vault_id
+            ? DB::table('password_vaults')->where('id', $item->password_vault_id)->first(['name', 'visibility', 'created_by'])
+            : null;
+        if ($vault && mb_strtolower($vault->name) === 'amministrazione') {
+            return DB::table('user_roles')->where('role', 'superadmin')->pluck('user_id');
+        }
+
+        $groupIds = DB::table('password_item_group')->where('password_item_id', $itemId)->pluck('password_group_id');
+        $recipients = DB::table('password_item_user')->where('password_item_id', $itemId)->pluck('user_id');
+        if ($vault && $vault->visibility === 'shared') {
+            $groupIds = $groupIds->merge(DB::table('password_vault_group')->where('password_vault_id', $item->password_vault_id)->pluck('password_group_id'));
+            $recipients = $recipients->merge(DB::table('password_vault_user')->where('password_vault_id', $item->password_vault_id)->pluck('user_id'));
+        }
+
+        return $recipients
+            ->merge(DB::table('password_group_user')->whereIn('password_group_id', $groupIds->unique())->pluck('user_id'))
+            ->push($item->created_by)
+            ->push($vault?->created_by)
+            ->filter()->unique()->values();
+    }
+
     private function notifyAbsencePeople(string $requestUserId, ?string $actorId, string $type, string $message): void
     {
-        $userIds = DB::table('user_roles')
-            ->whereIn('role', ['superadmin', 'admin'])
-            ->pluck('user_id')
-            ->push($requestUserId)
-            ->filter()
-            ->unique()
-            ->values();
-
-        $this->notifyUsers($userIds, $actorId, $type, $message);
+        $notifications = app(CentroNotificationService::class);
+        $notifications->notifyUsers($notifications->absenceRecipientIds($requestUserId), $actorId, $type, $message);
     }
 
     private function notifyUsers(iterable $userIds, ?string $actorId, string $type, string $message, ?string $taskId = null, ?string $companyDocumentId = null, ?string $companyMessageId = null): void

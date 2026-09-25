@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -13,7 +13,18 @@ use Minishlink\WebPush\WebPush;
 
 class CentroNotificationService
 {
-    public const CATEGORIES = ['tasks', 'projects', 'absences', 'documents', 'system'];
+    public const CATEGORIES = ['tasks', 'projects', 'absences', 'documents', 'passwords', 'system'];
+
+    public function absenceRecipientIds(string $userId): array
+    {
+        $managerId = DB::table('profiles')->where('user_id', $userId)->value('manager_user_id');
+        $managerId = $managerId && DB::table('user_roles')->where('user_id', $managerId)->whereIn('role', ['admin', 'superadmin'])->exists()
+            ? $managerId : null;
+
+        return DB::table('user_roles')->where('role', 'superadmin')->pluck('user_id')
+            ->push($managerId)
+            ->push($userId)->filter()->unique()->values()->all();
+    }
 
     public function notifyUsers(iterable $userIds, ?string $actorId, string $type, string $message, ?string $taskId = null, ?string $companyDocumentId = null, ?string $companyMessageId = null): void
     {
@@ -105,10 +116,21 @@ class CentroNotificationService
 
     private function categoryForType(string $type): string
     {
-        if (Str::startsWith($type, ['task_', 'task'])) return 'tasks';
-        if (Str::startsWith($type, ['project_', 'project'])) return 'projects';
-        if (Str::startsWith($type, ['absence_', 'absence'])) return 'absences';
-        if (Str::startsWith($type, ['company_document', 'company_message', 'document'])) return 'documents';
+        if (Str::startsWith($type, ['task_', 'task'])) {
+            return 'tasks';
+        }
+        if (Str::startsWith($type, ['project_', 'project'])) {
+            return 'projects';
+        }
+        if (Str::startsWith($type, ['absence_', 'absence'])) {
+            return 'absences';
+        }
+        if (Str::startsWith($type, ['company_document', 'company_message', 'document'])) {
+            return 'documents';
+        }
+        if (Str::startsWith($type, ['password_', 'password'])) {
+            return 'passwords';
+        }
 
         return 'system';
     }

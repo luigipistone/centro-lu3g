@@ -274,15 +274,8 @@ class ProfileController extends Controller
 
     private function notifyAbsencePeople(string $requestUserId, ?string $actorId, string $type, string $message): void
     {
-        $userIds = DB::table('user_roles')
-            ->whereIn('role', ['superadmin', 'admin'])
-            ->pluck('user_id')
-            ->push($requestUserId)
-            ->filter()
-            ->unique()
-            ->values();
-
-        app(CentroNotificationService::class)->notifyUsers($userIds, $actorId, $type, $message);
+        $notifications = app(CentroNotificationService::class);
+        $notifications->notifyUsers($notifications->absenceRecipientIds($requestUserId), $actorId, $type, $message);
     }
 
     private function notificationPreferenceRows(string $userId): array
@@ -292,6 +285,7 @@ class ProfileController extends Controller
             'projects' => 'Progetti',
             'absences' => 'Assenze',
             'documents' => 'Documenti',
+            'passwords' => 'Password',
             'system' => 'Sistema',
         ];
 
