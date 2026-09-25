@@ -172,6 +172,26 @@ class AttendanceManagementTest extends TestCase
         $this->assertSame('2026-10-04', $days[13]['date']);
     }
 
+    public function test_calendar_presence_counts_approved_full_day_absences_without_manual_entries(): void
+    {
+        $admin = User::factory()->create();
+        $employee = User::factory()->create();
+        $this->role($admin, 'superadmin');
+        $this->role($employee, 'editor');
+        $absenceId = $this->absence($employee);
+
+        $events = app(AttendanceService::class)->calendarEvents($admin->id, true, false, '2026-10-05', '2026-10-05');
+        $this->assertSame(2, $events[0]['present']);
+
+        DB::table('absence_requests')->where('id', $absenceId)->update(['status' => 'approved']);
+        $events = app(AttendanceService::class)->calendarEvents($admin->id, true, false, '2026-10-05', '2026-10-05');
+        $this->assertSame(1, $events[0]['present']);
+
+        DB::table('absence_requests')->where('id', $absenceId)->update(['start_time' => '09:00', 'end_time' => '11:00']);
+        $events = app(AttendanceService::class)->calendarEvents($admin->id, true, false, '2026-10-05', '2026-10-05');
+        $this->assertSame(2, $events[0]['present']);
+    }
+
     public function test_attendance_registry_is_paginated_and_exported_without_the_limit(): void
     {
         $this->withoutMiddleware(EnforceRolePermissions::class);

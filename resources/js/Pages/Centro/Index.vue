@@ -4225,6 +4225,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                             <span :class="['text-sm font-semibold', cell.today ? 'text-indigo-600' : 'text-gray-500']">{{ cell.day }}</span>
                                             <span v-if="calendarHolidays[cell.date]" class="truncate text-[10px] font-medium text-gray-500">{{ calendarHolidays[cell.date] }}</span>
                                         </span>
+                                        <div class="flex shrink-0 items-center gap-1">
                                         <div v-if="!isGuest && !(compactWeekend && cell.weekend)" class="relative" data-calendar-create-menu>
                                             <button
                                                 type="button"
@@ -4264,10 +4265,10 @@ function calendarDayStyle(sectionMonth, cell) {
                                                 </button>
                                             </div>
                                         </div>
-                                    </div>
-
-                                    <div v-if="!cell.weekend && calendarPresenceForDay(cell.date) && !calendarUserIds.length" class="mb-1 text-[10px] font-medium text-gray-400" :title="'Presenze previste / registrate'">
-                                        Presenze {{ calendarPresenceForDay(cell.date).planned }}/{{ calendarPresenceForDay(cell.date).actual }}
+                                        <span v-if="calendarPresenceForDay(cell.date)" class="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500" :title="`${calendarPresenceForDay(cell.date).present} persone presenti`">
+                                            <Users class="h-3.5 w-3.5" />{{ calendarPresenceForDay(cell.date).present }}
+                                        </span>
+                                        </div>
                                     </div>
                                     <div v-if="calendarAttendanceForDay(cell.date).length" class="mb-2 flex max-h-12 flex-wrap gap-1 overflow-hidden">
                                         <span v-for="event in calendarAttendanceForDay(cell.date).slice(0, compactWeekend && cell.weekend ? 2 : 4)" :key="`${event.id}-${event.user_id}-${event.date}`" :class="['max-w-full truncate rounded-[var(--radius-sm)] px-1.5 py-0.5 text-[10px] font-semibold', attendanceEventMeta[event.type]?.[1] || attendanceEventMeta.other[1]]" :title="`${event.user_name}: ${attendanceEventLabel(event)}${event.time ? ` ${event.time}` : ''}`">

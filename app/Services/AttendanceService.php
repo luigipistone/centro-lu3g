@@ -99,19 +99,28 @@ class AttendanceService
         $userIds = $isSuperadmin ? null : $teamIds;
         $users = DB::table('users as u')->leftJoin('user_roles as r', 'r.user_id', '=', 'u.id')
             ->where(fn ($query) => $query->whereNull('r.role')->orWhere('r.role', '!=', 'guest'))
+            ->where('u.account_status', 'active')
             ->when($userIds, fn ($query) => $query->whereIn('u.id', $userIds))->pluck('u.id');
-        $actual = DB::table('attendance_entries')->where('cause', 'actual')->whereBetween('day', [$from, $to])
-            ->whereIn('user_id', $users)->get()->groupBy('day');
         $requests = DB::table('absence_requests as a')->join('users as u', 'u.id', '=', 'a.user_id')
             ->where('a.status', 'approved')
             ->whereDate('a.start_date', '<=', $to)->whereDate('a.end_date', '>=', $from)
             ->when($userIds, fn ($query) => $query->whereIn('a.user_id', $userIds))
             ->get(['a.id', 'a.user_id', 'a.type', 'a.cause_code', 'a.start_date', 'a.end_date', 'a.start_time', 'a.end_time', 'u.name']);
+        $absenceDays = [];
+        foreach ($requests as $request) {
+            if (in_array($request->type, ['smart_working', 'travel'], true) || ($request->start_time && $request->end_time)) {
+                continue;
+            }
+            foreach (CarbonPeriod::create(max($request->start_date, $from), min($request->end_date ?: $request->start_date, $to)) as $day) {
+                $absenceDays[$day->toDateString()][$request->user_id] = true;
+            }
+        }
         $events = [];
         $settings = $this->settings();
         foreach (CarbonPeriod::create($from, $to) as $day) {
-            $planned = $users->filter(fn ($id) => $this->workingMinutes($id, $day, $settings) > 0)->count();
-            $events[] = ['date' => $day->toDateString(), 'type' => 'presence_summary', 'planned' => $planned, 'actual' => ($actual[$day->toDateString()] ?? collect())->count()];
+            $date = $day->toDateString();
+            $present = $users->filter(fn ($id) => $this->workingMinutes($id, $day, $settings) > 0 && ! isset($absenceDays[$date][$id]))->count();
+            $events[] = ['date' => $date, 'type' => 'presence_summary', 'present' => $present];
         }
         foreach ($requests as $request) {
             foreach (CarbonPeriod::create(max($request->start_date, $from), min($request->end_date ?: $request->start_date, $to)) as $day) {
