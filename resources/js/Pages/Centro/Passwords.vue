@@ -53,6 +53,7 @@ const editPasswordError = ref('');
 const newCustomFieldLabel = ref('');
 const customFieldsOpen = ref(false);
 const rotationHistoryExpanded = ref(false);
+const securityDetailsOpen = ref(false);
 const generator = ref({
     length: 20,
     uppercase: true,
@@ -279,6 +280,10 @@ function rotationDate(value) {
     return new Intl.DateTimeFormat('it-IT', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
 }
 
+function wholeDays(value) {
+    return Math.max(0, Math.floor(Number(value) || 0));
+}
+
 function handleCategoryChange(value) {
     if (itemForm.category !== value) {
         itemForm.category = value;
@@ -397,6 +402,7 @@ function resetItemForm() {
     newCustomFieldLabel.value = '';
     customFieldsOpen.value = false;
     rotationHistoryExpanded.value = false;
+    securityDetailsOpen.value = false;
 }
 
 function openCreateItem() {
@@ -409,6 +415,7 @@ function openCreateItem() {
 function openEditItem(item) {
     editingItem.value = item;
     rotationHistoryExpanded.value = false;
+    securityDetailsOpen.value = false;
     itemForm.defaults({
         ...defaultItemForm(),
         password_vault_id: item.password_vault_id || '',
@@ -1033,7 +1040,7 @@ if (props.selectedGroup) {
                             <div class="min-w-0">
                                 <p class="truncate text-sm font-semibold text-gray-900">{{ item.url || item.title }}</p>
                                 <p class="truncate text-xs text-gray-500">{{ item.risk_flags.join(', ') }}</p>
-                                <p class="mt-1 text-xs text-gray-400">{{ categoryLabel(item.category) }} · {{ item.password_length }} caratteri · {{ item.password_age_days ?? 0 }} giorni · priorità {{ item.rotation_priority }}</p>
+                                <p class="mt-1 text-xs text-gray-400">{{ categoryLabel(item.category) }} · {{ item.password_length }} caratteri · {{ wholeDays(item.password_age_days) }} giorni · priorità {{ item.rotation_priority }}</p>
                             </div>
                         </div>
                         <button v-if="item.can_edit" type="button" class="text-sm font-semibold text-[hsl(var(--primary-app))]" @click="startRotation(item)">Ruota</button>
@@ -1194,10 +1201,18 @@ if (props.selectedGroup) {
                         </div>
                         </div>
                     </section>
-                    <div v-if="editingItem" class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/80 p-4">
+                    <section v-if="editingItem" class="overflow-hidden rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/80">
+                        <button type="button" class="flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition hover:bg-gray-100/70" :aria-expanded="securityDetailsOpen" @click="securityDetailsOpen = !securityDetailsOpen">
+                            <span>
+                                <span class="block text-sm font-semibold text-gray-900">Sicurezza e rotazioni</span>
+                                <span class="mt-0.5 block text-xs text-gray-500">Priorità {{ editingItem.rotation_priority }} · {{ editingItem.rotation_count || 0 }} rotazioni</span>
+                            </span>
+                            <ChevronDown :class="['h-4 w-4 shrink-0 text-gray-400 transition-transform', securityDetailsOpen ? 'rotate-180' : '']" :stroke-width="1.8" />
+                        </button>
+                        <div v-if="securityDetailsOpen" class="border-t border-gray-100 px-4 pb-4 pt-3">
                         <div class="grid gap-3 text-xs sm:grid-cols-2">
                             <p><span class="text-gray-400">Ultima verifica</span><br><strong class="text-gray-700">{{ editingItem.compromised_checked_at ? new Date(editingItem.compromised_checked_at).toLocaleDateString('it-IT') : 'Mai' }}</strong></p>
-                            <p><span class="text-gray-400">Età password</span><br><strong class="text-gray-700">{{ editingItem.password_age_days ?? 0 }} giorni</strong></p>
+                            <p><span class="text-gray-400">Età password</span><br><strong class="text-gray-700">{{ wholeDays(editingItem.password_age_days) }} giorni</strong></p>
                             <p><span class="text-gray-400">Possibile riuso</span><br><strong class="text-gray-700">{{ editingItem.reused_count > 1 ? `${editingItem.reused_count} credenziali` : 'Non rilevato' }}</strong></p>
                             <p><span class="text-gray-400">Priorità rotazione</span><br><strong class="text-gray-700">{{ editingItem.rotation_priority }}</strong></p>
                         </div>
@@ -1217,7 +1232,8 @@ if (props.selectedGroup) {
                                 {{ rotationHistoryExpanded ? 'Mostra meno' : `Mostra tutte (${editingItem.rotation_count})` }}
                             </button>
                         </div>
-                    </div>
+                        </div>
+                    </section>
                     <div>
                         <span class="block text-sm font-medium text-gray-700">Note</span>
                         <div class="overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white">

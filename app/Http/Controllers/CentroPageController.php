@@ -4815,7 +4815,7 @@ class CentroPageController extends Controller
             $item->password_length = (int) ($item->password_length ?: $metrics['length']);
             $item->strength_score = (int) ($item->strength_score ?? $metrics['score']);
             $item->reused_count = $metrics['fingerprint'] ? (int) ($reuseCounts[$metrics['fingerprint']] ?? 0) : 0;
-            $item->password_age_days = $item->password_changed_at ? Carbon::parse($item->password_changed_at)->diffInDays(now()) : null;
+            $item->password_age_days = $item->password_changed_at ? (int) floor(Carbon::parse($item->password_changed_at)->diffInDays(now())) : null;
             $item->needs_compromise_check = ! $item->compromised_checked_at || Carbon::parse($item->compromised_checked_at)->lte(now()->subDays(7));
             $item->risk_flags = $this->passwordRiskFlags($item);
             $item->risk_level = $this->passwordRiskLevel($item);
