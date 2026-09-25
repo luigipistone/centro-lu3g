@@ -819,18 +819,20 @@ if (props.selectedGroup) {
                                     <button v-if="item.can_delete" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina" @click.stop="openDelete(item, 'item')">
                                         <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                     </button>
-                                    <span :class="['ml-1 h-2.5 w-2.5 shrink-0 rounded-full', riskDotClass(item.risk_level)]" :title="`Rischio ${riskLabel(item.risk_level).toLowerCase()}`" :aria-label="`Rischio ${riskLabel(item.risk_level)}`"></span>
                                 </div>
                             </div>
-                            <div class="mt-4 flex flex-wrap gap-2">
-                                <span class="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs font-semibold" :style="passwordVaultBadgeStyle(item)">
-                                    <Vault class="h-3.5 w-3.5" :stroke-width="1.8" />
-                                    {{ item.vault_name || 'Nessuna cassaforte' }}
-                                </span>
-                                <span v-if="item.client_name" class="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600 ring-1 ring-inset ring-gray-200">
-                                    <Building2 class="h-3.5 w-3.5" :stroke-width="1.8" />
-                                    {{ item.client_name }}
-                                </span>
+                            <div class="mt-4 flex items-center justify-between gap-3">
+                                <div class="flex min-w-0 flex-wrap gap-2">
+                                    <span class="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs font-semibold" :style="passwordVaultBadgeStyle(item)">
+                                        <Vault class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                        {{ item.vault_name || 'Nessuna cassaforte' }}
+                                    </span>
+                                    <span v-if="item.client_name" class="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600 ring-1 ring-inset ring-gray-200">
+                                        <Building2 class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                        {{ item.client_name }}
+                                    </span>
+                                </div>
+                                <span :class="['h-2.5 w-2.5 shrink-0 rounded-full', riskDotClass(item.risk_level)]" :title="`Rischio ${riskLabel(item.risk_level).toLowerCase()}`" :aria-label="`Rischio ${riskLabel(item.risk_level)}`"></span>
                             </div>
                         </article>
                     </div>
