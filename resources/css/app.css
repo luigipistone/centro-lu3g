@@ -961,6 +961,12 @@ html.dark .settings-tab-active:hover {
     color: hsl(216 28% 96%);
 }
 
+html.dark .attendance-approver-option.is-active {
+    border-color: hsl(var(--primary-app) / 0.55) !important;
+    background: hsl(213 45% 24% / 0.76) !important;
+    color: hsl(216 28% 96%) !important;
+}
+
 html.dark .restore-backup-button:hover {
     background: hsl(213 45% 24% / 0.48);
 }

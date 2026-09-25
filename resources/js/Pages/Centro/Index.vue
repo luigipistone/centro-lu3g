@@ -1,6 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppDateInput from '@/Components/AppDateInput.vue';
+import AppDateRangeInput from '@/Components/AppDateRangeInput.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import AppTimeInput from '@/Components/AppTimeInput.vue';
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
@@ -94,7 +95,9 @@ const props = defineProps({
     attendanceHolidays: Array,
     attendanceCauses: Array,
     attendanceBalances: Array,
+    attendanceBalanceCount: Number,
     attendanceEntries: Array,
+    attendanceEntryCount: Number,
     attendanceAvailability: Array,
     attendanceTeamUsers: Array,
     attendanceEvents: Array,
@@ -171,12 +174,51 @@ const billingType = ref('all');
 const billingStatus = ref('all');
 const absenceStatus = ref('all');
 const absenceWorkspaceTab = ref('overview');
+const attendanceWeek = ref(0);
+const visibleAttendanceWeek = computed(() => (props.attendanceAvailability || []).slice(attendanceWeek.value * 7, attendanceWeek.value * 7 + 7));
+const attendanceWeekLabel = computed(() => {
+    const days = visibleAttendanceWeek.value;
+    return days.length ? `${dateIt(days[0].date)} – ${dateIt(days[days.length - 1].date)}` : '';
+});
+const attendanceEntryRows = ref(props.attendanceEntries || []);
+const attendanceBalanceRows = ref(props.attendanceBalances || []);
+const attendanceEntryTotal = ref(props.attendanceEntryCount || 0);
+const attendanceBalanceTotal = ref(props.attendanceBalanceCount || 0);
+const attendanceRegistryLoading = ref(null);
+const attendanceRegistryError = ref('');
+watch(() => props.attendanceEntries, (rows) => { attendanceEntryRows.value = rows || []; attendanceEntryTotal.value = props.attendanceEntryCount || 0; });
+watch(() => props.attendanceBalances, (rows) => { attendanceBalanceRows.value = rows || []; attendanceBalanceTotal.value = props.attendanceBalanceCount || 0; });
+async function loadAttendanceRegistry(kind) {
+    if (attendanceRegistryLoading.value) return;
+    const rows = kind === 'entries' ? attendanceEntryRows : attendanceBalanceRows;
+    const total = kind === 'entries' ? attendanceEntryTotal : attendanceBalanceTotal;
+    if (rows.value.length >= Math.min(total.value, 200)) return;
+    attendanceRegistryLoading.value = kind;
+    attendanceRegistryError.value = '';
+    try {
+        const response = await fetch(route('attendance.registry', { kind, offset: rows.value.length, limit: Math.min(50, 200 - rows.value.length) }), { credentials: 'same-origin' });
+        if (!response.ok) throw new Error('Impossibile caricare altre registrazioni.');
+        const data = await response.json();
+        rows.value = [...rows.value, ...(data.rows || [])];
+        total.value = data.total || 0;
+    } catch (error) {
+        attendanceRegistryError.value = error.message;
+    } finally {
+        attendanceRegistryLoading.value = null;
+    }
+}
+const attendanceApprovalTypes = [
+    { value: 'vacation', label: 'Ferie' }, { value: 'permission', label: 'Permessi' },
+    { value: 'sickness', label: 'Malattia' }, { value: 'late', label: 'Ritardi' },
+    { value: 'smart_working', label: 'Smart working' }, { value: 'other', label: 'Altre assenze' },
+    { value: 'travel', label: 'Trasferte' }, { value: 'recovery', label: 'Recuperi' },
+];
 const attendanceSettingsForm = useForm({
     default_daily_minutes: props.attendanceSettings?.default_daily_minutes || 480,
     working_days: props.attendanceSettings?.working_days || [1, 2, 3, 4, 5],
     approvers: Object.fromEntries(['vacation', 'permission', 'sickness', 'late', 'smart_working', 'other', 'travel', 'recovery'].map((type) => [type, props.attendanceSettings?.approvers?.[type] || 'superadmin'])),
 });
-const attendanceHolidayForm = useForm({ day: '', days: [], name: '' });
+const attendanceHolidayForm = useForm({ start_day: '', end_day: '', name: '' });
 const attendanceCauseForm = useForm({ code: '', name: '', reduces_presence: true, requires_approval: true });
 const attendanceBalanceForm = useForm({ user_id: '', year: new Date().getFullYear(), vacation_minutes: 0, permission_minutes: 0 });
 const attendanceEntryForm = useForm({ user_id: '', day: new Date().toISOString().slice(0, 10), cause: 'actual', minutes: 480, note: '' });
@@ -192,12 +234,6 @@ function toggleAttendanceDay(day) {
         : [...attendanceSettingsForm.working_days, day].sort();
 }
 function saveAttendanceSettings() { attendanceSettingsForm.put(route('attendance.settings.update'), { preserveScroll: true }); }
-function queueAttendanceHolidayDay() {
-    if (!attendanceHolidayForm.day || attendanceHolidayForm.days.includes(attendanceHolidayForm.day)) return;
-    attendanceHolidayForm.days = [...attendanceHolidayForm.days, attendanceHolidayForm.day].sort();
-    attendanceHolidayForm.day = '';
-    attendanceHolidayForm.clearErrors();
-}
 function addAttendanceHoliday() {
     attendanceHolidayForm.post(route('attendance.holidays.store'), { preserveScroll: true, onSuccess: () => attendanceHolidayForm.reset() });
 }
@@ -5234,9 +5270,15 @@ function calendarDayStyle(sectionMonth, cell) {
                 </template>
                 <template v-if="absenceWorkspaceTab === 'presence'">
                     <section class="surface p-5">
-                        <h3 class="text-base font-semibold text-gray-900">Disponibilità del team</h3>
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div><h3 class="text-base font-semibold text-gray-900">Disponibilità del team</h3><p class="mt-0.5 text-sm text-gray-500">{{ attendanceWeekLabel }}</p></div>
+                            <div class="flex items-center gap-1">
+                                <button type="button" class="icon-btn h-9 w-9" :disabled="attendanceWeek === 0" title="Settimana corrente" aria-label="Settimana corrente" @click="attendanceWeek = 0"><ChevronLeft class="h-4 w-4" /></button>
+                                <button type="button" class="icon-btn h-9 w-9" :disabled="attendanceWeek === 1" title="Settimana successiva" aria-label="Settimana successiva" @click="attendanceWeek = 1"><ChevronRight class="h-4 w-4" /></button>
+                            </div>
+                        </div>
                         <div class="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
-                            <div v-for="day in attendanceAvailability" :key="day.date" class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/60 p-3">
+                            <div v-for="day in visibleAttendanceWeek" :key="day.date" class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/60 p-3">
                                 <p class="text-xs font-semibold text-gray-500">{{ dateIt(day.date) }}</p>
                                 <p class="mt-1 text-sm font-semibold text-gray-900">{{ day.available }}/{{ day.planned }} disponibili</p>
                                 <p class="text-xs text-gray-500">{{ day.smart }} smart · {{ day.actual }} registrati</p>
@@ -5255,11 +5297,20 @@ function calendarDayStyle(sectionMonth, cell) {
                         </form>
                         <p v-if="attendanceEntryForm.hasErrors" class="mt-2 text-sm text-red-600">{{ Object.values(attendanceEntryForm.errors).join(' ') }}</p>
                         <div class="mt-5 divide-y divide-gray-100">
-                            <div v-for="entry in attendanceEntries" :key="entry.id" class="flex items-center justify-between gap-3 py-2 text-sm">
-                                <span class="min-w-0 truncate"><strong>{{ attendanceTeamUsers?.find((user) => user.id === entry.user_id)?.name || 'Persona' }}</strong> · {{ dateIt(entry.day) }} · {{ attendanceEntryCauses.find((cause) => cause.value === entry.cause)?.label || entry.cause }} · {{ entry.minutes }} min</span>
+                            <div v-for="entry in attendanceEntryRows" :key="entry.id" class="flex items-center justify-between gap-3 py-2 text-sm">
+                                <span class="min-w-0 truncate"><strong>{{ entry.user_name }}</strong> · {{ dateIt(entry.day) }} · {{ attendanceEntryCauses.find((cause) => cause.value === entry.cause)?.label || entry.cause }} · {{ entry.minutes }} min</span>
                                 <button type="button" class="icon-btn h-8 w-8 shrink-0 text-red-600" title="Rimuovi registrazione" @click="requestAttendanceDelete(entry, 'attendance.entries.destroy', 'id')"><Trash2 class="h-4 w-4" /></button>
                             </div>
+                            <p v-if="!attendanceEntryRows.length" class="py-4 text-sm text-gray-500">Nessuna ora registrata.</p>
                         </div>
+                        <div v-if="attendanceEntryTotal > 10" class="mt-3 flex items-center justify-between gap-3 text-sm">
+                            <span class="text-gray-500">{{ attendanceEntryRows.length }} di {{ attendanceEntryTotal }}</span>
+                            <div class="flex items-center gap-4">
+                                <button v-if="attendanceEntryRows.length < Math.min(attendanceEntryTotal, 200)" type="button" class="font-semibold text-blue-700 hover:underline disabled:opacity-50" :disabled="!!attendanceRegistryLoading" @click="loadAttendanceRegistry('entries')">{{ attendanceRegistryLoading === 'entries' ? 'Caricamento…' : 'Carica altri' }}</button>
+                                <a v-if="attendanceEntryTotal > 200 && attendanceEntryRows.length >= 200" :href="route('attendance.registry.export', 'entries')" class="font-semibold text-blue-700 underline-offset-2 hover:underline">Scarica tutti</a>
+                            </div>
+                        </div>
+                        <p v-if="attendanceRegistryError" class="mt-2 text-sm text-red-600">{{ attendanceRegistryError }}</p>
                     </section>
                 </template>
                 <template v-if="isSuperadmin && absenceWorkspaceTab === 'rules'">
@@ -5268,7 +5319,15 @@ function calendarDayStyle(sectionMonth, cell) {
                         <form class="mt-4 space-y-5" @submit.prevent="saveAttendanceSettings">
                             <div class="max-w-xs"><label class="block text-sm font-medium text-gray-700">Minuti lavorativi standard al giorno</label><input v-model.number="attendanceSettingsForm.default_daily_minutes" type="number" min="60" max="960" class="form-control" /></div>
                             <div><p class="text-sm font-medium text-gray-700">Giorni lavorativi</p><div class="mt-2 flex flex-wrap gap-2"><button v-for="day in attendanceWeekdays" :key="day.value" type="button" :class="['h-10 w-10 rounded-full border text-xs font-semibold transition', attendanceSettingsForm.working_days.includes(day.value) ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-200 bg-white text-gray-600']" @click="toggleAttendanceDay(day.value)">{{ day.label }}</button></div></div>
-                            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><div v-for="type in [{ value: 'vacation', label: 'Ferie' }, { value: 'permission', label: 'Permessi' }, { value: 'sickness', label: 'Malattia' }, { value: 'late', label: 'Ritardo' }, { value: 'smart_working', label: 'Smart working' }, { value: 'other', label: 'Altre assenze' }, { value: 'travel', label: 'Trasferta' }, { value: 'recovery', label: 'Recupero' }]" :key="type.value"><label class="block text-sm font-medium text-gray-700">{{ type.label }}</label><AppSelect v-model="attendanceSettingsForm.approvers[type.value]" :options="[{ value: 'superadmin', label: 'Superadmin' }, { value: 'admin', label: 'Manager del team' }]" /></div></div>
+                            <div>
+                                <p class="text-sm font-medium text-gray-700">Il Manager del team può approvare</p>
+                                <div class="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                                    <button v-for="type in attendanceApprovalTypes" :key="type.value" type="button" :aria-pressed="attendanceSettingsForm.approvers[type.value] === 'admin'" :class="['attendance-approver-option flex min-h-10 items-center justify-between gap-2 rounded-[var(--radius-sm)] border px-3 py-2 text-left text-sm font-medium transition', attendanceSettingsForm.approvers[type.value] === 'admin' ? 'is-active border-blue-300 bg-blue-50 text-blue-800' : 'border-gray-200 bg-white text-gray-600 hover:border-blue-200']" @click="attendanceSettingsForm.approvers[type.value] = attendanceSettingsForm.approvers[type.value] === 'admin' ? 'superadmin' : 'admin'">
+                                        {{ type.label }}<Check v-if="attendanceSettingsForm.approvers[type.value] === 'admin'" class="h-4 w-4 shrink-0" />
+                                    </button>
+                                </div>
+                                <p class="mt-2 text-xs text-gray-500">Le tipologie non selezionate sono approvate solo dal Superadmin.</p>
+                            </div>
                             <button type="submit" class="btn btn-primary" :disabled="attendanceSettingsForm.processing">Salva regole</button>
                         </form>
                     </section>
@@ -5276,25 +5335,40 @@ function calendarDayStyle(sectionMonth, cell) {
                         <section class="surface p-5">
                             <h3 class="text-base font-semibold text-gray-900">Festività</h3>
                             <form class="mt-4 space-y-3" @submit.prevent="addAttendanceHoliday">
-                                <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-                                    <div><label class="block text-sm font-medium text-gray-700">Data</label><AppDateInput v-model="attendanceHolidayForm.day" /></div>
-                                    <button type="button" class="btn btn-outline self-end" :disabled="!attendanceHolidayForm.day" @click="queueAttendanceHolidayDay"><Plus class="h-4 w-4" /> Aggiungi data</button>
-                                </div>
-                                <div v-if="attendanceHolidayForm.days.length" class="flex flex-wrap gap-2">
-                                    <span v-for="day in attendanceHolidayForm.days" :key="day" class="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-blue-100 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-800">
-                                        {{ dateIt(day) }}
-                                        <button type="button" class="rounded-full p-0.5 hover:bg-blue-100" :aria-label="`Rimuovi ${dateIt(day)}`" @click="attendanceHolidayForm.days = attendanceHolidayForm.days.filter((value) => value !== day)"><X class="h-3.5 w-3.5" /></button>
-                                    </span>
-                                </div>
+                                <div><label class="block text-sm font-medium text-gray-700">Giorno o intervallo</label><AppDateRangeInput v-model:start-day="attendanceHolidayForm.start_day" v-model:end-day="attendanceHolidayForm.end_day" /></div>
                                 <div><label class="block text-sm font-medium text-gray-700">Nome festività</label><input v-model="attendanceHolidayForm.name" class="form-control" /></div>
                                 <p v-if="attendanceHolidayForm.hasErrors" class="text-sm text-red-600">{{ Object.values(attendanceHolidayForm.errors).join(' ') }}</p>
-                                <div class="flex justify-end"><button type="submit" class="btn btn-primary" :disabled="attendanceHolidayForm.processing || (!attendanceHolidayForm.day && !attendanceHolidayForm.days.length)">Salva festività</button></div>
+                                <div class="flex justify-end"><button type="submit" class="btn btn-primary" :disabled="attendanceHolidayForm.processing || !attendanceHolidayForm.start_day">Salva festività</button></div>
                             </form>
-                            <div class="mt-4 divide-y divide-gray-100"><div v-for="holiday in attendanceHolidays" :key="holiday.id" class="flex items-center justify-between py-2 text-sm"><span>{{ dateIt(holiday.day) }} · {{ holiday.name }}</span><button type="button" class="icon-btn h-8 w-8 text-red-600" title="Rimuovi festività" @click="requestAttendanceDelete(holiday, 'attendance.holidays.destroy', 'id')"><Trash2 class="h-4 w-4" /></button></div></div>
+                            <div class="mt-4 divide-y divide-gray-100"><div v-for="holiday in attendanceHolidays" :key="holiday.id" class="flex items-center justify-between py-2 text-sm"><span>{{ dateIt(holiday.day) }}<template v-if="holiday.end_day && holiday.end_day !== holiday.day"> – {{ dateIt(holiday.end_day) }}</template> · {{ holiday.name }}</span><button type="button" class="icon-btn h-8 w-8 text-red-600" title="Rimuovi festività" @click="requestAttendanceDelete(holiday, 'attendance.holidays.destroy', 'id')"><Trash2 class="h-4 w-4" /></button></div></div>
                         </section>
-                        <section class="surface p-5"><h3 class="text-base font-semibold text-gray-900">Altre causali</h3><form class="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]" @submit.prevent="addAttendanceCause"><input v-model="attendanceCauseForm.code" class="form-control" placeholder="Codice" /><input v-model="attendanceCauseForm.name" class="form-control" placeholder="Nome causale" /><button class="btn btn-primary">Aggiungi</button><label class="flex items-center gap-2 text-sm"><input v-model="attendanceCauseForm.reduces_presence" type="checkbox" />Riduce presenza</label><label class="flex items-center gap-2 text-sm"><input v-model="attendanceCauseForm.requires_approval" type="checkbox" />Richiede approvazione</label></form><div class="mt-4 divide-y divide-gray-100"><div v-for="cause in attendanceCauses" :key="cause.code" class="flex items-center justify-between py-2 text-sm"><span>{{ cause.name }} <small class="text-gray-500">{{ cause.code }}</small></span><button v-if="cause.active" type="button" class="icon-btn h-8 w-8 text-red-600" title="Disattiva causale" @click="requestAttendanceDelete(cause, 'attendance.causes.destroy', 'code')"><Trash2 class="h-4 w-4" /></button></div></div></section>
+                        <section class="surface p-5"><h3 class="text-base font-semibold text-gray-900">Causali aggiuntive</h3><p class="mt-1 text-sm text-gray-500">Motivi che il dipendente può scegliere nella richiesta “Altra assenza”, oltre alle tipologie già previste.</p><form class="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]" @submit.prevent="addAttendanceCause"><input v-model="attendanceCauseForm.code" class="form-control" placeholder="Codice breve" /><input v-model="attendanceCauseForm.name" class="form-control" placeholder="Nome causale" /><button class="btn btn-primary">Aggiungi</button><label class="flex items-center gap-2 text-sm" title="Questa causale riduce la presenza disponibile"><input v-model="attendanceCauseForm.reduces_presence" type="checkbox" />Riduce presenza</label><label class="flex items-center gap-2 text-sm" title="La richiesta deve essere approvata prima di diventare effettiva"><input v-model="attendanceCauseForm.requires_approval" type="checkbox" />Richiede approvazione</label></form><div class="mt-4 divide-y divide-gray-100"><div v-for="cause in attendanceCauses" :key="cause.code" class="flex items-center justify-between py-2 text-sm"><span>{{ cause.name }} <small class="text-gray-500">{{ cause.code }}</small></span><button v-if="cause.active" type="button" class="icon-btn h-8 w-8 text-red-600" title="Disattiva causale" @click="requestAttendanceDelete(cause, 'attendance.causes.destroy', 'code')"><Trash2 class="h-4 w-4" /></button></div></div></section>
                     </div>
-                    <section class="surface p-5"><h3 class="text-base font-semibold text-gray-900">Saldi annuali</h3><form class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5" @submit.prevent="saveAttendanceBalances"><div><label class="block text-sm font-medium text-gray-700">Persona</label><AppSelect v-model="attendanceBalanceForm.user_id" :options="attendanceUserOptions" searchable /></div><div><label class="block text-sm font-medium text-gray-700">Anno</label><input v-model.number="attendanceBalanceForm.year" type="number" min="2020" max="2100" class="form-control" /></div><div><label class="block text-sm font-medium text-gray-700">Ferie (minuti)</label><input v-model.number="attendanceBalanceForm.vacation_minutes" type="number" min="0" class="form-control" /></div><div><label class="block text-sm font-medium text-gray-700">Permessi (minuti)</label><input v-model.number="attendanceBalanceForm.permission_minutes" type="number" min="0" class="form-control" /></div><button type="submit" class="btn btn-primary self-end" :disabled="!attendanceBalanceForm.user_id">Salva saldi</button></form></section>
+                    <section class="surface p-5">
+                        <h3 class="text-base font-semibold text-gray-900">Saldi annuali</h3>
+                        <form class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5" @submit.prevent="saveAttendanceBalances">
+                            <div><label class="block text-sm font-medium text-gray-700">Persona</label><AppSelect v-model="attendanceBalanceForm.user_id" :options="attendanceUserOptions" searchable /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Anno</label><input v-model.number="attendanceBalanceForm.year" type="number" min="2020" max="2100" class="form-control" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Ferie (minuti)</label><input v-model.number="attendanceBalanceForm.vacation_minutes" type="number" min="0" class="form-control" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Permessi (minuti)</label><input v-model.number="attendanceBalanceForm.permission_minutes" type="number" min="0" class="form-control" /></div>
+                            <button type="submit" class="btn btn-primary self-end" :disabled="attendanceBalanceForm.processing || !attendanceBalanceForm.user_id">Salva saldi</button>
+                        </form>
+                        <div class="mt-5 divide-y divide-gray-100">
+                            <div v-for="balance in attendanceBalanceRows" :key="balance.id" class="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                                <span class="font-medium text-gray-800">{{ balance.user_name }}</span>
+                                <span class="text-gray-500">{{ balance.year }} · {{ balance.type === 'vacation' ? 'Ferie' : 'Permessi' }} · {{ balance.allocated_minutes }} min</span>
+                            </div>
+                            <p v-if="!attendanceBalanceRows.length" class="py-4 text-sm text-gray-500">Nessun saldo configurato.</p>
+                        </div>
+                        <div v-if="attendanceBalanceTotal > 10" class="mt-3 flex items-center justify-between gap-3 text-sm">
+                            <span class="text-gray-500">{{ attendanceBalanceRows.length }} di {{ attendanceBalanceTotal }}</span>
+                            <div class="flex items-center gap-4">
+                                <button v-if="attendanceBalanceRows.length < Math.min(attendanceBalanceTotal, 200)" type="button" class="font-semibold text-blue-700 hover:underline disabled:opacity-50" :disabled="!!attendanceRegistryLoading" @click="loadAttendanceRegistry('balances')">{{ attendanceRegistryLoading === 'balances' ? 'Caricamento…' : 'Carica altri' }}</button>
+                                <a v-if="attendanceBalanceTotal > 200 && attendanceBalanceRows.length >= 200" :href="route('attendance.registry.export', 'balances')" class="font-semibold text-blue-700 underline-offset-2 hover:underline">Scarica tutti</a>
+                            </div>
+                        </div>
+                        <p v-if="attendanceRegistryError" class="mt-2 text-sm text-red-600">{{ attendanceRegistryError }}</p>
+                    </section>
                 </template>
             </div>
         </div>

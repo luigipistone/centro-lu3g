@@ -669,11 +669,12 @@ class CentroPageController extends Controller
             'attendanceSettings' => $section === 'absences' ? app(AttendanceService::class)->settings() : null,
             'attendanceHolidays' => $section === 'absences' ? DB::table('attendance_holidays')->orderBy('day')->get() : [],
             'attendanceCauses' => $section === 'absences' ? DB::table('attendance_causes')->orderBy('name')->get() : [],
-            'attendanceBalances' => $section === 'absences' ? DB::table('attendance_balances')->where('year', now('Europe/Rome')->year)
-                ->when($this->currentUserRole($request) === 'admin', fn ($query) => $query->whereIn('user_id', DB::table('profiles')->where('manager_user_id', $request->user()->id)->select('user_id')))->get() : [],
-            'attendanceEntries' => $section === 'absences' ? DB::table('attendance_entries')->whereDate('day', '>=', now('Europe/Rome')->startOfMonth()->toDateString())
-                ->when($this->currentUserRole($request) === 'admin', fn ($query) => $query->whereIn('user_id', DB::table('profiles')->where('manager_user_id', $request->user()->id)->select('user_id')))
-                ->orderByDesc('day')->limit(150)->get() : [],
+            'attendanceBalances' => $section === 'absences' && $this->currentUserRole($request) === 'superadmin'
+                ? $this->attendanceRegistryQuery($request, 'balances')->limit(10)->get() : [],
+            'attendanceBalanceCount' => $section === 'absences' && $this->currentUserRole($request) === 'superadmin'
+                ? $this->attendanceRegistryQuery($request, 'balances')->count() : 0,
+            'attendanceEntries' => $section === 'absences' ? $this->attendanceRegistryQuery($request, 'entries')->limit(10)->get() : [],
+            'attendanceEntryCount' => $section === 'absences' ? $this->attendanceRegistryQuery($request, 'entries')->count() : 0,
             'attendanceAvailability' => $section === 'absences' ? app(AttendanceService::class)->availability($request->user()->id, $this->currentUserRole($request) === 'superadmin') : [],
             'attendanceTeamUsers' => $section === 'absences' ? DB::table('users as u')->join('profiles as p', 'p.user_id', '=', 'u.id')
                 ->when($this->currentUserRole($request) === 'admin', fn ($query) => $query->where('p.manager_user_id', $request->user()->id))
@@ -1014,15 +1015,35 @@ class CentroPageController extends Controller
         $this->ensureSuperadmin($request);
         $data = $request->validate([
             'day' => ['nullable', 'date_format:Y-m-d'],
+            'start_day' => ['nullable', 'date_format:Y-m-d', 'required_with:end_day'],
+            'end_day' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:start_day'],
             'days' => ['nullable', 'array', 'max:60'],
             'days.*' => ['required', 'date_format:Y-m-d', 'distinct'],
             'name' => ['required', 'string', 'max:120'],
         ]);
+        if (! empty($data['start_day'])) {
+            $start = Carbon::parse($data['start_day'], 'Europe/Rome');
+            $end = Carbon::parse($data['end_day'] ?? $data['start_day'], 'Europe/Rome');
+            if ($start->diffInDays($end) > 59) {
+                throw ValidationException::withMessages(['end_day' => 'Seleziona un intervallo massimo di 60 giorni.']);
+            }
+            if (DB::table('attendance_holidays')->whereDate('day', '<=', $end->toDateString())
+                ->whereRaw('DATE(COALESCE(end_day, day)) >= ?', [$start->toDateString()])->exists()) {
+                throw ValidationException::withMessages(['start_day' => 'L’intervallo si sovrappone a una festività già presente.']);
+            }
+            DB::table('attendance_holidays')->insert([
+                'id' => (string) Str::uuid(), 'day' => $start->toDateString(), 'end_day' => $end->toDateString(),
+                'name' => $data['name'], 'created_at' => now(), 'updated_at' => now(),
+            ]);
+
+            return back()->with('status', 'Festività aggiunta.');
+        }
         $days = collect($data['days'] ?? [])->push($data['day'] ?? null)->filter()->unique()->sort()->values();
         if ($days->isEmpty()) {
             throw ValidationException::withMessages(['day' => 'Seleziona almeno una data.']);
         }
-        if (DB::table('attendance_holidays')->whereIn('day', $days)->exists()) {
+        if ($days->contains(fn ($day) => DB::table('attendance_holidays')->whereDate('day', '<=', $day)
+            ->whereRaw('DATE(COALESCE(end_day, day)) >= ?', [$day])->exists())) {
             throw ValidationException::withMessages(['days' => 'Una delle date selezionate è già presente tra le festività.']);
         }
         DB::table('attendance_holidays')->insert($days->map(fn ($day) => [
@@ -1128,6 +1149,69 @@ class CentroPageController extends Controller
             $request->user()->name.' ha rimosso una voce delle tue presenze del '.Carbon::parse($entry->day)->format('d/m/Y').'.');
 
         return back()->with('status', 'Registrazione rimossa.');
+    }
+
+    public function attendanceRegistry(Request $request, string $kind): JsonResponse
+    {
+        $this->ensureAttendanceRegistryAccess($request, $kind);
+        $data = $request->validate([
+            'offset' => ['required', 'integer', 'between:0,199'],
+            'limit' => ['required', 'integer', 'between:1,50'],
+        ]);
+
+        return response()->json([
+            'rows' => $this->attendanceRegistryQuery($request, $kind)
+                ->offset($data['offset'])->limit(min($data['limit'], 200 - $data['offset']))->get(),
+            'total' => $this->attendanceRegistryQuery($request, $kind)->count(),
+        ]);
+    }
+
+    public function exportAttendanceRegistry(Request $request, string $kind)
+    {
+        $this->ensureAttendanceRegistryAccess($request, $kind);
+        $isEntry = $kind === 'entries';
+        $fileName = ($isEntry ? 'ore-registrate-' : 'saldi-annuali-').now('Europe/Rome')->format('Y-m-d').'.csv';
+
+        return response()->streamDownload(function () use ($request, $kind, $isEntry) {
+            $stream = fopen('php://output', 'w');
+            fwrite($stream, "\xEF\xBB\xBF");
+            fputcsv($stream, $isEntry
+                ? ['Persona', 'Giorno', 'Causale', 'Minuti', 'Nota']
+                : ['Persona', 'Anno', 'Tipo', 'Minuti assegnati'], ';');
+            foreach ($this->attendanceRegistryQuery($request, $kind)->cursor() as $row) {
+                $values = $isEntry
+                    ? [$row->user_name, $row->day, $row->cause, $row->minutes, $row->note]
+                    : [$row->user_name, $row->year, $row->type, $row->allocated_minutes];
+                fputcsv($stream, array_map(static function ($value) {
+                    $text = (string) ($value ?? '');
+
+                    return preg_match('/^[=+@\-]/u', $text) ? "'".$text : $text;
+                }, $values), ';');
+            }
+            fclose($stream);
+        }, $fileName, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    private function ensureAttendanceRegistryAccess(Request $request, string $kind): void
+    {
+        abort_unless(in_array($kind, ['entries', 'balances'], true), 404);
+        $kind === 'balances' ? $this->ensureSuperadmin($request) : $this->ensureAdmin($request);
+    }
+
+    private function attendanceRegistryQuery(Request $request, string $kind)
+    {
+        $isEntry = $kind === 'entries';
+        $query = DB::table(($isEntry ? 'attendance_entries' : 'attendance_balances').' as record')
+            ->join('users as u', 'u.id', '=', 'record.user_id')
+            ->select(['record.*', 'u.name as user_name']);
+
+        if ($isEntry && $this->currentUserRole($request) === 'admin') {
+            $query->whereIn('record.user_id', DB::table('profiles')->where('manager_user_id', $request->user()->id)->select('user_id'));
+        }
+
+        return $isEntry
+            ? $query->orderByDesc('record.day')->orderByDesc('record.created_at')->orderByDesc('record.id')
+            : $query->orderByDesc('record.year')->orderBy('u.name')->orderBy('record.type')->orderByDesc('record.id');
     }
 
     public function companyDocuments(Request $request): Response
@@ -5733,7 +5817,14 @@ class CentroPageController extends Controller
         }
         $attendance = app(AttendanceService::class);
         $settings = $attendance->settings();
-        $holidays = DB::table('attendance_holidays')->whereBetween('day', [$start->toDateString(), $end->toDateString()])->pluck('name', 'day');
+        $holidays = collect();
+        DB::table('attendance_holidays')->whereDate('day', '<=', $end->toDateString())
+            ->whereRaw('DATE(COALESCE(end_day, day)) >= ?', [$start->toDateString()])->get()
+            ->each(function ($holiday) use ($start, $end, $holidays) {
+                foreach (CarbonPeriod::create(max($holiday->day, $start->toDateString()), min($holiday->end_day ?: $holiday->day, $end->toDateString())) as $day) {
+                    $holidays->put($day->toDateString(), $holiday->name);
+                }
+            });
         $days = collect(CarbonPeriod::create($start, $end))->map(fn ($day) => [
             'iso' => $day->toDateString(),
             'day' => (int) $day->day,

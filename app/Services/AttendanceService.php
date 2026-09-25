@@ -29,7 +29,8 @@ class AttendanceService
     {
         $settings ??= $this->settings();
         $date = $day->toDateString();
-        $this->holidayCache[$date] ??= DB::table('attendance_holidays')->whereDate('day', $date)->exists();
+        $this->holidayCache[$date] ??= DB::table('attendance_holidays')->whereDate('day', '<=', $date)
+            ->whereRaw('DATE(COALESCE(end_day, day)) >= ?', [$date])->exists();
         if (! in_array($day->dayOfWeekIso, $settings['working_days'], true) || $this->holidayCache[$date]) {
             return 0;
         }
@@ -119,10 +120,11 @@ class AttendanceService
         $users = DB::table('users as u')->join('profiles as p', 'p.user_id', '=', 'u.id')
             ->when(! $isSuperadmin, fn ($query) => $query->where('p.manager_user_id', $viewerId))
             ->get(['u.id', 'u.name', 'p.smartworking_day', 'p.smartworking_days']);
-        $start = now('Europe/Rome')->startOfDay();
+        $start = now('Europe/Rome')->startOfWeek();
         $end = $start->copy()->addDays($days - 1);
         $absences = DB::table('absence_requests')->where('status', 'approved')->whereDate('start_date', '<=', $end->toDateString())
-            ->whereDate('end_date', '>=', $start->toDateString())->whereIn('user_id', $users->pluck('id'))->get();
+            ->whereRaw('DATE(COALESCE(end_date, start_date)) >= ?', [$start->toDateString()])
+            ->whereIn('user_id', $users->pluck('id'))->get();
         $actual = DB::table('attendance_entries')->where('cause', 'actual')->whereBetween('day', [$start->toDateString(), $end->toDateString()])
             ->whereIn('user_id', $users->pluck('id'))->get()->groupBy('day');
         $settings = $this->settings();
@@ -134,7 +136,7 @@ class AttendanceService
                     continue;
                 }
                 $planned++;
-                $absence = $absences->first(fn ($row) => $row->user_id === $user->id && $row->start_date <= $day->toDateString() && $row->end_date >= $day->toDateString());
+                $absence = $absences->first(fn ($row) => $row->user_id === $user->id && $row->start_date <= $day->toDateString() && ($row->end_date ?: $row->start_date) >= $day->toDateString());
                 if (! $absence || in_array($absence->type, ['smart_working', 'travel'], true)) {
                     $available++;
                 }
