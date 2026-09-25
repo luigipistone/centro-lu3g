@@ -176,7 +176,7 @@ const attendanceSettingsForm = useForm({
     working_days: props.attendanceSettings?.working_days || [1, 2, 3, 4, 5],
     approvers: Object.fromEntries(['vacation', 'permission', 'sickness', 'late', 'smart_working', 'other', 'travel', 'recovery'].map((type) => [type, props.attendanceSettings?.approvers?.[type] || 'superadmin'])),
 });
-const attendanceHolidayForm = useForm({ day: '', name: '' });
+const attendanceHolidayForm = useForm({ day: '', days: [], name: '' });
 const attendanceCauseForm = useForm({ code: '', name: '', reduces_presence: true, requires_approval: true });
 const attendanceBalanceForm = useForm({ user_id: '', year: new Date().getFullYear(), vacation_minutes: 0, permission_minutes: 0 });
 const attendanceEntryForm = useForm({ user_id: '', day: new Date().toISOString().slice(0, 10), cause: 'actual', minutes: 480, note: '' });
@@ -192,7 +192,15 @@ function toggleAttendanceDay(day) {
         : [...attendanceSettingsForm.working_days, day].sort();
 }
 function saveAttendanceSettings() { attendanceSettingsForm.put(route('attendance.settings.update'), { preserveScroll: true }); }
-function addAttendanceHoliday() { attendanceHolidayForm.post(route('attendance.holidays.store'), { preserveScroll: true, onSuccess: () => attendanceHolidayForm.reset() }); }
+function queueAttendanceHolidayDay() {
+    if (!attendanceHolidayForm.day || attendanceHolidayForm.days.includes(attendanceHolidayForm.day)) return;
+    attendanceHolidayForm.days = [...attendanceHolidayForm.days, attendanceHolidayForm.day].sort();
+    attendanceHolidayForm.day = '';
+    attendanceHolidayForm.clearErrors();
+}
+function addAttendanceHoliday() {
+    attendanceHolidayForm.post(route('attendance.holidays.store'), { preserveScroll: true, onSuccess: () => attendanceHolidayForm.reset() });
+}
 function addAttendanceCause() { attendanceCauseForm.post(route('attendance.causes.store'), { preserveScroll: true, onSuccess: () => attendanceCauseForm.reset() }); }
 function saveAttendanceBalances() {
     if (!attendanceBalanceForm.user_id) return;
@@ -5265,7 +5273,25 @@ function calendarDayStyle(sectionMonth, cell) {
                         </form>
                     </section>
                     <div class="grid gap-6 lg:grid-cols-2">
-                        <section class="surface p-5"><h3 class="text-base font-semibold text-gray-900">Festività</h3><form class="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]" @submit.prevent="addAttendanceHoliday"><AppDateInput v-model="attendanceHolidayForm.day" /><input v-model="attendanceHolidayForm.name" class="form-control" placeholder="Nome festività" /><button class="btn btn-primary">Aggiungi</button></form><div class="mt-4 divide-y divide-gray-100"><div v-for="holiday in attendanceHolidays" :key="holiday.id" class="flex items-center justify-between py-2 text-sm"><span>{{ dateIt(holiday.day) }} · {{ holiday.name }}</span><button type="button" class="icon-btn h-8 w-8 text-red-600" title="Rimuovi festività" @click="requestAttendanceDelete(holiday, 'attendance.holidays.destroy', 'id')"><Trash2 class="h-4 w-4" /></button></div></div></section>
+                        <section class="surface p-5">
+                            <h3 class="text-base font-semibold text-gray-900">Festività</h3>
+                            <form class="mt-4 space-y-3" @submit.prevent="addAttendanceHoliday">
+                                <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                                    <div><label class="block text-sm font-medium text-gray-700">Data</label><AppDateInput v-model="attendanceHolidayForm.day" /></div>
+                                    <button type="button" class="btn btn-outline self-end" :disabled="!attendanceHolidayForm.day" @click="queueAttendanceHolidayDay"><Plus class="h-4 w-4" /> Aggiungi data</button>
+                                </div>
+                                <div v-if="attendanceHolidayForm.days.length" class="flex flex-wrap gap-2">
+                                    <span v-for="day in attendanceHolidayForm.days" :key="day" class="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-blue-100 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-800">
+                                        {{ dateIt(day) }}
+                                        <button type="button" class="rounded-full p-0.5 hover:bg-blue-100" :aria-label="`Rimuovi ${dateIt(day)}`" @click="attendanceHolidayForm.days = attendanceHolidayForm.days.filter((value) => value !== day)"><X class="h-3.5 w-3.5" /></button>
+                                    </span>
+                                </div>
+                                <div><label class="block text-sm font-medium text-gray-700">Nome festività</label><input v-model="attendanceHolidayForm.name" class="form-control" /></div>
+                                <p v-if="attendanceHolidayForm.hasErrors" class="text-sm text-red-600">{{ Object.values(attendanceHolidayForm.errors).join(' ') }}</p>
+                                <div class="flex justify-end"><button type="submit" class="btn btn-primary" :disabled="attendanceHolidayForm.processing || (!attendanceHolidayForm.day && !attendanceHolidayForm.days.length)">Salva festività</button></div>
+                            </form>
+                            <div class="mt-4 divide-y divide-gray-100"><div v-for="holiday in attendanceHolidays" :key="holiday.id" class="flex items-center justify-between py-2 text-sm"><span>{{ dateIt(holiday.day) }} · {{ holiday.name }}</span><button type="button" class="icon-btn h-8 w-8 text-red-600" title="Rimuovi festività" @click="requestAttendanceDelete(holiday, 'attendance.holidays.destroy', 'id')"><Trash2 class="h-4 w-4" /></button></div></div>
+                        </section>
                         <section class="surface p-5"><h3 class="text-base font-semibold text-gray-900">Altre causali</h3><form class="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]" @submit.prevent="addAttendanceCause"><input v-model="attendanceCauseForm.code" class="form-control" placeholder="Codice" /><input v-model="attendanceCauseForm.name" class="form-control" placeholder="Nome causale" /><button class="btn btn-primary">Aggiungi</button><label class="flex items-center gap-2 text-sm"><input v-model="attendanceCauseForm.reduces_presence" type="checkbox" />Riduce presenza</label><label class="flex items-center gap-2 text-sm"><input v-model="attendanceCauseForm.requires_approval" type="checkbox" />Richiede approvazione</label></form><div class="mt-4 divide-y divide-gray-100"><div v-for="cause in attendanceCauses" :key="cause.code" class="flex items-center justify-between py-2 text-sm"><span>{{ cause.name }} <small class="text-gray-500">{{ cause.code }}</small></span><button v-if="cause.active" type="button" class="icon-btn h-8 w-8 text-red-600" title="Disattiva causale" @click="requestAttendanceDelete(cause, 'attendance.causes.destroy', 'code')"><Trash2 class="h-4 w-4" /></button></div></div></section>
                     </div>
                     <section class="surface p-5"><h3 class="text-base font-semibold text-gray-900">Saldi annuali</h3><form class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5" @submit.prevent="saveAttendanceBalances"><div><label class="block text-sm font-medium text-gray-700">Persona</label><AppSelect v-model="attendanceBalanceForm.user_id" :options="attendanceUserOptions" searchable /></div><div><label class="block text-sm font-medium text-gray-700">Anno</label><input v-model.number="attendanceBalanceForm.year" type="number" min="2020" max="2100" class="form-control" /></div><div><label class="block text-sm font-medium text-gray-700">Ferie (minuti)</label><input v-model.number="attendanceBalanceForm.vacation_minutes" type="number" min="0" class="form-control" /></div><div><label class="block text-sm font-medium text-gray-700">Permessi (minuti)</label><input v-model.number="attendanceBalanceForm.permission_minutes" type="number" min="0" class="form-control" /></div><button type="submit" class="btn btn-primary self-end" :disabled="!attendanceBalanceForm.user_id">Salva saldi</button></form></section>

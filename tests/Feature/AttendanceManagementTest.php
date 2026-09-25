@@ -110,6 +110,25 @@ class AttendanceManagementTest extends TestCase
         $this->assertStringNotContainsString($otherEmployee->name, $csv);
     }
 
+    public function test_superadmin_can_save_multiple_holidays_without_partial_duplicates(): void
+    {
+        $this->withoutMiddleware(EnforceRolePermissions::class);
+        $admin = User::factory()->create();
+        $this->role($admin, 'superadmin');
+
+        $this->actingAs($admin)->post(route('attendance.holidays.store'), [
+            'name' => 'Chiusura aziendale',
+            'days' => ['2026-12-24', '2026-12-31'],
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('attendance_holidays', 2);
+
+        $this->actingAs($admin)->post(route('attendance.holidays.store'), [
+            'name' => 'Altra chiusura',
+            'days' => ['2026-12-31', '2027-01-02'],
+        ])->assertSessionHasErrors('days');
+        $this->assertDatabaseCount('attendance_holidays', 2);
+    }
+
     private function role(User $user, string $role): void
     {
         DB::table('user_roles')->insert(['id' => (string) Str::uuid(), 'user_id' => $user->id, 'role' => $role]);

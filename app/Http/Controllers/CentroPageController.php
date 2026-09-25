@@ -1012,10 +1012,25 @@ class CentroPageController extends Controller
     public function storeAttendanceHoliday(Request $request): RedirectResponse
     {
         $this->ensureSuperadmin($request);
-        $data = $request->validate(['day' => ['required', 'date', 'unique:attendance_holidays,day'], 'name' => ['required', 'string', 'max:120']]);
-        DB::table('attendance_holidays')->insert(['id' => (string) Str::uuid(), ...$data, 'created_at' => now(), 'updated_at' => now()]);
+        $data = $request->validate([
+            'day' => ['nullable', 'date_format:Y-m-d'],
+            'days' => ['nullable', 'array', 'max:60'],
+            'days.*' => ['required', 'date_format:Y-m-d', 'distinct'],
+            'name' => ['required', 'string', 'max:120'],
+        ]);
+        $days = collect($data['days'] ?? [])->push($data['day'] ?? null)->filter()->unique()->sort()->values();
+        if ($days->isEmpty()) {
+            throw ValidationException::withMessages(['day' => 'Seleziona almeno una data.']);
+        }
+        if (DB::table('attendance_holidays')->whereIn('day', $days)->exists()) {
+            throw ValidationException::withMessages(['days' => 'Una delle date selezionate è già presente tra le festività.']);
+        }
+        DB::table('attendance_holidays')->insert($days->map(fn ($day) => [
+            'id' => (string) Str::uuid(), 'day' => $day, 'name' => $data['name'],
+            'created_at' => now(), 'updated_at' => now(),
+        ])->all());
 
-        return back()->with('status', 'Festività aggiunta.');
+        return back()->with('status', $days->count() === 1 ? 'Festività aggiunta.' : $days->count().' festività aggiunte.');
     }
 
     public function destroyAttendanceHoliday(Request $request, string $id): RedirectResponse
