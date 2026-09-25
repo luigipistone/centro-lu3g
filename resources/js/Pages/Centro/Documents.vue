@@ -1,6 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppSelect from '@/Components/AppSelect.vue';
+import AppDateInput from '@/Components/AppDateInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { dateIt } from '@/utils/formatters';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
@@ -13,6 +14,7 @@ const props = defineProps({
     documents: Array,
     messages: Array,
     attendanceReport: Object,
+    attendanceTeams: Array,
     groups: Array,
     users: Array,
     documentUsers: Array,
@@ -34,6 +36,15 @@ const activeAdminSection = computed(() => props.activeAdminSection || null);
 const reportYear = ref(props.attendanceReport?.year || new Date().getFullYear());
 const reportMonth = ref(props.attendanceReport?.month || (new Date().getMonth() + 1));
 const reportUserId = ref(props.attendanceReport?.selected_user_id || 'all');
+const reportTeamId = ref(props.attendanceReport?.selected_team_id || 'all');
+const reportRangeMode = ref('month');
+const reportFrom = ref(props.attendanceReport?.from || '');
+const reportTo = ref(props.attendanceReport?.to || '');
+const reportSummaryFields = [
+    ['planned', 'Previste'], ['actual', 'Effettive'], ['vacation', 'Ferie'], ['permissions', 'Permessi'],
+    ['sickness', 'Malattia'], ['late', 'Ritardi'], ['smart_working', 'Smart working'],
+    ['extra', 'Straordinari'], ['time_bank', 'Banca ore'], ['recovery', 'Recuperi'], ['travel', 'Trasferte'],
+];
 
 const documentForm = useForm({
     title: '',
@@ -88,7 +99,7 @@ const reportMonthOptions = [
     { value: 12, label: 'Dicembre' },
 ];
 const reportUserOptions = computed(() => [
-    { value: 'all', label: 'Tutto il team' },
+    { value: 'all', label: isSuperadmin.value ? 'Tutta l’azienda' : 'Tutto il mio team' },
     ...(props.users || []).map((user) => ({ value: user.id, label: user.name })),
 ]);
 const categoryOptions = computed(() => [
@@ -385,6 +396,11 @@ function loadReport() {
         month: reportMonth.value,
     };
     if (reportUserId.value !== 'all') params.user_id = reportUserId.value;
+    if (reportTeamId.value !== 'all') params.team_id = reportTeamId.value;
+    if (reportRangeMode.value === 'range' && reportFrom.value && reportTo.value) {
+        params.from = reportFrom.value;
+        params.to = reportTo.value;
+    }
 
     router.get(route('documents.reports'), params, {
         preserveScroll: true,
@@ -392,12 +408,18 @@ function loadReport() {
     });
 }
 
-function reportExportHref() {
+function reportExportHref(format = 'xlsx') {
     const params = {
         year: reportYear.value,
         month: reportMonth.value,
+        format,
     };
     if (reportUserId.value !== 'all') params.user_id = reportUserId.value;
+    if (reportTeamId.value !== 'all') params.team_id = reportTeamId.value;
+    if (reportRangeMode.value === 'range' && reportFrom.value && reportTo.value) {
+        params.from = reportFrom.value;
+        params.to = reportTo.value;
+    }
 
     return route('documents.reports.export', params);
 }
@@ -844,55 +866,51 @@ function deleteLabel(type) {
 
                 <section v-if="canManage && activeAdminSection === 'reports'" class="space-y-6">
                     <div class="surface p-5">
-                        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                             <div>
                                 <h3 class="text-base font-semibold text-gray-900">Report e dati</h3>
-                                <p class="mt-1 text-sm text-gray-500">Presenze mensili nel formato del tracciato paghe.</p>
+                                <p class="mt-1 text-sm text-gray-500">Presenze previste, effettive e causali per il consulente del lavoro.</p>
                             </div>
-                            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-[160px_140px_minmax(220px,1fr)_auto]">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Mese</label>
-                                    <AppSelect v-model="reportMonth" :options="reportMonthOptions" @update:model-value="loadReport" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Anno</label>
-                                    <AppSelect v-model="reportYear" :options="reportYearOptions" @update:model-value="loadReport" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Team</label>
-                                    <AppSelect v-model="reportUserId" :options="reportUserOptions" @update:model-value="loadReport" />
-                                </div>
-                                <a :href="reportExportHref()" class="btn btn-primary self-end">
-                                    <Download class="h-4 w-4" :stroke-width="1.7" />
-                                    Esporta XLSX
+                            <div class="flex flex-wrap gap-2">
+                                <a v-for="format in ['xlsx', 'csv', 'pdf']" :key="format" :href="reportExportHref(format)" class="btn btn-outline">
+                                    <Download class="h-4 w-4" :stroke-width="1.7" />{{ format.toUpperCase() }}
                                 </a>
                             </div>
+                        </div>
+                        <div class="mt-5 flex gap-2">
+                            <button type="button" :class="['settings-tab', reportRangeMode === 'month' ? 'settings-tab-active' : '']" @click="reportRangeMode = 'month'; loadReport()">Mese</button>
+                            <button type="button" :class="['settings-tab', reportRangeMode === 'range' ? 'settings-tab-active' : '']" @click="reportRangeMode = 'range'; loadReport()">Intervallo</button>
+                        </div>
+                        <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            <div v-if="reportRangeMode === 'month'">
+                                    <label class="block text-sm font-medium text-gray-700">Mese</label>
+                                    <AppSelect v-model="reportMonth" :options="reportMonthOptions" @update:model-value="loadReport" />
+                            </div>
+                            <div v-if="reportRangeMode === 'month'">
+                                    <label class="block text-sm font-medium text-gray-700">Anno</label>
+                                    <AppSelect v-model="reportYear" :options="reportYearOptions" @update:model-value="loadReport" />
+                            </div>
+                            <div v-if="reportRangeMode === 'range'"><label class="block text-sm font-medium text-gray-700">Dal</label><AppDateInput v-model="reportFrom" @change="loadReport" /></div>
+                            <div v-if="reportRangeMode === 'range'"><label class="block text-sm font-medium text-gray-700">Al</label><AppDateInput v-model="reportTo" @change="loadReport" /></div>
+                            <div>
+                                    <label class="block text-sm font-medium text-gray-700">Persona</label>
+                                    <AppSelect v-model="reportUserId" :options="reportUserOptions" @update:model-value="loadReport" />
+                            </div>
+                            <div v-if="isSuperadmin"><label class="block text-sm font-medium text-gray-700">Team</label><AppSelect v-model="reportTeamId" :options="[{ value: 'all', label: 'Tutti i team' }, ...(attendanceTeams || []).map((team) => ({ value: team.id, label: team.name }))]" @update:model-value="loadReport" /></div>
                         </div>
 
                         <p v-if="attendanceReport?.scope_label" class="mt-4 text-sm font-medium text-gray-500">
                             Report: <span class="text-gray-900">{{ attendanceReport.scope_label }}</span>
                         </p>
 
-                        <div v-if="attendanceReport" class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                        <div v-if="attendanceReport" class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                             <div class="rounded-[var(--radius-sm)] bg-white/70 px-4 py-3">
                                 <p class="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">Persone</p>
                                 <p class="mt-1 text-xl font-semibold text-gray-900">{{ attendanceReport.summary.users }}</p>
                             </div>
-                            <div class="rounded-[var(--radius-sm)] bg-white/70 px-4 py-3">
-                                <p class="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">Ore ordinarie</p>
-                                <p class="mt-1 text-xl font-semibold text-gray-900">{{ attendanceReport.summary.ordinary }}</p>
-                            </div>
-                            <div class="rounded-[var(--radius-sm)] bg-white/70 px-4 py-3">
-                                <p class="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">Ferie</p>
-                                <p class="mt-1 text-xl font-semibold text-gray-900">{{ attendanceReport.summary.vacation }}</p>
-                            </div>
-                            <div class="rounded-[var(--radius-sm)] bg-white/70 px-4 py-3">
-                                <p class="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">Permessi</p>
-                                <p class="mt-1 text-xl font-semibold text-gray-900">{{ attendanceReport.summary.permissions }}</p>
-                            </div>
-                            <div class="rounded-[var(--radius-sm)] bg-white/70 px-4 py-3">
-                                <p class="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">Malattia</p>
-                                <p class="mt-1 text-xl font-semibold text-gray-900">{{ attendanceReport.summary.sickness }}</p>
+                            <div v-for="[key, label] in reportSummaryFields" :key="key" class="rounded-[var(--radius-sm)] bg-white/70 px-4 py-3">
+                                <p class="text-xs font-semibold uppercase text-gray-400">{{ label }}</p>
+                                <p class="mt-1 text-xl font-semibold text-gray-900">{{ attendanceReport.summary[key] }}</p>
                             </div>
                         </div>
                     </div>
@@ -900,7 +918,7 @@ function deleteLabel(type) {
                     <div v-if="attendanceReport" class="surface overflow-hidden">
                         <div class="border-b border-white/70 px-5 py-4">
                             <h3 class="text-base font-semibold text-gray-900">{{ attendanceReport.month_label }}</h3>
-                            <p class="mt-1 text-sm text-gray-500">Anteprima sintetica. L'export contiene tutti i giorni del mese e i riepiloghi finali.</p>
+                            <p class="mt-1 text-sm text-gray-500">Generato il {{ attendanceReport.generated_at }}. XLSX e CSV includono il dettaglio giornaliero.</p>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="min-w-full divide-y divide-gray-100 text-sm">
@@ -908,10 +926,18 @@ function deleteLabel(type) {
                                     <tr>
                                         <th class="px-4 py-3 text-left font-semibold text-gray-600">Cognome Nome</th>
                                         <th class="px-4 py-3 text-left font-semibold text-gray-600">Matricola</th>
+                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Previste</th>
+                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Effettive</th>
                                         <th class="px-4 py-3 text-left font-semibold text-gray-600">Ore ordinarie</th>
                                         <th class="px-4 py-3 text-left font-semibold text-gray-600">Ferie</th>
                                         <th class="px-4 py-3 text-left font-semibold text-gray-600">Permessi</th>
                                         <th class="px-4 py-3 text-left font-semibold text-gray-600">Malattia</th>
+                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Ritardi</th>
+                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Smart working</th>
+                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Straordinari</th>
+                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Banca ore</th>
+                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Recuperi</th>
+                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Trasferte</th>
                                         <th class="px-4 py-3 text-left font-semibold text-gray-600">Altre assenze</th>
                                     </tr>
                                 </thead>
@@ -919,10 +945,18 @@ function deleteLabel(type) {
                                     <tr v-for="row in attendanceReport.rows" :key="row.user_id" class="hover:bg-gray-50">
                                         <td class="px-4 py-3 font-semibold text-gray-900">{{ row.name }}</td>
                                         <td class="px-4 py-3 text-gray-500">{{ row.employee_code }}</td>
+                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.planned }}</td>
+                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.actual }}</td>
                                         <td class="px-4 py-3 text-gray-700">{{ row.total_labels.ordinary }}</td>
                                         <td class="px-4 py-3 text-gray-700">{{ row.total_labels.vacation }}</td>
                                         <td class="px-4 py-3 text-gray-700">{{ row.total_labels.permissions }}</td>
                                         <td class="px-4 py-3 text-gray-700">{{ row.total_labels.sickness }}</td>
+                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.late }}</td>
+                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.smart_working }}</td>
+                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.extra }}</td>
+                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.time_bank }}</td>
+                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.recovery }}</td>
+                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.travel }}</td>
                                         <td class="px-4 py-3 text-gray-700">{{ row.total_labels.other }}</td>
                                     </tr>
                                 </tbody>

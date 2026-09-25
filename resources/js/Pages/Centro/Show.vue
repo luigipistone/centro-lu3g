@@ -63,6 +63,7 @@ const isGuest = computed(() => page.props.auth?.user?.role === 'guest');
 const isEditor = computed(() => currentRole.value === 'editor');
 const isSuperadmin = computed(() => currentRole.value === 'superadmin');
 const isAdmin = computed(() => ['admin', 'superadmin'].includes(currentRole.value));
+const canApproveCurrentAbsence = computed(() => isSuperadmin.value || props.related?.attendanceApprovers?.[props.record?.type] === 'admin');
 const permissions = computed(() => page.props.auth?.user?.permissions || []);
 const hasPermission = (permission) => isSuperadmin.value || permissions.value.includes(permission);
 const canEditClient = computed(() => hasPermission('clients.update'));
@@ -195,12 +196,16 @@ const absenceTypeOptions = [
     { value: 'permission', label: 'Permesso' },
     { value: 'sickness', label: 'Malattia' },
     { value: 'late', label: 'Ritardo' },
+    { value: 'smart_working', label: 'Smart working' },
+    { value: 'travel', label: 'Trasferta' },
+    { value: 'recovery', label: 'Recupero' },
     { value: 'other', label: 'Altra assenza' },
 ];
 const absenceStatusOptions = [
     { value: 'pending', label: 'In attesa' },
     { value: 'approved', label: 'Approvata' },
     { value: 'rejected', label: 'Rifiutata' },
+    { value: 'needs_info', label: 'Integrazione richiesta' },
 ];
 const absenceHourOptions = Array.from({ length: 14 }, (_, index) => {
     const hour = String(index + 7).padStart(2, '0');
@@ -914,6 +919,7 @@ const absenceForm = useForm({
     start_time: props.record.start_time ? String(props.record.start_time).slice(0, 5) : '',
     end_time: props.record.end_time ? String(props.record.end_time).slice(0, 5) : '',
     inps_code: props.record.inps_code || '',
+    cause_code: props.record.cause_code || '',
     status: props.record.status || 'pending',
     notes: props.record.notes || '',
 });
@@ -923,6 +929,9 @@ let absenceAutosaveTimer = null;
 let absenceAutosaveSequence = 0;
 const absenceNotesEditor = ref(null);
 const absenceMedicalDocumentInput = ref(null);
+const absenceDecision = ref(null);
+const absenceDecisionReason = ref('');
+const absenceDecisionError = ref('');
 const absenceMedicalDocumentForm = useForm({ medical_document: null });
 
 function normalizeHexColor(value, fallback = '#2563eb') {
@@ -951,7 +960,7 @@ function backLabel() {
 }
 
 function absenceNeedsEndDate(type = absenceForm.type) {
-    return ['vacation', 'sickness', 'other'].includes(type);
+    return ['vacation', 'sickness', 'smart_working', 'travel', 'recovery', 'other'].includes(type);
 }
 
 function absenceNeedsTime(type = absenceForm.type) {
@@ -966,6 +975,7 @@ function absencePayload() {
         start_time: absenceNeedsTime() ? (absenceForm.start_time || null) : null,
         end_time: absenceNeedsTime() ? (absenceForm.end_time || null) : null,
         inps_code: absenceForm.type === 'sickness' ? (absenceForm.inps_code || null) : null,
+        cause_code: absenceForm.type === 'other' ? (absenceForm.cause_code || null) : null,
         status: absenceForm.status,
         notes: absenceForm.notes || null,
     };
@@ -1047,10 +1057,25 @@ function saveAbsenceInline(delay = AUTOSAVE_IDLE_DELAY) {
 }
 
 function setAbsenceStatus(status) {
-    absenceForm.status = status;
-    router.patch(route('absences.status.update', props.record.id), { status }, {
+    if (status !== 'approved') {
+        absenceDecision.value = status;
+        absenceDecisionReason.value = '';
+        return;
+    }
+    submitAbsenceDecision(status);
+}
+
+function submitAbsenceDecision(status = absenceDecision.value) {
+    absenceDecisionError.value = '';
+    if (status !== 'approved' && absenceDecisionReason.value.trim().length < 5) {
+        absenceDecisionError.value = 'Scrivi almeno 5 caratteri.';
+        return;
+    }
+    router.patch(route('absences.status.update', props.record.id), { status, reason: absenceDecisionReason.value }, {
         preserveScroll: true,
         preserveState: true,
+        onSuccess: () => { absenceForm.status = status; absenceDecision.value = null; },
+        onError: (errors) => { absenceDecisionError.value = errors.reason || 'Operazione non riuscita.'; },
     });
 }
 
@@ -6124,6 +6149,7 @@ onUnmounted(() => {
                                 <AppSelect v-model="absenceForm.type" :options="absenceTypeOptions" @change="saveAbsenceInline(0)" />
                                 <div v-if="absenceForm.errors.type" class="mt-1 text-sm text-red-600">{{ absenceForm.errors.type }}</div>
                             </div>
+                            <div v-if="absenceForm.type === 'other'"><label class="block text-sm font-medium text-gray-700">Causale</label><AppSelect v-model="absenceForm.cause_code" :options="(related.attendanceCauses || []).map((cause) => ({ value: cause.code, label: cause.name }))" @change="saveAbsenceInline(0)" /></div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">{{ absenceNeedsEndDate() ? 'Dal' : 'Giorno' }}</label>
                                 <AppDateInput v-model="absenceForm.start_date" @change="saveAbsenceInline(0)" />
@@ -6163,7 +6189,7 @@ onUnmounted(() => {
                                         <FileText class="h-4 w-4 shrink-0 text-gray-400" :stroke-width="1.7" />
                                         Nessun documento caricato
                                     </div>
-                                    <button type="button" class="btn btn-outline" :disabled="absenceMedicalDocumentForm.processing" @click="chooseAbsenceMedicalDocument">
+                                    <button v-if="isSuperadmin" type="button" class="btn btn-outline" :disabled="absenceMedicalDocumentForm.processing" @click="chooseAbsenceMedicalDocument">
                                         <Paperclip class="h-4 w-4" :stroke-width="1.7" />
                                         {{ record.medical_document_path ? 'Sostituisci' : 'Allega' }}
                                     </button>
@@ -6172,7 +6198,10 @@ onUnmounted(() => {
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Stato</label>
-                                <AppSelect v-model="absenceForm.status" :options="absenceStatusOptions" @change="saveAbsenceInline(0)" />
+                                <p class="mt-2 text-sm font-semibold text-gray-900">{{ absenceStatusOptions.find((option) => option.value === absenceForm.status)?.label || 'In attesa' }}</p>
+                            </div>
+                            <div v-if="record.decision_reason || record.integration_request" class="md:col-span-3 2xl:col-span-4 rounded-[var(--radius-sm)] border border-amber-100 bg-amber-50/70 p-3 text-sm text-gray-700">
+                                {{ record.decision_reason || record.integration_request }}
                             </div>
                             <div class="md:col-span-3 2xl:col-span-4">
                                 <label class="block text-sm font-medium text-gray-700">Note</label>
@@ -6226,12 +6255,19 @@ onUnmounted(() => {
                         <section class="surface rounded-md p-5">
                             <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Azioni</h3>
                             <div class="mt-4 grid gap-2">
-                                <button v-if="absenceForm.status === 'pending'" type="button" class="btn btn-primary justify-center" @click="setAbsenceStatus('approved')">Approva</button>
-                                <button v-if="absenceForm.status === 'pending'" type="button" class="btn btn-outline justify-center" @click="setAbsenceStatus('rejected')">Rifiuta</button>
+                                <button v-if="canApproveCurrentAbsence && absenceForm.status === 'pending'" type="button" class="btn btn-primary justify-center" @click="setAbsenceStatus('approved')">Approva</button>
+                                <button v-if="canApproveCurrentAbsence && absenceForm.status === 'pending'" type="button" class="btn btn-outline justify-center" @click="setAbsenceStatus('rejected')">Rifiuta</button>
+                                <button v-if="isSuperadmin && absenceForm.status === 'pending'" type="button" class="btn btn-outline justify-center" @click="setAbsenceStatus('needs_info')">Richiedi integrazione</button>
                                 <button type="button" class="btn border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 justify-center" @click="deleteAbsenceFromDetail">
                                     <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                     Elimina
                                 </button>
+                            </div>
+                            <div v-if="absenceDecision" class="mt-4 space-y-3 border-t border-gray-100 pt-4">
+                                <label class="block text-sm font-medium text-gray-700">{{ absenceDecision === 'rejected' ? 'Motivazione del rifiuto' : 'Informazioni richieste' }}</label>
+                                <textarea v-model="absenceDecisionReason" class="form-control" rows="3" placeholder="Scrivi un motivo chiaro per il dipendente"></textarea>
+                                <p v-if="absenceDecisionError" class="text-xs text-red-600">{{ absenceDecisionError }}</p>
+                                <div class="flex justify-end gap-2"><button type="button" class="btn btn-outline" @click="absenceDecision = null">Annulla</button><button type="button" class="btn btn-primary" @click="submitAbsenceDecision()">Conferma</button></div>
                             </div>
                         </section>
                         <section class="surface rounded-md p-5">

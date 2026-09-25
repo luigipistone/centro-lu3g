@@ -28,6 +28,9 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    attendanceBalances: { type: Object, default: () => ({}) },
+    attendanceYear: Number,
+    attendanceCauses: { type: Array, default: () => [] },
     archiveRequest: Object,
     dossierDocuments: { type: Array, default: () => [] },
     employeeDossier: { type: Object, default: () => ({ items: [], summary: [] }) },
@@ -54,12 +57,16 @@ const absenceTypes = [
     { value: 'permission', label: 'Permesso' },
     { value: 'sickness', label: 'Malattia' },
     { value: 'late', label: 'Ritardo' },
+    { value: 'smart_working', label: 'Smart working' },
+    { value: 'travel', label: 'Trasferta' },
+    { value: 'recovery', label: 'Recupero' },
     { value: 'other', label: 'Altra assenza' },
 ];
 const absenceStatusLabels = {
     pending: 'In attesa',
     approved: 'Approvata',
     rejected: 'Rifiutata',
+    needs_info: 'Integrazione richiesta',
 };
 const smartworkingLabels = {
     monday: 'Lunedì',
@@ -76,6 +83,7 @@ const absenceForm = useForm({
     start_time: '',
     end_time: '',
     inps_code: '',
+    cause_code: '',
     medical_document: null,
     notes: '',
 });
@@ -83,12 +91,21 @@ const absenceNotesEditor = ref(null);
 const absenceMedicalDocumentInput = ref(null);
 const smartworkingLabel = computed(() => smartworkingLabels[props.profile?.smartworking_day] || 'Non impostato');
 const absenceRows = computed(() => props.absences || []);
-const absenceNeedsEndDate = computed(() => ['vacation', 'sickness', 'other'].includes(absenceForm.type));
+const absenceNeedsEndDate = computed(() => ['vacation', 'sickness', 'other', 'smart_working', 'travel', 'recovery'].includes(absenceForm.type));
 const absenceNeedsTime = computed(() => ['permission', 'late', 'other'].includes(absenceForm.type));
 const hourOptions = computed(() => Array.from({ length: 14 }, (_, index) => {
     const hour = String(index + 7).padStart(2, '0');
     return { value: `${hour}:00`, label: `${hour}:00` };
 }));
+const balanceLabels = { vacation: 'Ferie', permission: 'Permessi' };
+const formatHours = (minutes) => minutes === null || minutes === undefined ? 'Da configurare' : `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ''}`;
+const supplementText = ref({});
+function submitSupplement(absence) {
+    router.patch(route('profile.absences.supplement', absence.id), { notes: supplementText.value[absence.id] || '' }, {
+        preserveScroll: true,
+        onSuccess: () => { supplementText.value[absence.id] = ''; },
+    });
+}
 
 function absenceTypeLabel(type) {
     return absenceTypes.find((option) => option.value === type)?.label || 'Assenza';
@@ -112,6 +129,7 @@ function submitAbsence() {
         absenceForm.inps_code = '';
         absenceForm.medical_document = null;
     }
+    if (absenceForm.type !== 'other') absenceForm.cause_code = '';
     absenceForm.post(route('profile.absences.store'), {
         preserveScroll: true,
         onSuccess: () => {
@@ -265,6 +283,13 @@ watch(() => absenceForm.type, () => {
                 </section>
 
                 <section v-if="profileTab === 'absences'" class="surface p-4 sm:p-8">
+                    <div class="mb-6 grid gap-3 sm:grid-cols-2">
+                        <div v-for="(balance, type) in attendanceBalances" :key="type" class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
+                            <p class="text-xs font-semibold uppercase text-gray-500">{{ balanceLabels[type] }} {{ attendanceYear }}</p>
+                            <p class="mt-1 text-lg font-semibold text-gray-900">{{ formatHours(balance.remaining_minutes) }} <span v-if="balance.remaining_minutes !== null" class="text-sm font-normal text-gray-500">disponibili</span></p>
+                            <p class="text-xs text-gray-500">Usate {{ formatHours(balance.used_minutes) }} · Assegnate {{ formatHours(balance.allocated_minutes) }}</p>
+                        </div>
+                    </div>
                     <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
                         <div>
                             <h2 class="text-lg font-medium text-gray-900">Assenze e disponibilità</h2>
@@ -281,6 +306,11 @@ watch(() => absenceForm.type, () => {
                             <label class="block text-sm font-medium text-gray-700">Tipo richiesta</label>
                             <AppSelect v-model="absenceForm.type" :options="absenceTypes" />
                             <div v-if="absenceForm.errors.type" class="mt-1 text-sm text-red-600">{{ absenceForm.errors.type }}</div>
+                        </div>
+                        <div v-if="absenceForm.type === 'other'">
+                            <label class="block text-sm font-medium text-gray-700">Causale</label>
+                            <AppSelect v-model="absenceForm.cause_code" :options="attendanceCauses.map((cause) => ({ value: cause.code, label: cause.name }))" placeholder="Seleziona causale" />
+                            <div v-if="absenceForm.errors.cause_code" class="mt-1 text-sm text-red-600">{{ absenceForm.errors.cause_code }}</div>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">{{ absenceNeedsEndDate ? 'Dal' : 'Giorno' }}</label>
@@ -374,8 +404,8 @@ watch(() => absenceForm.type, () => {
                     <div class="mt-8">
                         <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Le tue richieste</h3>
                         <div v-if="absenceRows.length" class="mt-3 divide-y divide-gray-100 rounded-[var(--radius-sm)] border border-gray-100">
-                            <div v-for="absence in absenceRows" :key="absence.id" class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-                                <div>
+                            <div v-for="absence in absenceRows" :key="absence.id" class="flex flex-wrap items-start justify-between gap-3 px-4 py-3">
+                                <div class="min-w-0 flex-1">
                                     <div class="text-sm font-semibold text-gray-900">{{ absenceTypeLabel(absence.type) }}</div>
                                     <div class="text-xs text-gray-500">
                                         {{ formatDate(absence.start_date) }}
@@ -392,6 +422,12 @@ watch(() => absenceForm.type, () => {
                                         {{ absence.medical_document_name || 'Documento medico' }}
                                     </a>
                                     <div v-if="absence.notes" class="mt-1 text-sm text-gray-600" v-html="absence.notes"></div>
+                                    <p v-if="absence.decision_reason" class="mt-2 text-sm text-red-700">Motivo del rifiuto: {{ absence.decision_reason }}</p>
+                                    <div v-if="absence.status === 'needs_info'" class="mt-3 max-w-xl space-y-2">
+                                        <p class="text-sm text-amber-700">Integrazione richiesta: {{ absence.integration_request }}</p>
+                                        <textarea v-model="supplementText[absence.id]" class="form-control" rows="2" placeholder="Scrivi le informazioni richieste"></textarea>
+                                        <button type="button" class="btn btn-primary" :disabled="!supplementText[absence.id]?.trim()" @click="submitSupplement(absence)">Invia integrazione</button>
+                                    </div>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <span class="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">{{ absenceStatusLabels[absence.status] || absence.status }}</span>

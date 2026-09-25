@@ -3,17 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ProfileUpdateRequest;
-use App\Services\CentroNotificationService;
 use App\Services\AccountArchiveService;
+use App\Services\AttendanceService;
+use App\Services\CentroNotificationService;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redirect;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -45,6 +45,9 @@ class ProfileController extends Controller
                 ->latest('start_date')
                 ->limit(30)
                 ->get(),
+            'attendanceBalances' => app(AttendanceService::class)->balances($request->user()->id, now('Europe/Rome')->year),
+            'attendanceYear' => now('Europe/Rome')->year,
+            'attendanceCauses' => DB::table('attendance_causes')->where('active', true)->orderBy('name')->get(['code', 'name']),
             'archiveRequest' => DB::table('account_archive_requests')->where('user_id', $request->user()->id)->latest()->first(),
             'dossierDocuments' => $this->dossierDocuments($request->user()->id),
             'employeeDossier' => $this->employeeDossier($request->user()->id),
@@ -143,7 +146,8 @@ class ProfileController extends Controller
     public function storeAbsence(Request $request): RedirectResponse
     {
         $payload = $request->validate([
-            'type' => ['required', Rule::in(['vacation', 'permission', 'sickness', 'late', 'other'])],
+            'type' => ['required', Rule::in(AttendanceService::TYPES)],
+            'cause_code' => ['nullable', Rule::exists('attendance_causes', 'code')->where('active', true)],
             'start_date' => ['required', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'start_time' => ['nullable', 'regex:/^([01][0-9]|2[0-3]):00$/'],
@@ -152,7 +156,7 @@ class ProfileController extends Controller
             'medical_document' => ['nullable', 'required_if:type,sickness', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:8192'],
             'notes' => ['nullable', 'string', 'max:6000'],
         ]);
-        if (in_array($payload['type'], ['vacation', 'sickness'], true)) {
+        if (in_array($payload['type'], ['vacation', 'sickness', 'smart_working', 'travel', 'recovery'], true)) {
             $payload['start_time'] = null;
             $payload['end_time'] = null;
         }
@@ -174,11 +178,14 @@ class ProfileController extends Controller
         }
 
         $absenceId = (string) str()->uuid();
+        $autoApproved = $payload['type'] === 'other' && ! empty($payload['cause_code'])
+            && DB::table('attendance_causes')->where('code', $payload['cause_code'])->where('requires_approval', false)->exists();
 
         DB::table('absence_requests')->insert([
             'id' => $absenceId,
             'user_id' => $request->user()->id,
             'type' => $payload['type'],
+            'cause_code' => $payload['type'] === 'other' ? ($payload['cause_code'] ?? null) : null,
             'start_date' => $payload['start_date'],
             'end_date' => ($payload['end_date'] ?? null) ?: $payload['start_date'],
             'start_time' => ($payload['start_time'] ?? null) ?: null,
@@ -187,7 +194,7 @@ class ProfileController extends Controller
             'medical_document_path' => $medicalDocumentPath,
             'medical_document_name' => $medicalDocumentName,
             'medical_document_mime' => $medicalDocumentMime,
-            'status' => 'pending',
+            'status' => $autoApproved ? 'approved' : 'pending',
             'notes' => ($payload['notes'] ?? null) ?: null,
             'created_at' => now(),
             'updated_at' => now(),
@@ -200,7 +207,7 @@ class ProfileController extends Controller
             $request->user()->name.' ha inviato una richiesta assenza.',
         );
 
-        return Redirect::route('profile.edit')->with('status', 'Richiesta inviata.');
+        return Redirect::route('profile.edit')->with('status', $autoApproved ? 'Richiesta registrata.' : 'Richiesta inviata.');
     }
 
     public function destroyAbsence(Request $request, string $id): RedirectResponse
@@ -231,6 +238,21 @@ class ProfileController extends Controller
         }
 
         return Redirect::route('profile.edit')->with('status', 'Richiesta annullata.');
+    }
+
+    public function supplementAbsence(Request $request, string $id): RedirectResponse
+    {
+        $absence = DB::table('absence_requests')->where('id', $id)
+            ->where('user_id', $request->user()->id)->where('status', 'needs_info')->first();
+        abort_if(! $absence, 404);
+        $payload = $request->validate(['notes' => ['required', 'string', 'max:6000']]);
+        DB::table('absence_requests')->where('id', $id)->update([
+            'notes' => trim(($absence->notes ?: '').'<p><strong>Integrazione:</strong> '.e($payload['notes']).'</p>'),
+            'status' => 'pending', 'integration_request' => null, 'updated_at' => now(),
+        ]);
+        $this->notifyAbsencePeople($request->user()->id, $request->user()->id, 'absence_supplemented', $request->user()->name.' ha integrato una richiesta.');
+
+        return Redirect::route('profile.edit')->with('status', 'Integrazione inviata.');
     }
 
     public function avatar(string $filename)
@@ -310,7 +332,9 @@ class ProfileController extends Controller
 
     private function employeeDossier(string $userId): array
     {
-        if (! Schema::hasTable('employee_dossier_items')) return ['items' => [], 'summary' => []];
+        if (! Schema::hasTable('employee_dossier_items')) {
+            return ['items' => [], 'summary' => []];
+        }
 
         $labels = [
             'identity_document' => ['Documento d’identità', true],
@@ -324,10 +348,17 @@ class ProfileController extends Controller
         ];
         $rows = DB::table('employee_dossier_items')->where('user_id', $userId)->where('classification', '!=', 'admin')->orderByDesc('created_at')->get();
         $status = function ($item): string {
-            if ($item->replaced_at) return 'replaced';
-            if (! $item->expires_at) return 'valid';
+            if ($item->replaced_at) {
+                return 'replaced';
+            }
+            if (! $item->expires_at) {
+                return 'valid';
+            }
             $expiry = Carbon::parse($item->expires_at)->startOfDay();
-            if ($expiry->isPast()) return 'expired';
+            if ($expiry->isPast()) {
+                return 'expired';
+            }
+
             return $expiry->lte(now('Europe/Rome')->addDays(30)->endOfDay()) ? 'expiring' : 'valid';
         };
         $items = $rows->map(function ($item) use ($labels, $status) {
@@ -337,11 +368,13 @@ class ProfileController extends Controller
                 $item->identifier = null;
                 $item->notes = null;
             }
+
             return $item;
         })->values();
         $active = $rows->whereNull('replaced_at')->groupBy('type');
         $summary = collect($labels)->filter(fn ($definition) => $definition[1])->map(function ($definition, $type) use ($active, $status) {
             $item = $active->get($type)?->first();
+
             return ['type' => $type, 'label' => $definition[0], 'status' => $item ? $status($item) : 'missing'];
         })->values();
 

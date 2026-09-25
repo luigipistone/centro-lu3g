@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Services\AccountArchiveService;
+use App\Services\AttendanceService;
 use App\Services\CentroBackupService;
 use App\Services\CentroNotificationService;
 use App\Services\RolePermissionService;
@@ -343,7 +344,8 @@ class CentroPageController extends Controller
         return DB::table('absence_requests')
             ->leftJoin('users', 'users.id', '=', 'absence_requests.user_id')
             ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
-            ->where('absence_requests.status', '!=', 'rejected')
+            ->where('absence_requests.status', 'approved')
+            ->when($this->currentUserRole($request) === 'admin', fn ($query) => $query->where('profiles.manager_user_id', $request->user()->id))
             ->whereDate('absence_requests.start_date', '<=', $today)
             ->whereRaw('DATE(COALESCE(absence_requests.end_date, absence_requests.start_date)) >= ?', [$today])
             ->orderBy('users.name')
@@ -357,7 +359,13 @@ class CentroPageController extends Controller
                 'users.name as user_name',
                 'users.email as user_email',
                 'profiles.avatar_url as user_avatar_url',
-            ]);
+            ])->map(function ($row) use ($request) {
+                if ($this->currentUserRole($request) !== 'superadmin') {
+                    $row->inps_code = null;
+                }
+
+                return $row;
+            });
     }
 
     private function dashboardTodaySmartworkingRows(Request $request)
@@ -368,9 +376,17 @@ class CentroPageController extends Controller
 
         $todayKey = strtolower(now('Europe/Rome')->format('l'));
 
+        $today = now('Europe/Rome')->toDateString();
+
         return DB::table('users')
             ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
-            ->where('profiles.smartworking_day', $todayKey)
+            ->when($this->currentUserRole($request) === 'admin', fn ($query) => $query->where('profiles.manager_user_id', $request->user()->id))
+            ->where(function ($query) use ($todayKey, $today) {
+                $query->where('profiles.smartworking_day', $todayKey)
+                    ->orWhereExists(fn ($subquery) => $subquery->selectRaw('1')->from('absence_requests as a')
+                        ->whereColumn('a.user_id', 'users.id')->where('a.type', 'smart_working')->where('a.status', 'approved')
+                        ->whereDate('a.start_date', '<=', $today)->whereDate('a.end_date', '>=', $today));
+            })
             ->orderBy('users.name')
             ->get([
                 'users.id',
@@ -460,9 +476,11 @@ class CentroPageController extends Controller
                     'users.email as user_email',
                     'profiles.avatar_url as user_avatar_url',
                 )
+                ->when($this->currentUserRole($request) === 'admin', fn ($query) => $query->whereIn('absence_requests.user_id', DB::table('profiles')->where('manager_user_id', $request->user()->id)->pluck('user_id')))
                 ->latest('absence_requests.created_at')
                 ->limit(300)
-                ->get();
+                ->get()
+                ->map(fn ($row) => $this->safeAbsenceRow($request, $row));
         } elseif (str_starts_with($section, 'updates-')) {
             $rows = $this->serviceUpdateRows($config['serviceName']);
         } else {
@@ -644,6 +662,22 @@ class CentroPageController extends Controller
         return Inertia::render('Centro/Index', [
             ...$config,
             'rows' => $rows,
+            'attendanceEvents' => $section === 'calendar' ? app(AttendanceService::class)->calendarEvents(
+                $request->user()->id, $this->currentUserRole($request) === 'superadmin', $this->currentUserRole($request) === 'admin',
+                now('Europe/Rome')->subMonths(2)->startOfMonth()->toDateString(), now('Europe/Rome')->addMonths(2)->endOfMonth()->toDateString(),
+            ) : [],
+            'attendanceSettings' => $section === 'absences' ? app(AttendanceService::class)->settings() : null,
+            'attendanceHolidays' => $section === 'absences' ? DB::table('attendance_holidays')->orderBy('day')->get() : [],
+            'attendanceCauses' => $section === 'absences' ? DB::table('attendance_causes')->orderBy('name')->get() : [],
+            'attendanceBalances' => $section === 'absences' ? DB::table('attendance_balances')->where('year', now('Europe/Rome')->year)
+                ->when($this->currentUserRole($request) === 'admin', fn ($query) => $query->whereIn('user_id', DB::table('profiles')->where('manager_user_id', $request->user()->id)->select('user_id')))->get() : [],
+            'attendanceEntries' => $section === 'absences' ? DB::table('attendance_entries')->whereDate('day', '>=', now('Europe/Rome')->startOfMonth()->toDateString())
+                ->when($this->currentUserRole($request) === 'admin', fn ($query) => $query->whereIn('user_id', DB::table('profiles')->where('manager_user_id', $request->user()->id)->select('user_id')))
+                ->orderByDesc('day')->limit(150)->get() : [],
+            'attendanceAvailability' => $section === 'absences' ? app(AttendanceService::class)->availability($request->user()->id, $this->currentUserRole($request) === 'superadmin') : [],
+            'attendanceTeamUsers' => $section === 'absences' ? DB::table('users as u')->join('profiles as p', 'p.user_id', '=', 'u.id')
+                ->when($this->currentUserRole($request) === 'admin', fn ($query) => $query->where('p.manager_user_id', $request->user()->id))
+                ->orderBy('u.name')->get(['u.id', 'u.name', 'u.email', 'p.avatar_url', 'p.smartworking_day']) : [],
             'billingStats' => $section === 'billing' ? $this->billingStats() : null,
             'clientStats' => $section === 'clients' ? $this->clientStats() : null,
             'documentSettings' => $section === 'settings' ? DB::table('document_settings')->first() : null,
@@ -689,6 +723,17 @@ class CentroPageController extends Controller
                 ? $this->projectTemplateOptions()
                 : [],
         ]);
+    }
+
+    public function calendarAttendance(Request $request): JsonResponse
+    {
+        $data = $request->validate(['from' => ['required', 'date'], 'to' => ['required', 'date', 'after_or_equal:from']]);
+        abort_if(Carbon::parse($data['from'])->diffInDays(Carbon::parse($data['to'])) > 95, 422);
+
+        return response()->json(['events' => app(AttendanceService::class)->calendarEvents(
+            $request->user()->id, $this->currentUserRole($request) === 'superadmin', $this->currentUserRole($request) === 'admin',
+            $data['from'], $data['to'],
+        )]);
     }
 
     public function projectTemplates(Request $request): Response
@@ -791,15 +836,29 @@ class CentroPageController extends Controller
         $this->ensureAdmin($request);
         $absence = DB::table('absence_requests')->where('id', $id)->first();
         abort_if(! $absence, 404);
+        $this->ensureCanManageAbsence($request, $absence);
+        abort_unless($absence->status === 'pending', 409);
 
         $payload = $request->validate([
-            'status' => ['required', Rule::in(['approved', 'rejected'])],
+            'status' => ['required', Rule::in(['approved', 'rejected', 'needs_info'])],
+            'reason' => ['nullable', 'required_if:status,rejected,needs_info', 'string', 'min:5', 'max:2000'],
         ]);
+        if ($payload['status'] === 'needs_info') {
+            $this->ensureSuperadmin($request);
+        }
+        $approvers = app(AttendanceService::class)->settings()['approvers'];
+        if ($this->currentUserRole($request) === 'admin') {
+            abort_unless(($approvers[$absence->type] ?? 'superadmin') === 'admin', 403);
+        }
 
         DB::table('absence_requests')
             ->where('id', $id)
             ->update([
                 'status' => $payload['status'],
+                'decision_reason' => $payload['status'] === 'rejected' ? $payload['reason'] : null,
+                'integration_request' => $payload['status'] === 'needs_info' ? $payload['reason'] : null,
+                'decided_by' => $request->user()->id,
+                'decided_at' => now(),
                 'updated_at' => now(),
             ]);
 
@@ -807,10 +866,10 @@ class CentroPageController extends Controller
             $absence->user_id,
             $request->user()->id,
             'absence_status',
-            $request->user()->name.' ha '.($payload['status'] === 'approved' ? 'approvato' : 'rifiutato').' una richiesta assenza.',
+            $request->user()->name.' ha '.(['approved' => 'approvato', 'rejected' => 'rifiutato', 'needs_info' => 'richiesto integrazioni per'][$payload['status']]).' una richiesta assenza.',
         );
 
-        return back()->with('status', $payload['status'] === 'approved' ? 'Richiesta approvata.' : 'Richiesta rifiutata.');
+        return back()->with('status', ['approved' => 'Richiesta approvata.', 'rejected' => 'Richiesta rifiutata.', 'needs_info' => 'Integrazione richiesta.'][$payload['status']]);
     }
 
     public function updateAbsence(Request $request, string $id): RedirectResponse
@@ -818,8 +877,16 @@ class CentroPageController extends Controller
         $this->ensureAdmin($request);
         $absence = DB::table('absence_requests')->where('id', $id)->first();
         abort_if(! $absence, 404);
+        $this->ensureCanManageAbsence($request, $absence);
 
+        if ($this->currentUserRole($request) === 'admin') {
+            abort_if($absence->type === 'sickness' || $request->input('type') === 'sickness', 403);
+        }
         $payload = $this->validatedAbsencePayload($request);
+        unset($payload['status']);
+        if ($this->currentUserRole($request) === 'admin') {
+            abort_if($absence->type === 'sickness' || $payload['type'] === 'sickness', 403);
+        }
         if ($payload['type'] !== 'sickness') {
             if ($absence->medical_document_path) {
                 Storage::disk('local')->delete($absence->medical_document_path);
@@ -848,7 +915,7 @@ class CentroPageController extends Controller
 
     public function updateAbsenceMedicalDocument(Request $request, string $id): RedirectResponse
     {
-        $this->ensureAdmin($request);
+        $this->ensureSuperadmin($request);
         $absence = DB::table('absence_requests')->where('id', $id)->first();
         abort_if(! $absence, 404);
 
@@ -903,6 +970,8 @@ class CentroPageController extends Controller
         $this->ensureAdmin($request);
         $absence = DB::table('absence_requests')->where('id', $id)->first();
         abort_if(! $absence, 404);
+        $this->ensureCanManageAbsence($request, $absence);
+        abort_if($this->currentUserRole($request) === 'admin' && $absence->type === 'sickness', 403);
 
         if ($absence->medical_document_path) {
             Storage::disk('local')->delete($absence->medical_document_path);
@@ -920,24 +989,152 @@ class CentroPageController extends Controller
         return back()->with('status', 'Richiesta eliminata.');
     }
 
+    public function updateAttendanceSettings(Request $request): RedirectResponse
+    {
+        $this->ensureSuperadmin($request);
+        $data = $request->validate([
+            'default_daily_minutes' => ['required', 'integer', 'min:60', 'max:960'],
+            'working_days' => ['required', 'array', 'min:1'],
+            'working_days.*' => ['integer', 'between:1,7'],
+            'approvers' => ['required', 'array'],
+            'approvers.*' => [Rule::in(['admin', 'superadmin'])],
+        ]);
+        DB::table('attendance_settings')->updateOrInsert(['id' => 1], [
+            'default_daily_minutes' => $data['default_daily_minutes'],
+            'working_days' => json_encode(array_values(array_unique($data['working_days']))),
+            'approvers' => json_encode($data['approvers']),
+            'updated_at' => now(), 'created_at' => now(),
+        ]);
+
+        return back()->with('status', 'Regole presenze aggiornate.');
+    }
+
+    public function storeAttendanceHoliday(Request $request): RedirectResponse
+    {
+        $this->ensureSuperadmin($request);
+        $data = $request->validate(['day' => ['required', 'date', 'unique:attendance_holidays,day'], 'name' => ['required', 'string', 'max:120']]);
+        DB::table('attendance_holidays')->insert(['id' => (string) Str::uuid(), ...$data, 'created_at' => now(), 'updated_at' => now()]);
+
+        return back()->with('status', 'Festività aggiunta.');
+    }
+
+    public function destroyAttendanceHoliday(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureSuperadmin($request);
+        DB::table('attendance_holidays')->where('id', $id)->delete();
+
+        return back()->with('status', 'Festività rimossa.');
+    }
+
+    public function storeAttendanceCause(Request $request): RedirectResponse
+    {
+        $this->ensureSuperadmin($request);
+        $data = $request->validate([
+            'code' => ['required', 'alpha_dash', 'max:40', 'unique:attendance_causes,code'],
+            'name' => ['required', 'string', 'max:100'],
+            'reduces_presence' => ['required', 'boolean'],
+            'requires_approval' => ['required', 'boolean'],
+        ]);
+        DB::table('attendance_causes')->insert([...$data, 'active' => true, 'created_at' => now(), 'updated_at' => now()]);
+
+        return back()->with('status', 'Causale aggiunta.');
+    }
+
+    public function destroyAttendanceCause(Request $request, string $code): RedirectResponse
+    {
+        $this->ensureSuperadmin($request);
+        DB::table('attendance_causes')->where('code', $code)->update(['active' => false, 'updated_at' => now()]);
+
+        return back()->with('status', 'Causale disattivata.');
+    }
+
+    public function updateAttendanceBalances(Request $request, string $userId): RedirectResponse
+    {
+        $this->ensureSuperadmin($request);
+        abort_unless(DB::table('users')->where('id', $userId)->exists(), 404);
+        $data = $request->validate([
+            'year' => ['required', 'integer', 'between:2020,2100'],
+            'vacation_minutes' => ['required', 'integer', 'min:0'],
+            'permission_minutes' => ['required', 'integer', 'min:0'],
+        ]);
+        foreach (['vacation', 'permission'] as $type) {
+            $existing = DB::table('attendance_balances')->where('user_id', $userId)->where('year', $data['year'])->where('type', $type)->first();
+            DB::table('attendance_balances')->updateOrInsert(['user_id' => $userId, 'year' => $data['year'], 'type' => $type], [
+                'id' => $existing->id ?? (string) Str::uuid(),
+                'allocated_minutes' => $data[$type.'_minutes'], 'updated_at' => now(), 'created_at' => $existing->created_at ?? now(),
+            ]);
+        }
+
+        return back()->with('status', 'Saldi aggiornati.');
+    }
+
+    public function storeAttendanceEntry(Request $request): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        $data = $request->validate([
+            'user_id' => ['required', Rule::exists('users', 'id')],
+            'day' => ['required', 'date'],
+            'cause' => ['required', Rule::in(['actual', 'overtime', 'time_bank', 'recovery', 'travel'])],
+            'minutes' => ['required', 'integer', 'min:0', 'max:1440'],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+        if ($this->currentUserRole($request) === 'admin') {
+            abort_unless(DB::table('profiles')->where('user_id', $data['user_id'])->where('manager_user_id', $request->user()->id)->exists(), 403);
+        }
+        $existing = DB::table('attendance_entries')->where('user_id', $data['user_id'])->where('day', $data['day'])->where('cause', $data['cause'])->first();
+        DB::table('attendance_entries')->updateOrInsert(['user_id' => $data['user_id'], 'day' => $data['day'], 'cause' => $data['cause']], [
+            'id' => $existing->id ?? (string) Str::uuid(), 'minutes' => $data['minutes'], 'note' => $data['note'] ?? null,
+            'created_by' => $request->user()->id, 'updated_at' => now(), 'created_at' => $existing->created_at ?? now(),
+        ]);
+
+        return back()->with('status', 'Presenza registrata.');
+    }
+
+    public function destroyAttendanceEntry(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        $entry = DB::table('attendance_entries')->where('id', $id)->first();
+        abort_if(! $entry, 404);
+        if ($this->currentUserRole($request) === 'admin') {
+            abort_unless(DB::table('profiles')->where('user_id', $entry->user_id)->where('manager_user_id', $request->user()->id)->exists(), 403);
+        }
+        DB::table('attendance_entries')->where('id', $id)->delete();
+
+        return back()->with('status', 'Registrazione rimossa.');
+    }
+
     public function companyDocuments(Request $request): Response
     {
         $canManage = $this->canManageDocuments($request);
+        if ($canManage && $request->route('documentView') === 'reports') {
+            $request->validate([
+                'from' => ['nullable', 'required_with:to', 'date_format:Y-m-d'],
+                'to' => ['nullable', 'required_with:from', 'date_format:Y-m-d', 'after_or_equal:from'],
+            ]);
+        }
+        $managerReport = $this->currentUserRole($request) === 'admin';
         $userId = (string) $request->user()->id;
         $reportYear = (int) $request->integer('year', now('Europe/Rome')->year);
         $reportMonth = (int) $request->integer('month', now('Europe/Rome')->month);
         $reportUserId = $canManage && $request->filled('user_id') && $request->input('user_id') !== 'all'
             ? (string) $request->input('user_id')
             : null;
+        $reportTeamId = $managerReport ? (string) $request->user()->id : ($canManage && $request->filled('team_id') && $request->input('team_id') !== 'all' ? (string) $request->input('team_id') : null);
+        if ($managerReport && $reportUserId) {
+            abort_unless(DB::table('profiles')->where('user_id', $reportUserId)->where('manager_user_id', $request->user()->id)->exists(), 403);
+        }
 
         return Inertia::render('Centro/Documents', [
             'canManage' => $canManage,
             'activeAdminSection' => $canManage ? ($request->route('documentView') ?: 'documents') : null,
             'documents' => $this->companyDocumentRows($canManage ? null : $userId, $canManage),
             'messages' => $this->companyMessageRows($canManage ? null : $userId, $canManage),
-            'attendanceReport' => $canManage ? $this->attendanceReportData($reportYear, $reportMonth, $reportUserId) : null,
+            'attendanceReport' => $canManage && $request->route('documentView') === 'reports' ? $this->attendanceReportData($reportYear, $reportMonth, $reportUserId, $reportTeamId, $request->input('from'), $request->input('to')) : null,
+            'attendanceTeams' => $canManage && ! $managerReport && $request->route('documentView') === 'reports' ? DB::table('profiles as p')->join('users as u', 'u.id', '=', 'p.manager_user_id')->distinct()->orderBy('u.name')->get(['u.id', 'u.name']) : [],
             'groups' => $canManage ? $this->documentGroupRows() : [],
-            'users' => $canManage ? $this->userOptions() : [],
+            'users' => $canManage ? ($managerReport && $request->route('documentView') === 'reports'
+                ? $this->userOptions()->filter(fn ($user) => DB::table('profiles')->where('user_id', $user->id)->where('manager_user_id', $request->user()->id)->exists())->values()
+                : $this->userOptions()) : [],
             'documentUsers' => $canManage ? $this->companyDocumentUserRows() : [],
             'documentCategories' => $this->companyDocumentCategories(),
         ]);
@@ -990,16 +1187,33 @@ class CentroPageController extends Controller
             'year' => ['nullable', 'integer', 'min:2020', 'max:2100'],
             'month' => ['nullable', 'integer', 'min:1', 'max:12'],
             'user_id' => ['nullable', 'string', Rule::exists('users', 'id')],
+            'team_id' => ['nullable', 'string', Rule::exists('users', 'id')],
+            'from' => ['nullable', 'required_with:to', 'date_format:Y-m-d'],
+            'to' => ['nullable', 'required_with:from', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'format' => ['nullable', Rule::in(['xlsx', 'csv', 'pdf'])],
         ]);
+        if ($this->currentUserRole($request) === 'admin') {
+            if (! empty($payload['user_id'])) {
+                abort_unless(DB::table('profiles')->where('user_id', $payload['user_id'])->where('manager_user_id', $request->user()->id)->exists(), 403);
+            }
+            $payload['team_id'] = (string) $request->user()->id;
+        }
 
         $year = (int) ($payload['year'] ?? now('Europe/Rome')->year);
         $month = (int) ($payload['month'] ?? now('Europe/Rome')->month);
-        $report = $this->attendanceReportData($year, $month, $payload['user_id'] ?? null);
+        $report = $this->attendanceReportData($year, $month, $payload['user_id'] ?? null, $payload['team_id'] ?? null, $payload['from'] ?? null, $payload['to'] ?? null);
+        $format = $payload['format'] ?? 'xlsx';
+        if ($format === 'csv') {
+            $path = $this->buildAttendanceReportCsv($report);
+
+            return response()->download($path, str_replace('.xlsx', '.csv', $report['file_name']), ['Content-Type' => 'text/csv; charset=UTF-8'])->deleteFileAfterSend(true);
+        }
+        if ($format === 'pdf') {
+            return $this->buildAttendanceReportPdf($report);
+        }
         $path = $this->buildAttendanceReportXlsx($report);
 
-        return response()->download($path, $report['file_name'], [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        ])->deleteFileAfterSend(true);
+        return response()->download($path, $report['file_name'], ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend(true);
     }
 
     public function storeCompanyDocument(Request $request): RedirectResponse
@@ -1929,6 +2143,10 @@ class CentroPageController extends Controller
             default => DB::table($config['table'])->where('id', $id)->first(),
         };
         abort_if(! $record, 404);
+        if ($section === 'absences') {
+            $this->ensureCanManageAbsence($request, $record);
+            $record = $this->safeAbsenceRow($request, $record);
+        }
         $this->ensureRoleCanViewRecord($request, $section, $id);
         $this->ensureGuestCanViewRecord($request, $section, $id);
 
@@ -2051,6 +2269,8 @@ class CentroPageController extends Controller
                     : collect(),
             ],
             'absences' => [
+                'attendanceApprovers' => app(AttendanceService::class)->settings()['approvers'],
+                'attendanceCauses' => DB::table('attendance_causes')->where('active', true)->orderBy('name')->get(['code', 'name']),
                 'user' => [
                     'id' => $record->user_id,
                     'name' => $record->user_name,
@@ -4123,7 +4343,7 @@ class CentroPageController extends Controller
         $access = [
             'standard_manage' => $permissions->allows($role, 'users.dossier.standard.manage'),
             'contract_manage' => $permissions->allows($role, 'users.dossier.contract.manage'),
-            'medical_manage' => $permissions->allows($role, 'users.dossier.medical.manage'),
+            'medical_manage' => $role === 'superadmin',
             'admin_manage' => $permissions->allows($role, 'users.dossier.admin.manage'),
         ];
         $rows = DB::table('employee_dossier_items')->where('user_id', $userId)->orderByDesc('created_at')->get();
@@ -4193,6 +4413,9 @@ class CentroPageController extends Controller
 
     private function ensureEmployeeDossierManageAccess(Request $request, string $classification): void
     {
+        if ($classification === 'medical') {
+            $this->ensureSuperadmin($request);
+        }
         $permission = match ($classification) {
             'contract' => 'users.dossier.contract.manage',
             'medical' => 'users.dossier.medical.manage',
@@ -4206,6 +4429,9 @@ class CentroPageController extends Controller
     {
         if ((string) $request->user()->id === $userId && $classification !== 'admin') {
             return;
+        }
+        if ($classification === 'medical' && ! $allowMedicalSummary) {
+            $this->ensureSuperadmin($request);
         }
         $permission = match ($classification) {
             'contract' => 'users.dossier.contract.view',
@@ -5297,7 +5523,31 @@ class CentroPageController extends Controller
     private function canAccessAbsence(Request $request, object $absence): bool
     {
         return $absence->user_id === $request->user()?->id
-            || in_array($this->currentUserRole($request), ['superadmin', 'admin'], true);
+            || $this->currentUserRole($request) === 'superadmin';
+    }
+
+    private function ensureCanManageAbsence(Request $request, object $absence): void
+    {
+        if ($this->currentUserRole($request) === 'superadmin') {
+            return;
+        }
+        abort_unless($this->currentUserRole($request) === 'admin'
+            && DB::table('profiles')->where('user_id', $absence->user_id)->where('manager_user_id', $request->user()->id)->exists(), 403);
+    }
+
+    private function safeAbsenceRow(Request $request, object $row): object
+    {
+        if ($this->currentUserRole($request) !== 'superadmin') {
+            $row->inps_code = null;
+            $row->medical_document_path = null;
+            $row->medical_document_name = null;
+            $row->medical_document_mime = null;
+            if ($row->type === 'sickness') {
+                $row->notes = null;
+            }
+        }
+
+        return $row;
     }
 
     private function canAccessCompanyDocument(Request $request, object $document): bool
@@ -5380,18 +5630,29 @@ class CentroPageController extends Controller
         ];
     }
 
-    private function attendanceReportData(int $year, int $month, ?string $userId = null): array
+    private function attendanceReportData(int $year, int $month, ?string $userId = null, ?string $teamId = null, ?string $from = null, ?string $to = null): array
     {
         $year = max(2020, min(2100, $year));
         $month = max(1, min(12, $month));
         $start = Carbon::create($year, $month, 1, 0, 0, 0, 'Europe/Rome')->startOfDay();
         $end = $start->copy()->endOfMonth()->startOfDay();
+        if ($from && $to && preg_match('/^\d{4}-\d{2}-\d{2}$/', $from) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) {
+            $start = Carbon::parse($from, 'Europe/Rome')->startOfDay();
+            $end = Carbon::parse($to, 'Europe/Rome')->startOfDay();
+            if ($start->greaterThan($end) || $start->diffInDays($end) > 366) {
+                throw ValidationException::withMessages(['to' => 'Seleziona un intervallo massimo di 12 mesi.']);
+            }
+        }
+        $attendance = app(AttendanceService::class);
+        $settings = $attendance->settings();
+        $holidays = DB::table('attendance_holidays')->whereBetween('day', [$start->toDateString(), $end->toDateString()])->pluck('name', 'day');
         $days = collect(CarbonPeriod::create($start, $end))->map(fn ($day) => [
             'iso' => $day->toDateString(),
             'day' => (int) $day->day,
             'weekday' => $this->shortItalianWeekday((int) $day->dayOfWeekIso),
             'label' => $this->shortItalianWeekday((int) $day->dayOfWeekIso).' '.$day->day,
-            'is_weekend' => $day->isWeekend(),
+            'is_weekend' => ! in_array($day->dayOfWeekIso, $settings['working_days'], true),
+            'holiday' => $holidays[$day->toDateString()] ?? null,
         ])->values();
 
         $users = DB::table('users')
@@ -5401,40 +5662,83 @@ class CentroPageController extends Controller
                 $query->whereNull('user_roles.role')->orWhere('user_roles.role', '!=', 'guest');
             })
             ->when($userId, fn ($query) => $query->where('users.id', $userId))
+            ->when($teamId, fn ($query) => $query->where('profiles.manager_user_id', $teamId))
             ->orderBy('users.name')
             ->get([
                 'users.id',
                 'users.name',
                 'profiles.full_name',
                 'profiles.employee_code',
+                'profiles.smartworking_day',
+                'profiles.smartworking_days',
             ]);
 
         $absenceRows = DB::table('absence_requests')
-            ->where('status', '!=', 'rejected')
+            ->where('status', 'approved')
             ->whereDate('start_date', '<=', $end->toDateString())
             ->whereRaw('DATE(COALESCE(end_date, start_date)) >= ?', [$start->toDateString()])
             ->get();
+        $entryRows = DB::table('attendance_entries')->whereBetween('day', [$start->toDateString(), $end->toDateString()])
+            ->whereIn('user_id', $users->pluck('id'))->get()->groupBy('user_id');
+        $customCauses = DB::table('attendance_causes')->where('active', true)->orderBy('name')->get(['code', 'name', 'reduces_presence']);
 
-        $rows = $users->map(function ($user, $index) use ($days, $absenceRows) {
+        $rows = $users->map(function ($user, $index) use ($days, $absenceRows, $entryRows, $customCauses, $attendance, $settings) {
             $dayValues = [];
             $totals = [
                 'ordinary' => 0,
+                'planned' => 0,
+                'actual' => 0,
                 'extra' => 0,
                 'vacation' => 0,
                 'permissions' => 0,
                 'sickness' => 0,
+                'late' => 0,
+                'smart_working' => 0,
+                'time_bank' => 0,
+                'recovery' => 0,
+                'travel' => 0,
                 'other' => 0,
                 'holiday' => 0,
             ];
+            foreach ($customCauses as $cause) {
+                $totals['custom:'.$cause->code] = 0;
+            }
+            $entries = $entryRows[$user->id] ?? collect();
+            $smartDays = json_decode($user->smartworking_days ?: '[]', true) ?: [];
 
             foreach ($days as $day) {
-                if ($day['is_weekend']) {
-                    $dayValues[$day['iso']] = '';
+                $date = Carbon::parse($day['iso']);
+                $planned = $attendance->workingMinutes($user->id, $date, $settings);
+                $dayEntries = $entries->where('day', $day['iso']);
+                foreach ($dayEntries as $entry) {
+                    if ($entry->cause === 'actual') {
+                        $totals['actual'] += $entry->minutes;
+                    }
+                    if ($entry->cause === 'overtime') {
+                        $totals['extra'] += $entry->minutes;
+                    }
+                    if ($entry->cause === 'time_bank') {
+                        $totals['time_bank'] += $entry->minutes;
+                    }
+                    if ($entry->cause === 'recovery') {
+                        $totals['recovery'] += $entry->minutes;
+                    }
+                    if ($entry->cause === 'travel') {
+                        $totals['travel'] += $entry->minutes;
+                    }
+                }
+                if (! $planned) {
+                    if ($day['holiday']) {
+                        $totals['holiday'] += (int) $settings['default_daily_minutes'];
+                    }
+                    $actual = $dayEntries->firstWhere('cause', 'actual');
+                    $dayValues[$day['iso']] = $actual ? $this->formatAttendanceMinutes($actual->minutes) : '';
 
                     continue;
                 }
 
-                $workMinutes = 480;
+                $totals['planned'] += $planned;
+                $workMinutes = $planned;
                 $label = null;
                 $dayAbsences = $absenceRows
                     ->where('user_id', $user->id)
@@ -5446,26 +5750,53 @@ class CentroPageController extends Controller
                     });
 
                 foreach ($dayAbsences as $absence) {
-                    $minutes = $this->absenceMinutesForDay($absence, $day['iso']);
-                    $workMinutes = max(0, $workMinutes - $minutes);
+                    $minutes = min($planned, $this->absenceMinutesForDay($absence, $day['iso']));
+                    $customCause = $absence->cause_code ? $customCauses->firstWhere('code', $absence->cause_code) : null;
+                    if (! in_array($absence->type, ['smart_working', 'travel'], true) && ($absence->type !== 'other' || $customCause?->reduces_presence)) {
+                        $workMinutes = max(0, $workMinutes - $minutes);
+                    }
 
                     if ($absence->type === 'vacation') {
                         $totals['vacation'] += $minutes;
-                        $label = $minutes >= 480 ? 'FER' : $this->formatAttendanceMinutes($workMinutes);
-                    } elseif (in_array($absence->type, ['permission', 'late'], true)) {
+                        $label = $minutes >= $planned ? 'FER' : $this->formatAttendanceMinutes($workMinutes).' FER';
+                    } elseif ($absence->type === 'permission') {
                         $totals['permissions'] += $minutes;
-                        $label = $workMinutes > 0 ? $this->formatAttendanceMinutes($workMinutes) : 'PER';
+                        $label = $workMinutes > 0 ? $this->formatAttendanceMinutes($workMinutes).' PER' : 'PER';
+                    } elseif ($absence->type === 'late') {
+                        $totals['late'] += $minutes;
+                        $label = $workMinutes > 0 ? $this->formatAttendanceMinutes($workMinutes).' RIT' : 'RIT';
                     } elseif ($absence->type === 'sickness') {
                         $totals['sickness'] += $minutes;
-                        $label = $minutes >= 480 ? 'MAL' : $this->formatAttendanceMinutes($workMinutes);
+                        $label = $minutes >= $planned ? 'MAL' : $this->formatAttendanceMinutes($workMinutes).' MAL';
+                    } elseif ($absence->type === 'smart_working') {
+                        $totals['smart_working'] += $minutes;
+                        $label = 'SMART';
+                    } elseif ($absence->type === 'travel') {
+                        $totals['travel'] += $minutes;
+                        $label = 'TRA';
+                    } elseif ($absence->type === 'recovery') {
+                        $totals['recovery'] += $minutes;
+                        $label = 'REC';
                     } else {
                         $totals['other'] += $minutes;
-                        $label = $workMinutes > 0 ? $this->formatAttendanceMinutes($workMinutes) : 'ASS';
+                        if ($absence->cause_code && array_key_exists('custom:'.$absence->cause_code, $totals)) {
+                            $totals['custom:'.$absence->cause_code] += $minutes;
+                        }
+                        $label = $absence->cause_code ? strtoupper(substr($absence->cause_code, 0, 3)) : 'ASS';
                     }
                 }
 
+                if (! $label && (in_array(strtolower($date->englishDayOfWeek), $smartDays, true) || $user->smartworking_day === strtolower($date->englishDayOfWeek))) {
+                    $label = 'SMART';
+                    $totals['smart_working'] += $planned;
+                }
+
                 $totals['ordinary'] += $workMinutes;
+                $actualEntry = $dayEntries->firstWhere('cause', 'actual');
                 $dayValues[$day['iso']] = $label ?: $this->formatAttendanceMinutes($workMinutes);
+                if ($actualEntry) {
+                    $dayValues[$day['iso']] .= ' / '.$this->formatAttendanceMinutes($actualEntry->minutes);
+                }
             }
 
             return [
@@ -5477,25 +5808,38 @@ class CentroPageController extends Controller
                 'total_labels' => collect($totals)->map(fn ($minutes) => $this->formatAttendanceMinutes($minutes))->all(),
             ];
         })->values();
-        $scopeLabel = $userId && $rows->count() === 1 ? $rows->first()['name'] : 'Tutto il team';
+        $scopeLabel = $userId && $rows->count() === 1 ? $rows->first()['name'] : ($teamId ? 'Team '.(DB::table('users')->where('id', $teamId)->value('name') ?: '') : 'Tutta l’azienda');
         $scopeSlug = $userId && $rows->count() === 1 ? '-'.Str::slug($rows->first()['name']) : '';
+        $rangeLabel = $start->isSameMonth($end) ? $this->italianMonthName($start->month).' '.$start->year : $start->format('d/m/Y').' - '.$end->format('d/m/Y');
 
         return [
             'company' => 'LU3G SRL',
             'year' => $year,
             'month' => $month,
             'selected_user_id' => $userId,
+            'selected_team_id' => $teamId,
+            'from' => $start->toDateString(), 'to' => $end->toDateString(),
             'scope_label' => $scopeLabel,
-            'month_label' => $this->italianMonthName($month).' '.$year,
-            'file_name' => 'lu3gsrl-presenze-'.strtolower($this->italianMonthName($month)).'-'.$year.$scopeSlug.'.xlsx',
+            'month_label' => $rangeLabel,
+            'generated_at' => now('Europe/Rome')->format('d/m/Y H:i'),
+            'file_name' => 'lu3gsrl-presenze-'.Str::slug($rangeLabel).$scopeSlug.'.xlsx',
             'days' => $days,
             'rows' => $rows,
+            'custom_causes' => $customCauses,
             'summary' => [
                 'users' => $rows->count(),
                 'ordinary' => $this->formatAttendanceMinutes($rows->sum(fn ($row) => $row['totals']['ordinary'])),
+                'planned' => $this->formatAttendanceMinutes($rows->sum(fn ($row) => $row['totals']['planned'])),
+                'actual' => $this->formatAttendanceMinutes($rows->sum(fn ($row) => $row['totals']['actual'])),
+                'extra' => $this->formatAttendanceMinutes($rows->sum(fn ($row) => $row['totals']['extra'])),
                 'vacation' => $this->formatAttendanceMinutes($rows->sum(fn ($row) => $row['totals']['vacation'])),
                 'permissions' => $this->formatAttendanceMinutes($rows->sum(fn ($row) => $row['totals']['permissions'])),
                 'sickness' => $this->formatAttendanceMinutes($rows->sum(fn ($row) => $row['totals']['sickness'])),
+                'late' => $this->formatAttendanceMinutes($rows->sum(fn ($row) => $row['totals']['late'])),
+                'smart_working' => $this->formatAttendanceMinutes($rows->sum(fn ($row) => $row['totals']['smart_working'])),
+                'time_bank' => $this->formatAttendanceMinutes($rows->sum(fn ($row) => $row['totals']['time_bank'])),
+                'recovery' => $this->formatAttendanceMinutes($rows->sum(fn ($row) => $row['totals']['recovery'])),
+                'travel' => $this->formatAttendanceMinutes($rows->sum(fn ($row) => $row['totals']['travel'])),
                 'other' => $this->formatAttendanceMinutes($rows->sum(fn ($row) => $row['totals']['other'])),
             ],
         ];
@@ -5506,7 +5850,7 @@ class CentroPageController extends Controller
         $startDate = Carbon::parse($absence->start_date)->toDateString();
         $endDate = Carbon::parse($absence->end_date ?: $absence->start_date)->toDateString();
         if ($startDate === $endDate && $dayIso === $startDate && $absence->start_time && $absence->end_time) {
-            return min(480, max(0, Carbon::parse($absence->start_time)->diffInMinutes(Carbon::parse($absence->end_time))));
+            return max(0, Carbon::parse($absence->start_time)->diffInMinutes(Carbon::parse($absence->end_time)));
         }
 
         return 480;
@@ -5554,36 +5898,9 @@ class CentroPageController extends Controller
 
     private function buildAttendanceReportXlsx(array $report): string
     {
-        $headers = array_merge(
-            ['Cognome Nome', 'Matricola'],
-            collect($report['days'])->pluck('label')->all(),
-            ['Ore ordinarie', 'Lavoro extra', 'Ferie', 'Permessi', 'Malattia', 'Altre assenze', 'Festivo'],
-        );
-        $rows = [
-            ['Azienda: '.$report['company']],
-            [],
-            [$report['month_label']],
-            [],
-            $headers,
-        ];
+        $rows = [['Azienda: '.$report['company']], ['Periodo: '.$report['month_label']], ['Generato: '.$report['generated_at']], ['Ambito: '.$report['scope_label']], ...$this->attendanceExportRows($report)];
 
-        foreach ($report['rows'] as $row) {
-            $rows[] = array_merge(
-                [$row['name'], $row['employee_code']],
-                collect($report['days'])->map(fn ($day) => $row['days'][$day['iso']] ?? '')->all(),
-                [
-                    $row['total_labels']['ordinary'],
-                    $row['total_labels']['extra'],
-                    $row['total_labels']['vacation'],
-                    $row['total_labels']['permissions'],
-                    $row['total_labels']['sickness'],
-                    $row['total_labels']['other'],
-                    $row['total_labels']['holiday'],
-                ],
-            );
-        }
-
-        $sheetXml = $this->attendanceSheetXml($rows);
+        $sheetXml = $this->attendanceSheetXml($rows, count($report['days']));
         $tempPath = tempnam(sys_get_temp_dir(), 'centro-presenze-').'.xlsx';
         $zip = new \ZipArchive;
         $zip->open($tempPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
@@ -5598,7 +5915,60 @@ class CentroPageController extends Controller
         return $tempPath;
     }
 
-    private function attendanceSheetXml(array $rows): string
+    private function attendanceExportRows(array $report): array
+    {
+        $fields = [
+            'planned' => 'Previste', 'actual' => 'Effettive', 'ordinary' => 'Ordinarie',
+            'extra' => 'Straordinari', 'vacation' => 'Ferie', 'permissions' => 'Permessi',
+            'sickness' => 'Malattia', 'late' => 'Ritardi', 'smart_working' => 'Smart working',
+            'time_bank' => 'Banca ore', 'recovery' => 'Recuperi', 'travel' => 'Trasferte',
+            'other' => 'Altre assenze', 'holiday' => 'Festività',
+        ];
+        foreach ($report['custom_causes'] as $cause) {
+            $fields['custom:'.$cause->code] = $cause->name;
+        }
+        $rows = [array_merge(['Cognome Nome', 'Matricola'], collect($report['days'])->pluck('label')->all(), array_values($fields))];
+        foreach ($report['rows'] as $row) {
+            $rows[] = array_merge([$row['name'], $row['employee_code']],
+                collect($report['days'])->map(fn ($day) => $row['days'][$day['iso']] ?? '')->all(),
+                collect(array_keys($fields))->map(fn ($field) => $row['total_labels'][$field] ?? '0h')->all());
+        }
+
+        return $rows;
+    }
+
+    private function buildAttendanceReportCsv(array $report): string
+    {
+        $path = tempnam(sys_get_temp_dir(), 'centro-presenze-csv-');
+        $file = fopen($path, 'wb');
+        fwrite($file, "\xEF\xBB\xBF");
+        foreach ([['Azienda', $report['company']], ['Periodo', $report['month_label']], ['Generato', $report['generated_at']], ['Ambito', $report['scope_label']], []] as $row) {
+            fputcsv($file, $row, ';');
+        }
+        foreach ($this->attendanceExportRows($report) as $row) {
+            fputcsv($file, $row, ';');
+        }
+        fclose($file);
+
+        return $path;
+    }
+
+    private function buildAttendanceReportPdf(array $report)
+    {
+        $options = new Options;
+        $options->set('isRemoteEnabled', false);
+        $dompdf = new Dompdf($options);
+        $summary = collect($report['summary'])->except('users')->map(fn ($value, $key) => '<tr><td>'.e(ucfirst(str_replace('_', ' ', $key))).'</td><td>'.e($value).'</td></tr>')->implode('');
+        $people = collect($report['rows'])->map(fn ($row) => '<tr><td>'.e($row['name']).'</td><td>'.e($row['employee_code']).'</td><td>'.e($row['total_labels']['planned']).'</td><td>'.e($row['total_labels']['actual']).'</td><td>'.e($row['total_labels']['vacation']).'</td><td>'.e($row['total_labels']['permissions']).'</td><td>'.e($row['total_labels']['sickness']).'</td><td>'.e($row['total_labels']['late']).'</td></tr>')->implode('');
+        $html = '<html><head><meta charset="utf-8"><style>body{font-family:DejaVu Sans,sans-serif;color:#243044;font-size:10px}h1{font-size:18px;color:#1767d2}h2{font-size:13px;margin-top:22px}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #dde3ec;padding:7px;text-align:left}th{background:#eef4ff}.meta{color:#6b7585}</style></head><body><h1>Il Centro · Presenze</h1><p class="meta">'.e($report['company']).' · '.e($report['month_label']).' · '.e($report['scope_label']).'<br>Generato il '.e($report['generated_at']).'</p><h2>Riepilogo aziendale</h2><table>'.$summary.'</table><h2>Riepilogo per dipendente</h2><table><tr><th>Persona</th><th>Matricola</th><th>Previste</th><th>Effettive</th><th>Ferie</th><th>Permessi</th><th>Malattia</th><th>Ritardi</th></tr>'.$people.'</table></body></html>';
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('a4', 'landscape');
+        $dompdf->render();
+
+        return response($dompdf->output(), 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'attachment; filename="'.str_replace('.xlsx', '.pdf', $report['file_name']).'"']);
+    }
+
+    private function attendanceSheetXml(array $rows, int $dayCount): string
     {
         $xmlRows = [];
         foreach ($rows as $rowIndex => $row) {
@@ -5621,8 +5991,8 @@ class CentroPageController extends Controller
         $cols = [
             '<col min="1" max="1" width="25" customWidth="1"/>',
             '<col min="2" max="2" width="20" customWidth="1"/>',
-            '<col min="3" max="33" width="5" customWidth="1"/>',
-            '<col min="34" max="40" width="14" customWidth="1"/>',
+            '<col min="3" max="'.(2 + $dayCount).'" width="9" customWidth="1"/>',
+            '<col min="'.(3 + $dayCount).'" max="'.count($rows[4]).'" width="14" customWidth="1"/>',
         ];
 
         return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -6019,17 +6389,18 @@ class CentroPageController extends Controller
     private function validatedAbsencePayload(Request $request): array
     {
         $payload = $request->validate([
-            'type' => ['required', Rule::in(['vacation', 'permission', 'sickness', 'late', 'other'])],
+            'type' => ['required', Rule::in(AttendanceService::TYPES)],
+            'cause_code' => ['nullable', Rule::exists('attendance_causes', 'code')],
             'start_date' => ['required', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'start_time' => ['nullable', 'regex:/^([01][0-9]|2[0-3]):00$/'],
             'end_time' => ['nullable', 'regex:/^([01][0-9]|2[0-3]):00$/'],
             'inps_code' => ['nullable', 'required_if:type,sickness', 'string', 'max:255'],
-            'status' => ['required', Rule::in(['pending', 'approved', 'rejected'])],
+            'status' => ['required', Rule::in(['pending', 'approved', 'rejected', 'needs_info'])],
             'notes' => ['nullable', 'string', 'max:6000'],
         ]);
 
-        if (in_array($payload['type'], ['vacation', 'sickness'], true)) {
+        if (in_array($payload['type'], ['vacation', 'sickness', 'smart_working', 'travel', 'recovery'], true)) {
             $payload['start_time'] = null;
             $payload['end_time'] = null;
         }
@@ -6042,6 +6413,7 @@ class CentroPageController extends Controller
         $payload['start_time'] = ($payload['start_time'] ?? null) ?: null;
         $payload['end_time'] = ($payload['end_time'] ?? null) ?: null;
         $payload['inps_code'] = $payload['type'] === 'sickness' ? (($payload['inps_code'] ?? null) ?: null) : null;
+        $payload['cause_code'] = $payload['type'] === 'other' ? ($payload['cause_code'] ?? null) : null;
         $payload['notes'] = ($payload['notes'] ?? null) ?: null;
 
         return $payload;

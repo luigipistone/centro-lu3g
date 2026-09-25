@@ -57,6 +57,9 @@ class EnforceRolePermissions
         if (Str::startsWith($name, 'absences.')) {
             return 'absences.manage';
         }
+        if (Str::startsWith($name, 'attendance.')) {
+            return 'absences.manage';
+        }
         if (Str::startsWith($name, ['updates.', 'updates-'])) {
             return 'updates.'.($request->isMethod('GET') ? 'view' : 'manage');
         }

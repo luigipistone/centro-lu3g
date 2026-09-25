@@ -77,6 +77,7 @@ Route::middleware('auth')->group(function () {
     Route::put('/tasks/{id}/dependencies', [CentroPageController::class, 'syncTaskDependencies'])->name('tasks.dependencies.sync');
     Route::delete('/tasks/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'tasks')->name('tasks.destroy');
     Route::get('/calendar', [CentroPageController::class, 'index'])->defaults('section', 'calendar')->name('calendar.index');
+    Route::get('/calendar/attendance', [CentroPageController::class, 'calendarAttendance'])->name('calendar.attendance');
     Route::get('/absences', [CentroPageController::class, 'index'])->defaults('section', 'absences')->name('absences.index');
     Route::get('/absences/{id}', [CentroPageController::class, 'show'])->defaults('section', 'absences')->name('absences.show');
     Route::put('/absences/{id}', [CentroPageController::class, 'updateAbsence'])->name('absences.update');
@@ -84,6 +85,14 @@ Route::middleware('auth')->group(function () {
     Route::post('/absences/{id}/medical-document', [CentroPageController::class, 'updateAbsenceMedicalDocument'])->name('absences.medical-document.update');
     Route::patch('/absences/{id}/status', [CentroPageController::class, 'updateAbsenceStatus'])->name('absences.status.update');
     Route::delete('/absences/{id}', [CentroPageController::class, 'destroyAbsence'])->name('absences.destroy');
+    Route::put('/attendance/settings', [CentroPageController::class, 'updateAttendanceSettings'])->name('attendance.settings.update');
+    Route::post('/attendance/holidays', [CentroPageController::class, 'storeAttendanceHoliday'])->name('attendance.holidays.store');
+    Route::delete('/attendance/holidays/{id}', [CentroPageController::class, 'destroyAttendanceHoliday'])->name('attendance.holidays.destroy');
+    Route::post('/attendance/causes', [CentroPageController::class, 'storeAttendanceCause'])->name('attendance.causes.store');
+    Route::delete('/attendance/causes/{code}', [CentroPageController::class, 'destroyAttendanceCause'])->name('attendance.causes.destroy');
+    Route::put('/attendance/balances/{userId}', [CentroPageController::class, 'updateAttendanceBalances'])->name('attendance.balances.update');
+    Route::post('/attendance/entries', [CentroPageController::class, 'storeAttendanceEntry'])->name('attendance.entries.store');
+    Route::delete('/attendance/entries/{id}', [CentroPageController::class, 'destroyAttendanceEntry'])->name('attendance.entries.destroy');
     Route::get('/documents', [CentroPageController::class, 'companyDocuments'])->name('documents.index');
     Route::post('/documents', [CentroPageController::class, 'storeCompanyDocument'])->name('documents.store');
     Route::get('/documents/list', [CentroPageController::class, 'companyDocuments'])->defaults('documentView', 'documents')->name('documents.list');
@@ -220,6 +229,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/profile/avatar', [ProfileController::class, 'updateAvatar'])->name('profile.avatar.update');
     Route::post('/profile/absences', [ProfileController::class, 'storeAbsence'])->name('profile.absences.store');
     Route::delete('/profile/absences/{id}', [ProfileController::class, 'destroyAbsence'])->name('profile.absences.destroy');
+    Route::patch('/profile/absences/{id}/supplement', [ProfileController::class, 'supplementAbsence'])->name('profile.absences.supplement');
     Route::get('/avatars/{filename}', [ProfileController::class, 'avatar'])->name('profile.avatar');
     Route::post('/profile/archive-request', [ProfileController::class, 'requestArchive'])->name('profile.archive-request');
 });
