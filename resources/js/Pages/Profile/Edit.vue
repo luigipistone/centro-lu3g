@@ -214,7 +214,7 @@ watch(() => absenceForm.type, () => {
                         <div v-for="item in [
                             ['Matricola', profile?.employee_code], ['Qualifica', profile?.job_title], ['Reparto', profile?.department],
                             ['Responsabile', profile?.manager_name], ['Sede', profile?.office], ['Stato del rapporto', employmentStatusLabels[profile?.employment_status] || profile?.employment_status],
-                            ['Data di ingresso', formatDate(profile?.hire_date)], ['Data di uscita', formatDate(profile?.termination_date)],
+                            ['Data di assunzione', formatDate(profile?.hire_date)], ['Data di licenziamento', formatDate(profile?.termination_date)],
                         ]" :key="item[0]" class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 px-4 py-3">
                             <dt class="text-xs font-semibold uppercase text-gray-400">{{ item[0] }}</dt><dd class="mt-1 text-sm font-semibold text-gray-900">{{ item[1] || 'Non impostato' }}</dd>
                         </div>
