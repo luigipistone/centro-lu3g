@@ -90,6 +90,10 @@ class AdministrationGovernanceTest extends TestCase
             'permission' => 'clients.create',
             'allowed' => true,
         ]);
+        $log = DB::table('audit_logs')->where('route_name', 'settings.roles.update')->first();
+        $this->assertContains('settings.manage', json_decode($log->permissions_used, true));
+        $this->assertFalse(json_decode($log->state_before, true)['editor.clients.create']);
+        $this->assertTrue(json_decode($log->state_after, true)['editor.clients.create']);
     }
 
     public function test_important_mutations_are_recorded_in_the_audit_log(): void
@@ -107,6 +111,36 @@ class AdministrationGovernanceTest extends TestCase
             'method' => 'PATCH',
             'status_code' => 302,
         ]);
+        $log = DB::table('audit_logs')->where('route_name', 'users.status.update')->latest('created_at')->first();
+        $this->assertContains('users.profile.security.update', json_decode($log->permissions_used, true));
+        $this->assertSame('active', json_decode($log->state_before, true)['account_status']);
+        $this->assertSame('suspended', json_decode($log->state_after, true)['account_status']);
+
+        $this->actingAs($superadmin)->patch(route('users.status.update', $employee), ['status' => 'active'])->assertRedirect();
+        $this->assertSame(2, DB::table('audit_logs')->where('route_name', 'users.status.update')->count());
+    }
+
+    public function test_task_audit_keeps_operational_changes_without_free_text_or_secrets(): void
+    {
+        $employee = User::factory()->create();
+        $this->role($employee, 'editor');
+
+        $this->actingAs($employee)->post(route('tasks.store'), [
+            'title' => 'Riservato', 'description' => 'Non registrare questo contenuto',
+            'task_type' => 'task', 'status' => 'todo', 'priority' => 'medium',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $id = DB::table('tasks')->value('id');
+        $created = DB::table('audit_logs')->where('route_name', 'tasks.store')->first();
+        $this->assertSame($id, $created->subject_id);
+        $this->assertContains('tasks.create', json_decode($created->permissions_used, true));
+        $this->assertSame('medium', json_decode($created->state_after, true)['priority']);
+        $this->assertStringNotContainsString('Riservato', $created->state_after);
+
+        $this->actingAs($employee)->patch(route('tasks.status.update', $id), ['status' => 'in_progress'])->assertRedirect();
+        $updated = DB::table('audit_logs')->where('route_name', 'tasks.status.update')->first();
+        $this->assertSame(['status' => 'todo'], json_decode($updated->state_before, true));
+        $this->assertSame(['status' => 'in_progress'], json_decode($updated->state_after, true));
+        $this->assertContains('tasks.update', json_decode($updated->permissions_used, true));
     }
 
     public function test_permission_matrix_is_enforced_on_routes(): void
@@ -179,6 +213,8 @@ class AdministrationGovernanceTest extends TestCase
         $metadata = json_decode($log->metadata, true, flags: JSON_THROW_ON_ERROR);
         $this->assertSame('contract', $metadata['section']);
         $this->assertArrayHasKey('employee_code', $metadata['changed_fields']);
+        $this->assertContains('users.profile.contract.update', json_decode($log->permissions_used, true));
+        $this->assertSame('2026-01-12', json_decode($log->state_after, true)['hire_date']);
     }
 
     public function test_sensitive_save_requires_explicit_confirmation(): void

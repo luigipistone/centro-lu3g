@@ -664,6 +664,59 @@ function auditActivityText(log) {
     return `${verb} ${area}`;
 }
 
+function auditJson(value) {
+    if (!value) return null;
+    if (typeof value === 'object') return value;
+    try { return JSON.parse(value); } catch { return null; }
+}
+
+function auditPermissions(log) {
+    return (auditJson(log.permissions_used) || []).map((key) =>
+        props.rolePermissionMatrix?.permissions?.find((permission) => permission.key === key)?.label || key,
+    );
+}
+
+function auditChanges(log) {
+    const before = auditJson(log.state_before) || {};
+    const after = auditJson(log.state_after) || {};
+    return [...new Set([...Object.keys(before), ...Object.keys(after)])].map((field) => ({
+        field,
+        before: before[field] ?? null,
+        after: after[field] ?? null,
+    }));
+}
+
+const auditFieldLabels = {
+    account_status: 'Stato account', suspended_at: 'Sospeso il', archived_at: 'Archiviato il',
+    role: 'Ruolo', employment_status: 'Stato rapporto', hire_date: 'Data di assunzione',
+    termination_date: 'Data di licenziamento', job_title: 'Qualifica', department: 'Reparto',
+    manager_user_id: 'Responsabile', office: 'Sede', weekly_hours: 'Ore settimanali',
+    part_time: 'Part-time', part_time_percentage: 'Percentuale part-time',
+    smartworking_day: 'Giorno smart working', client_id: 'Cliente', service_id: 'Servizio',
+    project_id: 'Progetto', parent_task_id: 'Task genitore', task_type: 'Tipologia',
+    status: 'Stato', priority: 'Priorità', start_date: 'Data inizio', due_date: 'Scadenza',
+    due_time: 'Ora scadenza', end_date: 'Data fine', start_time: 'Ora inizio',
+    end_time: 'Ora fine', type: 'Tipo', category: 'Categoria', audience: 'Destinatari',
+    document_year: 'Anno documento', color: 'Colore', city: 'Città', country: 'Paese',
+    is_pa: 'Pubblica amministrazione', payment_terms_days: 'Termini di pagamento',
+};
+
+function auditFieldLabel(field) {
+    const [role, ...permissionParts] = field.split('.');
+    if (permissionParts.length) {
+        const permission = permissionParts.join('.');
+        const label = props.rolePermissionMatrix?.permissions?.find((item) => item.key === permission)?.label || permission;
+        return `${roleLabels[role] || role} · ${label}`;
+    }
+    return auditFieldLabels[field] || field.replaceAll('_', ' ');
+}
+
+function auditValue(value) {
+    if (value === null || value === undefined) return 'Nessuno';
+    if (typeof value === 'boolean') return value ? 'Sì' : 'No';
+    return String(value);
+}
+
 function auditDateLabel(value) {
     if (!value) return '-';
     const date = new Date(value);
@@ -6254,7 +6307,17 @@ function calendarDayStyle(sectionMonth, cell) {
                             <tbody class="divide-y divide-gray-100">
                                 <tr v-for="log in auditLogs || []" :key="log.id" class="hover:bg-gray-50/70">
                                     <td class="whitespace-nowrap px-4 py-3.5"><span class="block font-medium text-gray-700">{{ auditDateLabel(log.created_at) }}</span><span class="mt-0.5 block font-mono text-[11px] text-gray-400">{{ log.ip_address || 'IP non disponibile' }}</span></td>
-                                    <td class="px-4 py-3.5" :title="log.route_name || ''"><span class="block font-semibold text-gray-900">{{ log.user_name || 'Sistema' }}</span><span class="mt-0.5 block text-xs text-gray-500">{{ auditActivityText(log) }} · {{ roleLabels[log.user_role] || log.user_role || 'Sistema' }}</span></td>
+                                    <td class="px-4 py-3.5" :title="log.route_name || ''">
+                                        <span class="block font-semibold text-gray-900">{{ log.user_name || 'Sistema' }}</span>
+                                        <span class="mt-0.5 block text-xs text-gray-500">{{ auditActivityText(log) }} · {{ roleLabels[log.user_role] || log.user_role || 'Sistema' }}</span>
+                                        <details v-if="auditPermissions(log).length || auditChanges(log).length" class="mt-2 text-xs text-gray-600">
+                                            <summary class="w-fit cursor-pointer font-semibold text-[hsl(var(--primary-app))]">Dettagli</summary>
+                                            <p v-if="auditPermissions(log).length" class="mt-1">Permessi usati: {{ auditPermissions(log).join(', ') }}</p>
+                                            <p v-for="change in auditChanges(log)" :key="change.field" class="mt-1 break-all">
+                                                {{ auditFieldLabel(change.field) }}: {{ auditValue(change.before) }} → {{ auditValue(change.after) }}
+                                            </p>
+                                        </details>
+                                    </td>
                                     <td class="px-4 py-3.5"><span class="inline-flex rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">{{ auditAreaLabel(log) }}</span></td>
                                     <td class="px-4 py-3.5"><span :class="['inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold', Number(log.status_code) < 400 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700']"><span :class="['h-1.5 w-1.5 rounded-full', Number(log.status_code) < 400 ? 'bg-emerald-500' : 'bg-red-500']"></span>{{ Number(log.status_code) < 400 ? 'Riuscita' : 'Errore' }} <span class="font-normal opacity-70">{{ log.status_code }}</span></span></td>
                                 </tr>

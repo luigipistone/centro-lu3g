@@ -16,6 +16,7 @@ class EnforceRolePermissions
         if ($permission && $request->user()) {
             $role = (string) (DB::table('user_roles')->where('user_id', $request->user()->id)->value('role') ?: 'guest');
             abort_unless(app(RolePermissionService::class)->allows($role, $permission), 403);
+            $request->attributes->set('audit_permissions_used', [$permission]);
         }
 
         return $next($request);

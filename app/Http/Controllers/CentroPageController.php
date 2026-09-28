@@ -1095,6 +1095,9 @@ class CentroPageController extends Controller
                 'user_role' => $this->currentUserRole($request), 'action' => 'rettifica_ore_lavorate', 'area' => 'attendance',
                 'route_name' => 'attendance.entries.store', 'method' => 'POST', 'subject_id' => $data['user_id'],
                 'status_code' => 200, 'ip_address' => $request->ip(), 'user_agent' => $request->userAgent(),
+                'permissions_used' => json_encode($request->attributes->get('audit_permissions_used', []), JSON_THROW_ON_ERROR),
+                'state_before' => $existing ? json_encode(['minutes' => (int) $existing->minutes], JSON_THROW_ON_ERROR) : null,
+                'state_after' => json_encode(['minutes' => (int) $data['minutes']], JSON_THROW_ON_ERROR),
                 'metadata' => json_encode(['day' => $data['day'], 'previous_minutes' => $existing?->minutes, 'minutes' => $data['minutes'], 'reason' => $data['note']], JSON_THROW_ON_ERROR),
                 'created_at' => now(), 'updated_at' => now(),
             ]);
@@ -1465,6 +1468,7 @@ class CentroPageController extends Controller
             'user_role' => $this->currentUserRole($request), 'action' => 'accesso_file_documento',
             'area' => 'documents', 'route_name' => 'documents.file', 'method' => 'GET', 'subject_id' => $id,
             'status_code' => 200, 'ip_address' => $request->ip(), 'user_agent' => $request->userAgent(),
+            'permissions_used' => json_encode($request->attributes->get('audit_permissions_used', []), JSON_THROW_ON_ERROR),
             'metadata' => json_encode(['document_id' => $id, 'recipient' => $this->companyDocumentRecipientIds($id)->contains($userId)], JSON_THROW_ON_ERROR),
             'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -2586,6 +2590,7 @@ class CentroPageController extends Controller
         }
 
         DB::table($this->config($section)['table'])->insert($payload);
+        $request->attributes->set('audit_subject_id', $payload['id']);
 
         if ($section === 'projects') {
             if ($projectFollowers !== null) {
@@ -2861,6 +2866,9 @@ class CentroPageController extends Controller
             'id' => (string) str()->uuid(), 'user_id' => $request->user()->id, 'user_name' => $request->user()->name,
             'user_role' => 'superadmin', 'action' => 'eliminazione_fisica_utente', 'area' => 'users',
             'route_name' => 'users.physical-destroy', 'method' => 'DELETE', 'subject_id' => $id, 'status_code' => 200,
+            'permissions_used' => json_encode($request->attributes->get('audit_permissions_used', []), JSON_THROW_ON_ERROR),
+            'state_before' => json_encode(['account_status' => $user->account_status], JSON_THROW_ON_ERROR),
+            'state_after' => null,
             'ip_address' => $request->ip(), 'user_agent' => $request->userAgent(),
             'metadata' => json_encode(['target' => ['name' => $user->name, 'email' => $user->email], 'reason' => $payload['reason'], 'linked_summary' => $summary], JSON_THROW_ON_ERROR),
             'created_at' => now(), 'updated_at' => now(),
@@ -2919,9 +2927,9 @@ class CentroPageController extends Controller
 
         return response()->streamDownload(function () use ($rows) {
             $handle = fopen('php://output', 'wb');
-            fputcsv($handle, ['Data', 'Utente', 'Ruolo', 'Azione', 'Area', 'Rotta', 'Risorsa', 'Esito', 'IP']);
+            fputcsv($handle, ['Data', 'Utente', 'Ruolo', 'Permessi usati', 'Azione', 'Area', 'Rotta', 'Risorsa', 'Stato precedente', 'Stato successivo', 'Esito', 'IP']);
             foreach ($rows as $row) {
-                fputcsv($handle, [$row->created_at, $row->user_name, $row->user_role, $row->action, $row->area, $row->route_name, $row->subject_id, $row->status_code, $row->ip_address]);
+                fputcsv($handle, [$row->created_at, $row->user_name, $row->user_role, implode(', ', json_decode($row->permissions_used ?: '[]', true) ?: []), $row->action, $row->area, $row->route_name, $row->subject_id, $row->state_before, $row->state_after, $row->status_code, $row->ip_address]);
             }
             fclose($handle);
         }, 'log-centro-'.$payload['from'].'-'.$payload['to'].'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
@@ -4435,10 +4443,19 @@ class CentroPageController extends Controller
 
         }
 
+        $auditChanges = collect($changed)->only([
+            'role', 'job_title', 'department', 'manager_user_id', 'office', 'weekly_hours',
+            'part_time', 'part_time_percentage', 'smartworking_day', 'employment_status',
+            'hire_date', 'termination_date',
+        ]);
+
         DB::table('audit_logs')->insert([
             'id' => (string) str()->uuid(), 'user_id' => $request->user()->id, 'user_name' => $request->user()->name,
             'user_role' => $this->currentUserRole($request), 'action' => 'modifica_profilo_riservato', 'area' => 'users',
             'route_name' => 'users.sensitive.update', 'method' => 'PUT', 'subject_id' => $id, 'status_code' => 200,
+            'permissions_used' => json_encode($request->attributes->get('audit_permissions_used', []), JSON_THROW_ON_ERROR),
+            'state_before' => json_encode($auditChanges->mapWithKeys(fn ($change, $field) => [$field => $change['from']])->all(), JSON_THROW_ON_ERROR),
+            'state_after' => json_encode($auditChanges->mapWithKeys(fn ($change, $field) => [$field => $change['to']])->all(), JSON_THROW_ON_ERROR),
             'ip_address' => $request->ip(), 'user_agent' => $request->userAgent(),
             'metadata' => json_encode(['section' => $section, 'changed_fields' => $changed], JSON_THROW_ON_ERROR),
             'created_at' => now(), 'updated_at' => now(),
@@ -4559,6 +4576,9 @@ class CentroPageController extends Controller
             'user_role' => $this->currentUserRole($request), 'action' => $replaced ? 'nuova_versione_fascicolo' : 'aggiunta_fascicolo',
             'area' => 'users', 'route_name' => 'users.dossier-items.store', 'method' => 'POST', 'subject_id' => $id,
             'status_code' => 200, 'ip_address' => $request->ip(), 'user_agent' => $request->userAgent(),
+            'permissions_used' => json_encode($request->attributes->get('audit_permissions_used', []), JSON_THROW_ON_ERROR),
+            'state_before' => $replaced ? json_encode(['type' => $replaced->type, 'version' => (int) $replaced->version], JSON_THROW_ON_ERROR) : null,
+            'state_after' => json_encode(['type' => $payload['type'], 'version' => $replaced ? ((int) $replaced->version + 1) : 1], JSON_THROW_ON_ERROR),
             'metadata' => json_encode(['item_id' => $itemId, 'type' => $payload['type'], 'version' => $replaced ? ((int) $replaced->version + 1) : 1], JSON_THROW_ON_ERROR),
             'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -4582,6 +4602,7 @@ class CentroPageController extends Controller
             'user_role' => $this->currentUserRole($request), 'action' => 'accesso_file_fascicolo',
             'area' => 'users', 'route_name' => 'users.dossier-items.file', 'method' => 'GET', 'subject_id' => $id,
             'status_code' => 200, 'ip_address' => $request->ip(), 'user_agent' => $request->userAgent(),
+            'permissions_used' => json_encode($request->attributes->get('audit_permissions_used', []), JSON_THROW_ON_ERROR),
             'metadata' => json_encode(['item_id' => $itemId, 'type' => $item->type], JSON_THROW_ON_ERROR),
             'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -4606,6 +4627,9 @@ class CentroPageController extends Controller
             'user_role' => $this->currentUserRole($request), 'action' => 'eliminazione_voce_fascicolo',
             'area' => 'users', 'route_name' => 'users.dossier-items.destroy', 'method' => 'DELETE', 'subject_id' => $id,
             'status_code' => 200, 'ip_address' => $request->ip(), 'user_agent' => $request->userAgent(),
+            'permissions_used' => json_encode($request->attributes->get('audit_permissions_used', []), JSON_THROW_ON_ERROR),
+            'state_before' => json_encode(['type' => $item->type, 'version' => (int) $item->version], JSON_THROW_ON_ERROR),
+            'state_after' => null,
             'metadata' => json_encode(['item_id' => $itemId, 'type' => $item->type, 'title' => $item->title, 'version' => $item->version], JSON_THROW_ON_ERROR),
             'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -4865,6 +4889,9 @@ class CentroPageController extends Controller
     private function ensurePermission(Request $request, string $permission): void
     {
         abort_unless(app(RolePermissionService::class)->allows($this->currentUserRole($request), $permission), 403);
+        $request->attributes->set('audit_permissions_used', array_values(array_unique([
+            ...$request->attributes->get('audit_permissions_used', []), $permission,
+        ])));
     }
 
     private function permissionForSection(string $section, string $action): string
