@@ -88,13 +88,10 @@ Route::middleware('auth')->group(function () {
     Route::put('/attendance/settings', [CentroPageController::class, 'updateAttendanceSettings'])->name('attendance.settings.update');
     Route::post('/attendance/holidays', [CentroPageController::class, 'storeAttendanceHoliday'])->name('attendance.holidays.store');
     Route::delete('/attendance/holidays/{id}', [CentroPageController::class, 'destroyAttendanceHoliday'])->name('attendance.holidays.destroy');
-    Route::post('/attendance/causes', [CentroPageController::class, 'storeAttendanceCause'])->name('attendance.causes.store');
-    Route::delete('/attendance/causes/{code}', [CentroPageController::class, 'destroyAttendanceCause'])->name('attendance.causes.destroy');
-    Route::put('/attendance/balances/{userId}', [CentroPageController::class, 'updateAttendanceBalances'])->name('attendance.balances.update');
     Route::post('/attendance/entries', [CentroPageController::class, 'storeAttendanceEntry'])->name('attendance.entries.store');
     Route::delete('/attendance/entries/{id}', [CentroPageController::class, 'destroyAttendanceEntry'])->name('attendance.entries.destroy');
-    Route::get('/attendance/registry/{kind}', [CentroPageController::class, 'attendanceRegistry'])->whereIn('kind', ['entries', 'balances'])->name('attendance.registry');
-    Route::get('/attendance/registry/{kind}/export', [CentroPageController::class, 'exportAttendanceRegistry'])->whereIn('kind', ['entries', 'balances'])->name('attendance.registry.export');
+    Route::get('/attendance/registry/{kind}', [CentroPageController::class, 'attendanceRegistry'])->whereIn('kind', ['entries'])->name('attendance.registry');
+    Route::get('/attendance/registry/{kind}/export', [CentroPageController::class, 'exportAttendanceRegistry'])->whereIn('kind', ['entries'])->name('attendance.registry.export');
     Route::get('/documents', [CentroPageController::class, 'companyDocuments'])->name('documents.index');
     Route::post('/documents', [CentroPageController::class, 'storeCompanyDocument'])->name('documents.store');
     Route::get('/documents/list', [CentroPageController::class, 'companyDocuments'])->defaults('documentView', 'documents')->name('documents.list');

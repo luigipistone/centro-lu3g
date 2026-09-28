@@ -673,13 +673,8 @@ class CentroPageController extends Controller
             'attendanceHolidays' => $section === 'absences' ? DB::table('attendance_holidays')->orderBy('day')->get() : [],
             'taskHolidayRanges' => in_array($section, ['tasks', 'calendar'], true)
                 ? DB::table('attendance_holidays')->get(['day', 'end_day', 'name']) : [],
-            'attendanceCauses' => $section === 'absences' ? DB::table('attendance_causes')->orderBy('name')->get() : [],
-            'attendanceBalances' => $section === 'absences' && $this->currentUserRole($request) === 'superadmin'
-                ? $this->attendanceRegistryQuery($request, 'balances')->limit(10)->get() : [],
-            'attendanceBalanceCount' => $section === 'absences' && $this->currentUserRole($request) === 'superadmin'
-                ? $this->attendanceRegistryQuery($request, 'balances')->count() : 0,
-            'attendanceEntries' => $section === 'absences' ? $this->attendanceRegistryQuery($request, 'entries')->limit(10)->get() : [],
-            'attendanceEntryCount' => $section === 'absences' ? $this->attendanceRegistryQuery($request, 'entries')->count() : 0,
+            'attendanceEntries' => $section === 'absences' ? $this->attendanceRegistryQuery($request)->limit(10)->get() : [],
+            'attendanceEntryCount' => $section === 'absences' ? $this->attendanceRegistryQuery($request)->count() : 0,
             'attendanceAvailability' => $section === 'absences' ? app(AttendanceService::class)->availability($request->user()->id, $this->currentUserRole($request) === 'superadmin') : [],
             'attendanceTeamUsers' => $section === 'absences' ? DB::table('users as u')->join('profiles as p', 'p.user_id', '=', 'u.id')
                 ->when($this->currentUserRole($request) === 'admin', fn ($query) => $query->where('p.manager_user_id', $request->user()->id))
@@ -890,6 +885,9 @@ class CentroPageController extends Controller
         }
         $payload = $this->validatedAbsencePayload($request);
         unset($payload['status']);
+        if ($payload['type'] !== 'other') {
+            $payload['cause_code'] = null;
+        }
         if ($this->currentUserRole($request) === 'admin') {
             abort_if($absence->type === 'sickness' || $payload['type'] === 'sickness', 403);
         }
@@ -1067,54 +1065,6 @@ class CentroPageController extends Controller
         return back()->with('status', 'Festività rimossa.');
     }
 
-    public function storeAttendanceCause(Request $request): RedirectResponse
-    {
-        $this->ensureSuperadmin($request);
-        $data = $request->validate([
-            'code' => ['required', 'alpha_dash', 'max:40', 'unique:attendance_causes,code'],
-            'name' => ['required', 'string', 'max:100'],
-            'reduces_presence' => ['required', 'boolean'],
-            'requires_approval' => ['required', 'boolean'],
-        ]);
-        DB::table('attendance_causes')->insert([...$data, 'active' => true, 'created_at' => now(), 'updated_at' => now()]);
-
-        return back()->with('status', 'Causale aggiunta.');
-    }
-
-    public function destroyAttendanceCause(Request $request, string $code): RedirectResponse
-    {
-        $this->ensureSuperadmin($request);
-        DB::table('attendance_causes')->where('code', $code)->update(['active' => false, 'updated_at' => now()]);
-
-        return back()->with('status', 'Causale disattivata.');
-    }
-
-    public function updateAttendanceBalances(Request $request, string $userId): RedirectResponse
-    {
-        $this->ensureSuperadmin($request);
-        abort_unless(DB::table('users')->where('id', $userId)->exists(), 404);
-        $data = $request->validate([
-            'year' => ['required', 'integer', 'between:2020,2100'],
-            'vacation_minutes' => ['required', 'integer', 'min:0'],
-            'permission_minutes' => ['required', 'integer', 'min:0'],
-        ]);
-        $changed = false;
-        foreach (['vacation', 'permission'] as $type) {
-            $existing = DB::table('attendance_balances')->where('user_id', $userId)->where('year', $data['year'])->where('type', $type)->first();
-            $changed = $changed || ! $existing || (int) $existing->allocated_minutes !== (int) $data[$type.'_minutes'];
-            DB::table('attendance_balances')->updateOrInsert(['user_id' => $userId, 'year' => $data['year'], 'type' => $type], [
-                'id' => $existing->id ?? (string) Str::uuid(),
-                'allocated_minutes' => $data[$type.'_minutes'], 'updated_at' => now(), 'created_at' => $existing->created_at ?? now(),
-            ]);
-        }
-        if ($changed) {
-            $this->notifyUsers([$userId], $request->user()->id, 'absence_balance_updated',
-                $request->user()->name.' ha aggiornato i tuoi saldi ferie e permessi per il '.$data['year'].'.');
-        }
-
-        return back()->with('status', 'Saldi aggiornati.');
-    }
-
     public function storeAttendanceEntry(Request $request): RedirectResponse
     {
         $this->ensureAdmin($request);
@@ -1165,28 +1115,23 @@ class CentroPageController extends Controller
         ]);
 
         return response()->json([
-            'rows' => $this->attendanceRegistryQuery($request, $kind)
+            'rows' => $this->attendanceRegistryQuery($request)
                 ->offset($data['offset'])->limit(min($data['limit'], 200 - $data['offset']))->get(),
-            'total' => $this->attendanceRegistryQuery($request, $kind)->count(),
+            'total' => $this->attendanceRegistryQuery($request)->count(),
         ]);
     }
 
     public function exportAttendanceRegistry(Request $request, string $kind)
     {
         $this->ensureAttendanceRegistryAccess($request, $kind);
-        $isEntry = $kind === 'entries';
-        $fileName = ($isEntry ? 'ore-registrate-' : 'saldi-annuali-').now('Europe/Rome')->format('Y-m-d').'.csv';
+        $fileName = 'ore-registrate-'.now('Europe/Rome')->format('Y-m-d').'.csv';
 
-        return response()->streamDownload(function () use ($request, $kind, $isEntry) {
+        return response()->streamDownload(function () use ($request) {
             $stream = fopen('php://output', 'w');
             fwrite($stream, "\xEF\xBB\xBF");
-            fputcsv($stream, $isEntry
-                ? ['Persona', 'Giorno', 'Causale', 'Minuti', 'Nota']
-                : ['Persona', 'Anno', 'Tipo', 'Minuti assegnati'], ';');
-            foreach ($this->attendanceRegistryQuery($request, $kind)->cursor() as $row) {
-                $values = $isEntry
-                    ? [$row->user_name, $row->day, $row->cause, $row->minutes, $row->note]
-                    : [$row->user_name, $row->year, $row->type, $row->allocated_minutes];
+            fputcsv($stream, ['Persona', 'Giorno', 'Causale', 'Minuti', 'Nota'], ';');
+            foreach ($this->attendanceRegistryQuery($request)->cursor() as $row) {
+                $values = [$row->user_name, $row->day, $row->cause, $row->minutes, $row->note];
                 fputcsv($stream, array_map(static function ($value) {
                     $text = (string) ($value ?? '');
 
@@ -1199,24 +1144,21 @@ class CentroPageController extends Controller
 
     private function ensureAttendanceRegistryAccess(Request $request, string $kind): void
     {
-        abort_unless(in_array($kind, ['entries', 'balances'], true), 404);
-        $kind === 'balances' ? $this->ensureSuperadmin($request) : $this->ensureAdmin($request);
+        abort_unless($kind === 'entries', 404);
+        $this->ensureAdmin($request);
     }
 
-    private function attendanceRegistryQuery(Request $request, string $kind)
+    private function attendanceRegistryQuery(Request $request)
     {
-        $isEntry = $kind === 'entries';
-        $query = DB::table(($isEntry ? 'attendance_entries' : 'attendance_balances').' as record')
+        $query = DB::table('attendance_entries as record')
             ->join('users as u', 'u.id', '=', 'record.user_id')
             ->select(['record.*', 'u.name as user_name']);
 
-        if ($isEntry && $this->currentUserRole($request) === 'admin') {
+        if ($this->currentUserRole($request) === 'admin') {
             $query->whereIn('record.user_id', DB::table('profiles')->where('manager_user_id', $request->user()->id)->select('user_id'));
         }
 
-        return $isEntry
-            ? $query->orderByDesc('record.day')->orderByDesc('record.created_at')->orderByDesc('record.id')
-            : $query->orderByDesc('record.year')->orderBy('u.name')->orderBy('record.type')->orderByDesc('record.id');
+        return $query->orderByDesc('record.day')->orderByDesc('record.created_at')->orderByDesc('record.id');
     }
 
     public function companyDocuments(Request $request): Response
@@ -2415,7 +2357,6 @@ class CentroPageController extends Controller
             ],
             'absences' => [
                 'attendanceApprovers' => app(AttendanceService::class)->settings()['approvers'],
-                'attendanceCauses' => DB::table('attendance_causes')->where('active', true)->orderBy('name')->get(['code', 'name']),
                 'user' => [
                     'id' => $record->user_id,
                     'name' => $record->user_name,
@@ -6604,7 +6545,6 @@ class CentroPageController extends Controller
     {
         $payload = $request->validate([
             'type' => ['required', Rule::in(AttendanceService::TYPES)],
-            'cause_code' => ['nullable', Rule::exists('attendance_causes', 'code')],
             'start_date' => ['required', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'start_time' => ['nullable', 'regex:/^([01][0-9]|2[0-3]):00$/'],
@@ -6627,7 +6567,6 @@ class CentroPageController extends Controller
         $payload['start_time'] = ($payload['start_time'] ?? null) ?: null;
         $payload['end_time'] = ($payload['end_time'] ?? null) ?: null;
         $payload['inps_code'] = $payload['type'] === 'sickness' ? (($payload['inps_code'] ?? null) ?: null) : null;
-        $payload['cause_code'] = $payload['type'] === 'other' ? ($payload['cause_code'] ?? null) : null;
         $payload['notes'] = ($payload['notes'] ?? null) ?: null;
 
         return $payload;

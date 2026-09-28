@@ -68,31 +68,6 @@ class AttendanceService
         return (int) $settings['default_daily_minutes'];
     }
 
-    public function balances(string $userId, int $year): array
-    {
-        $allocated = DB::table('attendance_balances')->where('user_id', $userId)->where('year', $year)->pluck('allocated_minutes', 'type');
-        $used = ['vacation' => 0, 'permission' => 0];
-        $settings = $this->settings();
-        $requests = DB::table('absence_requests')->where('user_id', $userId)
-            ->where('status', 'approved')->whereIn('type', array_keys($used))
-            ->whereDate('start_date', '<=', "$year-12-31")
-            ->whereDate('end_date', '>=', "$year-01-01")->get();
-        foreach ($requests as $request) {
-            foreach (CarbonPeriod::create(max($request->start_date, "$year-01-01"), min($request->end_date ?: $request->start_date, "$year-12-31")) as $day) {
-                $planned = $this->workingMinutes($userId, $day, $settings);
-                $used[$request->type] += $request->start_time && $request->end_time
-                    ? min($planned, max(0, Carbon::parse($request->start_time)->diffInMinutes(Carbon::parse($request->end_time))))
-                    : $planned;
-            }
-        }
-
-        return collect($used)->map(fn ($minutes, $type) => [
-            'allocated_minutes' => isset($allocated[$type]) ? (int) $allocated[$type] : null,
-            'used_minutes' => $minutes,
-            'remaining_minutes' => isset($allocated[$type]) ? (int) $allocated[$type] - $minutes : null,
-        ])->all();
-    }
-
     public function calendarEvents(string $viewerId, bool $isSuperadmin, bool $isManager, string $from, string $to): array
     {
         $teamIds = $isManager ? DB::table('profiles')->where('manager_user_id', $viewerId)->pluck('user_id')->push($viewerId)->all() : [$viewerId];

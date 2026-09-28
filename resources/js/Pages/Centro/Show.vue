@@ -919,7 +919,6 @@ const absenceForm = useForm({
     start_time: props.record.start_time ? String(props.record.start_time).slice(0, 5) : '',
     end_time: props.record.end_time ? String(props.record.end_time).slice(0, 5) : '',
     inps_code: props.record.inps_code || '',
-    cause_code: props.record.cause_code || '',
     status: props.record.status || 'pending',
     notes: props.record.notes || '',
 });
@@ -975,7 +974,6 @@ function absencePayload() {
         start_time: absenceNeedsTime() ? (absenceForm.start_time || null) : null,
         end_time: absenceNeedsTime() ? (absenceForm.end_time || null) : null,
         inps_code: absenceForm.type === 'sickness' ? (absenceForm.inps_code || null) : null,
-        cause_code: absenceForm.type === 'other' ? (absenceForm.cause_code || null) : null,
         status: absenceForm.status,
         notes: absenceForm.notes || null,
     };
@@ -6149,7 +6147,6 @@ onUnmounted(() => {
                                 <AppSelect v-model="absenceForm.type" :options="absenceTypeOptions" @change="saveAbsenceInline(0)" />
                                 <div v-if="absenceForm.errors.type" class="mt-1 text-sm text-red-600">{{ absenceForm.errors.type }}</div>
                             </div>
-                            <div v-if="absenceForm.type === 'other'"><label class="block text-sm font-medium text-gray-700">Causale</label><AppSelect v-model="absenceForm.cause_code" :options="(related.attendanceCauses || []).map((cause) => ({ value: cause.code, label: cause.name }))" @change="saveAbsenceInline(0)" /></div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">{{ absenceNeedsEndDate() ? 'Dal' : 'Giorno' }}</label>
                                 <AppDateInput v-model="absenceForm.start_date" @change="saveAbsenceInline(0)" />

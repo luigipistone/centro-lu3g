@@ -45,9 +45,6 @@ class ProfileController extends Controller
                 ->latest('start_date')
                 ->limit(30)
                 ->get(),
-            'attendanceBalances' => app(AttendanceService::class)->balances($request->user()->id, now('Europe/Rome')->year),
-            'attendanceYear' => now('Europe/Rome')->year,
-            'attendanceCauses' => DB::table('attendance_causes')->where('active', true)->orderBy('name')->get(['code', 'name']),
             'archiveRequest' => DB::table('account_archive_requests')->where('user_id', $request->user()->id)->latest()->first(),
             'dossierDocuments' => $this->dossierDocuments($request->user()->id),
             'employeeDossier' => $this->employeeDossier($request->user()->id),
@@ -147,7 +144,6 @@ class ProfileController extends Controller
     {
         $payload = $request->validate([
             'type' => ['required', Rule::in(AttendanceService::TYPES)],
-            'cause_code' => ['nullable', Rule::exists('attendance_causes', 'code')->where('active', true)],
             'start_date' => ['required', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'start_time' => ['nullable', 'regex:/^([01][0-9]|2[0-3]):00$/'],
@@ -178,14 +174,11 @@ class ProfileController extends Controller
         }
 
         $absenceId = (string) str()->uuid();
-        $autoApproved = $payload['type'] === 'other' && ! empty($payload['cause_code'])
-            && DB::table('attendance_causes')->where('code', $payload['cause_code'])->where('requires_approval', false)->exists();
-
         DB::table('absence_requests')->insert([
             'id' => $absenceId,
             'user_id' => $request->user()->id,
             'type' => $payload['type'],
-            'cause_code' => $payload['type'] === 'other' ? ($payload['cause_code'] ?? null) : null,
+            'cause_code' => null,
             'start_date' => $payload['start_date'],
             'end_date' => ($payload['end_date'] ?? null) ?: $payload['start_date'],
             'start_time' => ($payload['start_time'] ?? null) ?: null,
@@ -194,7 +187,7 @@ class ProfileController extends Controller
             'medical_document_path' => $medicalDocumentPath,
             'medical_document_name' => $medicalDocumentName,
             'medical_document_mime' => $medicalDocumentMime,
-            'status' => $autoApproved ? 'approved' : 'pending',
+            'status' => 'pending',
             'notes' => ($payload['notes'] ?? null) ?: null,
             'created_at' => now(),
             'updated_at' => now(),
@@ -207,7 +200,7 @@ class ProfileController extends Controller
             $request->user()->name.' ha inviato una richiesta assenza.',
         );
 
-        return Redirect::route('profile.edit')->with('status', $autoApproved ? 'Richiesta registrata.' : 'Richiesta inviata.');
+        return Redirect::route('profile.edit')->with('status', 'Richiesta inviata.');
     }
 
     public function destroyAbsence(Request $request, string $id): RedirectResponse

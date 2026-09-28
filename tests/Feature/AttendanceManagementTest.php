@@ -16,7 +16,7 @@ class AttendanceManagementTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_employee_can_request_smart_working_and_see_balance(): void
+    public function test_employee_can_request_smart_working(): void
     {
         $employee = User::factory()->create();
         $this->role($employee, 'editor');
@@ -33,13 +33,46 @@ class AttendanceManagementTest extends TestCase
             'status' => 'pending',
         ]);
 
-        DB::table('attendance_balances')->insert([
-            'id' => (string) Str::uuid(), 'user_id' => $employee->id,
-            'year' => 2026, 'type' => 'vacation', 'allocated_minutes' => 2400,
-            'created_at' => now(), 'updated_at' => now(),
+    }
+
+    public function test_other_absence_no_longer_uses_custom_cause_or_auto_approval(): void
+    {
+        $employee = User::factory()->create();
+        $this->role($employee, 'editor');
+        DB::table('attendance_causes')->insert([
+            'code' => 'old', 'name' => 'Vecchia causale', 'reduces_presence' => true,
+            'requires_approval' => false, 'active' => true, 'created_at' => now(), 'updated_at' => now(),
         ]);
-        $balance = app(AttendanceService::class)->balances($employee->id, 2026);
-        $this->assertSame(2400, $balance['vacation']['remaining_minutes']);
+
+        $this->actingAs($employee)->post(route('profile.absences.store'), [
+            'type' => 'other', 'cause_code' => 'old',
+            'start_date' => '2026-10-05', 'end_date' => '2026-10-05',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('absence_requests', [
+            'user_id' => $employee->id, 'type' => 'other',
+            'cause_code' => null, 'status' => 'pending',
+        ]);
+        $this->assertDatabaseHas('attendance_causes', ['code' => 'old']);
+    }
+
+    public function test_editing_legacy_other_absence_preserves_its_cause(): void
+    {
+        $this->withoutMiddleware(EnforceRolePermissions::class);
+        $admin = User::factory()->create();
+        $employee = User::factory()->create();
+        $this->role($admin, 'superadmin');
+        $id = $this->absence($employee, 'other');
+        DB::table('absence_requests')->where('id', $id)->update(['cause_code' => 'old']);
+
+        $this->actingAs($admin)->put(route('absences.update', $id), [
+            'type' => 'other', 'status' => 'pending', 'start_date' => '2026-10-06',
+            'end_date' => '2026-10-06', 'notes' => 'Nota aggiornata',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('absence_requests', [
+            'id' => $id, 'cause_code' => 'old', 'notes' => 'Nota aggiornata',
+        ]);
     }
 
     public function test_rejection_requires_reason_and_it_is_saved(): void
@@ -240,31 +273,17 @@ class AttendanceManagementTest extends TestCase
 
         $this->actingAs($manager)->get(route('attendance.registry', ['kind' => 'entries', 'offset' => 0, 'limit' => 10]))
             ->assertOk()->assertJsonPath('total', 1)->assertJsonPath('rows.0.user_id', $ownEmployee->id);
-        $this->actingAs($manager)->get(route('attendance.registry.export', 'balances'))->assertForbidden();
+        $this->actingAs($manager)->get('/attendance/registry/balances/export')->assertNotFound();
     }
 
-    public function test_balance_registry_loads_in_batches_and_exports_every_year(): void
+    public function test_legacy_balances_and_custom_causes_cannot_be_managed(): void
     {
         $this->withoutMiddleware(EnforceRolePermissions::class);
         $admin = User::factory()->create();
-        $employee = User::factory()->create();
         $this->role($admin, 'superadmin');
-        foreach (range(2020, 2025) as $year) {
-            foreach (['vacation', 'permission'] as $type) {
-                DB::table('attendance_balances')->insert([
-                    'id' => (string) Str::uuid(), 'user_id' => $employee->id,
-                    'year' => $year, 'type' => $type, 'allocated_minutes' => 2400,
-                    'created_at' => now(), 'updated_at' => now(),
-                ]);
-            }
-        }
-
-        $this->actingAs($admin)->get(route('attendance.registry', ['kind' => 'balances', 'offset' => 0, 'limit' => 10]))
-            ->assertOk()->assertJsonCount(10, 'rows')->assertJsonPath('total', 12);
-        $this->actingAs($admin)->get(route('attendance.registry', ['kind' => 'balances', 'offset' => 10, 'limit' => 50]))
-            ->assertOk()->assertJsonCount(2, 'rows');
-        $csv = $this->actingAs($admin)->get(route('attendance.registry.export', 'balances'))->assertOk()->streamedContent();
-        $this->assertSame(13, substr_count($csv, "\n"));
+        $this->actingAs($admin)->get('/attendance/registry/balances?offset=0&limit=10')->assertNotFound();
+        $this->actingAs($admin)->post('/attendance/causes', ['code' => 'custom', 'name' => 'Custom'])->assertNotFound();
+        $this->actingAs($admin)->put('/attendance/balances/'.$admin->id, ['year' => 2026])->assertNotFound();
     }
 
     private function role(User $user, string $role): void
