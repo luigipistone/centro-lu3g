@@ -10,6 +10,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Smalot\PdfParser\Parser;
 use Tests\TestCase;
 
 class AttendanceManagementTest extends TestCase
@@ -142,6 +143,23 @@ class AttendanceManagementTest extends TestCase
         $csv = file_get_contents($response->baseResponse->getFile()->getPathname());
         $this->assertStringContainsString($ownEmployee->name, $csv);
         $this->assertStringNotContainsString($otherEmployee->name, $csv);
+    }
+
+    public function test_attendance_pdf_report_uses_italian_summary_labels(): void
+    {
+        $admin = User::factory()->create();
+        $this->role($admin, 'superadmin');
+
+        $pdf = $this->actingAs($admin)->get(route('documents.reports.export', [
+            'format' => 'pdf', 'year' => 2026, 'month' => 9,
+        ]))->assertOk()->assertHeader('Content-Type', 'application/pdf')->getContent();
+        $text = (new Parser)->parseContent($pdf)->getText();
+
+        foreach (['Ordinarie', 'Straordinari', 'Ferie', 'Permessi', 'Malattia', 'Ritardi', 'Smart working', 'Banca ore', 'Recuperi', 'Trasferte', 'Altre assenze'] as $label) {
+            $this->assertStringContainsString($label, $text);
+        }
+        $this->assertStringNotContainsString('Vacation', $text);
+        $this->assertStringNotContainsString('Sickness', $text);
     }
 
     public function test_superadmin_can_save_multiple_holidays_without_partial_duplicates(): void

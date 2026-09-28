@@ -6330,16 +6330,7 @@ class CentroPageController extends Controller
 
     private function attendanceExportRows(array $report): array
     {
-        $fields = [
-            'planned' => 'Previste', 'actual' => 'Ore lavorate', 'ordinary' => 'Ordinarie',
-            'extra' => 'Straordinari', 'vacation' => 'Ferie', 'permissions' => 'Permessi',
-            'sickness' => 'Malattia', 'late' => 'Ritardi', 'smart_working' => 'Smart working',
-            'time_bank' => 'Banca ore', 'recovery' => 'Recuperi', 'travel' => 'Trasferte',
-            'other' => 'Altre assenze', 'holiday' => 'Festività',
-        ];
-        foreach ($report['custom_causes'] as $cause) {
-            $fields['custom:'.$cause->code] = $cause->name;
-        }
+        $fields = $this->attendanceExportLabels($report);
         $rows = [array_merge(['Cognome Nome', 'Matricola'], collect($report['days'])->pluck('label')->all(), array_values($fields))];
         foreach ($report['rows'] as $row) {
             $rows[] = array_merge([$row['name'], $row['employee_code']],
@@ -6348,6 +6339,22 @@ class CentroPageController extends Controller
         }
 
         return $rows;
+    }
+
+    private function attendanceExportLabels(array $report): array
+    {
+        $labels = [
+            'planned' => 'Previste', 'actual' => 'Ore lavorate', 'ordinary' => 'Ordinarie',
+            'extra' => 'Straordinari', 'vacation' => 'Ferie', 'permissions' => 'Permessi',
+            'sickness' => 'Malattia', 'late' => 'Ritardi', 'smart_working' => 'Smart working',
+            'time_bank' => 'Banca ore', 'recovery' => 'Recuperi', 'travel' => 'Trasferte',
+            'other' => 'Altre assenze', 'holiday' => 'Festività',
+        ];
+        foreach ($report['custom_causes'] as $cause) {
+            $labels['custom:'.$cause->code] = $cause->name;
+        }
+
+        return $labels;
     }
 
     private function buildAttendanceReportCsv(array $report): string
@@ -6371,7 +6378,8 @@ class CentroPageController extends Controller
         $options = new Options;
         $options->set('isRemoteEnabled', false);
         $dompdf = new Dompdf($options);
-        $summary = collect($report['summary'])->except('users')->map(fn ($value, $key) => '<tr><td>'.e($key === 'actual' ? 'Ore lavorate' : ucfirst(str_replace('_', ' ', $key))).'</td><td>'.e($value).'</td></tr>')->implode('');
+        $labels = $this->attendanceExportLabels($report);
+        $summary = collect($report['summary'])->except('users')->map(fn ($value, $key) => '<tr><td>'.e($labels[$key]).'</td><td>'.e($value).'</td></tr>')->implode('');
         $people = collect($report['rows'])->map(fn ($row) => '<tr><td>'.e($row['name']).'</td><td>'.e($row['employee_code']).'</td><td>'.e($row['total_labels']['planned']).'</td><td>'.e($row['total_labels']['actual']).'</td><td>'.e($row['total_labels']['vacation']).'</td><td>'.e($row['total_labels']['permissions']).'</td><td>'.e($row['total_labels']['sickness']).'</td><td>'.e($row['total_labels']['late']).'</td></tr>')->implode('');
         $html = '<html><head><meta charset="utf-8"><style>body{font-family:DejaVu Sans,sans-serif;color:#243044;font-size:10px}h1{font-size:18px;color:#1767d2}h2{font-size:13px;margin-top:22px}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #dde3ec;padding:7px;text-align:left}th{background:#eef4ff}.meta{color:#6b7585}</style></head><body><h1>Il Centro · Presenze</h1><p class="meta">'.e($report['company']).' · '.e($report['month_label']).' · '.e($report['scope_label']).'<br>Generato il '.e($report['generated_at']).'</p><h2>Riepilogo aziendale</h2><table>'.$summary.'</table><h2>Riepilogo per dipendente</h2><table><tr><th>Persona</th><th>Matricola</th><th>Previste</th><th>Ore lavorate</th><th>Ferie</th><th>Permessi</th><th>Malattia</th><th>Ritardi</th></tr>'.$people.'</table></body></html>';
         $dompdf->loadHtml($html);
