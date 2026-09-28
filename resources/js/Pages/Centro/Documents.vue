@@ -5,14 +5,15 @@ import AppDateInput from '@/Components/AppDateInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { dateIt } from '@/utils/formatters';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { Bold, Check, Download, FileText, Heading3, Italic, Link2, List, ListOrdered, MessageSquare, Plus, Quote, Send, Table2, Trash2, Underline, Upload, Users, X } from '@lucide/vue';
-import { computed, nextTick, ref } from 'vue';
+import { Bold, Check, Download, FileText, Heading3, Italic, Link2, List, ListOrdered, MessageSquare, Pause, Play, Plus, Quote, Send, Table2, Trash2, Underline, Upload, Users, X } from '@lucide/vue';
+import { computed, nextTick, ref, watch } from 'vue';
 
 const props = defineProps({
     canManage: Boolean,
     activeAdminSection: String,
     documents: Array,
     messages: Array,
+    messageSchedules: Array,
     attendanceReport: Object,
     attendanceTeams: Array,
     groups: Array,
@@ -30,6 +31,7 @@ const yearVisibleCounts = ref({ [new Date().getFullYear()]: 5 });
 const documentDescriptionEditor = ref(null);
 const messageBodyEditor = ref(null);
 const createModal = ref(null);
+const documentReview = ref(false);
 const categoryFilters = ref({});
 const isSuperadmin = computed(() => page.props.auth?.user?.role === 'superadmin');
 const activeAdminSection = computed(() => props.activeAdminSection || null);
@@ -50,7 +52,8 @@ const documentForm = useForm({
     title: '',
     description: '',
     category: 'documenti_vari',
-    audience: 'all',
+    audience: '',
+    publication_confirmed: false,
     file: null,
     user_ids: [],
     group_ids: [],
@@ -68,6 +71,13 @@ const messageForm = useForm({
     audience: 'all',
     user_ids: [],
     group_ids: [],
+    send_mode: 'now',
+    scheduled_date: '',
+    scheduled_hour: '09',
+    scheduled_minute: '00',
+    scheduled_at: '',
+    recurrence: 'none',
+    ends_on: '',
 });
 
 const audienceOptions = [
@@ -75,6 +85,26 @@ const audienceOptions = [
     { value: 'users', label: 'Utenti specifici' },
     { value: 'groups', label: 'Gruppi' },
 ];
+const sensitiveDocumentCategories = ['compensi', 'contratti', 'documenti_identita'];
+const sensitiveDocument = computed(() => sensitiveDocumentCategories.includes(documentForm.category));
+const documentAudienceOptions = computed(() => sensitiveDocument.value ? audienceOptions.filter((option) => option.value === 'users') : audienceOptions);
+const documentRecipientNames = computed(() => documentForm.audience === 'all' ? ['Tutti gli utenti']
+    : documentForm.audience === 'users' ? (props.users || []).filter((user) => documentForm.user_ids.includes(user.id)).map((user) => user.name)
+        : (props.groups || []).filter((group) => documentForm.group_ids.includes(group.id)).map((group) => `${group.name} (${group.members_count} persone)`));
+const hourOptions = Array.from({ length: 24 }, (_, hour) => ({ value: String(hour).padStart(2, '0'), label: String(hour).padStart(2, '0') }));
+const recurrenceOptions = [
+    { value: 'none', label: 'Una volta' }, { value: 'daily', label: 'Ogni giorno' },
+    { value: 'weekly', label: 'Ogni settimana' }, { value: 'monthly', label: 'Ogni mese' },
+];
+watch(() => documentForm.category, () => {
+    documentForm.audience = '';
+    documentForm.user_ids = [];
+    documentForm.group_ids = [];
+    documentReview.value = false;
+});
+watch(() => [documentForm.title, documentForm.audience, documentForm.file, ...documentForm.user_ids, ...documentForm.group_ids], () => {
+    documentReview.value = false;
+});
 
 const visibleDocuments = computed(() => props.documents || []);
 const visibleMessages = computed(() => props.messages || []);
@@ -106,7 +136,7 @@ const categoryOptions = computed(() => [
     { value: 'all', label: 'Tutte le categorie' },
     ...Object.entries(props.documentCategories || {}).map(([value, label]) => ({ value, label })),
 ]);
-const documentCategoryOptions = computed(() => categoryOptions.value.filter((option) => option.value !== 'all'));
+const documentCategoryOptions = computed(() => categoryOptions.value.filter((option) => option.value !== 'all' && (isSuperadmin.value || !sensitiveDocumentCategories.includes(option.value))));
 const documentYearGroups = computed(() => {
     const grouped = visibleDocuments.value.reduce((carry, document) => {
         const year = documentYear(document);
@@ -178,6 +208,7 @@ function categoryBadgeStyle(category) {
 function resetDocumentForm() {
     documentForm.reset();
     documentForm.clearErrors();
+    documentReview.value = false;
     nextTick(() => {
         if (documentDescriptionEditor.value) {
             documentDescriptionEditor.value.innerHTML = '';
@@ -187,13 +218,25 @@ function resetDocumentForm() {
 
 function closeCreateModal() {
     createModal.value = null;
+    documentReview.value = false;
 }
 
 function submitDocument() {
-    updateDocumentDescriptionFromEditor();
+    if (!documentReview.value) {
+        updateDocumentDescriptionFromEditor();
+        if (!documentForm.audience || !documentRecipientNames.value.length || (sensitiveDocument.value && documentRecipientNames.value.length !== 1)) {
+            documentForm.setError('audience', 'Seleziona i destinatari prima di continuare.');
+            return;
+        }
+        documentForm.clearErrors();
+        documentReview.value = true;
+        return;
+    }
+    documentForm.publication_confirmed = true;
     documentForm.post(route('documents.store'), {
         preserveScroll: true,
         forceFormData: true,
+        onError: () => { documentReview.value = false; },
         onSuccess: () => {
             resetDocumentForm();
             closeCreateModal();
@@ -240,13 +283,24 @@ function resetMessageForm() {
 
 function submitMessage() {
     updateMessageBodyFromEditor();
-    messageForm.post(route('document-messages.store'), {
+    const scheduled = messageForm.send_mode === 'scheduled';
+    messageForm.scheduled_at = scheduled ? `${messageForm.scheduled_date}T${messageForm.scheduled_hour}:${messageForm.scheduled_minute}` : '';
+    messageForm.post(route(scheduled ? 'document-messages.schedules.store' : 'document-messages.store'), {
         preserveScroll: true,
         onSuccess: () => {
             resetMessageForm();
             closeCreateModal();
         },
     });
+}
+
+function toggleMessageSchedule(schedule) {
+    router.patch(route('document-messages.schedules.update', schedule.id), { active: !schedule.active }, { preserveScroll: true });
+}
+
+function removeMessageSchedule(schedule) {
+    confirmDelete.value = { type: 'schedule', title: schedule.title, route: route('document-messages.schedules.destroy', schedule.id) };
+    confirmDeleteText.value = '';
 }
 
 function updateMessageBodyFromEditor() {
@@ -527,6 +581,7 @@ function deleteLabel(type) {
                             <button type="button" class="icon-btn" aria-label="Chiudi" @click="closeCreateModal"><X class="h-4 w-4" :stroke-width="1.7" /></button>
                         </div>
 
+                        <div v-if="!documentReview" class="space-y-5">
                         <div class="grid gap-4 md:grid-cols-2">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Titolo</label>
@@ -540,7 +595,7 @@ function deleteLabel(type) {
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Destinatari</label>
-                                <AppSelect v-model="documentForm.audience" :options="audienceOptions" />
+                                <AppSelect v-model="documentForm.audience" :options="documentAudienceOptions" placeholder="Seleziona destinatari" />
                                 <div v-if="documentForm.errors.audience" class="mt-1 text-sm text-red-600">{{ documentForm.errors.audience }}</div>
                             </div>
                             <div class="md:col-span-2">
@@ -635,11 +690,21 @@ function deleteLabel(type) {
                             </div>
                             <div v-if="documentForm.errors.group_ids" class="mt-2 text-sm text-red-600">{{ documentForm.errors.group_ids }}</div>
                         </div>
+                        </div>
 
-                        <button type="submit" class="btn btn-primary" :disabled="documentForm.processing">
-                            <Plus class="h-4 w-4" :stroke-width="1.7" />
-                            Pubblica documento
-                        </button>
+                        <div v-if="documentReview" class="rounded-[var(--radius-sm)] border border-blue-100 bg-blue-50/60 p-4">
+                            <p class="text-sm font-semibold text-gray-900">Conferma pubblicazione</p>
+                            <p class="mt-1 text-sm text-gray-600">{{ documentForm.title }} · {{ props.documentCategories?.[documentForm.category] }}</p>
+                            <p class="mt-2 text-xs font-semibold uppercase text-gray-500">Destinatari</p>
+                            <p class="mt-1 text-sm text-gray-800">{{ documentRecipientNames.join(', ') }}</p>
+                        </div>
+                        <div class="flex justify-end gap-2">
+                            <button v-if="documentReview" type="button" class="btn btn-outline" @click="documentReview = false">Indietro</button>
+                            <button type="submit" class="btn btn-primary" :disabled="documentForm.processing">
+                                <Plus class="h-4 w-4" :stroke-width="1.7" />
+                                {{ documentReview ? 'Conferma e pubblica' : 'Continua' }}
+                            </button>
+                        </div>
                     </form>
                     </div>
 
@@ -696,6 +761,33 @@ function deleteLabel(type) {
                                 <AppSelect v-model="messageForm.audience" :options="audienceOptions" />
                                 <div v-if="messageForm.errors.audience" class="mt-1 text-sm text-red-600">{{ messageForm.errors.audience }}</div>
                             </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Invio</label>
+                                <AppSelect v-model="messageForm.send_mode" :options="[{ value: 'now', label: 'Pubblica ora' }, { value: 'scheduled', label: 'Programma invio' }]" />
+                            </div>
+                            <template v-if="messageForm.send_mode === 'scheduled'">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Primo invio</label>
+                                    <AppDateInput v-model="messageForm.scheduled_date" />
+                                    <p v-if="messageForm.errors.scheduled_at" class="mt-1 text-sm text-red-600">{{ messageForm.errors.scheduled_at }}</p>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Ora</label>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <AppSelect v-model="messageForm.scheduled_hour" :options="hourOptions" />
+                                        <AppSelect v-model="messageForm.scheduled_minute" :options="[{ value: '00', label: '00' }, { value: '30', label: '30' }]" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Ripetizione</label>
+                                    <AppSelect v-model="messageForm.recurrence" :options="recurrenceOptions" />
+                                </div>
+                                <div v-if="messageForm.recurrence !== 'none'">
+                                    <label class="block text-sm font-medium text-gray-700">Termina il (facoltativo)</label>
+                                    <AppDateInput v-model="messageForm.ends_on" />
+                                    <p v-if="messageForm.errors.ends_on" class="mt-1 text-sm text-red-600">{{ messageForm.errors.ends_on }}</p>
+                                </div>
+                            </template>
                             <div class="md:col-span-2">
                                 <label class="block text-sm font-medium text-gray-700">Messaggio</label>
                                 <div class="mt-1 overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white/90 shadow-inner">
@@ -780,7 +872,7 @@ function deleteLabel(type) {
 
                         <button type="submit" class="btn btn-primary" :disabled="messageForm.processing">
                             <Send class="h-4 w-4" :stroke-width="1.7" />
-                            Pubblica messaggio
+                            {{ messageForm.send_mode === 'scheduled' ? 'Programma messaggio' : 'Pubblica messaggio' }}
                         </button>
                     </form>
                     </div>
@@ -791,6 +883,22 @@ function deleteLabel(type) {
                         <div>
                             <h3 class="text-base font-semibold text-gray-900">{{ canManage ? 'Tutti i messaggi' : 'Messaggi da leggere' }}</h3>
                             <p class="mt-1 text-sm text-gray-500">Comunicazioni con conferma di lettura.</p>
+                        </div>
+                    </div>
+
+                    <div v-if="canManage && messageSchedules?.length" class="surface p-5">
+                        <h4 class="text-sm font-semibold text-gray-900">Invii programmati</h4>
+                        <div class="mt-3 divide-y divide-gray-100">
+                            <div v-for="schedule in messageSchedules" :key="schedule.id" class="flex items-center justify-between gap-4 py-2.5">
+                                <div class="min-w-0">
+                                    <p class="truncate text-sm font-semibold text-gray-800">{{ schedule.title }}</p>
+                                    <p class="text-xs text-gray-500">{{ schedule.active ? `Prossimo invio ${schedule.next_run_label}` : 'Sospeso' }} · {{ recurrenceOptions.find((option) => option.value === schedule.recurrence)?.label }}</p>
+                                </div>
+                                <div class="flex shrink-0 items-center gap-1">
+                                    <button type="button" class="icon-btn h-8 w-8" :title="schedule.active ? 'Sospendi' : 'Riattiva'" @click="toggleMessageSchedule(schedule)"><Pause v-if="schedule.active" class="h-4 w-4" /><Play v-else class="h-4 w-4" /></button>
+                                    <button type="button" class="icon-btn h-8 w-8 text-red-600" title="Elimina programmazione" @click="removeMessageSchedule(schedule)"><Trash2 class="h-4 w-4" /></button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -1065,7 +1173,7 @@ function deleteLabel(type) {
                                                         <p class="mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold" :style="categoryBadgeStyle(document.category)">{{ categoryLabel(document.category) }}</p>
                                                     </div>
                                                 </div>
-                                                <button v-if="canManage" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina documento" @click.stop="removeDocument(document)">
+                                                <button v-if="canManage && (isSuperadmin || (!sensitiveDocumentCategories.includes(document.category) && document.audience !== 'users'))" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina documento" @click.stop="removeDocument(document)">
                                                     <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                                 </button>
                                             </div>

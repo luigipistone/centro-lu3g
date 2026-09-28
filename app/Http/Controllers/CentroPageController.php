@@ -1201,22 +1201,29 @@ class CentroPageController extends Controller
         return Inertia::render('Centro/Documents', [
             'canManage' => $canManage,
             'activeAdminSection' => $canManage ? ($request->route('documentView') ?: 'documents') : null,
-            'documents' => $this->companyDocumentRows($canManage ? null : $userId, $canManage),
+            'documents' => $this->companyDocumentRows($canManage ? null : $userId, $canManage)
+                ->filter(fn ($document) => $this->canAccessCompanyDocument($request, $document))->values(),
             'messages' => $this->companyMessageRows($canManage ? null : $userId, $canManage),
+            'messageSchedules' => $canManage ? DB::table('company_message_schedules')->orderBy('next_run_at')->get()
+                ->map(function ($schedule) {
+                    $schedule->next_run_label = Carbon::parse($schedule->next_run_at, 'Europe/Rome')->format('d/m/Y H:i');
+
+                    return $schedule;
+                }) : [],
             'attendanceReport' => $canManage && $request->route('documentView') === 'reports' ? $this->attendanceReportData($reportYear, $reportMonth, $reportUserId, $reportTeamId, $request->input('from'), $request->input('to')) : null,
             'attendanceTeams' => $canManage && ! $managerReport && $request->route('documentView') === 'reports' ? DB::table('profiles as p')->join('users as u', 'u.id', '=', 'p.manager_user_id')->distinct()->orderBy('u.name')->get(['u.id', 'u.name']) : [],
             'groups' => $canManage ? $this->documentGroupRows() : [],
             'users' => $canManage ? ($managerReport && $request->route('documentView') === 'reports'
                 ? $this->userOptions()->filter(fn ($user) => DB::table('profiles')->where('user_id', $user->id)->where('manager_user_id', $request->user()->id)->exists())->values()
                 : $this->userOptions()) : [],
-            'documentUsers' => $canManage ? $this->companyDocumentUserRows() : [],
+            'documentUsers' => $this->currentUserRole($request) === 'superadmin' ? $this->companyDocumentUserRows() : [],
             'documentCategories' => $this->companyDocumentCategories(),
         ]);
     }
 
     public function showCompanyDocumentsUser(Request $request, string $userId): Response
     {
-        $this->ensureAdmin($request);
+        $this->ensureSuperadmin($request);
 
         $user = DB::table('users')
             ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
@@ -1242,7 +1249,8 @@ class CentroPageController extends Controller
         return Inertia::render('Centro/DocumentArchive', [
             'canManage' => $canManage,
             'year' => $year,
-            'documents' => $this->companyDocumentRows($canManage ? null : $userId, $canManage, $year),
+            'documents' => $this->companyDocumentRows($canManage ? null : $userId, $canManage, $year)
+                ->filter(fn ($document) => $this->canAccessCompanyDocument($request, $document))->values(),
             'groups' => $canManage ? $this->documentGroupRows() : [],
             'users' => $canManage ? $this->userOptions() : [],
             'documentCategories' => $this->companyDocumentCategories(),
@@ -1300,6 +1308,7 @@ class CentroPageController extends Controller
             'category' => ['required', Rule::in(array_keys($this->companyDocumentCategories()))],
             'document_year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
             'audience' => ['required', Rule::in(['all', 'users', 'groups'])],
+            'publication_confirmed' => ['required', 'accepted'],
             'file' => ['required', 'file', 'mimes:pdf', 'max:20480'],
             'user_ids' => ['nullable', 'array'],
             'user_ids.*' => ['uuid', 'exists:users,id'],
@@ -1313,6 +1322,14 @@ class CentroPageController extends Controller
 
         if ($payload['audience'] === 'groups' && empty($payload['group_ids'])) {
             return back()->withErrors(['group_ids' => 'Seleziona almeno un gruppo.'])->withInput();
+        }
+
+        if ($this->isSensitiveCompanyDocument($payload['category'], $payload['audience'])) {
+            abort_unless($this->currentUserRole($request) === 'superadmin', 403);
+        }
+        if ($this->isSensitiveCompanyDocumentCategory($payload['category']) &&
+            ($payload['audience'] !== 'users' || count(array_unique($payload['user_ids'] ?? [])) !== 1)) {
+            return back()->withErrors(['audience' => 'Per un documento riservato seleziona un solo destinatario.'])->withInput();
         }
 
         $documentId = (string) str()->uuid();
@@ -1379,7 +1396,8 @@ class CentroPageController extends Controller
         abort_if(! $document, 404);
         abort_unless($this->canAccessCompanyDocument($request, $document), 403);
 
-        $canManage = $this->canManageDocuments($request);
+        $canManage = $this->canManageDocuments($request) &&
+            (! $this->isSensitiveCompanyDocument($document->category, $document->audience) || $this->currentUserRole($request) === 'superadmin');
         $userId = (string) $request->user()->id;
         $isRecipient = $this->companyDocumentRecipientIds($id)->contains($userId);
         if ($isRecipient) {
@@ -1390,6 +1408,11 @@ class CentroPageController extends Controller
             'canManage' => $canManage,
             'document' => $this->companyDocumentRow($document, $isRecipient ? $userId : null),
             'readers' => $canManage ? $this->companyDocumentReaderRows($id) : [],
+            'managerAccess' => $this->currentUserRole($request) === 'superadmin'
+                ? DB::table('company_document_manager_access')->where('company_document_id', $id)->pluck('user_id') : [],
+            'managerOptions' => $this->currentUserRole($request) === 'superadmin'
+                ? DB::table('users as u')->join('user_roles as r', 'r.user_id', '=', 'u.id')->where('r.role', 'admin')->orderBy('u.name')->get(['u.id', 'u.name']) : [],
+            'isSuperadmin' => $this->currentUserRole($request) === 'superadmin',
             'documentCategories' => $this->companyDocumentCategories(),
         ]);
     }
@@ -1399,10 +1422,19 @@ class CentroPageController extends Controller
         $this->ensureAdmin($request);
         $document = DB::table('company_documents')->where('id', $id)->first();
         abort_if(! $document, 404);
+        abort_unless($this->canAccessCompanyDocument($request, $document), 403);
 
         $payload = $request->validate([
             'category' => ['required', Rule::in(array_keys($this->companyDocumentCategories()))],
         ]);
+        if ($this->isSensitiveCompanyDocument($payload['category'], $document->audience) ||
+            $this->isSensitiveCompanyDocument($document->category, $document->audience)) {
+            $this->ensureSuperadmin($request);
+        }
+        if ($this->isSensitiveCompanyDocumentCategory($payload['category']) &&
+            ($document->audience !== 'users' || $this->companyDocumentRecipientIds($id)->count() !== 1)) {
+            return back()->withErrors(['category' => 'Il documento deve avere un solo destinatario per questa categoria.']);
+        }
 
         DB::table('company_documents')->where('id', $id)->update([
             'category' => $payload['category'],
@@ -1428,10 +1460,42 @@ class CentroPageController extends Controller
             $this->markCompanyDocumentOpened($id, $userId);
         }
 
+        DB::table('audit_logs')->insert([
+            'id' => (string) Str::uuid(), 'user_id' => $request->user()->id, 'user_name' => $request->user()->name,
+            'user_role' => $this->currentUserRole($request), 'action' => 'accesso_file_documento',
+            'area' => 'documents', 'route_name' => 'documents.file', 'method' => 'GET', 'subject_id' => $id,
+            'status_code' => 200, 'ip_address' => $request->ip(), 'user_agent' => $request->userAgent(),
+            'metadata' => json_encode(['document_id' => $id, 'recipient' => $this->companyDocumentRecipientIds($id)->contains($userId)], JSON_THROW_ON_ERROR),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
         return response()->file(Storage::disk('local')->path($document->file_path), [
             'Content-Type' => $document->file_mime ?: 'application/pdf',
             'Content-Disposition' => 'inline; filename="'.$document->file_name.'"',
         ]);
+    }
+
+    public function grantCompanyDocumentManagerAccess(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureSuperadmin($request);
+        abort_unless(DB::table('company_documents')->where('id', $id)->exists(), 404);
+        $payload = $request->validate(['user_id' => ['required', 'uuid', 'exists:users,id']]);
+        abort_unless(DB::table('user_roles')->where('user_id', $payload['user_id'])->where('role', 'admin')->exists(), 422);
+        DB::table('company_document_manager_access')->insertOrIgnore([
+            'id' => (string) Str::uuid(), 'company_document_id' => $id,
+            'user_id' => $payload['user_id'], 'granted_by' => $request->user()->id,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        return back()->with('status', 'Accesso al documento autorizzato.');
+    }
+
+    public function revokeCompanyDocumentManagerAccess(Request $request, string $id, string $userId): RedirectResponse
+    {
+        $this->ensureSuperadmin($request);
+        DB::table('company_document_manager_access')->where('company_document_id', $id)->where('user_id', $userId)->delete();
+
+        return back()->with('status', 'Autorizzazione rimossa.');
     }
 
     public function markCompanyDocumentRead(Request $request, string $id): RedirectResponse
@@ -1472,6 +1536,10 @@ class CentroPageController extends Controller
         $this->ensureAdmin($request);
         $document = DB::table('company_documents')->where('id', $id)->first();
         abort_if(! $document, 404);
+        abort_unless($this->canAccessCompanyDocument($request, $document), 403);
+        if ($this->isSensitiveCompanyDocument($document->category, $document->audience)) {
+            $this->ensureSuperadmin($request);
+        }
 
         $recipients = $this->companyDocumentRecipientIds($id);
 
@@ -1552,6 +1620,66 @@ class CentroPageController extends Controller
         );
 
         return redirect()->route('documents.messages')->with('status', 'Messaggio pubblicato.');
+    }
+
+    public function storeCompanyMessageSchedule(Request $request): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        $payload = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'body' => ['nullable', 'string', 'max:10000'],
+            'audience' => ['required', Rule::in(['all', 'users', 'groups'])],
+            'user_ids' => ['nullable', 'array'],
+            'user_ids.*' => ['uuid', 'exists:users,id'],
+            'group_ids' => ['nullable', 'array'],
+            'group_ids.*' => ['uuid', 'exists:document_groups,id'],
+            'scheduled_at' => ['required', 'date_format:Y-m-d\TH:i'],
+            'recurrence' => ['required', Rule::in(['none', 'daily', 'weekly', 'monthly'])],
+            'ends_on' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+        $firstRun = Carbon::createFromFormat('Y-m-d\TH:i', $payload['scheduled_at'], 'Europe/Rome');
+        if ($firstRun->lte(now('Europe/Rome'))) {
+            return back()->withErrors(['scheduled_at' => 'Scegli una data e un orario futuri.']);
+        }
+        if (! empty($payload['ends_on']) && $payload['ends_on'] < $firstRun->toDateString()) {
+            return back()->withErrors(['ends_on' => 'La fine non può precedere il primo invio.']);
+        }
+        if ($payload['audience'] === 'users' && empty($payload['user_ids'])) {
+            return back()->withErrors(['message_user_ids' => 'Seleziona almeno un utente.']);
+        }
+        if ($payload['audience'] === 'groups' && empty($payload['group_ids'])) {
+            return back()->withErrors(['message_group_ids' => 'Seleziona almeno un gruppo.']);
+        }
+
+        DB::table('company_message_schedules')->insert([
+            'id' => (string) Str::uuid(), 'title' => $payload['title'], 'body' => $payload['body'] ?? null,
+            'audience' => $payload['audience'],
+            'user_ids' => json_encode(array_values(array_unique($payload['user_ids'] ?? [])), JSON_THROW_ON_ERROR),
+            'group_ids' => json_encode(array_values(array_unique($payload['group_ids'] ?? [])), JSON_THROW_ON_ERROR),
+            'recurrence' => $payload['recurrence'], 'ends_on' => $payload['ends_on'] ?? null,
+            'next_run_at' => $firstRun->toDateTimeString(), 'active' => true,
+            'created_by' => $request->user()->id, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        return redirect()->route('documents.messages')->with('status', 'Invio programmato.');
+    }
+
+    public function updateCompanyMessageSchedule(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        $payload = $request->validate(['active' => ['required', 'boolean']]);
+        abort_unless(DB::table('company_message_schedules')->where('id', $id)->exists(), 404);
+        DB::table('company_message_schedules')->where('id', $id)->update(['active' => $payload['active'], 'updated_at' => now()]);
+
+        return back()->with('status', $payload['active'] ? 'Programmazione riattivata.' : 'Programmazione sospesa.');
+    }
+
+    public function destroyCompanyMessageSchedule(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        DB::table('company_message_schedules')->where('id', $id)->delete();
+
+        return back()->with('status', 'Programmazione eliminata.');
     }
 
     public function showCompanyMessage(Request $request, string $id): Response
@@ -4449,6 +4577,15 @@ class CentroPageController extends Controller
         $this->ensureEmployeeDossierViewAccess($request, $id, $item->classification, false);
         abort_unless(Storage::disk('local')->exists($item->file_path), 404);
 
+        DB::table('audit_logs')->insert([
+            'id' => (string) Str::uuid(), 'user_id' => $request->user()->id, 'user_name' => $request->user()->name,
+            'user_role' => $this->currentUserRole($request), 'action' => 'accesso_file_fascicolo',
+            'area' => 'users', 'route_name' => 'users.dossier-items.file', 'method' => 'GET', 'subject_id' => $id,
+            'status_code' => 200, 'ip_address' => $request->ip(), 'user_agent' => $request->userAgent(),
+            'metadata' => json_encode(['item_id' => $itemId, 'type' => $item->type], JSON_THROW_ON_ERROR),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
         return response()->file(Storage::disk('local')->path($item->file_path), [
             'Content-Type' => $item->file_mime ?: 'application/octet-stream',
             'Content-Disposition' => 'inline; filename="'.($item->file_name ?: 'documento').'"',
@@ -5716,11 +5853,39 @@ class CentroPageController extends Controller
 
     private function canAccessCompanyDocument(Request $request, object $document): bool
     {
-        if ($this->canManageDocuments($request)) {
+        $role = $this->currentUserRole($request);
+        if ($role === 'superadmin') {
             return true;
         }
 
-        return $this->companyDocumentRecipientIds($document->id)->contains($request->user()?->id);
+        if ($role === 'admin' && $this->isSensitiveCompanyDocument($document->category, $document->audience)) {
+            return DB::table('company_document_manager_access')
+                ->where('company_document_id', $document->id)->where('user_id', $request->user()->id)->exists();
+        }
+
+        if ($this->isSensitiveCompanyDocumentCategory($document->category) && $document->audience !== 'users') {
+            return false;
+        }
+
+        if ($this->companyDocumentRecipientIds($document->id)->contains($request->user()?->id)) {
+            return true;
+        }
+
+        if ($role === 'admin' && $this->canManageDocuments($request)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function isSensitiveCompanyDocumentCategory(?string $category): bool
+    {
+        return in_array($category, ['compensi', 'contratti', 'documenti_identita'], true);
+    }
+
+    private function isSensitiveCompanyDocument(?string $category, string $audience): bool
+    {
+        return $this->isSensitiveCompanyDocumentCategory($category) || $audience === 'users';
     }
 
     private function canAccessCompanyMessage(Request $request, object $message): bool

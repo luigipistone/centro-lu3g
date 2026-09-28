@@ -178,7 +178,7 @@ function confirmDeleteAction() {
                                         </p>
                                     </div>
                                 </div>
-                                <button v-if="canManage" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina documento" @click.stop="removeDocument(document)">
+                                <button v-if="canManage && (isSuperadmin || (!['compensi', 'contratti', 'documenti_identita'].includes(document.category) && document.audience !== 'users'))" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina documento" @click.stop="removeDocument(document)">
                                     <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                 </button>
                             </div>

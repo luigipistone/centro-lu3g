@@ -2,6 +2,7 @@
 
 use App\Services\CentroBackupService;
 use App\Services\CentroNotificationService;
+use App\Services\ScheduledCompanyMessageService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Crypt;
@@ -15,6 +16,12 @@ use Symfony\Component\Console\Command\Command;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+Artisan::command('centro:publish-messages', function (ScheduledCompanyMessageService $service) {
+    $this->info($service->publishDue().' messaggi pubblicati.');
+})->purpose('Publish scheduled company messages');
+
+Schedule::command('centro:publish-messages')->everyMinute()->withoutOverlapping();
 
 Schedule::call(function () {
     if (! Schema::hasTable('figma_settings') || ! Schema::hasColumn('figma_settings', 'token_expires_at')) {

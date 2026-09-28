@@ -102,10 +102,15 @@ Route::middleware('auth')->group(function () {
     Route::get('/documents/users/{userId}', [CentroPageController::class, 'showCompanyDocumentsUser'])->name('documents.users.show');
     Route::get('/documents/archive/{year}', [CentroPageController::class, 'companyDocumentArchive'])->whereNumber('year')->name('documents.archive');
     Route::post('/document-messages', [CentroPageController::class, 'storeCompanyMessage'])->name('document-messages.store');
+    Route::post('/document-messages/schedules', [CentroPageController::class, 'storeCompanyMessageSchedule'])->name('document-messages.schedules.store');
+    Route::patch('/document-messages/schedules/{id}', [CentroPageController::class, 'updateCompanyMessageSchedule'])->name('document-messages.schedules.update');
+    Route::delete('/document-messages/schedules/{id}', [CentroPageController::class, 'destroyCompanyMessageSchedule'])->name('document-messages.schedules.destroy');
     Route::get('/document-messages/{id}', [CentroPageController::class, 'showCompanyMessage'])->name('document-messages.show');
     Route::post('/document-messages/{id}/read', [CentroPageController::class, 'markCompanyMessageRead'])->name('document-messages.read');
     Route::delete('/document-messages/{id}', [CentroPageController::class, 'destroyCompanyMessage'])->name('document-messages.destroy');
     Route::patch('/documents/{id}/category', [CentroPageController::class, 'updateCompanyDocumentCategory'])->name('documents.category.update');
+    Route::post('/documents/{id}/manager-access', [CentroPageController::class, 'grantCompanyDocumentManagerAccess'])->name('documents.manager-access.store');
+    Route::delete('/documents/{id}/manager-access/{userId}', [CentroPageController::class, 'revokeCompanyDocumentManagerAccess'])->name('documents.manager-access.destroy');
     Route::get('/documents/{id}', [CentroPageController::class, 'showCompanyDocument'])->name('documents.show');
     Route::get('/documents/{id}/file', [CentroPageController::class, 'viewCompanyDocumentFile'])->name('documents.file');
     Route::post('/documents/{id}/read', [CentroPageController::class, 'markCompanyDocumentRead'])->name('documents.read');

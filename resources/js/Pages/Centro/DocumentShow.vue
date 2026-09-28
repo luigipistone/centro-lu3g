@@ -4,7 +4,7 @@ import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { dateIt, dateTimeIt } from '@/utils/formatters';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { Check, ChevronLeft, FileText } from '@lucide/vue';
+import { Check, ChevronLeft, FileText, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 const props = defineProps({
@@ -12,11 +12,16 @@ const props = defineProps({
     document: Object,
     readers: Array,
     documentCategories: Object,
+    managerAccess: Array,
+    managerOptions: Array,
+    isSuperadmin: Boolean,
 });
 
 const page = usePage();
 const selectedCategory = ref(props.document.category || 'documenti_vari');
 const savingCategory = ref(false);
+const selectedManager = ref('');
+const availableManagers = computed(() => (props.managerOptions || []).filter((user) => !(props.managerAccess || []).includes(user.id)).map((user) => ({ value: user.id, label: user.name })));
 
 const documentCategoryOptions = computed(() => Object.entries(props.documentCategories || {}).map(([value, label]) => ({ value, label })));
 
@@ -50,6 +55,18 @@ function updateCategory(value) {
             savingCategory.value = false;
         },
     });
+}
+
+function grantManagerAccess() {
+    if (!selectedManager.value) return;
+    router.post(route('documents.manager-access.store', props.document.id), { user_id: selectedManager.value }, {
+        preserveScroll: true,
+        onSuccess: () => { selectedManager.value = ''; },
+    });
+}
+
+function revokeManagerAccess(userId) {
+    router.delete(route('documents.manager-access.destroy', [props.document.id, userId]), { preserveScroll: true });
 }
 </script>
 
@@ -106,6 +123,20 @@ function updateCategory(value) {
                     </div>
 
                     <aside class="space-y-6">
+                        <section v-if="isSuperadmin" class="surface p-5">
+                            <h3 class="text-base font-semibold text-gray-900">Accesso Manager</h3>
+                            <p class="mt-1 text-sm text-gray-500">Autorizza un Manager a consultare questo documento.</p>
+                            <div class="mt-4 flex gap-2">
+                                <AppSelect v-model="selectedManager" :options="availableManagers" searchable placeholder="Seleziona Manager" />
+                                <button type="button" class="btn btn-outline" :disabled="!selectedManager" @click="grantManagerAccess">Autorizza</button>
+                            </div>
+                            <div v-if="managerAccess?.length" class="mt-3 flex flex-wrap gap-2">
+                                <span v-for="userId in managerAccess" :key="userId" class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-gray-50 px-2.5 py-1.5 text-xs font-semibold text-gray-700">
+                                    {{ managerOptions.find((user) => user.id === userId)?.name || 'Manager' }}
+                                    <button type="button" class="icon-btn h-5 w-5" title="Revoca accesso" @click="revokeManagerAccess(userId)"><X class="h-3 w-3" /></button>
+                                </span>
+                            </div>
+                        </section>
                         <section v-if="canManage" class="surface p-5">
                             <div class="flex items-start justify-between gap-3">
                                 <div>

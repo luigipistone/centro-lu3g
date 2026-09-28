@@ -47,6 +47,21 @@ deploy() {
     "$PHP_BIN" artisan route:cache
     "$PHP_BIN" artisan view:cache
 
+    local scheduler_entry="* * * * * cd $APP_DIR && $PHP_BIN artisan schedule:run >> /dev/null 2>&1 # centro-lu3g-scheduler"
+    if command -v crontab >/dev/null 2>&1; then
+        local existing_crontab
+        existing_crontab="$(crontab -l 2>/dev/null || true)"
+        if ! grep -Fq 'artisan schedule:run' <<< "$existing_crontab"; then
+            if printf '%s\n%s\n' "$existing_crontab" "$scheduler_entry" | crontab -; then
+                log 'Laravel scheduler configured in crontab'
+            else
+                log 'WARNING: unable to configure the scheduler; add schedule:run in Plesk Scheduled Tasks'
+            fi
+        fi
+    else
+        log 'WARNING: crontab unavailable; add schedule:run in Plesk Scheduled Tasks'
+    fi
+
     log "Current production commit: $(git -C "$GIT_DIR" rev-parse --short "$BRANCH")"
 }
 

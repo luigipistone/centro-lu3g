@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Services\ScheduledCompanyMessageService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +23,7 @@ class CompanyDocumentsTest extends TestCase
 
         $admin = User::factory()->create(['name' => 'Admin']);
         $user = User::factory()->create(['name' => 'Mario Rossi']);
-        $this->role($admin, 'admin');
+        $this->role($admin, 'superadmin');
         $this->role($user, 'editor');
         DB::table('role_permissions')->where('role', 'admin')->where('permission', 'documents.manage')->update(['allowed' => true]);
 
@@ -33,6 +35,7 @@ class CompanyDocumentsTest extends TestCase
                 'category' => 'documenti_vari',
                 'audience' => 'users',
                 'user_ids' => [$user->id],
+                'publication_confirmed' => true,
                 'file' => UploadedFile::fake()->create('policy.pdf', 120, 'application/pdf'),
             ])
             ->assertRedirect(route('documents.list'))
@@ -98,6 +101,82 @@ class CompanyDocumentsTest extends TestCase
             ->assertSessionHasErrors(['user_ids']);
 
         $this->assertDatabaseCount('document_groups', 0);
+    }
+
+    public function test_sensitive_document_requires_one_recipient_and_manager_access_is_explicit(): void
+    {
+        Storage::fake('local');
+        $superadmin = User::factory()->create();
+        $manager = User::factory()->create();
+        $employee = User::factory()->create();
+        $this->role($superadmin, 'superadmin');
+        $this->role($manager, 'admin');
+        $this->role($employee, 'editor');
+
+        $payload = [
+            'title' => 'Busta paga', 'category' => 'compensi', 'audience' => 'all',
+            'publication_confirmed' => true,
+            'file' => UploadedFile::fake()->create('cedolino.pdf', 10, 'application/pdf'),
+        ];
+        $this->actingAs($superadmin)->post(route('documents.store'), $payload)->assertSessionHasErrors('audience');
+        $this->assertDatabaseCount('company_documents', 0);
+
+        $payload['audience'] = 'users';
+        $payload['user_ids'] = [$employee->id];
+        $this->actingAs($manager)->post(route('documents.store'), $payload)->assertForbidden();
+        $payload['publication_confirmed'] = false;
+        $this->actingAs($superadmin)->post(route('documents.store'), $payload)->assertSessionHasErrors('publication_confirmed');
+        $payload['publication_confirmed'] = true;
+        $this->actingAs($superadmin)->post(route('documents.store'), $payload)->assertRedirect()->assertSessionHasNoErrors();
+        $id = DB::table('company_documents')->value('id');
+
+        $this->actingAs($manager)->get(route('documents.show', $id))->assertForbidden();
+        $this->actingAs($manager)->get(route('documents.file', $id))->assertForbidden();
+        $this->actingAs($manager)->get(route('documents.users.show', $employee->id))->assertForbidden();
+        $this->actingAs($manager)->get(route('documents.list'))->assertInertia(fn (Assert $page) => $page->has('documents', 0));
+
+        $this->actingAs($superadmin)->post(route('documents.manager-access.store', $id), ['user_id' => $manager->id])
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $this->actingAs($manager)->get(route('documents.file', $id))->assertOk();
+        $this->actingAs($employee)->get(route('documents.file', $id))->assertOk();
+        $this->assertDatabaseHas('audit_logs', ['action' => 'accesso_file_documento', 'subject_id' => $id, 'user_id' => $employee->id]);
+
+        $this->actingAs($superadmin)->delete(route('documents.manager-access.destroy', [$id, $manager->id]))->assertRedirect();
+        $this->actingAs($manager)->get(route('documents.file', $id))->assertForbidden();
+
+        DB::table('company_documents')->where('id', $id)->update(['audience' => 'all']);
+        $this->actingAs($manager)->get(route('documents.file', $id))->assertForbidden();
+        $this->actingAs($employee)->get(route('documents.file', $id))->assertForbidden();
+    }
+
+    public function test_scheduled_message_is_published_only_when_due_and_repeats(): void
+    {
+        $this->travelTo(Carbon::parse('2026-09-28 09:00:00', 'Europe/Rome'));
+        $admin = User::factory()->create();
+        $user = User::factory()->create();
+        $this->role($admin, 'superadmin');
+        $this->role($user, 'editor');
+
+        $this->actingAs($admin)->post(route('document-messages.schedules.store'), [
+            'title' => 'Promemoria', 'body' => 'Controlla la bacheca.', 'audience' => 'users',
+            'user_ids' => [$user->id], 'scheduled_at' => '2026-09-29T09:00', 'recurrence' => 'daily',
+            'ends_on' => '2026-09-30',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $service = app(ScheduledCompanyMessageService::class);
+        $this->assertSame(0, $service->publishDue());
+        $this->assertDatabaseCount('company_messages', 0);
+
+        $this->travelTo(Carbon::parse('2026-09-29 09:01:00', 'Europe/Rome'));
+        $this->assertSame(1, $service->publishDue());
+        $this->assertSame(0, $service->publishDue());
+        $this->assertDatabaseCount('company_messages', 1);
+        $this->assertDatabaseHas('company_message_reads', ['user_id' => $user->id, 'read_at' => null]);
+        $this->assertDatabaseHas('notifications', ['user_id' => $user->id, 'type' => 'company_message_created']);
+
+        $this->travelTo(Carbon::parse('2026-09-30 09:01:00', 'Europe/Rome'));
+        $this->assertSame(1, $service->publishDue());
+        $this->assertDatabaseCount('company_messages', 2);
+        $this->assertDatabaseHas('company_message_schedules', ['active' => false]);
     }
 
     private function role(User $user, string $role): void
