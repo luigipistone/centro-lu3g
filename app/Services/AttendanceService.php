@@ -124,8 +124,6 @@ class AttendanceService
         $absences = DB::table('absence_requests')->where('status', 'approved')->whereDate('start_date', '<=', $end->toDateString())
             ->whereRaw('DATE(COALESCE(end_date, start_date)) >= ?', [$start->toDateString()])
             ->whereIn('user_id', $users->pluck('id'))->get();
-        $actual = DB::table('attendance_entries')->where('cause', 'actual')->whereBetween('day', [$start->toDateString(), $end->toDateString()])
-            ->whereIn('user_id', $users->pluck('id'))->get()->groupBy('day');
         $settings = $this->settings();
         $result = [];
         foreach (CarbonPeriod::create($start, $end) as $day) {
@@ -146,7 +144,7 @@ class AttendanceService
             }
             $result[] = [
                 'date' => $day->toDateString(), 'planned' => $planned, 'available' => $available,
-                'smart' => $smart, 'actual' => ($actual[$day->toDateString()] ?? collect())->count(),
+                'smart' => $smart,
             ];
         }
 

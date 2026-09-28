@@ -215,11 +215,12 @@ const attendanceSettingsForm = useForm({
     approvers: Object.fromEntries(['vacation', 'permission', 'sickness', 'late', 'smart_working', 'other', 'travel', 'recovery'].map((type) => [type, props.attendanceSettings?.approvers?.[type] || 'superadmin'])),
 });
 const attendanceHolidayForm = useForm({ start_day: '', end_day: '', name: '' });
-const attendanceEntryForm = useForm({ user_id: '', day: new Date().toISOString().slice(0, 10), cause: 'actual', minutes: 480, note: '' });
+const attendanceEntryForm = useForm({ user_id: '', day: new Date().toISOString().slice(0, 10), cause: 'adjustment', minutes: 480, note: '' });
 const attendanceEntryCauses = [
-    { value: 'actual', label: 'Presenza effettiva' }, { value: 'overtime', label: 'Straordinario' },
+    { value: 'adjustment', label: 'Rettifica ore lavorate' }, { value: 'actual', label: 'Presenza registrata (storica)' }, { value: 'overtime', label: 'Straordinario' },
     { value: 'time_bank', label: 'Banca ore' }, { value: 'recovery', label: 'Recupero' }, { value: 'travel', label: 'Trasferta' },
 ];
+const attendanceEntryOptions = attendanceEntryCauses.filter((cause) => cause.value !== 'actual');
 const attendanceWeekdays = [{ value: 1, label: 'Lun' }, { value: 2, label: 'Mar' }, { value: 3, label: 'Mer' }, { value: 4, label: 'Gio' }, { value: 5, label: 'Ven' }, { value: 6, label: 'Sab' }, { value: 7, label: 'Dom' }];
 const attendanceUserOptions = computed(() => (props.attendanceTeamUsers || []).map((user) => ({ value: user.id, label: user.name })));
 function toggleAttendanceDay(day) {
@@ -5114,7 +5115,7 @@ function calendarDayStyle(sectionMonth, cell) {
         <div v-else-if="section === 'absences'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <div class="surface flex flex-wrap gap-2 p-2">
-                    <button v-for="tab in [{ value: 'overview', label: 'Richieste' }, { value: 'presence', label: 'Disponibilità e presenze' }, ...(isSuperadmin ? [{ value: 'rules', label: 'Regole e saldi' }] : [])]" :key="tab.value" type="button" :class="['settings-tab', absenceWorkspaceTab === tab.value ? 'settings-tab-active' : '']" @click="absenceWorkspaceTab = tab.value">{{ tab.label }}</button>
+                    <button v-for="tab in [{ value: 'overview', label: 'Richieste' }, { value: 'presence', label: 'Disponibilità e presenze' }, ...(isSuperadmin ? [{ value: 'rules', label: 'Regole' }] : [])]" :key="tab.value" type="button" :class="['settings-tab', absenceWorkspaceTab === tab.value ? 'settings-tab-active' : '']" @click="absenceWorkspaceTab = tab.value">{{ tab.label }}</button>
                 </div>
                 <template v-if="absenceWorkspaceTab === 'overview'">
                 <div class="grid gap-6 lg:grid-cols-2">
@@ -5297,18 +5298,19 @@ function calendarDayStyle(sectionMonth, cell) {
                             <div v-for="day in visibleAttendanceWeek" :key="day.date" class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/60 p-3">
                                 <p class="text-xs font-semibold text-gray-500">{{ dateIt(day.date) }}</p>
                                 <p class="mt-1 text-sm font-semibold text-gray-900">{{ day.available }}/{{ day.planned }} disponibili</p>
-                                <p class="text-xs text-gray-500">{{ day.smart }} smart · {{ day.actual }} registrati</p>
+                                <p class="text-xs text-gray-500">{{ day.smart }} smart</p>
                             </div>
                         </div>
                     </section>
                     <section class="surface p-5">
-                        <h3 class="text-base font-semibold text-gray-900">Registra le ore</h3>
+                        <h3 class="text-base font-semibold text-gray-900">Rettifiche e ore straordinarie</h3>
+                        <p class="mt-1 text-sm text-gray-500">Le ore lavorate sono calcolate automaticamente. Registra qui solo correzioni motivate o altre ore particolari.</p>
                         <form class="mt-4 grid gap-4 md:grid-cols-3 xl:grid-cols-6" @submit.prevent="saveAttendanceEntry">
                             <div><label class="block text-sm font-medium text-gray-700">Persona</label><AppSelect v-model="attendanceEntryForm.user_id" :options="attendanceUserOptions" searchable required /></div>
                             <div><label class="block text-sm font-medium text-gray-700">Giorno</label><AppDateInput v-model="attendanceEntryForm.day" /></div>
-                            <div><label class="block text-sm font-medium text-gray-700">Causale</label><AppSelect v-model="attendanceEntryForm.cause" :options="attendanceEntryCauses" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Causale</label><AppSelect v-model="attendanceEntryForm.cause" :options="attendanceEntryOptions" /></div>
                             <div><label class="block text-sm font-medium text-gray-700">Minuti</label><input v-model.number="attendanceEntryForm.minutes" type="number" min="0" max="1440" class="form-control" /></div>
-                            <div><label class="block text-sm font-medium text-gray-700">Nota</label><input v-model="attendanceEntryForm.note" class="form-control" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">{{ attendanceEntryForm.cause === 'adjustment' ? 'Motivo della rettifica' : 'Nota' }}</label><input v-model="attendanceEntryForm.note" class="form-control" :required="attendanceEntryForm.cause === 'adjustment'" /></div>
                             <button type="submit" class="btn btn-primary self-end" :disabled="attendanceEntryForm.processing || !attendanceEntryForm.user_id">Registra</button>
                         </form>
                         <p v-if="attendanceEntryForm.hasErrors" class="mt-2 text-sm text-red-600">{{ Object.values(attendanceEntryForm.errors).join(' ') }}</p>

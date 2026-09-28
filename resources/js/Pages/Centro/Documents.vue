@@ -41,7 +41,7 @@ const reportRangeMode = ref('month');
 const reportFrom = ref(props.attendanceReport?.from || '');
 const reportTo = ref(props.attendanceReport?.to || '');
 const reportSummaryFields = [
-    ['planned', 'Previste'], ['actual', 'Effettive'], ['vacation', 'Ferie'], ['permissions', 'Permessi'],
+    ['planned', 'Previste'], ['actual', 'Ore lavorate'], ['vacation', 'Ferie'], ['permissions', 'Permessi'],
     ['sickness', 'Malattia'], ['late', 'Ritardi'], ['smart_working', 'Smart working'],
     ['extra', 'Straordinari'], ['time_bank', 'Banca ore'], ['recovery', 'Recuperi'], ['travel', 'Trasferte'],
 ];
@@ -927,7 +927,7 @@ function deleteLabel(type) {
                                         <th class="px-4 py-3 text-left font-semibold text-gray-600">Cognome Nome</th>
                                         <th class="px-4 py-3 text-left font-semibold text-gray-600">Matricola</th>
                                         <th class="px-4 py-3 text-left font-semibold text-gray-600">Previste</th>
-                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Effettive</th>
+                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Ore lavorate</th>
                                         <th class="px-4 py-3 text-left font-semibold text-gray-600">Ore ordinarie</th>
                                         <th class="px-4 py-3 text-left font-semibold text-gray-600">Ferie</th>
                                         <th class="px-4 py-3 text-left font-semibold text-gray-600">Permessi</th>

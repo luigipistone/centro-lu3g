@@ -1071,10 +1071,16 @@ class CentroPageController extends Controller
         $data = $request->validate([
             'user_id' => ['required', Rule::exists('users', 'id')],
             'day' => ['required', 'date'],
-            'cause' => ['required', Rule::in(['actual', 'overtime', 'time_bank', 'recovery', 'travel'])],
+            'cause' => ['required', Rule::in(['adjustment', 'overtime', 'time_bank', 'recovery', 'travel'])],
             'minutes' => ['required', 'integer', 'min:0', 'max:1440'],
             'note' => ['nullable', 'string', 'max:1000'],
         ]);
+        if ($data['cause'] === 'adjustment') {
+            $request->validate([
+                'day' => ['before_or_equal:today'],
+                'note' => ['required', 'string', 'min:5', 'max:1000'],
+            ]);
+        }
         if ($this->currentUserRole($request) === 'admin') {
             abort_unless(DB::table('profiles')->where('user_id', $data['user_id'])->where('manager_user_id', $request->user()->id)->exists(), 403);
         }
@@ -1083,12 +1089,22 @@ class CentroPageController extends Controller
             'id' => $existing->id ?? (string) Str::uuid(), 'minutes' => $data['minutes'], 'note' => $data['note'] ?? null,
             'created_by' => $request->user()->id, 'updated_at' => now(), 'created_at' => $existing->created_at ?? now(),
         ]);
+        if ($data['cause'] === 'adjustment' && (! $existing || (int) $existing->minutes !== (int) $data['minutes'] || (string) $existing->note !== $data['note'])) {
+            DB::table('audit_logs')->insert([
+                'id' => (string) Str::uuid(), 'user_id' => $request->user()->id, 'user_name' => $request->user()->name,
+                'user_role' => $this->currentUserRole($request), 'action' => 'rettifica_ore_lavorate', 'area' => 'attendance',
+                'route_name' => 'attendance.entries.store', 'method' => 'POST', 'subject_id' => $data['user_id'],
+                'status_code' => 200, 'ip_address' => $request->ip(), 'user_agent' => $request->userAgent(),
+                'metadata' => json_encode(['day' => $data['day'], 'previous_minutes' => $existing?->minutes, 'minutes' => $data['minutes'], 'reason' => $data['note']], JSON_THROW_ON_ERROR),
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
         if (! $existing || (int) $existing->minutes !== (int) $data['minutes'] || (string) $existing->note !== (string) ($data['note'] ?? '')) {
             $this->notifyUsers([$data['user_id']], $request->user()->id, 'absence_presence_updated',
                 $request->user()->name.' ha '.($existing ? 'aggiornato' : 'registrato').' una voce delle tue presenze del '.Carbon::parse($data['day'])->format('d/m/Y').'.');
         }
 
-        return back()->with('status', 'Presenza registrata.');
+        return back()->with('status', $data['cause'] === 'adjustment' ? 'Ore lavorate rettificate.' : 'Ore registrate.');
     }
 
     public function destroyAttendanceEntry(Request $request, string $id): RedirectResponse
@@ -5866,9 +5882,6 @@ class CentroPageController extends Controller
                 $planned = $attendance->workingMinutes($user->id, $date, $settings);
                 $dayEntries = $entries->where('day', $day['iso']);
                 foreach ($dayEntries as $entry) {
-                    if ($entry->cause === 'actual') {
-                        $totals['actual'] += $entry->minutes;
-                    }
                     if ($entry->cause === 'overtime') {
                         $totals['extra'] += $entry->minutes;
                     }
@@ -5886,8 +5899,10 @@ class CentroPageController extends Controller
                     if ($day['holiday']) {
                         $totals['holiday'] += (int) $settings['default_daily_minutes'];
                     }
-                    $actual = $dayEntries->firstWhere('cause', 'actual');
-                    $dayValues[$day['iso']] = $actual ? $this->formatAttendanceMinutes($actual->minutes) : '';
+                    $adjustment = $dayEntries->firstWhere('cause', 'adjustment');
+                    $worked = $adjustment?->minutes ?? 0;
+                    $totals['actual'] += $worked;
+                    $dayValues[$day['iso']] = $adjustment ? $this->formatAttendanceMinutes($worked) : '';
 
                     continue;
                 }
@@ -5907,7 +5922,7 @@ class CentroPageController extends Controller
                 foreach ($dayAbsences as $absence) {
                     $minutes = min($planned, $this->absenceMinutesForDay($absence, $day['iso']));
                     $customCause = $absence->cause_code ? $customCauses->firstWhere('code', $absence->cause_code) : null;
-                    if (! in_array($absence->type, ['smart_working', 'travel'], true) && ($absence->type !== 'other' || $customCause?->reduces_presence)) {
+                    if (! in_array($absence->type, ['smart_working', 'travel'], true) && ($absence->type !== 'other' || ! $customCause || $customCause->reduces_presence)) {
                         $workMinutes = max(0, $workMinutes - $minutes);
                     }
 
@@ -5947,10 +5962,12 @@ class CentroPageController extends Controller
                 }
 
                 $totals['ordinary'] += $workMinutes;
-                $actualEntry = $dayEntries->firstWhere('cause', 'actual');
+                $adjustment = $dayEntries->firstWhere('cause', 'adjustment');
+                $worked = $date->toDateString() <= now('Europe/Rome')->toDateString() ? ($adjustment?->minutes ?? $workMinutes) : 0;
+                $totals['actual'] += $worked;
                 $dayValues[$day['iso']] = $label ?: $this->formatAttendanceMinutes($workMinutes);
-                if ($actualEntry) {
-                    $dayValues[$day['iso']] .= ' / '.$this->formatAttendanceMinutes($actualEntry->minutes);
+                if ($adjustment) {
+                    $dayValues[$day['iso']] .= ' / '.$this->formatAttendanceMinutes($worked);
                 }
             }
 
@@ -6073,7 +6090,7 @@ class CentroPageController extends Controller
     private function attendanceExportRows(array $report): array
     {
         $fields = [
-            'planned' => 'Previste', 'actual' => 'Effettive', 'ordinary' => 'Ordinarie',
+            'planned' => 'Previste', 'actual' => 'Ore lavorate', 'ordinary' => 'Ordinarie',
             'extra' => 'Straordinari', 'vacation' => 'Ferie', 'permissions' => 'Permessi',
             'sickness' => 'Malattia', 'late' => 'Ritardi', 'smart_working' => 'Smart working',
             'time_bank' => 'Banca ore', 'recovery' => 'Recuperi', 'travel' => 'Trasferte',
@@ -6113,9 +6130,9 @@ class CentroPageController extends Controller
         $options = new Options;
         $options->set('isRemoteEnabled', false);
         $dompdf = new Dompdf($options);
-        $summary = collect($report['summary'])->except('users')->map(fn ($value, $key) => '<tr><td>'.e(ucfirst(str_replace('_', ' ', $key))).'</td><td>'.e($value).'</td></tr>')->implode('');
+        $summary = collect($report['summary'])->except('users')->map(fn ($value, $key) => '<tr><td>'.e($key === 'actual' ? 'Ore lavorate' : ucfirst(str_replace('_', ' ', $key))).'</td><td>'.e($value).'</td></tr>')->implode('');
         $people = collect($report['rows'])->map(fn ($row) => '<tr><td>'.e($row['name']).'</td><td>'.e($row['employee_code']).'</td><td>'.e($row['total_labels']['planned']).'</td><td>'.e($row['total_labels']['actual']).'</td><td>'.e($row['total_labels']['vacation']).'</td><td>'.e($row['total_labels']['permissions']).'</td><td>'.e($row['total_labels']['sickness']).'</td><td>'.e($row['total_labels']['late']).'</td></tr>')->implode('');
-        $html = '<html><head><meta charset="utf-8"><style>body{font-family:DejaVu Sans,sans-serif;color:#243044;font-size:10px}h1{font-size:18px;color:#1767d2}h2{font-size:13px;margin-top:22px}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #dde3ec;padding:7px;text-align:left}th{background:#eef4ff}.meta{color:#6b7585}</style></head><body><h1>Il Centro · Presenze</h1><p class="meta">'.e($report['company']).' · '.e($report['month_label']).' · '.e($report['scope_label']).'<br>Generato il '.e($report['generated_at']).'</p><h2>Riepilogo aziendale</h2><table>'.$summary.'</table><h2>Riepilogo per dipendente</h2><table><tr><th>Persona</th><th>Matricola</th><th>Previste</th><th>Effettive</th><th>Ferie</th><th>Permessi</th><th>Malattia</th><th>Ritardi</th></tr>'.$people.'</table></body></html>';
+        $html = '<html><head><meta charset="utf-8"><style>body{font-family:DejaVu Sans,sans-serif;color:#243044;font-size:10px}h1{font-size:18px;color:#1767d2}h2{font-size:13px;margin-top:22px}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #dde3ec;padding:7px;text-align:left}th{background:#eef4ff}.meta{color:#6b7585}</style></head><body><h1>Il Centro · Presenze</h1><p class="meta">'.e($report['company']).' · '.e($report['month_label']).' · '.e($report['scope_label']).'<br>Generato il '.e($report['generated_at']).'</p><h2>Riepilogo aziendale</h2><table>'.$summary.'</table><h2>Riepilogo per dipendente</h2><table><tr><th>Persona</th><th>Matricola</th><th>Previste</th><th>Ore lavorate</th><th>Ferie</th><th>Permessi</th><th>Malattia</th><th>Ritardi</th></tr>'.$people.'</table></body></html>';
         $dompdf->loadHtml($html);
         $dompdf->setPaper('a4', 'landscape');
         $dompdf->render();

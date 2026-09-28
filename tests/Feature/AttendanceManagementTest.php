@@ -250,6 +250,73 @@ class AttendanceManagementTest extends TestCase
         $this->assertSame(206, substr_count($csv, "\n"));
     }
 
+    public function test_worked_hours_are_calculated_from_approved_absences_and_can_be_corrected(): void
+    {
+        $this->withoutMiddleware(EnforceRolePermissions::class);
+        $this->travelTo(Carbon::parse('2026-09-28 12:00:00', 'Europe/Rome'));
+        $admin = User::factory()->create();
+        $employee = User::factory()->create();
+        $this->role($admin, 'superadmin');
+        $this->role($employee, 'editor');
+
+        foreach ([
+            ['2026-09-21', 'vacation', null, null],
+            ['2026-09-22', 'permission', '09:00', '11:00'],
+            ['2026-09-23', 'smart_working', null, null],
+            ['2026-09-24', 'other', null, null],
+        ] as [$day, $type, $start, $end]) {
+            DB::table('absence_requests')->insert([
+                'id' => (string) Str::uuid(), 'user_id' => $employee->id, 'type' => $type,
+                'start_date' => $day, 'end_date' => $day, 'start_time' => $start, 'end_time' => $end,
+                'status' => 'approved', 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+
+        $url = route('documents.reports.export', [
+            'format' => 'csv', 'user_id' => $employee->id,
+            'from' => '2026-09-21', 'to' => '2026-09-25',
+        ]);
+        $workedHours = static function (string $csv): string {
+            $rows = array_map(static fn ($line) => str_getcsv($line, ';'), array_values(array_filter(explode("\n", $csv))));
+            $headerIndex = array_search('Cognome Nome', array_column($rows, 0), true);
+            $columnIndex = array_search('Ore lavorate', $rows[$headerIndex], true);
+
+            return $rows[$headerIndex + 1][$columnIndex];
+        };
+        $csv = file_get_contents($this->actingAs($admin)->get($url)->assertOk()->baseResponse->getFile()->getPathname());
+        $this->assertSame('22h', $workedHours($csv));
+
+        DB::table('attendance_entries')->insert([
+            'id' => (string) Str::uuid(), 'user_id' => $employee->id, 'day' => '2026-09-25',
+            'cause' => 'actual', 'minutes' => 60, 'created_by' => $admin->id,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $csv = file_get_contents($this->actingAs($admin)->get($url)->assertOk()->baseResponse->getFile()->getPathname());
+        $this->assertSame('22h', $workedHours($csv));
+
+        $futureUrl = route('documents.reports.export', [
+            'format' => 'csv', 'user_id' => $employee->id,
+            'from' => '2026-09-21', 'to' => '2026-09-29',
+        ]);
+        $futureCsv = file_get_contents($this->actingAs($admin)->get($futureUrl)->assertOk()->baseResponse->getFile()->getPathname());
+        $this->assertSame('30h', $workedHours($futureCsv));
+
+        $this->actingAs($admin)->post(route('attendance.entries.store'), [
+            'user_id' => $employee->id, 'day' => '2026-09-25', 'cause' => 'adjustment', 'minutes' => 300,
+        ])->assertSessionHasErrors('note');
+        $this->actingAs($admin)->post(route('attendance.entries.store'), [
+            'user_id' => $employee->id, 'day' => '2026-09-29', 'cause' => 'adjustment', 'minutes' => 300,
+            'note' => 'Rettifica futura non consentita',
+        ])->assertSessionHasErrors('day');
+        $this->actingAs($admin)->post(route('attendance.entries.store'), [
+            'user_id' => $employee->id, 'day' => '2026-09-25', 'cause' => 'adjustment', 'minutes' => 300,
+            'note' => 'Uscita anticipata concordata',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('audit_logs', ['action' => 'rettifica_ore_lavorate', 'subject_id' => $employee->id]);
+        $csv = file_get_contents($this->actingAs($admin)->get($url)->assertOk()->baseResponse->getFile()->getPathname());
+        $this->assertSame('19h', $workedHours($csv));
+    }
+
     public function test_manager_registry_contains_only_their_team(): void
     {
         $this->withoutMiddleware(EnforceRolePermissions::class);
