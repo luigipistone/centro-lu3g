@@ -8,28 +8,59 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Throwable;
 
 class AuditUserActions
 {
     public function handle(Request $request, Closure $next)
     {
         $name = $request->route()?->getName();
-        $audit = $request->user() && $this->shouldAudit($request, $name) && Schema::hasTable('audit_logs');
+        $actor = $request->user();
+        $audit = $actor && $this->shouldAudit($request, $name) && Schema::hasTable('audit_logs');
         $snapshot = $audit ? app(AuditStateSnapshot::class) : null;
         $before = $snapshot?->capture($request);
-        $response = $next($request);
-        $user = $request->user();
-        if ($audit && $user) {
+        try {
+            $response = $next($request);
+        } catch (Throwable $error) {
+            if ($audit) {
+                $status = $error instanceof HttpExceptionInterface ? $error->getStatusCode()
+                    : ($error instanceof ValidationException ? 422 : 500);
+                $this->record($request, $actor, $name, $snapshot, $before, $status, class_basename($error));
+            }
+
+            throw $error;
+        }
+        if ($audit) {
+            $status = $response->getStatusCode();
+            $failureType = $status >= 400 ? 'HttpError' : null;
+            if (($actor->account_status ?? 'active') !== 'active') {
+                $status = 403;
+                $failureType = 'AccountInactive';
+            } elseif ($status === 302 && $request->session()->get('errors')) {
+                $status = 422;
+                $failureType = 'ValidationException';
+            }
+            $this->record($request, $actor, $name, $snapshot, $before, $status, $failureType);
+        }
+
+        return $response;
+    }
+
+    private function record(Request $request, $actor, ?string $name, AuditStateSnapshot $snapshot, ?array $before, int $status, ?string $failureType = null): void
+    {
+        $user = $actor;
+        if ($user) {
             $subjectId = $request->attributes->get('audit_subject_id')
                 ?: collect($request->route()?->parameters() ?? [])->first(fn ($value, $key) => in_array($key, ['id', 'user', 'project', 'task'], true));
-            [$stateBefore, $stateAfter] = $snapshot->changes($before, $snapshot->capture($request));
+            [$stateBefore, $stateAfter] = $failureType ? [null, null] : $snapshot->changes($before, $snapshot->capture($request));
             $metadata = ['path' => '/'.ltrim($request->path(), '/')];
             if (Str::startsWith((string) $name, 'users.')) {
                 $metadata += array_filter([
                     'status' => $request->input('status'),
                     'decision' => $request->input('decision'),
                     'role' => $request->input('role'),
-                    'reason' => $request->input('reason'),
                 ], fn ($value) => $value !== null && $value !== '');
             }
             $values = [
@@ -45,7 +76,11 @@ class AuditUserActions
                 'route_name' => $name,
                 'method' => $request->method(),
                 'subject_id' => $subjectId,
-                'status_code' => $response->getStatusCode(),
+                'status_code' => $status,
+                'related_request_id' => $request->attributes->get('audit_related_request_id'),
+                'reviewed_by' => $request->attributes->get('audit_reviewed_by'),
+                'reason' => $request->attributes->get('audit_reason'),
+                'failure_type' => $failureType,
                 'ip_address' => $request->ip(),
                 'user_agent' => Str::limit((string) $request->userAgent(), 1000, ''),
                 'metadata' => json_encode($metadata),
@@ -53,8 +88,6 @@ class AuditUserActions
             ];
             DB::table('audit_logs')->insert($values);
         }
-
-        return $response;
     }
 
     private function action(string $method): string

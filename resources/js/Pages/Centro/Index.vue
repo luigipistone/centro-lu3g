@@ -90,6 +90,8 @@ const props = defineProps({
     backupRuns: Array,
     rolePermissionMatrix: Object,
     auditLogs: Array,
+    auditFilters: Object,
+    auditAreas: Array,
     archiveRequests: Array,
     attendanceSettings: Object,
     attendanceHolidays: Array,
@@ -118,8 +120,11 @@ const archiveReason = ref('');
 const archiveReviewTarget = ref(null);
 const archiveReviewDecision = ref('approved');
 const archiveReviewNote = ref('');
-const auditTo = ref(new Date().toISOString().slice(0, 10));
-const auditFrom = ref(new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10));
+const auditTo = ref(props.auditFilters?.to || new Date().toISOString().slice(0, 10));
+const auditFrom = ref(props.auditFilters?.from || new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10));
+const auditArea = ref(props.auditFilters?.area || '');
+const auditUser = ref(props.auditFilters?.user || '');
+const auditResult = ref(props.auditFilters?.result || '');
 const restoreTarget = ref(null);
 const restoreConfirmText = ref('');
 const updateDrafts = ref({});
@@ -305,7 +310,7 @@ const taskSearchSelectQueries = ref({
     priority: '',
 });
 const taskDescriptionEditor = ref(null);
-const settingsTab = ref('personalizzazione');
+const settingsTab = ref(new URLSearchParams(window.location.search).get('tab') === 'log' ? 'log' : 'personalizzazione');
 const rolePermissionDraft = ref(JSON.parse(JSON.stringify(props.rolePermissionMatrix?.values || {})));
 const rolePermissionsSaving = ref(false);
 const userRoleFilter = ref('all');
@@ -1765,7 +1770,17 @@ function reviewArchiveRequest() {
     });
 }
 
-const auditDownloadUrl = computed(() => route('settings.logs.download', { from: auditFrom.value, to: auditTo.value }));
+const auditDownloadUrl = computed(() => route('settings.logs.download', {
+    from: auditFrom.value, to: auditTo.value, area: auditArea.value || undefined,
+    user: auditUser.value || undefined, result: auditResult.value || undefined,
+}));
+
+function applyAuditFilters() {
+    router.get(route('settings.index'), {
+        tab: 'log', log_from: auditFrom.value, log_to: auditTo.value,
+        log_area: auditArea.value, log_user: auditUser.value, log_result: auditResult.value,
+    }, { preserveState: true, preserveScroll: true, only: ['auditLogs', 'auditFilters'] });
+}
 
 function executeDelete(row, action = null) {
     if (action) {
@@ -6296,6 +6311,10 @@ function calendarDayStyle(sectionMonth, cell) {
                         <div class="flex flex-wrap items-end gap-2">
                             <div><label class="mb-1 block text-xs font-semibold text-gray-500">Dal</label><AppDateInput v-model="auditFrom" /></div>
                             <div><label class="mb-1 block text-xs font-semibold text-gray-500">Al</label><AppDateInput v-model="auditTo" /></div>
+                            <div class="min-w-40"><label class="mb-1 block text-xs font-semibold text-gray-500">Area</label><AppSelect v-model="auditArea" :options="[{ value: '', label: 'Tutte' }, ...(auditAreas || []).map((area) => ({ value: area, label: area }))]" /></div>
+                            <div class="min-w-44"><label class="mb-1 block text-xs font-semibold text-gray-500">Utente</label><AppSelect v-model="auditUser" :options="[{ value: '', label: 'Tutti' }, ...(users || []).map((user) => ({ value: user.id, label: user.name }))]" searchable /></div>
+                            <div class="min-w-36"><label class="mb-1 block text-xs font-semibold text-gray-500">Esito</label><AppSelect v-model="auditResult" :options="[{ value: '', label: 'Tutti' }, { value: 'success', label: 'Riuscite' }, { value: 'error', label: 'Errori e negate' }]" /></div>
+                            <button type="button" class="btn btn-outline" @click="applyAuditFilters">Filtra</button>
                             <a :href="auditDownloadUrl" class="btn btn-outline">Scarica log</a>
                         </div>
                     </div>
@@ -6310,16 +6329,20 @@ function calendarDayStyle(sectionMonth, cell) {
                                     <td class="px-4 py-3.5" :title="log.route_name || ''">
                                         <span class="block font-semibold text-gray-900">{{ log.user_name || 'Sistema' }}</span>
                                         <span class="mt-0.5 block text-xs text-gray-500">{{ auditActivityText(log) }} · {{ roleLabels[log.user_role] || log.user_role || 'Sistema' }}</span>
-                                        <details v-if="auditPermissions(log).length || auditChanges(log).length" class="mt-2 text-xs text-gray-600">
+                                        <details v-if="auditPermissions(log).length || auditChanges(log).length || log.related_request_id || log.reason || log.failure_type" class="mt-2 text-xs text-gray-600">
                                             <summary class="w-fit cursor-pointer font-semibold text-[hsl(var(--primary-app))]">Dettagli</summary>
                                             <p v-if="auditPermissions(log).length" class="mt-1">Permessi usati: {{ auditPermissions(log).join(', ') }}</p>
+                                            <p v-if="log.related_request_id" class="mt-1">Richiesta: <span class="font-mono">{{ log.related_request_id }}</span></p>
+                                            <p v-if="log.reviewed_by" class="mt-1">Approvazione: {{ users?.find((user) => user.id === log.reviewed_by)?.name || log.reviewed_by }}</p>
+                                            <p v-if="log.reason" class="mt-1">Motivazione: {{ log.reason }}</p>
+                                            <p v-if="log.failure_type" class="mt-1">Errore: {{ log.failure_type }}</p>
                                             <p v-for="change in auditChanges(log)" :key="change.field" class="mt-1 break-all">
                                                 {{ auditFieldLabel(change.field) }}: {{ auditValue(change.before) }} → {{ auditValue(change.after) }}
                                             </p>
                                         </details>
                                     </td>
                                     <td class="px-4 py-3.5"><span class="inline-flex rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">{{ auditAreaLabel(log) }}</span></td>
-                                    <td class="px-4 py-3.5"><span :class="['inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold', Number(log.status_code) < 400 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700']"><span :class="['h-1.5 w-1.5 rounded-full', Number(log.status_code) < 400 ? 'bg-emerald-500' : 'bg-red-500']"></span>{{ Number(log.status_code) < 400 ? 'Riuscita' : 'Errore' }} <span class="font-normal opacity-70">{{ log.status_code }}</span></span></td>
+                                    <td class="px-4 py-3.5"><span :class="['inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold', Number(log.status_code) < 400 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700']"><span :class="['h-1.5 w-1.5 rounded-full', Number(log.status_code) < 400 ? 'bg-emerald-500' : 'bg-red-500']"></span>{{ Number(log.status_code) < 400 ? 'Riuscita' : Number(log.status_code) === 403 ? 'Negata' : 'Errore' }} <span class="font-normal opacity-70">{{ log.status_code }}</span></span></td>
                                 </tr>
                                 <tr v-if="!(auditLogs || []).length"><td colspan="4" class="px-4 py-10 text-center text-gray-500">Nessun log disponibile.</td></tr>
                             </tbody>

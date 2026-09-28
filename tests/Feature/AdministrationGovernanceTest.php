@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Services\RolePermissionService;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -118,6 +119,115 @@ class AdministrationGovernanceTest extends TestCase
 
         $this->actingAs($superadmin)->patch(route('users.status.update', $employee), ['status' => 'active'])->assertRedirect();
         $this->assertSame(2, DB::table('audit_logs')->where('route_name', 'users.status.update')->count());
+    }
+
+    public function test_archive_request_and_review_share_an_audit_reference_and_reason(): void
+    {
+        $superadmin = User::factory()->create();
+        $employee = User::factory()->create();
+        $this->role($superadmin, 'superadmin');
+        $this->role($employee, 'editor');
+
+        $this->actingAs($superadmin)->post(route('users.archive-requests.store', $employee), [
+            'reason' => 'Rapporto terminato e accesso non più necessario.',
+        ])->assertRedirect();
+        $requestId = DB::table('account_archive_requests')->where('user_id', $employee->id)->value('id');
+        $this->actingAs($superadmin)->patch(route('users.archive-requests.review', $requestId), [
+            'decision' => 'approved', 'note' => 'Proprietà operative verificate.',
+        ])->assertRedirect();
+
+        $created = DB::table('audit_logs')->where('route_name', 'users.archive-requests.store')->first();
+        $reviewed = DB::table('audit_logs')->where('route_name', 'users.archive-requests.review')->first();
+        $this->assertSame($requestId, $created->related_request_id);
+        $this->assertSame('Rapporto terminato e accesso non più necessario.', $created->reason);
+        $this->assertSame($requestId, $reviewed->related_request_id);
+        $this->assertSame($superadmin->id, $reviewed->reviewed_by);
+        $this->assertSame('Proprietà operative verificate.', $reviewed->reason);
+        $this->assertSame('pending', json_decode($reviewed->state_before, true)['status']);
+        $this->assertSame('approved', json_decode($reviewed->state_after, true)['status']);
+    }
+
+    public function test_denied_and_invalid_actions_are_logged_without_sensitive_input(): void
+    {
+        $employee = User::factory()->create();
+        $this->role($employee, 'editor');
+
+        $this->actingAs($employee)->put(route('settings.roles.update'), [
+            'password' => 'never-log-this',
+        ])->assertForbidden();
+        $denied = DB::table('audit_logs')->where('route_name', 'settings.roles.update')->first();
+        $this->assertSame(403, $denied->status_code);
+        $this->assertSame('HttpError', $denied->failure_type);
+        $this->assertContains('settings.manage', json_decode($denied->permissions_used, true));
+        $this->assertStringNotContainsString('never-log-this', json_encode($denied));
+
+        $this->actingAs($employee)->post(route('tasks.store'), ['title' => ''])->assertSessionHasErrors();
+        $invalid = DB::table('audit_logs')->where('route_name', 'tasks.store')->first();
+        $this->assertSame(422, $invalid->status_code);
+        $this->assertSame('ValidationException', $invalid->failure_type);
+    }
+
+    public function test_suspended_account_attempt_is_logged_as_denied(): void
+    {
+        $employee = User::factory()->create(['account_status' => 'suspended']);
+        $this->role($employee, 'editor');
+
+        $this->actingAs($employee)->post(route('tasks.store'), ['title' => 'Non consentita'])->assertRedirect(route('login'));
+
+        $log = DB::table('audit_logs')->where('route_name', 'tasks.store')->first();
+        $this->assertSame($employee->id, $log->user_id);
+        $this->assertSame(403, $log->status_code);
+        $this->assertSame('AccountInactive', $log->failure_type);
+        $this->assertDatabaseMissing('tasks', ['title' => 'Non consentita']);
+    }
+
+    public function test_audit_log_is_append_only_and_export_is_superadmin_only(): void
+    {
+        $superadmin = User::factory()->create();
+        $employee = User::factory()->create();
+        $this->role($superadmin, 'superadmin');
+        $this->role($employee, 'editor');
+        $this->actingAs($superadmin)->patch(route('users.status.update', $employee), ['status' => 'suspended'])->assertRedirect();
+        $id = DB::table('audit_logs')->where('route_name', 'users.status.update')->value('id');
+
+        try {
+            DB::table('audit_logs')->where('id', $id)->update(['action' => 'altered']);
+            $this->fail('Audit log update should be rejected.');
+        } catch (QueryException $exception) {
+            $this->assertStringContainsString('immutable', $exception->getMessage());
+        }
+        try {
+            DB::table('audit_logs')->where('id', $id)->delete();
+            $this->fail('Audit log delete should be rejected.');
+        } catch (QueryException $exception) {
+            $this->assertStringContainsString('immutable', $exception->getMessage());
+        }
+
+        $dates = ['from' => now()->subDay()->toDateString(), 'to' => now()->addDay()->toDateString()];
+        $this->actingAs($employee)->get(route('settings.logs.download', $dates))->assertForbidden();
+        $this->actingAs($superadmin)->get(route('settings.logs.download', $dates))->assertOk();
+    }
+
+    public function test_audit_filters_apply_to_screen_and_download(): void
+    {
+        $superadmin = User::factory()->create();
+        $employee = User::factory()->create();
+        $this->role($superadmin, 'superadmin');
+        $this->role($employee, 'editor');
+        $this->actingAs($employee)->put(route('settings.roles.update'), [])->assertForbidden();
+        $this->actingAs($superadmin)->patch(route('users.status.update', $employee), ['status' => 'suspended'])->assertRedirect();
+
+        $this->actingAs($superadmin)->get(route('settings.index', [
+            'tab' => 'log', 'log_from' => now()->subDay()->toDateString(), 'log_to' => now()->addDay()->toDateString(),
+            'log_area' => 'settings', 'log_user' => $employee->id, 'log_result' => 'error',
+        ]))->assertInertia(fn ($page) => $page->has('auditLogs', 1)->where('auditLogs.0.status_code', 403));
+
+        $csv = $this->actingAs($superadmin)->get(route('settings.logs.download', [
+            'from' => now()->subDay()->toDateString(), 'to' => now()->addDay()->toDateString(),
+            'area' => 'settings', 'user' => $employee->id, 'result' => 'error',
+        ]))->assertOk()->streamedContent();
+        $this->assertStringContainsString('settings.roles.update', $csv);
+        $this->assertStringNotContainsString('users.status.update', $csv);
     }
 
     public function test_task_audit_keeps_operational_changes_without_free_text_or_secrets(): void

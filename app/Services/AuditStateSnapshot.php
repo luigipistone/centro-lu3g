@@ -19,6 +19,18 @@ class AuditStateSnapshot
     public function capture(Request $request): ?array
     {
         $routeName = (string) $request->route()?->getName();
+        if (in_array($routeName, ['users.archive-requests.store', 'users.archive-requests.review', 'profile.archive-request'], true)) {
+            $id = $request->attributes->get('audit_related_request_id') ?: $request->route('id');
+            $row = $id ? DB::table('account_archive_requests')->where('id', $id)->first(['status', 'reviewed_by', 'reviewed_at']) : null;
+
+            return $row ? (array) $row : null;
+        }
+        if ($routeName === 'profile.absences.store') {
+            $id = $request->attributes->get('audit_related_request_id');
+            $row = $id ? DB::table('absence_requests')->where('id', $id)->first(['type', 'start_date', 'end_date', 'start_time', 'end_time', 'status']) : null;
+
+            return $row ? (array) $row : null;
+        }
         if ($routeName === 'settings.roles.update') {
             return DB::table('role_permissions')->orderBy('role')->orderBy('permission')
                 ->get(['role', 'permission', 'allowed'])

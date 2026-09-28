@@ -174,6 +174,8 @@ class ProfileController extends Controller
         }
 
         $absenceId = (string) str()->uuid();
+        $request->attributes->set('audit_related_request_id', $absenceId);
+        $request->attributes->set('audit_subject_id', $absenceId);
         DB::table('absence_requests')->insert([
             'id' => $absenceId,
             'user_id' => $request->user()->id,
@@ -375,7 +377,8 @@ class ProfileController extends Controller
             'reason' => ['required', 'string', 'min:10', 'max:2000'],
         ]);
         $user = $request->user();
-        app(AccountArchiveService::class)->create($user, $user, $request->string('reason')->toString());
+        $request->attributes->set('audit_related_request_id', app(AccountArchiveService::class)->create($user, $user, $request->string('reason')->toString()));
+        $request->attributes->set('audit_reason', $request->string('reason')->toString());
         $superadmins = DB::table('user_roles')->where('role', 'superadmin')->where('user_id', '!=', $user->id)->pluck('user_id');
         app(CentroNotificationService::class)->notifyUsers($superadmins, $user->id, 'account_archive_requested', $user->name.' ha richiesto l’archiviazione del proprio account.');
 

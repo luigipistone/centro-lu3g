@@ -687,8 +687,11 @@ class CentroPageController extends Controller
             'numberings' => $section === 'settings' ? DB::table('document_numbering')->orderBy('doc_type')->orderByDesc('year')->get() : [],
             'backupRuns' => $section === 'settings' ? $this->backupRuns() : [],
             'rolePermissionMatrix' => $section === 'settings' ? app(RolePermissionService::class)->matrix() : null,
+            'auditFilters' => $section === 'settings' ? $this->auditFilters($request) : null,
+            'auditAreas' => $section === 'settings' && Schema::hasTable('audit_logs')
+                ? DB::table('audit_logs')->whereNotNull('area')->distinct()->orderBy('area')->pluck('area') : [],
             'auditLogs' => $section === 'settings' && Schema::hasTable('audit_logs')
-                ? $this->readableAuditLogsQuery()->latest('created_at')->limit(50)->get()
+                ? $this->filteredAuditLogsQuery($this->auditFilters($request))->latest('created_at')->limit(50)->get()
                 : [],
             'archiveRequests' => $section === 'users' && Schema::hasTable('account_archive_requests')
                 ? DB::table('account_archive_requests')
@@ -851,6 +854,10 @@ class CentroPageController extends Controller
         if ($this->currentUserRole($request) === 'admin') {
             abort_unless(($approvers[$absence->type] ?? 'superadmin') === 'admin', 403);
         }
+
+        $request->attributes->set('audit_related_request_id', $id);
+        $request->attributes->set('audit_reviewed_by', $request->user()->id);
+        $request->attributes->set('audit_reason', $payload['reason'] ?? null);
 
         DB::table('absence_requests')
             ->where('id', $id)
@@ -2808,7 +2815,8 @@ class CentroPageController extends Controller
         abort_if($request->user()->id === $id, 422, 'Non puoi richiedere l’archiviazione del tuo account da qui.');
         $payload = $request->validate(['reason' => ['required', 'string', 'min:10', 'max:2000']]);
         $user = User::query()->findOrFail($id);
-        app(AccountArchiveService::class)->create($user, $request->user(), $payload['reason']);
+        $request->attributes->set('audit_related_request_id', app(AccountArchiveService::class)->create($user, $request->user(), $payload['reason']));
+        $request->attributes->set('audit_reason', $payload['reason']);
         $superadmins = DB::table('user_roles')->where('role', 'superadmin')->where('user_id', '!=', $request->user()->id)->pluck('user_id');
         app(CentroNotificationService::class)->notifyUsers($superadmins, $request->user()->id, 'account_archive_requested', $request->user()->name.' ha richiesto l’archiviazione di '.$user->name.'.');
         $this->notifyUsers([$user->id], $request->user()->id, 'account_archive_requested', 'È stata richiesta l’archiviazione del tuo account.');
@@ -2825,6 +2833,9 @@ class CentroPageController extends Controller
         ]);
         $archiveRequest = DB::table('account_archive_requests')->where('id', $id)->where('status', 'pending')->first();
         abort_if(! $archiveRequest, 404);
+        $request->attributes->set('audit_related_request_id', $id);
+        $request->attributes->set('audit_reviewed_by', $request->user()->id);
+        $request->attributes->set('audit_reason', $payload['note'] ?? null);
 
         DB::transaction(function () use ($archiveRequest, $payload, $request) {
             DB::table('account_archive_requests')->where('id', $archiveRequest->id)->update([
@@ -2861,6 +2872,8 @@ class CentroPageController extends Controller
             'confirmation' => ['required', 'in:ELIMINA DEFINITIVAMENTE'],
         ]);
         $user = User::query()->where('account_status', 'archived')->findOrFail($id);
+        $request->attributes->set('audit_related_request_id', DB::table('account_archive_requests')->where('user_id', $id)->where('status', 'approved')->latest('reviewed_at')->value('id'));
+        $request->attributes->set('audit_reason', $payload['reason']);
         $summary = app(AccountArchiveService::class)->summary($id);
         DB::table('audit_logs')->insert([
             'id' => (string) str()->uuid(), 'user_id' => $request->user()->id, 'user_name' => $request->user()->name,
@@ -2869,6 +2882,9 @@ class CentroPageController extends Controller
             'permissions_used' => json_encode($request->attributes->get('audit_permissions_used', []), JSON_THROW_ON_ERROR),
             'state_before' => json_encode(['account_status' => $user->account_status], JSON_THROW_ON_ERROR),
             'state_after' => null,
+            'related_request_id' => $request->attributes->get('audit_related_request_id'),
+            'reviewed_by' => $request->user()->id,
+            'reason' => $payload['reason'],
             'ip_address' => $request->ip(), 'user_agent' => $request->userAgent(),
             'metadata' => json_encode(['target' => ['name' => $user->name, 'email' => $user->email], 'reason' => $payload['reason'], 'linked_summary' => $summary], JSON_THROW_ON_ERROR),
             'created_at' => now(), 'updated_at' => now(),
@@ -2920,16 +2936,17 @@ class CentroPageController extends Controller
         $payload = $request->validate([
             'from' => ['required', 'date'],
             'to' => ['required', 'date', 'after_or_equal:from'],
+            'area' => ['nullable', 'string', 'max:80'],
+            'user' => ['nullable', 'uuid'],
+            'result' => ['nullable', Rule::in(['success', 'error'])],
         ]);
-        $rows = $this->readableAuditLogsQuery()
-            ->whereBetween('created_at', [Carbon::parse($payload['from'])->startOfDay(), Carbon::parse($payload['to'])->endOfDay()])
-            ->oldest('created_at')->get();
 
-        return response()->streamDownload(function () use ($rows) {
+        return response()->streamDownload(function () use ($payload) {
             $handle = fopen('php://output', 'wb');
-            fputcsv($handle, ['Data', 'Utente', 'Ruolo', 'Permessi usati', 'Azione', 'Area', 'Rotta', 'Risorsa', 'Stato precedente', 'Stato successivo', 'Esito', 'IP']);
-            foreach ($rows as $row) {
-                fputcsv($handle, [$row->created_at, $row->user_name, $row->user_role, implode(', ', json_decode($row->permissions_used ?: '[]', true) ?: []), $row->action, $row->area, $row->route_name, $row->subject_id, $row->state_before, $row->state_after, $row->status_code, $row->ip_address]);
+            fputcsv($handle, ['ID evento', 'Data', 'Utente', 'Ruolo', 'Permessi usati', 'Azione', 'Area', 'Rotta', 'Risorsa', 'Richiesta collegata', 'Approvato da', 'Motivazione', 'Stato precedente', 'Stato successivo', 'Esito', 'Tipo errore', 'IP']);
+            foreach ($this->filteredAuditLogsQuery($payload)->oldest('created_at')->cursor() as $row) {
+                $values = [$row->id, $row->created_at, $row->user_name, $row->user_role, implode(', ', json_decode($row->permissions_used ?: '[]', true) ?: []), $row->action, $row->area, $row->route_name, $row->subject_id, $row->related_request_id, $row->reviewed_by, $row->reason, $row->state_before, $row->state_after, $row->status_code, $row->failure_type, $row->ip_address];
+                fputcsv($handle, array_map(fn ($value) => is_string($value) && preg_match('/^[=+@\-\t\r]/', $value) ? "'".$value : $value, $values));
             }
             fclose($handle);
         }, 'log-centro-'.$payload['from'].'-'.$payload['to'].'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
@@ -4793,6 +4810,38 @@ class CentroPageController extends Controller
             ->whereNotIn('route_name', ['push-subscriptions.store', 'push.test']);
     }
 
+    private function auditFilters(Request $request): array
+    {
+        $date = function ($value, $fallback) {
+            if (! is_string($value) || ! preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $value, $matches)) {
+                return $fallback;
+            }
+
+            return checkdate((int) $matches[2], (int) $matches[3], (int) $matches[1]) ? $value : $fallback;
+        };
+        $area = $request->query('log_area');
+        $user = $request->query('log_user');
+        $result = $request->query('log_result');
+
+        return [
+            'from' => $date($request->query('log_from'), now()->subDays(30)->toDateString()),
+            'to' => $date($request->query('log_to'), now()->toDateString()),
+            'area' => is_string($area) ? substr($area, 0, 80) : '',
+            'user' => is_string($user) && Str::isUuid($user) ? $user : '',
+            'result' => in_array($result, ['success', 'error'], true) ? $result : '',
+        ];
+    }
+
+    private function filteredAuditLogsQuery(array $filters)
+    {
+        return $this->readableAuditLogsQuery()
+            ->whereBetween('created_at', [Carbon::parse($filters['from'])->startOfDay(), Carbon::parse($filters['to'])->endOfDay()])
+            ->when($filters['area'] ?? null, fn ($query, $area) => $query->where('area', $area))
+            ->when($filters['user'] ?? null, fn ($query, $user) => $query->where('user_id', $user))
+            ->when(($filters['result'] ?? null) === 'success', fn ($query) => $query->where('status_code', '<', 400))
+            ->when(($filters['result'] ?? null) === 'error', fn ($query) => $query->where('status_code', '>=', 400));
+    }
+
     private function isGuest(Request $request): bool
     {
         return $this->currentUserRole($request) === 'guest';
@@ -4888,10 +4937,10 @@ class CentroPageController extends Controller
 
     private function ensurePermission(Request $request, string $permission): void
     {
-        abort_unless(app(RolePermissionService::class)->allows($this->currentUserRole($request), $permission), 403);
         $request->attributes->set('audit_permissions_used', array_values(array_unique([
             ...$request->attributes->get('audit_permissions_used', []), $permission,
         ])));
+        abort_unless(app(RolePermissionService::class)->allows($this->currentUserRole($request), $permission), 403);
     }
 
     private function permissionForSection(string $section, string $action): string
