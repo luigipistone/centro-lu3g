@@ -139,7 +139,7 @@ onUnmounted(() => {
             <div
                 v-if="open"
                 ref="menu"
-                class="app-popover field-dropdown-menu fixed z-[7000] grid grid-cols-[1fr_72px] gap-2 p-3"
+                class="app-popover field-dropdown-menu fixed z-[10000] grid grid-cols-[1fr_72px] gap-2 p-3"
                 :style="menuStyle"
                 @click.stop
             >

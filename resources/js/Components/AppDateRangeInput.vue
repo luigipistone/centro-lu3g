@@ -87,7 +87,7 @@ onUnmounted(() => {
             <CalendarDays class="h-4 w-4 shrink-0 text-gray-400" :stroke-width="1.7" />
         </button>
         <Teleport to="body">
-            <div v-if="open" ref="menu" class="app-popover field-dropdown-menu fixed z-[7000] p-3" :style="menuStyle" @click.stop>
+            <div v-if="open" ref="menu" class="app-popover field-dropdown-menu fixed z-[10000] p-3" :style="menuStyle" @click.stop>
                 <div class="mb-3 flex items-center justify-between gap-3">
                     <button type="button" class="icon-btn h-8 w-8" aria-label="Mese precedente" @click="viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1)"><ChevronLeft class="h-4 w-4" /></button>
                     <span class="text-sm font-semibold capitalize text-gray-900">{{ monthLabel }}</span>
