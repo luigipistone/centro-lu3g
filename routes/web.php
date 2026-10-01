@@ -79,6 +79,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/calendar', [CentroPageController::class, 'index'])->defaults('section', 'calendar')->name('calendar.index');
     Route::get('/calendar/attendance', [CentroPageController::class, 'calendarAttendance'])->name('calendar.attendance');
     Route::get('/absences', [CentroPageController::class, 'index'])->defaults('section', 'absences')->name('absences.index');
+    Route::get('/absences/reports/export', [CentroPageController::class, 'exportAttendanceReport'])->name('absences.reports.export');
     Route::get('/absences/{id}', [CentroPageController::class, 'show'])->defaults('section', 'absences')->name('absences.show');
     Route::put('/absences/{id}', [CentroPageController::class, 'updateAbsence'])->name('absences.update');
     Route::get('/absences/{id}/medical-document', [CentroPageController::class, 'downloadAbsenceMedicalDocument'])->name('absences.medical-document.download');
@@ -97,7 +98,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/documents/list', [CentroPageController::class, 'companyDocuments'])->defaults('documentView', 'documents')->name('documents.list');
     Route::get('/documents/messages', [CentroPageController::class, 'companyDocuments'])->defaults('documentView', 'messages')->name('documents.messages');
     Route::get('/documents/groups', [CentroPageController::class, 'companyDocuments'])->defaults('documentView', 'groups')->name('documents.groups');
-    Route::get('/documents/reports', [CentroPageController::class, 'companyDocuments'])->defaults('documentView', 'reports')->name('documents.reports');
+    Route::get('/documents/reports', fn () => redirect()->route('absences.index', ['tab' => 'reports']))->name('documents.reports');
     Route::get('/documents/reports/export', [CentroPageController::class, 'exportAttendanceReport'])->name('documents.reports.export');
     Route::get('/documents/users/{userId}', [CentroPageController::class, 'showCompanyDocumentsUser'])->name('documents.users.show');
     Route::get('/documents/archive/{year}', [CentroPageController::class, 'companyDocumentArchive'])->whereNumber('year')->name('documents.archive');

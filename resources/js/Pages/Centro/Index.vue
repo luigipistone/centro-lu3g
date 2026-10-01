@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import AttendanceReport from './AttendanceReport.vue';
 import AppDateInput from '@/Components/AppDateInput.vue';
 import AppDateRangeInput from '@/Components/AppDateRangeInput.vue';
 import AppSelect from '@/Components/AppSelect.vue';
@@ -99,6 +100,8 @@ const props = defineProps({
     attendanceEntryCount: Number,
     attendanceAvailability: Array,
     attendanceTeamUsers: Array,
+    attendanceReport: Object,
+    attendanceTeams: Array,
     attendanceEvents: Array,
     calendarHolidays: Object,
     taskHolidayRanges: Array,
@@ -177,7 +180,7 @@ const billingSearch = ref('');
 const billingType = ref('all');
 const billingStatus = ref('all');
 const absenceStatus = ref('all');
-const absenceWorkspaceTab = ref('overview');
+const absenceWorkspaceTab = ref(new URLSearchParams(window.location.search).get('tab') === 'reports' ? 'reports' : 'overview');
 const attendanceWeek = ref(0);
 const visibleAttendanceWeek = computed(() => (props.attendanceAvailability || []).slice(attendanceWeek.value * 7, attendanceWeek.value * 7 + 7));
 const attendanceWeekLabel = computed(() => {
@@ -5183,7 +5186,7 @@ function calendarDayStyle(sectionMonth, cell) {
         <div v-else-if="section === 'absences'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <div class="surface flex flex-wrap gap-2 p-2">
-                    <button v-for="tab in [{ value: 'overview', label: 'Richieste' }, { value: 'presence', label: 'Disponibilità e presenze' }, ...(isSuperadmin ? [{ value: 'rules', label: 'Regole' }] : [])]" :key="tab.value" type="button" :class="['settings-tab', absenceWorkspaceTab === tab.value ? 'settings-tab-active' : '']" @click="absenceWorkspaceTab = tab.value">{{ tab.label }}</button>
+                    <button v-for="tab in [{ value: 'overview', label: 'Richieste' }, { value: 'presence', label: 'Disponibilità e presenze' }, { value: 'reports', label: 'Report e dati' }, ...(isSuperadmin ? [{ value: 'rules', label: 'Regole' }] : [])]" :key="tab.value" type="button" :class="['settings-tab', absenceWorkspaceTab === tab.value ? 'settings-tab-active' : '']" @click="absenceWorkspaceTab = tab.value">{{ tab.label }}</button>
                 </div>
                 <template v-if="absenceWorkspaceTab === 'overview'">
                 <div class="grid gap-6 lg:grid-cols-2">
@@ -5399,7 +5402,15 @@ function calendarDayStyle(sectionMonth, cell) {
                         <p v-if="attendanceRegistryError" class="mt-2 text-sm text-red-600">{{ attendanceRegistryError }}</p>
                     </section>
                 </template>
+                <AttendanceReport
+                    v-if="absenceWorkspaceTab === 'reports'"
+                    :report="attendanceReport"
+                    :users="isSuperadmin ? users : attendanceTeamUsers"
+                    :teams="attendanceTeams"
+                    :is-superadmin="isSuperadmin"
+                />
                 <template v-if="isSuperadmin && absenceWorkspaceTab === 'rules'">
+                    <div class="grid items-start gap-6 lg:grid-cols-2">
                     <section class="surface p-5">
                         <h3 class="text-base font-semibold text-gray-900">Orario e approvatori</h3>
                         <form class="mt-4 space-y-5" @submit.prevent="saveAttendanceSettings">
@@ -5407,7 +5418,7 @@ function calendarDayStyle(sectionMonth, cell) {
                             <div><p class="text-sm font-medium text-gray-700">Giorni lavorativi</p><div class="mt-2 flex flex-wrap gap-2"><button v-for="day in attendanceWeekdays" :key="day.value" type="button" :class="['h-10 w-10 rounded-full border text-xs font-semibold transition', attendanceSettingsForm.working_days.includes(day.value) ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-200 bg-white text-gray-600']" @click="toggleAttendanceDay(day.value)">{{ day.label }}</button></div></div>
                             <div>
                                 <p class="text-sm font-medium text-gray-700">Il Manager del team può approvare</p>
-                                <div class="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                                <div class="mt-2 grid gap-2 sm:grid-cols-2">
                                     <button v-for="type in attendanceApprovalTypes" :key="type.value" type="button" :aria-pressed="attendanceSettingsForm.approvers[type.value] === 'admin'" :class="['attendance-approver-option flex min-h-10 items-center justify-between gap-2 rounded-[var(--radius-sm)] border px-3 py-2 text-left text-sm font-medium transition', attendanceSettingsForm.approvers[type.value] === 'admin' ? 'is-active border-blue-300 bg-blue-50 text-blue-800' : 'border-gray-200 bg-white text-gray-600 hover:border-blue-200']" @click="attendanceSettingsForm.approvers[type.value] = attendanceSettingsForm.approvers[type.value] === 'admin' ? 'superadmin' : 'admin'">
                                         {{ type.label }}<Check v-if="attendanceSettingsForm.approvers[type.value] === 'admin'" class="h-4 w-4 shrink-0" />
                                     </button>
@@ -5427,6 +5438,7 @@ function calendarDayStyle(sectionMonth, cell) {
                         </form>
                         <div class="mt-4 divide-y divide-gray-100"><div v-for="holiday in attendanceHolidays" :key="holiday.id" class="flex items-center justify-between py-2 text-sm"><span>{{ dateIt(holiday.day) }}<template v-if="holiday.end_day && holiday.end_day !== holiday.day"> – {{ dateIt(holiday.end_day) }}</template> · {{ holiday.name }}</span><button type="button" class="icon-btn h-8 w-8 text-red-600" title="Rimuovi festività" @click="requestAttendanceDelete(holiday, 'attendance.holidays.destroy', 'id')"><Trash2 class="h-4 w-4" /></button></div></div>
                     </section>
+                    </div>
                 </template>
             </div>
         </div>

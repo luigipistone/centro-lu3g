@@ -145,6 +145,57 @@ class AttendanceManagementTest extends TestCase
         $this->assertStringNotContainsString($otherEmployee->name, $csv);
     }
 
+    public function test_attendance_report_is_available_from_absences_and_old_link_redirects(): void
+    {
+        $admin = User::factory()->create();
+        $this->role($admin, 'superadmin');
+
+        $this->actingAs($admin)->get(route('absences.index', [
+            'tab' => 'reports', 'year' => 2026, 'month' => 9,
+        ]))->assertOk()->assertInertia(fn ($page) => $page
+            ->component('Centro/Index')
+            ->where('section', 'absences')
+            ->where('attendanceReport.year', 2026)
+            ->where('attendanceReport.month', 9)
+            ->has('attendanceTeams')
+        );
+
+        $this->actingAs($admin)->get(route('documents.reports'))
+            ->assertRedirect(route('absences.index', ['tab' => 'reports']));
+
+        $this->actingAs($admin)->get(route('absences.reports.export', [
+            'format' => 'pdf', 'year' => 2026, 'month' => 9,
+        ]))->assertOk()->assertHeader('Content-Type', 'application/pdf');
+    }
+
+    public function test_manager_cannot_open_another_team_members_attendance_report(): void
+    {
+        $manager = User::factory()->create();
+        $ownEmployee = User::factory()->create();
+        $otherEmployee = User::factory()->create();
+        $this->role($manager, 'admin');
+        $this->role($ownEmployee, 'editor');
+        $this->role($otherEmployee, 'editor');
+        DB::table('profiles')->insert([
+            'id' => (string) Str::uuid(), 'user_id' => $ownEmployee->id,
+            'manager_user_id' => $manager->id, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->actingAs($manager)->get(route('absences.index', [
+            'tab' => 'reports', 'year' => 2026, 'month' => 9,
+            'user_id' => $otherEmployee->id,
+        ]))->assertForbidden();
+
+        $this->actingAs($manager)->get(route('absences.reports.export', [
+            'format' => 'csv', 'year' => 2026, 'month' => 9,
+            'user_id' => $otherEmployee->id,
+        ]))->assertForbidden();
+
+        $this->actingAs($manager)->get(route('absences.reports.export', [
+            'format' => 'pdf', 'year' => 2026, 'month' => 9,
+        ]))->assertOk()->assertHeader('Content-Type', 'application/pdf');
+    }
+
     public function test_attendance_pdf_report_uses_italian_summary_labels(): void
     {
         $admin = User::factory()->create();

@@ -5,7 +5,7 @@ import AppDateInput from '@/Components/AppDateInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { dateIt } from '@/utils/formatters';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { Bold, Check, Download, FileText, Heading3, Italic, Link2, List, ListOrdered, MessageSquare, Pause, Play, Plus, Quote, Send, Table2, Trash2, Underline, Upload, Users, X } from '@lucide/vue';
+import { Bold, Check, FileText, Heading3, Italic, Link2, List, ListOrdered, MessageSquare, Pause, Play, Plus, Quote, Send, Trash2, Underline, Upload, Users, X } from '@lucide/vue';
 import { computed, nextTick, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -14,8 +14,6 @@ const props = defineProps({
     documents: Array,
     messages: Array,
     messageSchedules: Array,
-    attendanceReport: Object,
-    attendanceTeams: Array,
     groups: Array,
     users: Array,
     documentUsers: Array,
@@ -35,18 +33,6 @@ const documentReview = ref(false);
 const categoryFilters = ref({});
 const isSuperadmin = computed(() => page.props.auth?.user?.role === 'superadmin');
 const activeAdminSection = computed(() => props.activeAdminSection || null);
-const reportYear = ref(props.attendanceReport?.year || new Date().getFullYear());
-const reportMonth = ref(props.attendanceReport?.month || (new Date().getMonth() + 1));
-const reportUserId = ref(props.attendanceReport?.selected_user_id || 'all');
-const reportTeamId = ref(props.attendanceReport?.selected_team_id || 'all');
-const reportRangeMode = ref('month');
-const reportFrom = ref(props.attendanceReport?.from || '');
-const reportTo = ref(props.attendanceReport?.to || '');
-const reportSummaryFields = [
-    ['planned', 'Previste'], ['actual', 'Ore lavorate'], ['vacation', 'Ferie'], ['permissions', 'Permessi'],
-    ['sickness', 'Malattia'], ['late', 'Ritardi'], ['smart_working', 'Smart working'],
-    ['extra', 'Straordinari'], ['time_bank', 'Banca ore'], ['recovery', 'Recuperi'], ['travel', 'Trasferte'],
-];
 
 const documentForm = useForm({
     title: '',
@@ -110,28 +96,6 @@ const visibleDocuments = computed(() => props.documents || []);
 const visibleMessages = computed(() => props.messages || []);
 const documentUsers = computed(() => props.documentUsers || []);
 const currentYear = new Date().getFullYear();
-const reportYearOptions = computed(() => Array.from({ length: 6 }, (_, index) => {
-    const year = currentYear - 4 + index;
-    return { value: year, label: String(year) };
-}));
-const reportMonthOptions = [
-    { value: 1, label: 'Gennaio' },
-    { value: 2, label: 'Febbraio' },
-    { value: 3, label: 'Marzo' },
-    { value: 4, label: 'Aprile' },
-    { value: 5, label: 'Maggio' },
-    { value: 6, label: 'Giugno' },
-    { value: 7, label: 'Luglio' },
-    { value: 8, label: 'Agosto' },
-    { value: 9, label: 'Settembre' },
-    { value: 10, label: 'Ottobre' },
-    { value: 11, label: 'Novembre' },
-    { value: 12, label: 'Dicembre' },
-];
-const reportUserOptions = computed(() => [
-    { value: 'all', label: isSuperadmin.value ? 'Tutta l’azienda' : 'Tutto il mio team' },
-    ...(props.users || []).map((user) => ({ value: user.id, label: user.name })),
-]);
 const categoryOptions = computed(() => [
     { value: 'all', label: 'Tutte le categorie' },
     ...Object.entries(props.documentCategories || {}).map(([value, label]) => ({ value, label })),
@@ -444,40 +408,6 @@ function showMoreYearDocuments(year) {
     };
 }
 
-function loadReport() {
-    const params = {
-        year: reportYear.value,
-        month: reportMonth.value,
-    };
-    if (reportUserId.value !== 'all') params.user_id = reportUserId.value;
-    if (reportTeamId.value !== 'all') params.team_id = reportTeamId.value;
-    if (reportRangeMode.value === 'range' && reportFrom.value && reportTo.value) {
-        params.from = reportFrom.value;
-        params.to = reportTo.value;
-    }
-
-    router.get(route('documents.reports'), params, {
-        preserveScroll: true,
-        preserveState: true,
-    });
-}
-
-function reportExportHref(format = 'xlsx') {
-    const params = {
-        year: reportYear.value,
-        month: reportMonth.value,
-        format,
-    };
-    if (reportUserId.value !== 'all') params.user_id = reportUserId.value;
-    if (reportTeamId.value !== 'all') params.team_id = reportTeamId.value;
-    if (reportRangeMode.value === 'range' && reportFrom.value && reportTo.value) {
-        params.from = reportFrom.value;
-        params.to = reportTo.value;
-    }
-
-    return route('documents.reports.export', params);
-}
-
 function deleteLabel(type) {
     if (type === 'group') return 'il gruppo';
     if (type === 'message') return 'il messaggio';
@@ -547,13 +477,6 @@ function deleteLabel(type) {
                             <Users class="h-4 w-4" :stroke-width="1.7" />
                             Gruppi
                             <span class="rounded-full bg-white/20 px-2 py-0.5 text-xs">{{ groups.length }}</span>
-                        </Link>
-                        <Link
-                            :href="route('documents.reports')"
-                            :class="['btn', activeAdminSection === 'reports' ? 'btn-primary' : 'btn-outline']"
-                        >
-                            <Table2 class="h-4 w-4" :stroke-width="1.7" />
-                            Report e dati
                         </Link>
                     </div>
                     <button v-if="activeAdminSection === 'documents'" type="button" class="btn btn-primary" @click="createModal = 'document'">
@@ -970,107 +893,6 @@ function deleteLabel(type) {
                         </article>
                     </div>
                     <div v-else class="surface px-5 py-12 text-center text-sm text-gray-500">Nessun gruppo creato.</div>
-                </section>
-
-                <section v-if="canManage && activeAdminSection === 'reports'" class="space-y-6">
-                    <div class="surface p-5">
-                        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                            <div>
-                                <h3 class="text-base font-semibold text-gray-900">Report e dati</h3>
-                                <p class="mt-1 text-sm text-gray-500">Presenze previste, effettive e causali per il consulente del lavoro.</p>
-                            </div>
-                            <div class="flex flex-wrap gap-2">
-                                <a v-for="format in ['xlsx', 'csv', 'pdf']" :key="format" :href="reportExportHref(format)" class="btn btn-outline">
-                                    <Download class="h-4 w-4" :stroke-width="1.7" />{{ format.toUpperCase() }}
-                                </a>
-                            </div>
-                        </div>
-                        <div class="mt-5 flex gap-2">
-                            <button type="button" :class="['settings-tab', reportRangeMode === 'month' ? 'settings-tab-active' : '']" @click="reportRangeMode = 'month'; loadReport()">Mese</button>
-                            <button type="button" :class="['settings-tab', reportRangeMode === 'range' ? 'settings-tab-active' : '']" @click="reportRangeMode = 'range'; loadReport()">Intervallo</button>
-                        </div>
-                        <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                            <div v-if="reportRangeMode === 'month'">
-                                    <label class="block text-sm font-medium text-gray-700">Mese</label>
-                                    <AppSelect v-model="reportMonth" :options="reportMonthOptions" @update:model-value="loadReport" />
-                            </div>
-                            <div v-if="reportRangeMode === 'month'">
-                                    <label class="block text-sm font-medium text-gray-700">Anno</label>
-                                    <AppSelect v-model="reportYear" :options="reportYearOptions" @update:model-value="loadReport" />
-                            </div>
-                            <div v-if="reportRangeMode === 'range'"><label class="block text-sm font-medium text-gray-700">Dal</label><AppDateInput v-model="reportFrom" @change="loadReport" /></div>
-                            <div v-if="reportRangeMode === 'range'"><label class="block text-sm font-medium text-gray-700">Al</label><AppDateInput v-model="reportTo" @change="loadReport" /></div>
-                            <div>
-                                    <label class="block text-sm font-medium text-gray-700">Persona</label>
-                                    <AppSelect v-model="reportUserId" :options="reportUserOptions" @update:model-value="loadReport" />
-                            </div>
-                            <div v-if="isSuperadmin"><label class="block text-sm font-medium text-gray-700">Team</label><AppSelect v-model="reportTeamId" :options="[{ value: 'all', label: 'Tutti i team' }, ...(attendanceTeams || []).map((team) => ({ value: team.id, label: team.name }))]" @update:model-value="loadReport" /></div>
-                        </div>
-
-                        <p v-if="attendanceReport?.scope_label" class="mt-4 text-sm font-medium text-gray-500">
-                            Report: <span class="text-gray-900">{{ attendanceReport.scope_label }}</span>
-                        </p>
-
-                        <div v-if="attendanceReport" class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                            <div class="rounded-[var(--radius-sm)] bg-white/70 px-4 py-3">
-                                <p class="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">Persone</p>
-                                <p class="mt-1 text-xl font-semibold text-gray-900">{{ attendanceReport.summary.users }}</p>
-                            </div>
-                            <div v-for="[key, label] in reportSummaryFields" :key="key" class="rounded-[var(--radius-sm)] bg-white/70 px-4 py-3">
-                                <p class="text-xs font-semibold uppercase text-gray-400">{{ label }}</p>
-                                <p class="mt-1 text-xl font-semibold text-gray-900">{{ attendanceReport.summary[key] }}</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div v-if="attendanceReport" class="surface overflow-hidden">
-                        <div class="border-b border-white/70 px-5 py-4">
-                            <h3 class="text-base font-semibold text-gray-900">{{ attendanceReport.month_label }}</h3>
-                            <p class="mt-1 text-sm text-gray-500">Generato il {{ attendanceReport.generated_at }}. XLSX e CSV includono il dettaglio giornaliero.</p>
-                        </div>
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-gray-100 text-sm">
-                                <thead class="bg-gray-50/80">
-                                    <tr>
-                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Cognome Nome</th>
-                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Matricola</th>
-                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Previste</th>
-                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Ore lavorate</th>
-                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Ore ordinarie</th>
-                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Ferie</th>
-                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Permessi</th>
-                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Malattia</th>
-                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Ritardi</th>
-                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Smart working</th>
-                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Straordinari</th>
-                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Banca ore</th>
-                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Recuperi</th>
-                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Trasferte</th>
-                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Altre assenze</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-gray-100 bg-white/50">
-                                    <tr v-for="row in attendanceReport.rows" :key="row.user_id" class="hover:bg-gray-50">
-                                        <td class="px-4 py-3 font-semibold text-gray-900">{{ row.name }}</td>
-                                        <td class="px-4 py-3 text-gray-500">{{ row.employee_code }}</td>
-                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.planned }}</td>
-                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.actual }}</td>
-                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.ordinary }}</td>
-                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.vacation }}</td>
-                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.permissions }}</td>
-                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.sickness }}</td>
-                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.late }}</td>
-                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.smart_working }}</td>
-                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.extra }}</td>
-                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.time_bank }}</td>
-                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.recovery }}</td>
-                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.travel }}</td>
-                                        <td class="px-4 py-3 text-gray-700">{{ row.total_labels.other }}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
                 </section>
 
                 <section v-if="canManage && activeAdminSection === 'documents'" class="surface p-5">

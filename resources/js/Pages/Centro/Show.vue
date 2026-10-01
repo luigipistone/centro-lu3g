@@ -16,6 +16,7 @@ import {
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import {
     Bold,
+    Briefcase,
     CalendarDays,
     Check,
     ChevronDown,
@@ -42,7 +43,9 @@ import {
     Rocket,
     RotateCcw,
     Send,
+    ShieldCheck,
     Trash2,
+    TrendingUp,
     Underline,
     UploadCloud,
     UserRound,
@@ -793,10 +796,10 @@ let projectTaskDrawerAutosaveTimer = null;
 const projectColors = ['#2563eb', '#7c3aed', '#db2777', '#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#475569'];
 const userDetailTab = ref('personal');
 const userDetailTabs = [
-    { value: 'personal', label: 'Dati personali' }, { value: 'employment', label: 'Rapporto di lavoro' },
-    { value: 'schedule', label: 'Orario e smart working' }, { value: 'dossier', label: 'Fascicolo digitale' },
-    { value: 'performance', label: 'Andamento' },
-    { value: 'security', label: 'Sicurezza' },
+    { value: 'personal', label: 'Dati personali', icon: UserRound }, { value: 'employment', label: 'Rapporto di lavoro', icon: Briefcase },
+    { value: 'schedule', label: 'Orario e smart working', icon: CalendarDays }, { value: 'dossier', label: 'Fascicolo digitale', icon: FileText },
+    { value: 'performance', label: 'Andamento', icon: TrendingUp },
+    { value: 'security', label: 'Sicurezza', icon: ShieldCheck },
 ];
 const userFieldAccess = computed(() => props.related?.fieldAccess || {});
 const parsedSmartworkingDays = (() => { try { return JSON.parse(props.record.smartworking_days || '[]'); } catch { return []; } })();
@@ -5833,7 +5836,7 @@ onUnmounted(() => {
 
                 <section v-if="section === 'users'" class="space-y-6 lg:order-1">
                     <nav class="surface flex w-full gap-2 overflow-x-auto p-2" aria-label="Sezioni utente">
-                        <button v-for="tab in userDetailTabs" :key="tab.value" type="button" :class="['settings-tab shrink-0', userDetailTab === tab.value ? 'settings-tab-active' : '']" @click="userDetailTab = tab.value">{{ tab.label }}</button>
+                        <button v-for="tab in userDetailTabs" :key="tab.value" type="button" :class="['settings-tab inline-flex shrink-0 items-center gap-2', userDetailTab === tab.value ? 'settings-tab-active' : '']" :aria-current="userDetailTab === tab.value ? 'page' : undefined" @click="userDetailTab = tab.value"><component :is="tab.icon" class="h-4 w-4 shrink-0" :stroke-width="1.7" />{{ tab.label }}</button>
                     </nav>
                     <section v-if="userDetailTab === 'personal'" class="surface rounded-md p-5">
                         <div class="flex flex-wrap items-center gap-4 rounded-md border border-gray-100 bg-gray-50 p-4">

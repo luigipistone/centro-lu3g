@@ -460,6 +460,21 @@ class CentroPageController extends Controller
 
         $this->ensureRoleCanAccessIndex($request, $section);
 
+        $attendanceReportRequested = $section === 'absences' && $request->query('tab') === 'reports';
+        if ($attendanceReportRequested) {
+            $request->validate([
+                'year' => ['nullable', 'integer', 'min:2020', 'max:2100'],
+                'month' => ['nullable', 'integer', 'min:1', 'max:12'],
+                'user_id' => ['nullable', Rule::exists('users', 'id')],
+                'team_id' => ['nullable', Rule::exists('users', 'id')],
+                'from' => ['nullable', 'required_with:to', 'date_format:Y-m-d'],
+                'to' => ['nullable', 'required_with:from', 'date_format:Y-m-d', 'after_or_equal:from'],
+            ]);
+            if ($this->currentUserRole($request) === 'admin' && $request->filled('user_id')) {
+                abort_unless(DB::table('profiles')->where('user_id', $request->input('user_id'))->where('manager_user_id', $request->user()->id)->exists(), 403);
+            }
+        }
+
         $config = $this->config($section);
         $limit = $section === 'billing' ? 500 : 100;
         $guestVisibleTaskIds = $this->isGuest($request) ? $this->visibleTaskIdsForUser($request->user()->id) : null;
@@ -679,6 +694,16 @@ class CentroPageController extends Controller
             'attendanceTeamUsers' => $section === 'absences' ? DB::table('users as u')->join('profiles as p', 'p.user_id', '=', 'u.id')
                 ->when($this->currentUserRole($request) === 'admin', fn ($query) => $query->where('p.manager_user_id', $request->user()->id))
                 ->orderBy('u.name')->get(['u.id', 'u.name', 'u.email', 'p.avatar_url', 'p.smartworking_day']) : [],
+            'attendanceReport' => $attendanceReportRequested ? $this->attendanceReportData(
+                (int) $request->integer('year', now('Europe/Rome')->year),
+                (int) $request->integer('month', now('Europe/Rome')->month),
+                $request->input('user_id'),
+                $this->currentUserRole($request) === 'admin' ? $request->user()->id : $request->input('team_id'),
+                $request->input('from'),
+                $request->input('to'),
+            ) : null,
+            'attendanceTeams' => $attendanceReportRequested && $this->currentUserRole($request) === 'superadmin'
+                ? DB::table('profiles as p')->join('users as u', 'u.id', '=', 'p.manager_user_id')->distinct()->orderBy('u.name')->get(['u.id', 'u.name']) : [],
             'billingStats' => $section === 'billing' ? $this->billingStats() : null,
             'clientStats' => $section === 'clients' ? $this->clientStats() : null,
             'documentSettings' => $section === 'settings' ? DB::table('document_settings')->first() : null,
@@ -1190,23 +1215,7 @@ class CentroPageController extends Controller
     public function companyDocuments(Request $request): Response
     {
         $canManage = $this->canManageDocuments($request);
-        if ($canManage && $request->route('documentView') === 'reports') {
-            $request->validate([
-                'from' => ['nullable', 'required_with:to', 'date_format:Y-m-d'],
-                'to' => ['nullable', 'required_with:from', 'date_format:Y-m-d', 'after_or_equal:from'],
-            ]);
-        }
-        $managerReport = $this->currentUserRole($request) === 'admin';
         $userId = (string) $request->user()->id;
-        $reportYear = (int) $request->integer('year', now('Europe/Rome')->year);
-        $reportMonth = (int) $request->integer('month', now('Europe/Rome')->month);
-        $reportUserId = $canManage && $request->filled('user_id') && $request->input('user_id') !== 'all'
-            ? (string) $request->input('user_id')
-            : null;
-        $reportTeamId = $managerReport ? (string) $request->user()->id : ($canManage && $request->filled('team_id') && $request->input('team_id') !== 'all' ? (string) $request->input('team_id') : null);
-        if ($managerReport && $reportUserId) {
-            abort_unless(DB::table('profiles')->where('user_id', $reportUserId)->where('manager_user_id', $request->user()->id)->exists(), 403);
-        }
 
         return Inertia::render('Centro/Documents', [
             'canManage' => $canManage,
@@ -1220,12 +1229,8 @@ class CentroPageController extends Controller
 
                     return $schedule;
                 }) : [],
-            'attendanceReport' => $canManage && $request->route('documentView') === 'reports' ? $this->attendanceReportData($reportYear, $reportMonth, $reportUserId, $reportTeamId, $request->input('from'), $request->input('to')) : null,
-            'attendanceTeams' => $canManage && ! $managerReport && $request->route('documentView') === 'reports' ? DB::table('profiles as p')->join('users as u', 'u.id', '=', 'p.manager_user_id')->distinct()->orderBy('u.name')->get(['u.id', 'u.name']) : [],
             'groups' => $canManage ? $this->documentGroupRows() : [],
-            'users' => $canManage ? ($managerReport && $request->route('documentView') === 'reports'
-                ? $this->userOptions()->filter(fn ($user) => DB::table('profiles')->where('user_id', $user->id)->where('manager_user_id', $request->user()->id)->exists())->values()
-                : $this->userOptions()) : [],
+            'users' => $canManage ? $this->userOptions() : [],
             'documentUsers' => $this->currentUserRole($request) === 'superadmin' ? $this->companyDocumentUserRows() : [],
             'documentCategories' => $this->companyDocumentCategories(),
         ]);

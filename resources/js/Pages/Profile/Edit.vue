@@ -6,7 +6,7 @@ import DeleteUserForm from './Partials/DeleteUserForm.vue';
 import UpdatePasswordForm from './Partials/UpdatePasswordForm.vue';
 import UpdateProfileInformationForm from './Partials/UpdateProfileInformationForm.vue';
 import { Head, Link as InertiaLink, router, useForm } from '@inertiajs/vue3';
-import { Bold, FileText, Heading3, Italic, Link2, List, ListOrdered, Paperclip, Quote, Underline } from '@lucide/vue';
+import { Bell, Bold, Briefcase, CalendarDays, CalendarX2, FileText, Heading3, Italic, Link2, List, ListOrdered, Paperclip, Quote, ShieldCheck, Underline, UserRound } from '@lucide/vue';
 import { computed, nextTick, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -35,13 +35,13 @@ const props = defineProps({
 
 const profileTab = ref('personal');
 const profileTabs = [
-    { value: 'personal', label: 'Dati personali' },
-    { value: 'employment', label: 'Rapporto di lavoro' },
-    { value: 'schedule', label: 'Orario e smart working' },
-    { value: 'notifications', label: 'Notifiche' },
-    { value: 'dossier', label: 'Fascicolo digitale' },
-    { value: 'absences', label: 'Assenze' },
-    { value: 'security', label: 'Sicurezza' },
+    { value: 'personal', label: 'Dati personali', icon: UserRound },
+    { value: 'employment', label: 'Rapporto di lavoro', icon: Briefcase },
+    { value: 'schedule', label: 'Orario e smart working', icon: CalendarDays },
+    { value: 'notifications', label: 'Notifiche', icon: Bell },
+    { value: 'dossier', label: 'Fascicolo digitale', icon: FileText },
+    { value: 'absences', label: 'Assenze', icon: CalendarX2 },
+    { value: 'security', label: 'Sicurezza', icon: ShieldCheck },
 ];
 const employmentStatusLabels = { active: 'Attivo', suspended: 'Sospeso', ended: 'Terminato' };
 const documentCategoryLabels = { compensation: 'Compensi', contracts: 'Contratti', courses: 'Corsi e attestati', identity: "Documenti d'identità", other: 'Documenti vari' };
@@ -202,7 +202,8 @@ watch(() => absenceForm.type, () => {
         <div class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 sm:px-6 lg:px-8">
                 <nav class="surface flex w-full gap-2 overflow-x-auto p-2" aria-label="Sezioni profilo">
-                    <button v-for="tab in profileTabs" :key="tab.value" type="button" :class="['settings-tab shrink-0', profileTab === tab.value ? 'settings-tab-active' : '']" @click="profileTab = tab.value">
+                    <button v-for="tab in profileTabs" :key="tab.value" type="button" :class="['settings-tab inline-flex shrink-0 items-center gap-2', profileTab === tab.value ? 'settings-tab-active' : '']" :aria-current="profileTab === tab.value ? 'page' : undefined" @click="profileTab = tab.value">
+                        <component :is="tab.icon" class="h-4 w-4 shrink-0" :stroke-width="1.7" />
                         {{ tab.label }}
                     </button>
                 </nav>
