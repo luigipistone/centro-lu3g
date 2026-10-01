@@ -132,6 +132,7 @@ function templatePayload(template) {
                 service_id: task.service_id || '',
                 assignee_ids: Array.isArray(task.assignee_ids) ? task.assignee_ids : JSON.parse(task.assignee_ids || '[]'),
                 subtasks: (Array.isArray(task.subtasks) ? task.subtasks : JSON.parse(task.subtasks || '[]')).map((subtask) => ({
+                    template_key: subtask.template_key || newTemplateTaskKey(),
                     title: subtask.title || '',
                     assignee_ids: subtask.assignee_ids || [],
                     day_offset: subtask.day_offset ?? null,
@@ -192,7 +193,7 @@ function duplicateSection(section) {
             date_reference_type: 'project_start',
             dependency_mode: 'none',
             dependency_task_keys: [],
-            subtasks: (task.subtasks || []).map((subtask) => ({ ...subtask, assignee_ids: [...(subtask.assignee_ids || [])] })),
+            subtasks: (task.subtasks || []).map((subtask) => ({ ...subtask, template_key: newTemplateTaskKey(), assignee_ids: [...(subtask.assignee_ids || [])] })),
         })),
     };
     form.sections.splice(form.sections.indexOf(section) + 1, 0, clone);
@@ -237,8 +238,9 @@ function addTask(section, sectionIndex) {
 function removeTask(section, index) {
     const removed = section.tasks.splice(index, 1)[0];
     if (removed?.template_key) {
+        const removedKeys = new Set([removed.template_key, ...(removed.subtasks || []).map((subtask) => subtask.template_key)]);
         allTemplateTasks().forEach((task) => {
-            task.dependency_task_keys = (task.dependency_task_keys || []).filter((key) => key !== removed.template_key);
+            task.dependency_task_keys = (task.dependency_task_keys || []).filter((key) => !removedKeys.has(key));
             if (!(task.dependency_task_keys || []).length) {
                 task.dependency_mode = 'none';
             }
@@ -345,7 +347,10 @@ function referenceOptions(task) {
 }
 
 function dependencyTaskOptions(task) {
-    return allTemplateTasks()
+    return allTemplateTasks().flatMap((item) => [
+        item,
+        ...(item.template_key === task.template_key ? [] : (item.subtasks || [])),
+    ])
         .filter((item) => item.template_key !== task.template_key)
         .map((item) => ({
             value: item.template_key,
@@ -457,7 +462,7 @@ function removeDrawerTask() {
     form.sections.forEach((section) => {
         const index = section.tasks.findIndex((row) => row.template_key === task.template_key);
         if (index >= 0) {
-            section.tasks.splice(index, 1);
+            removeTask(section, index);
         }
     });
     closeTaskDrawer();
@@ -492,6 +497,15 @@ function toggleAssignee(task, userId) {
     if (index >= 0) values.splice(index, 1);
     else values.push(userId);
     task.assignee_ids = values;
+}
+
+function removeTemplateSubtask(task, index) {
+    const [removed] = task.subtasks.splice(index, 1);
+    if (!removed?.template_key) return;
+    allTemplateTasks().forEach((item) => {
+        item.dependency_task_keys = (item.dependency_task_keys || []).filter((key) => key !== removed.template_key);
+        if (!item.dependency_task_keys.length) item.dependency_mode = 'none';
+    });
 }
 
 function personAvatarClass(selected) {
@@ -934,14 +948,14 @@ onUnmounted(() => {
                             <section class="app-card p-4">
                                 <div class="mb-3 flex items-center justify-between gap-3">
                                     <h4 class="text-sm font-semibold text-gray-900">Sottoattività</h4>
-                                    <button type="button" class="btn btn-outline !px-3 !py-1.5" @click="drawerTask.subtasks.push({ title: '', assignee_ids: [], day_offset: null, duration_days: 1 })">
+                                    <button type="button" class="btn btn-outline !px-3 !py-1.5" @click="drawerTask.subtasks.push({ template_key: newTemplateTaskKey(), title: '', assignee_ids: [], day_offset: null, duration_days: 1 })">
                                         <Plus class="h-4 w-4" :stroke-width="1.7" /> Aggiungi
                                     </button>
                                 </div>
                                 <div v-for="(subtask, index) in drawerTask.subtasks" :key="`${drawerTask.template_key}-${index}`" class="border-t border-gray-100 py-3 first:border-0">
                                     <div class="flex items-center gap-2">
                                         <input v-model="subtask.title" class="form-control mt-0 h-[38px] min-h-[38px] flex-1" :aria-label="`Sottoattività ${index + 1}`" placeholder="Nome sottoattività" />
-                                        <button type="button" class="icon-btn text-red-500" :aria-label="`Elimina sottoattività ${index + 1}`" @click="drawerTask.subtasks.splice(index, 1)"><Trash2 class="h-4 w-4" :stroke-width="1.7" /></button>
+                                        <button type="button" class="icon-btn text-red-500" :aria-label="`Elimina sottoattività ${index + 1}`" @click="removeTemplateSubtask(drawerTask, index)"><Trash2 class="h-4 w-4" :stroke-width="1.7" /></button>
                                     </div>
                                     <div class="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_100px_100px]">
                                         <div class="flex flex-col gap-1.5">

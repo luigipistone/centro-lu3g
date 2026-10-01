@@ -36,13 +36,20 @@ class SviluppoWebTemplateTest extends TestCase
 
         $parents = DB::table('tasks')->where('project_id', $projectId)->whereNull('parent_task_id')->get();
         $this->assertCount(9, $parents);
-        $this->assertSame(16, DB::table('tasks')->where('project_id', $projectId)->whereNotNull('parent_task_id')->count());
+        $this->assertSame(29, DB::table('tasks')->where('project_id', $projectId)->whereNotNull('parent_task_id')->count());
 
         $figma = $parents->firstWhere('title', 'Sviluppo mockup con Figma');
         $this->assertSame('2026-10-12', $figma->start_date);
         $this->assertSame('2026-10-17', $figma->due_date);
         $sviluppo = $parents->firstWhere('title', 'Sviluppo del sito web online');
         $this->assertSame(2, DB::table('task_dependencies')->where('task_id', $sviluppo->id)->count());
+        $this->assertSame(9, DB::table('tasks')->where('parent_task_id', $sviluppo->id)->count());
+        $riunioneCliente = DB::table('tasks')->where('parent_task_id', $sviluppo->id)->where('title', 'Riunione con cliente per modifiche con report')->first();
+        $modifiche = $parents->firstWhere('title', 'Realizzazione modifiche per max 2 tornate');
+        $this->assertDatabaseHas('task_dependencies', [
+            'task_id' => $modifiche->id,
+            'depends_on_task_id' => $riunioneCliente->id,
+        ]);
         $controllo = $parents->firstWhere('title', 'Controllo e Responsive');
         $this->assertSame(13, DB::table('tasks')->where('parent_task_id', $controllo->id)->count());
         $seo = DB::table('tasks')->where('parent_task_id', $controllo->id)->where('title', 'Impostare la SEO di base')->first();

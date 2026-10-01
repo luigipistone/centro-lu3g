@@ -3700,6 +3700,7 @@ class CentroPageController extends Controller
             'sections.*.tasks.*.status' => ['nullable', Rule::in(['todo', 'in_progress', 'in_review', 'done'])],
             'sections.*.tasks.*.task_type' => ['nullable', Rule::in(['task', 'project', 'meeting'])],
             'sections.*.tasks.*.subtasks' => ['nullable', 'array'],
+            'sections.*.tasks.*.subtasks.*.template_key' => ['nullable', 'string', 'max:80'],
             'sections.*.tasks.*.subtasks.*.title' => ['required', 'string', 'max:255'],
             'sections.*.tasks.*.subtasks.*.assignee_ids' => ['nullable', 'array'],
             'sections.*.tasks.*.subtasks.*.assignee_ids.*' => ['uuid', 'exists:users,id'],
@@ -7305,6 +7306,9 @@ class CentroPageController extends Controller
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);
+                    if (! empty($subtask['template_key'])) {
+                        $createdTaskIdsByTemplateKey[$subtask['template_key']] = $subtaskId;
+                    }
                     $subtaskAssignees = collect($subtask['assignee_ids'] ?? [])->filter()->unique();
                     if ($subtaskAssignees->isNotEmpty()) {
                         DB::table('task_assignees')->insert($subtaskAssignees->map(fn ($userId) => [

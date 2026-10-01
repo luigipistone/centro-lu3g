@@ -16,7 +16,8 @@ return new class extends Migration
             'Giulia Grandi', 'Giorgio Sala', 'Francesco Puglisi', 'Andrea Riva',
         ])->pluck('id', 'name');
         $person = fn (string $name): array => isset($people[$name]) ? [$people[$name]] : [];
-        $subtask = fn (string $title, ?string $assignee = null, ?int $day = null, int $duration = 1): array => [
+        $subtask = fn (string $title, ?string $assignee = null, ?int $day = null, int $duration = 1, ?string $key = null): array => [
+            'template_key' => $key ?? (string) Str::uuid(),
             'title' => $title,
             'assignee_ids' => $assignee ? $person($assignee) : [],
             'day_offset' => $day,
@@ -33,12 +34,25 @@ return new class extends Migration
                 ['team', 'Riunione con il team sviluppo', 'Giulia Grandi', 10, 1, 'medium', ['email']],
             ],
             'Fase Realizzativa' => [
-                ['figma', 'Sviluppo mockup con Figma', 'Giulia Grandi', 11, 6, 'medium', ['team']],
+                ['figma', 'Sviluppo mockup con Figma', 'Giulia Grandi', 11, 6, 'medium', ['team'], null, [
+                    $subtask('Invio Richiesta Riunione di presentazione'),
+                    $subtask('Recap della riunione via email'),
+                ]],
                 ['testi', 'Conferma o modifica dei testi', 'Giorgio Sala', 21, 6, 'medium', []],
-                ['sviluppo', 'Sviluppo del sito web online', 'Francesco Puglisi', 26, 8, 'medium', ['figma', 'testi']],
+                ['sviluppo', 'Sviluppo del sito web online', 'Francesco Puglisi', 26, 8, 'medium', ['figma', 'testi'], null, [
+                    $subtask('Installare Wordpress in spazio di test'),
+                    $subtask('Salvare gli accessi su 1Password'),
+                    $subtask('Installare i plugin essenziali'),
+                    $subtask('Impostare la modalità manutenzione'),
+                    $subtask('Installare il tema con la sua demo idonea'),
+                    $subtask("Creare la struttura del sito, l'estetica e le funzionalità"),
+                    $subtask('Creare gli accessi al cliente con la sua email e un ruolo non admin'),
+                    $subtask('Inviare Email per richiesta riunione presentazione sito'),
+                    $subtask('Riunione con cliente per modifiche con report', null, null, 1, 'riunione-cliente'),
+                ]],
             ],
             'Fase Conclusiva' => [
-                ['modifiche', 'Realizzazione modifiche per max 2 tornate', 'Francesco Puglisi', 50, 1, 'medium', []],
+                ['modifiche', 'Realizzazione modifiche per max 2 tornate', 'Francesco Puglisi', 50, 1, 'medium', ['riunione-cliente']],
                 ['controllo', 'Controllo e Responsive', 'Francesco Puglisi', 57, 1, 'medium', ['modifiche'], null, [
                     $subtask('Creazione delle Thank You Page'),
                     $subtask('Testing di tutte le funzionalità esistenti sul sito'),
@@ -54,7 +68,10 @@ return new class extends Migration
                     $subtask('Rimuovere la spunta "Scoraggia i motori di ricerca"'),
                     $subtask('Impostare la SEO di base', null, 54, 4),
                 ]],
-                ['online', 'Messa online del sito web', 'Francesco Puglisi', 60, 1, 'medium', ['controllo']],
+                ['online', 'Messa online del sito web', 'Francesco Puglisi', 60, 1, 'medium', ['controllo'], null, [
+                    $subtask('Spostare il sito sugli spazi ufficiali usando il plugin Duplicator'),
+                    $subtask('Controllo del corretto funzionamento del sito sugli spazi definitivi'),
+                ]],
                 ['tracciamenti', 'Impostare tracciamenti', 'Andrea Riva', 63, 1, 'high', ['online']],
             ],
         ];
