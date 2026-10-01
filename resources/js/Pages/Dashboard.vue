@@ -1,6 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
+import UserAvatar from '@/Components/UserAvatar.vue';
 import { APP_TIME_ZONE } from '@/utils/formatters';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
@@ -87,6 +88,7 @@ let saveTimer = null;
 let noteSaveTimer = null;
 let resizeState = null;
 let moveState = null;
+let moveReordering = false;
 
 const widgetMeta = {
     stat_clients: {
@@ -387,6 +389,7 @@ async function saveNote() {
 }
 
 function startMove(widget, event) {
+    if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
 
@@ -396,6 +399,7 @@ function startMove(widget, event) {
     const rect = card?.getBoundingClientRect();
     moveState = {
         type: widget.widget_type,
+        originalWidgets: widgets.value.map((item) => ({ ...item })),
         offsetX: rect ? event.clientX - rect.left : 24,
         offsetY: rect ? event.clientY - rect.top : 24,
     };
@@ -416,6 +420,7 @@ function startMove(widget, event) {
 
     window.addEventListener('pointermove', moveWidget);
     window.addEventListener('pointerup', stopMove, { once: true });
+    window.addEventListener('pointercancel', cancelMove, { once: true });
 }
 
 function moveWidget(event) {
@@ -435,7 +440,7 @@ function moveWidget(event) {
 
 function reorderWidgetsDuringDrag(nextIndex) {
     const sourceType = draggingType.value;
-    if (!sourceType) return;
+    if (!sourceType || moveReordering) return;
 
     const before = new Map(
         [...dashboardGrid.value.querySelectorAll('[data-widget-type]')]
@@ -446,6 +451,7 @@ function reorderWidgetsDuringDrag(nextIndex) {
     if (!moved) return;
 
     const target = Math.max(0, Math.min(nextIndex, current.length));
+    moveReordering = true;
     current.splice(target, 0, moved);
     dragOverIndex.value = target;
     widgets.value = [...current, ...hiddenWidgets.value].map((widget, index) => ({ ...widget, position: index }));
@@ -467,6 +473,7 @@ function reorderWidgetsDuringDrag(nextIndex) {
                 { duration: 260, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
             );
         });
+        moveReordering = false;
     });
 }
 
@@ -484,29 +491,41 @@ function resolveDropIndex(event) {
 
     if (!cards.length) return 0;
 
-    const y = event.clientY;
     const x = event.clientX;
-    const rowTolerance = 12;
-    const rowCards = cards.filter((card) => y >= card.rect.top - rowTolerance && y <= card.rect.bottom + rowTolerance);
+    const y = event.clientY;
+    const nearest = cards.reduce((best, card) => {
+        const dx = Math.max(card.rect.left - x, 0, x - card.rect.right);
+        const dy = Math.max(card.rect.top - y, 0, y - card.rect.bottom);
+        const distance = dx * dx + dy * dy;
+        return !best || distance < best.distance ? { ...card, distance } : best;
+    }, null);
 
-    if (rowCards.length) {
-        const sortedRow = [...rowCards].sort((a, b) => a.rect.left - b.rect.left);
-        const beforeCard = sortedRow.find((card) => x < card.rect.left + card.rect.width / 2);
-
-        return beforeCard ? beforeCard.index : sortedRow[sortedRow.length - 1].index + 1;
-    }
-
-    const belowPointer = cards.find((card) => y < card.rect.top + card.rect.height / 2);
-
-    return belowPointer ? belowPointer.index : ordered.length;
+    if (y < nearest.rect.top) return nearest.index;
+    if (y > nearest.rect.bottom) return nearest.index + 1;
+    return x < nearest.rect.left + nearest.rect.width / 2 ? nearest.index : nearest.index + 1;
 }
 
 function stopMove() {
     window.removeEventListener('pointermove', moveWidget);
+    window.removeEventListener('pointercancel', cancelMove);
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
     dropOnGrid();
     moveState = null;
+    moveReordering = false;
+    dragPreview.value = null;
+}
+
+function cancelMove() {
+    window.removeEventListener('pointermove', moveWidget);
+    window.removeEventListener('pointerup', stopMove);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    if (moveState?.originalWidgets) commitWidgets(moveState.originalWidgets, false);
+    moveState = null;
+    moveReordering = false;
+    draggingType.value = null;
+    dragOverIndex.value = null;
     dragPreview.value = null;
 }
 
@@ -632,6 +651,13 @@ function weatherDescription(code) {
     if ([71, 73, 75, 77, 85, 86].includes(code)) return 'Neve';
     if ([95, 96, 99].includes(code)) return 'Temporale';
     return 'Variabile';
+}
+
+function weatherBackgroundPosition(code) {
+    if ([71, 73, 75, 77, 85, 86].includes(code)) return '100% 100%';
+    if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code)) return '0% 100%';
+    if ([3, 45, 48].includes(code)) return '100% 0%';
+    return '0% 0%';
 }
 
 async function loadWeather() {
@@ -833,6 +859,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+    if (moveState) cancelMove();
     window.clearInterval(clockTimer);
     document.removeEventListener('click', closeWidgetMenuOnOutside);
     window.removeEventListener('centro:close-floating-ui', closeDashboardFloatingUi);
@@ -899,7 +926,7 @@ watch(
 
                 <div
                     ref="dashboardGrid"
-                    class="grid grid-cols-1 gap-4 lg:auto-rows-[84px] lg:grid-flow-dense lg:grid-cols-4"
+                    class="grid grid-cols-1 gap-4 lg:auto-rows-[84px] lg:grid-cols-4"
                 >
                     <article
                         v-for="widget in visibleWidgets"
@@ -912,6 +939,13 @@ watch(
                             draggingType === widget.widget_type ? 'widget-card-drag-source' : '',
                         ]"
                     >
+                        <div
+                            v-if="metaFor(widget).kind === 'weather' && weatherData"
+                            class="pointer-events-none absolute inset-0 z-0 bg-[length:200%_200%]"
+                            :style="{ backgroundImage: 'url(/images/weather-conditions.jpg)', backgroundPosition: weatherBackgroundPosition(weatherData.weather_code) }"
+                            aria-hidden="true"
+                        ></div>
+                        <div v-if="metaFor(widget).kind === 'weather' && weatherData" class="pointer-events-none absolute inset-0 z-0 bg-black/50" aria-hidden="true"></div>
                         <button
                             type="button"
                             class="absolute inset-y-0 right-0 z-20 w-3 cursor-ew-resize rounded-r-[inherit] bg-indigo-500/0 transition hover:bg-indigo-500/12"
@@ -924,7 +958,7 @@ watch(
                         <div class="absolute left-4 right-5 top-4 z-10 flex items-center justify-between gap-2">
                             <button
                                 type="button"
-                                class="icon-btn h-7 w-7 cursor-grab active:cursor-grabbing"
+                                class="icon-btn h-7 w-7 touch-none cursor-grab active:cursor-grabbing"
                                 :title="`Sposta ${metaFor(widget).label}`"
                                 @pointerdown="startMove(widget, $event)"
                             >
@@ -946,14 +980,14 @@ watch(
                             </div>
                         </div>
 
-                        <div class="mt-10 flex items-start justify-between gap-4 rounded-2xl px-1 pb-3 pr-4">
+                        <div class="relative z-10 mt-10 flex items-start justify-between gap-4 rounded-2xl px-1 pb-3 pr-4">
                             <span class="flex min-w-0 items-start gap-3">
                                 <span :class="['metric-icon', metaFor(widget).iconClass]">
                                     <component :is="metaFor(widget).icon" class="h-5 w-5" :stroke-width="1.7" />
                                 </span>
                                 <span class="min-w-0 pt-0.5">
-                                    <span class="block truncate text-sm font-semibold text-gray-900">{{ metaFor(widget).label }}</span>
-                                    <span class="block truncate text-xs text-gray-500">{{ metaFor(widget).description }}</span>
+                                    <span :class="['block truncate text-sm font-semibold', metaFor(widget).kind === 'weather' && weatherData ? 'text-white' : 'text-gray-900']">{{ metaFor(widget).label }}</span>
+                                    <span :class="['block truncate text-xs', metaFor(widget).kind === 'weather' && weatherData ? 'text-white/85' : 'text-gray-500']">{{ metaFor(widget).description }}</span>
                                 </span>
                             </span>
                             <span v-if="showsWidgetNumber(widget)" class="shrink-0 text-3xl font-bold leading-none text-gray-950">{{ widgetNumber(widget) }}</span>
@@ -986,13 +1020,13 @@ watch(
                             <strong class="max-w-[60%] truncate text-2xl font-semibold text-gray-950">{{ calculatorResult }}</strong>
                         </button>
 
-                        <div v-if="metaFor(widget).kind === 'weather'" class="flex flex-1 items-end justify-between gap-3 pr-4">
+                        <div v-if="metaFor(widget).kind === 'weather'" class="relative z-10 flex flex-1 items-end justify-between gap-3 pr-4">
                             <div>
-                                <strong v-if="weatherData" class="text-3xl font-semibold leading-none text-gray-950">{{ Math.round(weatherData.temperature_2m) }}°</strong>
+                                <strong v-if="weatherData" class="text-3xl font-semibold leading-none text-white">{{ Math.round(weatherData.temperature_2m) }}°</strong>
                                 <span v-else class="text-sm font-medium text-gray-500">{{ weatherLoading ? 'Caricamento...' : weatherError }}</span>
-                                <p v-if="weatherData" class="mt-1 text-xs text-gray-500">{{ weatherDescription(weatherData.weather_code) }}</p>
+                                <p v-if="weatherData" class="mt-1 text-xs text-white/90">{{ weatherDescription(weatherData.weather_code) }}</p>
                             </div>
-                            <span class="max-w-[48%] truncate text-right text-xs font-semibold text-gray-600">{{ weatherSettings.city }}</span>
+                            <span :class="['max-w-[48%] truncate text-right text-xs font-semibold', weatherData ? 'text-white' : 'text-gray-600']">{{ weatherSettings.city }}</span>
                         </div>
 
                         <div v-if="metaFor(widget).kind === 'list'" class="flex flex-1 flex-col pr-3">
@@ -1026,19 +1060,17 @@ watch(
                                         <span class="text-xs font-semibold uppercase tracking-wide text-gray-400">Assenti</span>
                                         <span class="rounded-full bg-rose-50 px-2 py-0.5 text-xs font-bold text-rose-600">{{ dashboardTodayAbsences.length }}</span>
                                     </div>
-                                    <div class="mt-2 max-h-[94px] space-y-1 overflow-y-auto pr-1">
+                                    <div class="mt-2 flex max-h-20 min-h-8 flex-wrap items-center gap-1.5 overflow-y-auto">
                                         <Link
                                             v-for="row in dashboardTodayAbsences"
                                             :key="`dashboard-absence-${row.id}`"
                                             :href="route('absences.show', row.id)"
-                                            class="group/item flex items-center justify-between gap-3 rounded-xl px-2 py-1.5 transition hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_10px_22px_rgba(28,42,73,0.08)] hover:ring-1 hover:ring-indigo-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                                            :title="`${row.user_name || row.user_email} · ${absenceTypeLabel(row.type)}${absenceExtraInfo(row) ? ` · ${absenceExtraInfo(row)}` : ''}`"
+                                            class="rounded-full transition hover:-translate-y-0.5 hover:ring-2 hover:ring-indigo-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                                         >
-                                            <span class="min-w-0 truncate text-sm font-semibold text-gray-900">{{ row.user_name || row.user_email }}</span>
-                                            <span class="shrink-0 truncate text-xs text-gray-500">
-                                                {{ absenceTypeLabel(row.type) }}<span v-if="absenceExtraInfo(row)"> - {{ absenceExtraInfo(row) }}</span>
-                                            </span>
+                                            <UserAvatar :user="{ name: row.user_name, email: row.user_email, avatar_url: row.user_avatar_url }" size="xs" />
                                         </Link>
-                                        <p v-if="!dashboardTodayAbsences.length" class="py-2 text-sm text-gray-500">Nessuna assenza oggi.</p>
+                                        <p v-if="!dashboardTodayAbsences.length" class="text-xs text-gray-500">Nessuna assenza oggi.</p>
                                     </div>
                                 </section>
 
@@ -1047,16 +1079,15 @@ watch(
                                         <span class="text-xs font-semibold uppercase tracking-wide text-gray-400">Smart working</span>
                                         <span class="rounded-full bg-sky-50 px-2 py-0.5 text-xs font-bold text-sky-600">{{ dashboardTodaySmartworking.length }}</span>
                                     </div>
-                                    <div class="mt-2 max-h-[94px] space-y-1 overflow-y-auto pr-1">
+                                    <div class="mt-2 flex max-h-20 min-h-8 flex-wrap items-center gap-1.5 overflow-y-auto">
                                         <div
                                             v-for="user in dashboardTodaySmartworking"
                                             :key="`dashboard-smartworking-${user.id}`"
-                                            class="flex items-center justify-between gap-3 rounded-xl px-2 py-1.5"
+                                            :title="user.name || user.email"
                                         >
-                                            <span class="min-w-0 truncate text-sm font-semibold text-gray-900">{{ user.name || user.email }}</span>
-                                            <span v-if="user.job_title" class="shrink-0 truncate text-xs text-gray-500">{{ user.job_title }}</span>
+                                            <UserAvatar :user="user" size="xs" />
                                         </div>
-                                        <p v-if="!dashboardTodaySmartworking.length" class="py-2 text-sm text-gray-500">Nessuno in smart working oggi.</p>
+                                        <p v-if="!dashboardTodaySmartworking.length" class="text-xs text-gray-500">Nessuno in smart working oggi.</p>
                                     </div>
                                 </section>
                             </div>
