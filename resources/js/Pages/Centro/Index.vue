@@ -5410,8 +5410,8 @@ function calendarDayStyle(sectionMonth, cell) {
                     :is-superadmin="isSuperadmin"
                 />
                 <template v-if="isSuperadmin && absenceWorkspaceTab === 'rules'">
-                    <div class="grid items-start gap-6 lg:grid-cols-2">
-                    <section class="surface p-5">
+                    <div class="grid items-stretch gap-6 lg:grid-cols-2">
+                    <section class="surface h-full p-5">
                         <h3 class="text-base font-semibold text-gray-900">Orario e approvatori</h3>
                         <form class="mt-4 space-y-5" @submit.prevent="saveAttendanceSettings">
                             <div class="max-w-xs"><label class="block text-sm font-medium text-gray-700">Minuti lavorativi standard al giorno</label><input v-model.number="attendanceSettingsForm.default_daily_minutes" type="number" min="60" max="960" class="form-control" /></div>
@@ -5428,7 +5428,7 @@ function calendarDayStyle(sectionMonth, cell) {
                             <button type="submit" class="btn btn-primary" :disabled="attendanceSettingsForm.processing">Salva regole</button>
                         </form>
                     </section>
-                    <section class="surface p-5">
+                    <section class="surface h-full p-5">
                         <h3 class="text-base font-semibold text-gray-900">Festività</h3>
                         <form class="mt-4 space-y-3" @submit.prevent="addAttendanceHoliday">
                             <div><label class="block text-sm font-medium text-gray-700">Giorno o intervallo</label><AppDateRangeInput v-model:start-day="attendanceHolidayForm.start_day" v-model:end-day="attendanceHolidayForm.end_day" /></div>
