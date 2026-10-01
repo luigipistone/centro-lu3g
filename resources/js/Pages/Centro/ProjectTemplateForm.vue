@@ -85,6 +85,7 @@ function blankTask(title = '', dayOffset = 0) {
         description: '',
         service_id: '',
         assignee_ids: [],
+        subtasks: [],
         day_offset: dayOffset,
         date_offset_direction: 'after',
         date_reference_type: 'project_start',
@@ -130,6 +131,12 @@ function templatePayload(template) {
                 description: task.description || '',
                 service_id: task.service_id || '',
                 assignee_ids: Array.isArray(task.assignee_ids) ? task.assignee_ids : JSON.parse(task.assignee_ids || '[]'),
+                subtasks: (Array.isArray(task.subtasks) ? task.subtasks : JSON.parse(task.subtasks || '[]')).map((subtask) => ({
+                    title: subtask.title || '',
+                    assignee_ids: subtask.assignee_ids || [],
+                    day_offset: subtask.day_offset ?? null,
+                    duration_days: subtask.duration_days || 1,
+                })),
                 day_offset: Number(task.day_offset || 0),
                 date_offset_direction: task.date_offset_direction || 'after',
                 date_reference_type: task.date_reference_type === 'task' ? 'task' : 'project_start',
@@ -185,6 +192,7 @@ function duplicateSection(section) {
             date_reference_type: 'project_start',
             dependency_mode: 'none',
             dependency_task_keys: [],
+            subtasks: (task.subtasks || []).map((subtask) => ({ ...subtask, assignee_ids: [...(subtask.assignee_ids || [])] })),
         })),
     };
     form.sections.splice(form.sections.indexOf(section) + 1, 0, clone);
@@ -920,6 +928,35 @@ onUnmounted(() => {
                                     >
                                         <UserAvatar :user="user" size="md" />
                                     </button>
+                                </div>
+                            </section>
+
+                            <section class="app-card p-4">
+                                <div class="mb-3 flex items-center justify-between gap-3">
+                                    <h4 class="text-sm font-semibold text-gray-900">Sottoattività</h4>
+                                    <button type="button" class="btn btn-outline !px-3 !py-1.5" @click="drawerTask.subtasks.push({ title: '', assignee_ids: [], day_offset: null, duration_days: 1 })">
+                                        <Plus class="h-4 w-4" :stroke-width="1.7" /> Aggiungi
+                                    </button>
+                                </div>
+                                <div v-for="(subtask, index) in drawerTask.subtasks" :key="`${drawerTask.template_key}-${index}`" class="border-t border-gray-100 py-3 first:border-0">
+                                    <div class="flex items-center gap-2">
+                                        <input v-model="subtask.title" class="form-control mt-0 h-[38px] min-h-[38px] flex-1" :aria-label="`Sottoattività ${index + 1}`" placeholder="Nome sottoattività" />
+                                        <button type="button" class="icon-btn text-red-500" :aria-label="`Elimina sottoattività ${index + 1}`" @click="drawerTask.subtasks.splice(index, 1)"><Trash2 class="h-4 w-4" :stroke-width="1.7" /></button>
+                                    </div>
+                                    <div class="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_100px_100px]">
+                                        <div class="flex flex-col gap-1.5">
+                                            <label class="text-xs font-medium text-gray-600">Assegnatario</label>
+                                            <AppSelect :model-value="subtask.assignee_ids?.[0] || ''" :options="[{ value: '', label: 'Nessuno' }, ...users.map((user) => ({ value: user.id, label: user.name || user.email }))]" searchable @update:model-value="subtask.assignee_ids = $event ? [$event] : []" />
+                                        </div>
+                                        <div class="flex flex-col gap-1.5">
+                                            <label class="text-xs font-medium text-gray-600">Giorno</label>
+                                            <input v-model.number="subtask.day_offset" type="number" min="0" class="form-control mt-0 h-[38px] min-h-[38px]" placeholder="Come task" />
+                                        </div>
+                                        <div class="flex flex-col gap-1.5">
+                                            <label class="text-xs font-medium text-gray-600">Durata</label>
+                                            <input v-model.number="subtask.duration_days" type="number" min="1" class="form-control mt-0 h-[38px] min-h-[38px]" />
+                                        </div>
+                                    </div>
                                 </div>
                             </section>
 

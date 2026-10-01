@@ -3699,6 +3699,12 @@ class CentroPageController extends Controller
             'sections.*.tasks.*.priority' => ['nullable', Rule::in(['low', 'medium', 'high', 'urgent'])],
             'sections.*.tasks.*.status' => ['nullable', Rule::in(['todo', 'in_progress', 'in_review', 'done'])],
             'sections.*.tasks.*.task_type' => ['nullable', Rule::in(['task', 'project', 'meeting'])],
+            'sections.*.tasks.*.subtasks' => ['nullable', 'array'],
+            'sections.*.tasks.*.subtasks.*.title' => ['required', 'string', 'max:255'],
+            'sections.*.tasks.*.subtasks.*.assignee_ids' => ['nullable', 'array'],
+            'sections.*.tasks.*.subtasks.*.assignee_ids.*' => ['uuid', 'exists:users,id'],
+            'sections.*.tasks.*.subtasks.*.day_offset' => ['nullable', 'integer', 'min:0', 'max:3650'],
+            'sections.*.tasks.*.subtasks.*.duration_days' => ['nullable', 'integer', 'min:1', 'max:3650'],
         ]);
     }
 
@@ -7129,6 +7135,7 @@ class CentroPageController extends Controller
                     'description' => $task['description'] ?? null,
                     'service_id' => $task['service_id'] ?? null,
                     'assignee_ids' => json_encode(array_values(array_unique($task['assignee_ids'] ?? []))),
+                    'subtasks' => json_encode(array_values($task['subtasks'] ?? [])),
                     'day_offset' => (int) ($task['day_offset'] ?? 0),
                     'date_offset_direction' => $task['date_offset_direction'] ?? 'after',
                     'date_reference_type' => ($task['date_reference_type'] ?? 'project_start') === 'task' ? 'task' : 'project_start',
@@ -7263,6 +7270,51 @@ class CentroPageController extends Controller
                         'created_at' => now(),
                         'updated_at' => now(),
                     ])->all());
+                }
+
+                foreach (array_values(json_decode($templateTask->subtasks ?: '[]', true) ?: []) as $subtaskIndex => $subtask) {
+                    $subtaskStart = isset($subtask['day_offset'])
+                        ? $baseDate->copy()->addDays((int) $subtask['day_offset'])
+                        : $taskStart->copy();
+                    $subtaskDue = $subtaskStart->copy()->addDays(max(1, (int) ($subtask['duration_days'] ?? 1)) - 1);
+                    $subtaskId = (string) str()->uuid();
+                    DB::table('tasks')->insert([
+                        'id' => $subtaskId,
+                        'title' => $subtask['title'],
+                        'description' => null,
+                        'project_id' => $projectId,
+                        'project_section_id' => $sectionId,
+                        'client_id' => $clientId,
+                        'service_id' => $templateTask->service_id ?? null,
+                        'parent_task_id' => $taskId,
+                        'start_date' => $subtaskStart->toDateString(),
+                        'due_date' => $subtaskDue->toDateString(),
+                        'due_time' => null,
+                        'location' => null,
+                        'priority' => $templateTask->priority,
+                        'status' => 'todo',
+                        'task_type' => 'task',
+                        'recurring_enabled' => false,
+                        'recurring_mode' => null,
+                        'recurring_interval_value' => null,
+                        'recurring_interval_unit' => null,
+                        'recurring_weekday' => null,
+                        'recurring_month_day' => null,
+                        'created_by' => $actorId,
+                        'position' => $subtaskIndex,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                    $subtaskAssignees = collect($subtask['assignee_ids'] ?? [])->filter()->unique();
+                    if ($subtaskAssignees->isNotEmpty()) {
+                        DB::table('task_assignees')->insert($subtaskAssignees->map(fn ($userId) => [
+                            'id' => (string) str()->uuid(),
+                            'task_id' => $subtaskId,
+                            'user_id' => $userId,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ])->all());
+                    }
                 }
             }
         }
