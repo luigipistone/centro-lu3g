@@ -26,6 +26,7 @@ import {
     Building2,
     CalendarClock,
     CalendarDays,
+    CalendarX2,
     ChevronDown,
     Check,
     ChevronLeft,
@@ -5186,7 +5187,7 @@ function calendarDayStyle(sectionMonth, cell) {
         <div v-else-if="section === 'absences'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <div class="surface flex flex-wrap gap-2 p-2">
-                    <button v-for="tab in [{ value: 'overview', label: 'Richieste' }, { value: 'presence', label: 'Disponibilità e presenze' }, { value: 'reports', label: 'Report e dati' }, ...(isSuperadmin ? [{ value: 'rules', label: 'Regole' }] : [])]" :key="tab.value" type="button" :class="['settings-tab', absenceWorkspaceTab === tab.value ? 'settings-tab-active' : '']" @click="absenceWorkspaceTab = tab.value">{{ tab.label }}</button>
+                    <button v-for="tab in [{ value: 'overview', label: 'Richieste', icon: CalendarX2 }, { value: 'presence', label: 'Disponibilità e presenze', icon: CalendarDays }, { value: 'reports', label: 'Report e dati', icon: FileText }, ...(isSuperadmin ? [{ value: 'rules', label: 'Regole', icon: Settings }] : [])]" :key="tab.value" type="button" :class="['settings-tab inline-flex items-center gap-2', absenceWorkspaceTab === tab.value ? 'settings-tab-active' : '']" :aria-current="absenceWorkspaceTab === tab.value ? 'page' : undefined" @click="absenceWorkspaceTab = tab.value"><component :is="tab.icon" class="h-4 w-4 shrink-0" :stroke-width="1.7" />{{ tab.label }}</button>
                 </div>
                 <template v-if="absenceWorkspaceTab === 'overview'">
                 <div class="grid gap-6 lg:grid-cols-2">
