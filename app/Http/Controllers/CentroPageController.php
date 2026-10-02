@@ -8,6 +8,7 @@ use App\Services\AttendanceService;
 use App\Services\CentroBackupService;
 use App\Services\CentroNotificationService;
 use App\Services\RolePermissionService;
+use App\Services\SectionAvailabilityService;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Dompdf\Dompdf;
@@ -37,8 +38,31 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class CentroPageController extends Controller
 {
+    public function updateSectionAvailability(Request $request, string $key): RedirectResponse
+    {
+        $this->ensureSuperadmin($request);
+        abort_unless(array_key_exists($key, SectionAvailabilityService::SECTIONS), 404);
+        $data = $request->validate(['enabled' => ['required', 'boolean']]);
+        $before = app(SectionAvailabilityService::class)->statuses()[$key];
+        $request->attributes->set('audit_subject_id', $key);
+        $request->attributes->set('audit_reason', ($data['enabled'] ? 'Riattivazione' : 'Sospensione').' della sezione '.SectionAvailabilityService::SECTIONS[$key]['label']);
+        $request->attributes->set('audit_state_before', ['enabled' => $before]);
+        $request->attributes->set('audit_state_after', ['enabled' => (bool) $data['enabled']]);
+
+        DB::table('section_availability')->updateOrInsert(['section_key' => $key], [
+            'enabled' => (bool) $data['enabled'],
+            'updated_by' => $request->user()->id,
+            'updated_at' => now(),
+        ]);
+
+        return redirect()->route('settings.index', ['tab' => 'sezioni'])->with('status', 'Disponibilità della sezione aggiornata.');
+    }
+
     public function dashboard(Request $request): Response
     {
+        $visibility = app(SectionAvailabilityService::class)->statuses();
+        $isSuperadmin = $this->currentUserRole($request) === 'superadmin';
+        $visible = fn (string $section) => $isSuperadmin || $visibility[$section];
         $guestTaskIds = $this->isGuest($request) ? $this->visibleTaskIdsForUser($request->user()->id) : null;
         $currentWeekStart = now('Europe/Rome')->startOfWeek()->toDateString();
         $currentWeekEnd = now('Europe/Rome')->endOfWeek()->toDateString();
@@ -48,12 +72,12 @@ class CentroPageController extends Controller
 
         return Inertia::render('Dashboard', [
             'stats' => [
-                'clients' => $this->isGuest($request) ? 0 : DB::table('clients')->count(),
-                'openTasks' => DB::table('tasks')->where($taskScope)->where('status', '!=', 'done')->count(),
-                'urgentTasks' => DB::table('tasks')->where($taskScope)->where('priority', 'urgent')->where('status', '!=', 'done')->count(),
+                'clients' => $visible('clients') && ! $this->isGuest($request) ? DB::table('clients')->count() : 0,
+                'openTasks' => $visible('tasks') ? DB::table('tasks')->where($taskScope)->where('status', '!=', 'done')->count() : 0,
+                'urgentTasks' => $visible('tasks') ? DB::table('tasks')->where($taskScope)->where('priority', 'urgent')->where('status', '!=', 'done')->count() : 0,
             ],
-            'recentClients' => $this->isGuest($request) ? collect() : DB::table('clients')->latest()->limit(6)->get(['id', 'name', 'email', 'phone', 'created_at']),
-            'upcomingTasks' => DB::table('tasks')
+            'recentClients' => $visible('clients') && ! $this->isGuest($request) ? DB::table('clients')->latest()->limit(6)->get(['id', 'name', 'email', 'phone', 'created_at']) : collect(),
+            'upcomingTasks' => ! $visible('tasks') ? collect() : DB::table('tasks')
                 ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
                 ->where($taskScope)
                 ->where('tasks.status', '!=', 'done')
@@ -62,7 +86,7 @@ class CentroPageController extends Controller
                 ->orderBy('tasks.due_date')
                 ->limit(6)
                 ->get(['tasks.id', 'tasks.title', 'tasks.status', 'tasks.priority', 'tasks.due_date', 'clients.name as client_name']),
-            'urgentTasks' => DB::table('tasks')
+            'urgentTasks' => ! $visible('tasks') ? collect() : DB::table('tasks')
                 ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
                 ->where($taskScope)
                 ->where('tasks.priority', 'urgent')
@@ -70,7 +94,7 @@ class CentroPageController extends Controller
                 ->orderBy('tasks.due_date')
                 ->limit(6)
                 ->get(['tasks.id', 'tasks.title', 'tasks.status', 'tasks.priority', 'tasks.due_date', 'clients.name as client_name']),
-            'myTasks' => DB::table('tasks')
+            'myTasks' => ! $visible('tasks') ? collect() : DB::table('tasks')
                 ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
                 ->where($taskScope)
                 ->when(! $this->isGuest($request), fn ($query) => $query->whereIn('tasks.id', $this->visibleTaskIdsForUser($request->user()->id)))
@@ -78,7 +102,7 @@ class CentroPageController extends Controller
                 ->orderBy('tasks.due_date')
                 ->limit(6)
                 ->get(['tasks.id', 'tasks.title', 'tasks.status', 'tasks.priority', 'tasks.due_date', 'clients.name as client_name']),
-            'activeProjects' => DB::table('projects')
+            'activeProjects' => ! $visible('projects') ? collect() : DB::table('projects')
                 ->join('project_followers', 'project_followers.project_id', '=', 'projects.id')
                 ->leftJoin('clients', 'clients.id', '=', 'projects.client_id')
                 ->where('project_followers.user_id', $request->user()->id)
@@ -86,13 +110,13 @@ class CentroPageController extends Controller
                 ->latest('projects.updated_at')
                 ->limit(6)
                 ->get(['projects.id', 'projects.name', 'projects.color', 'clients.name as client_name']),
-            'dashboardWidgets' => $this->dashboardWidgetsFor($request->user()),
+            'dashboardWidgets' => array_values(array_filter($this->dashboardWidgetsFor($request->user()), fn ($widget) => in_array($widget['widget_type'], array_column($this->availableDashboardWidgetsFor($request), 'type'), true))),
             'availableDashboardWidgets' => $this->availableDashboardWidgetsFor($request),
             'dashboardWidgetSettings' => $this->dashboardWidgetSettingsFor($request->user()),
             'dashboardNote' => $this->dashboardNoteFor($request->user()),
-            'passwordItems' => $this->dashboardPasswordItemRows($request),
-            'todayAbsences' => $this->dashboardTodayAbsenceRows($request),
-            'todaySmartworking' => $this->dashboardTodaySmartworkingRows($request),
+            'passwordItems' => $visible('passwords') ? $this->dashboardPasswordItemRows($request) : collect(),
+            'todayAbsences' => $visible('absences') ? $this->dashboardTodayAbsenceRows($request) : collect(),
+            'todaySmartworking' => $visible('absences') ? $this->dashboardTodaySmartworkingRows($request) : collect(),
         ]);
     }
 
@@ -318,6 +342,21 @@ class CentroPageController extends Controller
     private function availableDashboardWidgetsFor(Request $request): array
     {
         $widgets = collect($this->availableDashboardWidgets());
+        if ($this->currentUserRole($request) !== 'superadmin') {
+            $visibility = app(SectionAvailabilityService::class)->statuses();
+            $types = [
+                'clients' => ['stat_clients', 'recent_clients'],
+                'tasks' => ['stat_open_tasks', 'stat_urgent_tasks', 'upcoming_tasks', 'my_tasks', 'urgent_tasks'],
+                'projects' => ['active_projects'],
+                'passwords' => ['password_search'],
+                'absences' => ['attendance_today'],
+            ];
+            foreach ($types as $section => $widgetTypes) {
+                if (! $visibility[$section]) {
+                    $widgets = $widgets->reject(fn ($widget) => in_array($widget['type'], $widgetTypes, true));
+                }
+            }
+        }
         if ($this->isGuest($request)) {
             $widgets = $widgets->reject(fn ($widget) => in_array($widget['type'], ['stat_clients', 'recent_clients'], true));
         }
@@ -712,6 +751,7 @@ class CentroPageController extends Controller
             'numberings' => $section === 'settings' ? DB::table('document_numbering')->orderBy('doc_type')->orderByDesc('year')->get() : [],
             'backupRuns' => $section === 'settings' ? $this->backupRuns() : [],
             'rolePermissionMatrix' => $section === 'settings' ? app(RolePermissionService::class)->matrix() : null,
+            'sectionAvailability' => $section === 'settings' ? app(SectionAvailabilityService::class)->settingsRows() : [],
             'auditFilters' => $section === 'settings' ? $this->auditFilters($request) : null,
             'auditAreas' => $section === 'settings' && Schema::hasTable('audit_logs')
                 ? DB::table('audit_logs')->whereNotNull('area')->distinct()->orderBy('area')->pluck('area') : [],

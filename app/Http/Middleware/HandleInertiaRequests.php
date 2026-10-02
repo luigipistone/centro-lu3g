@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Services\RolePermissionService;
+use App\Services\SectionAvailabilityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -56,6 +57,7 @@ class HandleInertiaRequests extends Middleware
                 ] : null,
             ],
             'notifications' => fn () => $user ? $this->notificationPayload($user->id) : ['active' => 0, 'unread' => 0, 'latest' => []],
+            'sectionVisibility' => fn () => $user ? app(SectionAvailabilityService::class)->statuses() : [],
             'push' => [
                 'vapidPublicKey' => config('services.webpush.public_key'),
             ],

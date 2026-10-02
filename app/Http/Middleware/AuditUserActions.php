@@ -55,6 +55,10 @@ class AuditUserActions
             $subjectId = $request->attributes->get('audit_subject_id')
                 ?: collect($request->route()?->parameters() ?? [])->first(fn ($value, $key) => in_array($key, ['id', 'user', 'project', 'task'], true));
             [$stateBefore, $stateAfter] = $failureType ? [null, null] : $snapshot->changes($before, $snapshot->capture($request));
+            if (! $failureType && $request->attributes->has('audit_state_before')) {
+                $stateBefore = $request->attributes->get('audit_state_before');
+                $stateAfter = $request->attributes->get('audit_state_after');
+            }
             $metadata = ['path' => '/'.ltrim($request->path(), '/')];
             if (Str::startsWith((string) $name, 'users.')) {
                 $metadata += array_filter([

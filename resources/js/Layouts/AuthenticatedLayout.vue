@@ -297,8 +297,18 @@ onUnmounted(() => {
 });
 
 const groups = computed(() => {
+    const sectionForRoute = (name) => ({
+        'clients.index': 'clients', 'projects.index': 'projects', 'tasks.index': 'tasks',
+        'calendar.index': 'calendar', 'documents.index': 'documents', 'passwords.index': 'passwords',
+        'absences.index': 'absences', 'billing.index': 'billing', 'users.index': 'users',
+        'modules.index': 'modules', 'ai-agency.index': 'ai_agency',
+        'updates.social': 'social', 'updates.newsletter': 'newsletter',
+        'updates.seo': 'seo', 'updates.adv': 'adv',
+    })[name];
+    const visible = (name) => page.props.auth?.user?.role === 'superadmin'
+        || page.props.sectionVisibility?.[sectionForRoute(name)] !== false;
     const permitted = (routeName, label, icon, permission = null) => (
-        !permission || can(permission) ? [routeName, label, icon] : null
+        visible(routeName) && (!permission || can(permission)) ? [routeName, label, icon] : null
     );
     const compact = (links) => links.filter(Boolean);
 
@@ -320,12 +330,12 @@ const groups = computed(() => {
         {
             label: 'Aggiornamenti',
             collapsible: true,
-            links: can('updates.view') ? [
-                ['updates.social', 'Social', Megaphone],
-                ['updates.newsletter', 'Newsletter', Mail],
-                ['updates.seo', 'SEO', Search],
-                ['updates.adv', 'ADV', Target],
-            ] : [],
+            links: can('updates.view') ? compact([
+                permitted('updates.social', 'Social', Megaphone),
+                permitted('updates.newsletter', 'Newsletter', Mail),
+                permitted('updates.seo', 'SEO', Search),
+                permitted('updates.adv', 'ADV', Target),
+            ]) : [],
         },
         {
             label: 'Amministrazione',

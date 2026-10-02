@@ -91,6 +91,7 @@ const props = defineProps({
     numberings: Array,
     backupRuns: Array,
     rolePermissionMatrix: Object,
+    sectionAvailability: Array,
     auditLogs: Array,
     auditFilters: Object,
     auditAreas: Array,
@@ -314,7 +315,8 @@ const taskSearchSelectQueries = ref({
     priority: '',
 });
 const taskDescriptionEditor = ref(null);
-const settingsTab = ref(new URLSearchParams(window.location.search).get('tab') === 'log' ? 'log' : 'personalizzazione');
+const settingsTab = ref(['log', 'sezioni'].includes(new URLSearchParams(window.location.search).get('tab')) ? new URLSearchParams(window.location.search).get('tab') : 'personalizzazione');
+const sectionSwitchSaving = ref(null);
 const rolePermissionDraft = ref(JSON.parse(JSON.stringify(props.rolePermissionMatrix?.values || {})));
 const rolePermissionsSaving = ref(false);
 const userRoleFilter = ref('all');
@@ -599,9 +601,18 @@ const settingsTabs = [
     ['figma', 'Figma', PanelsTopLeft],
     ['backup', 'Backup', DatabaseBackup],
     ['ruoli', 'Ruoli', ShieldCheck],
+    ['sezioni', 'Sezioni', PanelsTopLeft],
     ['log', 'Log', FileText],
     ['gestione', 'Gestione', Settings],
 ];
+
+function updateSectionVisibility(section) {
+    sectionSwitchSaving.value = section.key;
+    router.patch(route('settings.sections.update', section.key), { enabled: !section.enabled }, {
+        preserveScroll: true,
+        onFinish: () => { sectionSwitchSaving.value = null; },
+    });
+}
 
 function saveRolePermissions() {
     rolePermissionsSaving.value = true;
@@ -6312,6 +6323,25 @@ function calendarDayStyle(sectionMonth, cell) {
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+                </section>
+
+                <section v-else-if="settingsTab === 'sezioni'" class="app-card">
+                    <h3 class="section-title"><span class="section-icon"><PanelsTopLeft class="h-4 w-4" :stroke-width="1.7" /></span>Disponibilità delle sezioni</h3>
+                    <p class="mt-2 text-sm text-gray-500">Quando disattivi una sezione, gli altri utenti non la vedono e non possono aprirla, neppure con un link diretto. Il Superadmin mantiene l'accesso per completare le modifiche.</p>
+                    <div v-for="group in ['Menu', 'Aggiornamenti', 'Amministrazione']" :key="group" class="mt-6">
+                        <h4 class="mb-2 text-xs font-semibold uppercase text-gray-500">{{ group }}</h4>
+                        <div class="divide-y divide-gray-100 rounded-[var(--radius-sm)] border border-gray-100">
+                            <div v-for="item in (sectionAvailability || []).filter((entry) => entry.group === group)" :key="item.key" class="flex min-h-14 items-center justify-between gap-4 px-4 py-3">
+                                <div class="min-w-0">
+                                    <p class="font-medium text-gray-900">{{ item.label }}</p>
+                                    <p class="text-xs" :class="item.enabled ? 'text-emerald-700' : 'text-amber-700'">{{ item.enabled ? 'Disponibile' : 'Temporaneamente sospesa' }}</p>
+                                </div>
+                                <button type="button" role="switch" :aria-checked="item.enabled" :aria-label="`${item.enabled ? 'Disattiva' : 'Attiva'} ${item.label}`" :disabled="sectionSwitchSaving !== null" :class="['relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50', item.enabled ? 'bg-blue-600' : 'bg-gray-300']" @click="updateSectionVisibility(item)">
+                                    <span :class="['absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform', item.enabled ? 'translate-x-5' : 'translate-x-0']" />
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </section>
 

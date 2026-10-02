@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\AuditUserActions;
 use App\Http\Middleware\EnforceRolePermissions;
+use App\Http\Middleware\EnforceSectionAvailability;
 use App\Http\Middleware\EnsureActiveAccount;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
@@ -21,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
             AuditUserActions::class,
             EnsureActiveAccount::class,
             EnforceRolePermissions::class,
+            EnforceSectionAvailability::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
         ]);
