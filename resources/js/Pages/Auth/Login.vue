@@ -5,7 +5,9 @@ import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
+import { Eye, EyeOff } from '@lucide/vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { ref } from 'vue';
 
 defineProps({
     canResetPassword: {
@@ -21,10 +23,14 @@ const form = useForm({
     password: '',
     remember: false,
 });
+const passwordVisible = ref(false);
 
 const submit = () => {
     form.post(route('login'), {
-        onFinish: () => form.reset('password'),
+        onFinish: () => {
+            form.reset('password');
+            passwordVisible.value = false;
+        },
     });
 };
 </script>
@@ -56,15 +62,27 @@ const submit = () => {
 
             <div class="mt-4">
                 <InputLabel for="password" value="Password" />
-
-                <TextInput
-                    id="password"
-                    type="password"
-                    class="mt-1 block w-full"
-                    v-model="form.password"
-                    required
-                    autocomplete="current-password"
-                />
+                <div class="relative mt-1">
+                    <TextInput
+                        id="password"
+                        :type="passwordVisible ? 'text' : 'password'"
+                        class="block w-full pr-12"
+                        v-model="form.password"
+                        required
+                        autocomplete="current-password"
+                    />
+                    <button
+                        type="button"
+                        class="absolute inset-y-0 right-3 flex items-center text-gray-500 transition hover:text-gray-800 focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--primary-app)/0.5)]"
+                        :aria-label="passwordVisible ? 'Nascondi password' : 'Mostra password'"
+                        :aria-pressed="passwordVisible"
+                        :title="passwordVisible ? 'Nascondi password' : 'Mostra password'"
+                        @click="passwordVisible = !passwordVisible"
+                    >
+                        <EyeOff v-if="passwordVisible" class="h-4 w-4" :stroke-width="1.8" />
+                        <Eye v-else class="h-4 w-4" :stroke-width="1.8" />
+                    </button>
+                </div>
 
                 <InputError class="mt-2" :message="form.errors.password" />
             </div>
