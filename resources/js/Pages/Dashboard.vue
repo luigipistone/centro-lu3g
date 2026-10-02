@@ -641,23 +641,32 @@ const clockDate = computed(() => clockNow.value.toLocaleDateString('it-IT', {
     month: 'long',
 }));
 
+const weatherConditions = [
+    { codes: [0], description: 'Sereno', position: '0% 0%' },
+    { codes: [1], description: 'Prevalentemente sereno', position: '33.333% 0%' },
+    { codes: [2], description: 'Poco nuvoloso', position: '66.667% 0%' },
+    { codes: [3], description: 'Nuvoloso', position: '100% 0%' },
+    { codes: [45, 48], description: 'Nebbia', position: '0% 50%' },
+    { codes: [51, 53, 55], description: 'Pioviggine', position: '33.333% 50%' },
+    { codes: [56, 57], description: 'Pioviggine gelata', position: '66.667% 50%' },
+    { codes: [61, 63, 65], description: 'Pioggia', position: '100% 50%' },
+    { codes: [66, 67], description: 'Pioggia gelata', position: '0% 100%' },
+    { codes: [71, 73, 75, 77, 85, 86], description: 'Neve', position: '33.333% 100%' },
+    { codes: [80, 81, 82], description: 'Rovesci di pioggia', position: '66.667% 100%' },
+    { codes: [95, 96, 97, 99], description: 'Temporale', position: '100% 100%' },
+];
+
+function weatherCondition(code) {
+    return weatherConditions.find((condition) => condition.codes.includes(Number(code)))
+        ?? { description: 'Variabile', position: '66.667% 0%' };
+}
+
 function weatherDescription(code) {
-    if (code === 0) return 'Sereno';
-    if ([1, 2].includes(code)) return 'Poco nuvoloso';
-    if (code === 3) return 'Nuvoloso';
-    if ([45, 48].includes(code)) return 'Nebbia';
-    if ([51, 53, 55, 56, 57].includes(code)) return 'Pioviggine';
-    if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return 'Pioggia';
-    if ([71, 73, 75, 77, 85, 86].includes(code)) return 'Neve';
-    if ([95, 96, 99].includes(code)) return 'Temporale';
-    return 'Variabile';
+    return weatherCondition(code).description;
 }
 
 function weatherBackgroundPosition(code) {
-    if ([71, 73, 75, 77, 85, 86].includes(code)) return '100% 100%';
-    if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code)) return '0% 100%';
-    if ([3, 45, 48].includes(code)) return '100% 0%';
-    return '0% 0%';
+    return weatherCondition(code).position;
 }
 
 async function loadWeather() {
@@ -941,8 +950,8 @@ watch(
                     >
                         <div
                             v-if="metaFor(widget).kind === 'weather' && weatherData"
-                            class="pointer-events-none absolute inset-0 z-0 bg-[length:200%_200%]"
-                            :style="{ backgroundImage: 'url(/images/weather-skies.jpg)', backgroundPosition: weatherBackgroundPosition(weatherData.weather_code) }"
+                            class="pointer-events-none absolute inset-0 z-0"
+                            :style="{ backgroundImage: 'url(/images/weather-conditions-extended.jpg)', backgroundSize: '400% 300%', backgroundPosition: weatherBackgroundPosition(weatherData.weather_code) }"
                             aria-hidden="true"
                         ></div>
                         <div v-if="metaFor(widget).kind === 'weather' && weatherData" class="pointer-events-none absolute inset-0 z-0 bg-black/50" aria-hidden="true"></div>
