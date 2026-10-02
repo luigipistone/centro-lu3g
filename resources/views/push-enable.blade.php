@@ -5,6 +5,9 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
         <meta name="theme-color" content="#0b6ef3">
+        <link rel="icon" href="/favicon.ico" sizes="any">
+        <link rel="icon" href="/brand/logo-gestionale-webapp.svg" type="image/svg+xml">
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png">
         <link rel="manifest" href="/manifest.webmanifest">
         <title>Attiva notifiche - Il Centro</title>
         <style>
