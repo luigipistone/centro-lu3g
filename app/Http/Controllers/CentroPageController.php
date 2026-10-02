@@ -61,8 +61,8 @@ class CentroPageController extends Controller
     public function dashboard(Request $request): Response
     {
         $visibility = app(SectionAvailabilityService::class)->statuses();
-        $isSuperadmin = $this->currentUserRole($request) === 'superadmin';
-        $visible = fn (string $section) => $isSuperadmin || $visibility[$section];
+        $isManager = in_array($this->currentUserRole($request), ['superadmin', 'admin'], true);
+        $visible = fn (string $section) => $isManager || $visibility[$section];
         $guestTaskIds = $this->isGuest($request) ? $this->visibleTaskIdsForUser($request->user()->id) : null;
         $currentWeekStart = now('Europe/Rome')->startOfWeek()->toDateString();
         $currentWeekEnd = now('Europe/Rome')->endOfWeek()->toDateString();
@@ -342,7 +342,7 @@ class CentroPageController extends Controller
     private function availableDashboardWidgetsFor(Request $request): array
     {
         $widgets = collect($this->availableDashboardWidgets());
-        if ($this->currentUserRole($request) !== 'superadmin') {
+        if (! in_array($this->currentUserRole($request), ['superadmin', 'admin'], true)) {
             $visibility = app(SectionAvailabilityService::class)->statuses();
             $types = [
                 'clients' => ['stat_clients', 'recent_clients'],

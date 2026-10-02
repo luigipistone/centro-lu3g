@@ -305,7 +305,7 @@ const groups = computed(() => {
         'updates.social': 'social', 'updates.newsletter': 'newsletter',
         'updates.seo': 'seo', 'updates.adv': 'adv',
     })[name];
-    const visible = (name) => page.props.auth?.user?.role === 'superadmin'
+    const visible = (name) => ['superadmin', 'admin'].includes(page.props.auth?.user?.role)
         || page.props.sectionVisibility?.[sectionForRoute(name)] !== false;
     const permitted = (routeName, label, icon, permission = null) => (
         visible(routeName) && (!permission || can(permission)) ? [routeName, label, icon] : null

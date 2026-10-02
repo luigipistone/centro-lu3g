@@ -23,7 +23,7 @@ class EnforceSectionAvailability
         }
 
         $role = DB::table('user_roles')->where('user_id', $request->user()->id)->value('role');
-        if ($role !== 'superadmin' && ! $this->availability->statuses()[$section]) {
+        if (! in_array($role, ['superadmin', 'admin'], true) && ! $this->availability->statuses()[$section]) {
             abort(503, 'Questa sezione è temporaneamente non disponibile.');
         }
 

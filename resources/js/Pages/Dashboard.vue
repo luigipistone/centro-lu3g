@@ -942,7 +942,7 @@ watch(
                         <div
                             v-if="metaFor(widget).kind === 'weather' && weatherData"
                             class="pointer-events-none absolute inset-0 z-0 bg-[length:200%_200%]"
-                            :style="{ backgroundImage: 'url(/images/weather-conditions.jpg)', backgroundPosition: weatherBackgroundPosition(weatherData.weather_code) }"
+                            :style="{ backgroundImage: 'url(/images/weather-skies.jpg)', backgroundPosition: weatherBackgroundPosition(weatherData.weather_code) }"
                             aria-hidden="true"
                         ></div>
                         <div v-if="metaFor(widget).kind === 'weather' && weatherData" class="pointer-events-none absolute inset-0 z-0 bg-black/50" aria-hidden="true"></div>

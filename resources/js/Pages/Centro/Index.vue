@@ -6328,7 +6328,7 @@ function calendarDayStyle(sectionMonth, cell) {
 
                 <section v-else-if="settingsTab === 'sezioni'" class="app-card">
                     <h3 class="section-title"><span class="section-icon"><PanelsTopLeft class="h-4 w-4" :stroke-width="1.7" /></span>Disponibilità delle sezioni</h3>
-                    <p class="mt-2 text-sm text-gray-500">Quando disattivi una sezione, gli altri utenti non la vedono e non possono aprirla, neppure con un link diretto. Il Superadmin mantiene l'accesso per completare le modifiche.</p>
+                    <p class="mt-2 text-sm text-gray-500">Quando disattivi una sezione, Dipendenti e Clienti non la vedono e non possono aprirla, neppure con un link diretto. Manager e Superadmin mantengono l'accesso per lavorarci.</p>
                     <div v-for="group in ['Menu', 'Aggiornamenti', 'Amministrazione']" :key="group" class="mt-6">
                         <h4 class="mb-2 text-xs font-semibold uppercase text-gray-500">{{ group }}</h4>
                         <div class="divide-y divide-gray-100 rounded-[var(--radius-sm)] border border-gray-100">
