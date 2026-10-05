@@ -51,7 +51,7 @@ class AuditStateSnapshot
                 return ['role' => DB::table('user_roles')->where('user_id', $id)->value('role')];
             }
             $fields = $request->input('section') === 'contract'
-                ? ['employment_status', 'hire_date', 'termination_date']
+                ? ['contract_level', 'employment_status', 'hire_date', 'termination_date']
                 : ['job_title', 'department', 'manager_user_id', 'office', 'weekly_hours', 'part_time', 'part_time_percentage', 'smartworking_day'];
             $row = DB::table('profiles')->where('user_id', $id)->first($fields);
 

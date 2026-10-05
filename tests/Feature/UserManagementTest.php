@@ -210,6 +210,62 @@ class UserManagementTest extends TestCase
         Storage::disk('local')->assertExists('avatars/'.basename($avatarUrl));
     }
 
+    public function test_organization_options_are_superadmin_managed_and_renames_keep_profiles_aligned(): void
+    {
+        $superadmin = User::factory()->create();
+        $manager = User::factory()->create();
+        $employee = User::factory()->create();
+        $this->role($superadmin, 'superadmin');
+        $this->role($manager, 'admin');
+        $this->role($employee, 'editor');
+
+        $this->actingAs($manager)->post(route('settings.organization-options.store'), [
+            'type' => 'department', 'name' => 'Design',
+        ])->assertForbidden();
+        $this->actingAs($superadmin)->post(route('settings.organization-options.store'), [
+            'type' => 'department', 'name' => 'Design',
+        ])->assertSessionHasNoErrors();
+        $id = DB::table('employee_organization_options')->where('name', 'Design')->value('id');
+        DB::table('profiles')->insert([
+            'id' => (string) Str::uuid(), 'user_id' => $employee->id,
+            'full_name' => $employee->name, 'department' => 'Design',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->actingAs($superadmin)->put(route('settings.organization-options.update', $id), [
+            'name' => 'Progettazione',
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('profiles', ['user_id' => $employee->id, 'department' => 'Progettazione']);
+        $this->actingAs($superadmin)->delete(route('settings.organization-options.destroy', $id))
+            ->assertSessionHasErrors('organization_option');
+        $this->assertDatabaseHas('employee_organization_options', ['id' => $id]);
+    }
+
+    public function test_contract_level_requires_explicit_save_and_appears_in_restricted_export(): void
+    {
+        $superadmin = User::factory()->create();
+        $employee = User::factory()->create();
+        $this->role($superadmin, 'superadmin');
+        $this->role($employee, 'editor');
+
+        $this->actingAs($superadmin)->put(route('users.sensitive.update', $employee->id), [
+            'section' => 'contract', 'confirmed' => true,
+            'employee_code' => 'A-42', 'contract_level' => 'CCNL Commercio - 3 livello',
+            'employment_status' => 'active',
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('profiles', [
+            'user_id' => $employee->id, 'contract_level' => 'CCNL Commercio - 3 livello',
+        ]);
+        $this->actingAs($superadmin)->get(route('users.show', $employee->id))
+            ->assertInertia(fn (Assert $page) => $page->where('record.contract_level', 'CCNL Commercio - 3 livello'));
+        $xlsx = $this->actingAs($superadmin)->get(route('users.export', [$employee->id, 'xlsx']));
+        $xlsx->assertOk();
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($xlsx->baseResponse->getFile()->getPathname()) === true);
+        $this->assertStringContainsString('CCNL Commercio - 3 livello', $zip->getFromName('xl/worksheets/sheet1.xml'));
+        $zip->close();
+    }
+
     private function role(User $user, string $role): void
     {
         DB::table('user_roles')->insert([

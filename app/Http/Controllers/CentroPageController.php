@@ -38,6 +38,63 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class CentroPageController extends Controller
 {
+    public function storeOrganizationOption(Request $request): RedirectResponse
+    {
+        $this->ensureSuperadmin($request);
+        $data = $request->validate([
+            'type' => ['required', Rule::in(['department', 'office'])],
+            'name' => ['required', 'string', 'max:255'],
+        ]);
+        $name = trim($data['name']);
+        if (DB::table('employee_organization_options')->where('type', $data['type'])->where('name', $name)->exists()) {
+            throw ValidationException::withMessages(['name' => 'Questa voce esiste già.']);
+        }
+        $id = (string) Str::uuid();
+        DB::table('employee_organization_options')->insert([
+            'id' => $id, 'type' => $data['type'], 'name' => $name,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $request->attributes->set('audit_subject_id', $id);
+
+        return back()->with('status', 'Voce aggiunta.');
+    }
+
+    public function updateOrganizationOption(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureSuperadmin($request);
+        $option = DB::table('employee_organization_options')->where('id', $id)->first();
+        abort_if(! $option, 404);
+        $data = $request->validate(['name' => ['required', 'string', 'max:255']]);
+        $name = trim($data['name']);
+        if (DB::table('employee_organization_options')->where('type', $option->type)->where('name', $name)->where('id', '!=', $id)->exists()) {
+            throw ValidationException::withMessages(['name' => 'Questa voce esiste già.']);
+        }
+        DB::transaction(function () use ($option, $name) {
+            DB::table('employee_organization_options')->where('id', $option->id)->update(['name' => $name, 'updated_at' => now()]);
+            DB::table('profiles')->where($option->type, $option->name)->update([$option->type => $name, 'updated_at' => now()]);
+        });
+        $request->attributes->set('audit_subject_id', $id);
+        $request->attributes->set('audit_state_before', ['name' => $option->name]);
+        $request->attributes->set('audit_state_after', ['name' => $name]);
+
+        return back()->with('status', 'Voce aggiornata anche nei profili collegati.');
+    }
+
+    public function destroyOrganizationOption(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureSuperadmin($request);
+        $option = DB::table('employee_organization_options')->where('id', $id)->first();
+        abort_if(! $option, 404);
+        if (DB::table('profiles')->where($option->type, $option->name)->exists()) {
+            throw ValidationException::withMessages(['organization_option' => 'Questa voce è ancora assegnata a un profilo. Riassegna prima le persone collegate.']);
+        }
+        DB::table('employee_organization_options')->where('id', $id)->delete();
+        $request->attributes->set('audit_subject_id', $id);
+        $request->attributes->set('audit_state_before', ['type' => $option->type, 'name' => $option->name]);
+
+        return back()->with('status', 'Voce rimossa.');
+    }
+
     public function updateSectionAvailability(Request $request, string $key): RedirectResponse
     {
         $this->ensureSuperadmin($request);
@@ -748,6 +805,7 @@ class CentroPageController extends Controller
             'billingStats' => $section === 'billing' ? $this->billingStats() : null,
             'clientStats' => $section === 'clients' ? $this->clientStats() : null,
             'documentSettings' => $section === 'settings' ? DB::table('document_settings')->first() : null,
+            'organizationOptions' => $section === 'settings' ? DB::table('employee_organization_options')->orderBy('name')->get() : [],
             'emailSettings' => $section === 'settings' ? $this->emailSettingsForView() : null,
             'figmaSettings' => $section === 'settings' ? $this->figmaSettingsForView() : null,
             'numberings' => $section === 'settings' ? DB::table('document_numbering')->orderBy('doc_type')->orderByDesc('year')->get() : [],
@@ -2433,7 +2491,7 @@ class CentroPageController extends Controller
                 ->leftJoin('user_roles', 'user_roles.user_id', '=', 'users.id')
                 ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
                 ->where('users.id', $id)
-                ->select('users.*', 'user_roles.role', 'profiles.avatar_url', 'profiles.employee_code', 'profiles.first_name', 'profiles.last_name', 'profiles.fiscal_code', 'profiles.birth_date', 'profiles.birth_place', 'profiles.gender', 'profiles.personal_email', 'profiles.residence_place', 'profiles.job_title', 'profiles.department', 'profiles.manager_user_id', 'profiles.office', 'profiles.employment_status', 'profiles.hire_date', 'profiles.termination_date', 'profiles.weekly_hours', 'profiles.part_time', 'profiles.part_time_percentage', 'profiles.work_schedule', 'profiles.phone', 'profiles.bio', 'profiles.completion_effect', 'profiles.smartworking_day', 'profiles.smartworking_days', 'profiles.smartworking_rules')
+                ->select('users.*', 'user_roles.role', 'profiles.avatar_url', 'profiles.employee_code', 'profiles.first_name', 'profiles.last_name', 'profiles.fiscal_code', 'profiles.birth_date', 'profiles.birth_place', 'profiles.gender', 'profiles.personal_email', 'profiles.residence_place', 'profiles.job_title', 'profiles.contract_level', 'profiles.department', 'profiles.manager_user_id', 'profiles.office', 'profiles.employment_status', 'profiles.hire_date', 'profiles.termination_date', 'profiles.weekly_hours', 'profiles.part_time', 'profiles.part_time_percentage', 'profiles.work_schedule', 'profiles.phone', 'profiles.bio', 'profiles.completion_effect', 'profiles.smartworking_day', 'profiles.smartworking_days', 'profiles.smartworking_rules')
                 ->first(),
             'absences' => DB::table('absence_requests')
                 ->leftJoin('users', 'users.id', '=', 'absence_requests.user_id')
@@ -2454,7 +2512,7 @@ class CentroPageController extends Controller
         if ($section === 'users') {
             $fieldAccess = $this->userProfileFieldAccess($request);
             if (! $fieldAccess['contract_view']) {
-                foreach (['employee_code', 'employment_status', 'hire_date', 'termination_date'] as $field) {
+                foreach (['employee_code', 'contract_level', 'employment_status', 'hire_date', 'termination_date'] as $field) {
                     $record->{$field} = null;
                 }
             }
@@ -2557,6 +2615,7 @@ class CentroPageController extends Controller
             ],
             'users' => [
                 'roleOptions' => ['superadmin', 'admin', 'editor', 'guest'],
+                'organizationOptions' => DB::table('employee_organization_options')->orderBy('name')->get(),
                 'fieldAccess' => $this->userProfileFieldAccess($request),
                 'managerOptions' => $this->userOptions()->where('id', '!=', $id)->values(),
                 'dossierDocuments' => $this->companyDocumentRows($id, false),
@@ -4510,6 +4569,7 @@ class CentroPageController extends Controller
                 ['', ''],
                 ['Dati contrattuali riservati', ''],
                 ['Matricola', $person->employee_code],
+                ['Inquadramento', $person->contract_level],
                 ['Stato del rapporto', $status[$person->employment_status] ?? ''],
                 ['Data di assunzione', $date($person->hire_date)],
                 ['Data di licenziamento', $date($person->termination_date)],
@@ -4648,7 +4708,7 @@ class CentroPageController extends Controller
                 'smartworking_rules' => ['nullable', 'string', 'max:4000'],
             ],
             'contract' => [
-                'employee_code' => ['nullable', 'string', 'max:64'], 'employment_status' => ['required', Rule::in(['active', 'suspended', 'ended'])],
+                'employee_code' => ['nullable', 'string', 'max:64'], 'contract_level' => ['nullable', 'string', 'max:255'], 'employment_status' => ['required', Rule::in(['active', 'suspended', 'ended'])],
                 'hire_date' => ['nullable', 'date'], 'termination_date' => ['nullable', 'date', 'after_or_equal:hire_date'],
             ],
             'security' => [
@@ -4657,6 +4717,13 @@ class CentroPageController extends Controller
             ],
         };
         $payload = $request->validate($rules + ['section' => ['required'], 'confirmed' => ['accepted']]);
+        if ($section === 'operational') {
+            foreach (['department', 'office'] as $field) {
+                if (! empty($payload[$field]) && ! DB::table('employee_organization_options')->where('type', $field)->where('name', $payload[$field])->exists()) {
+                    throw ValidationException::withMessages([$field => 'Seleziona una voce configurata nelle impostazioni.']);
+                }
+            }
+        }
         $profile = (array) (DB::table('profiles')->where('user_id', $id)->first() ?: []);
         $changed = [];
 
@@ -4716,7 +4783,7 @@ class CentroPageController extends Controller
         }
 
         $auditChanges = collect($changed)->only([
-            'role', 'job_title', 'department', 'manager_user_id', 'office', 'weekly_hours',
+            'role', 'job_title', 'contract_level', 'department', 'manager_user_id', 'office', 'weekly_hours',
             'part_time', 'part_time_percentage', 'smartworking_day', 'employment_status',
             'hire_date', 'termination_date',
         ]);

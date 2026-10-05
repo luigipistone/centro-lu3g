@@ -277,6 +277,10 @@ class AdministrationGovernanceTest extends TestCase
         $this->role($manager, 'admin');
         $this->role($employee, 'editor');
         $this->assertTrue(app(RolePermissionService::class)->allows('admin', 'users.profile.operational.update'));
+        DB::table('employee_organization_options')->insert([
+            'id' => (string) Str::uuid(), 'type' => 'department', 'name' => 'Creativo',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
 
         $this->actingAs($manager)->put(route('users.sensitive.update', $employee), [
             'section' => 'operational',

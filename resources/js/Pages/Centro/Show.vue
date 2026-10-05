@@ -809,6 +809,7 @@ const userForm = useForm({
     role: props.record.role || 'guest',
     employee_code: props.record.employee_code || '',
     job_title: props.record.job_title || '',
+    contract_level: props.record.contract_level || '',
     phone: props.record.phone || '',
     bio: props.record.bio || '',
     completion_effect: completionEffectValues.includes(props.record.completion_effect) ? props.record.completion_effect : 'balloons',
@@ -2367,7 +2368,7 @@ function sensitivePayload(section) {
         smartworking_days: userForm.smartworking_days, smartworking_rules: userForm.smartworking_rules,
     };
     if (section === 'contract') return {
-        section, confirmed: true, employee_code: userForm.employee_code,
+        section, confirmed: true, employee_code: userForm.employee_code, contract_level: userForm.contract_level,
         employment_status: userForm.employment_status, hire_date: userForm.hire_date || null,
         termination_date: userForm.termination_date || null,
     };
@@ -5975,13 +5976,14 @@ onUnmounted(() => {
                         <p class="mt-1 text-sm text-gray-500">Le modifiche richiedono conferma e vengono registrate nel log.</p>
                         <div class="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                             <div><label class="block text-sm font-medium text-gray-700">Qualifica</label><input v-model="userForm.job_title" class="form-control" :disabled="!userFieldAccess.operational_update" /></div>
-                            <div><label class="block text-sm font-medium text-gray-700">Reparto</label><input v-model="userForm.department" class="form-control" :disabled="!userFieldAccess.operational_update" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Reparto</label><AppSelect v-model="userForm.department" :disabled="!userFieldAccess.operational_update" :options="[{ value: '', label: 'Nessun reparto' }, ...(related.organizationOptions || []).filter(item => item.type === 'department').map(item => ({ value: item.name, label: item.name }))]" searchable /><div v-if="userForm.errors.department" class="mt-1 text-sm text-red-600">{{ userForm.errors.department }}</div></div>
                             <div><label class="block text-sm font-medium text-gray-700">Responsabile</label><AppSelect v-model="userForm.manager_user_id" :disabled="!userFieldAccess.operational_update" :options="[{ value: '', label: 'Nessuno' }, ...related.managerOptions.map(user => ({ value: user.id, label: user.name }))]" /></div>
-                            <div><label class="block text-sm font-medium text-gray-700">Sede</label><input v-model="userForm.office" class="form-control" :disabled="!userFieldAccess.operational_update" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Sede di lavoro</label><AppSelect v-model="userForm.office" :disabled="!userFieldAccess.operational_update" :options="[{ value: '', label: 'Nessuna sede' }, ...(related.organizationOptions || []).filter(item => item.type === 'office').map(item => ({ value: item.name, label: item.name }))]" searchable /><div v-if="userForm.errors.office" class="mt-1 text-sm text-red-600">{{ userForm.errors.office }}</div></div>
                         </div>
                         <div class="mt-5 flex justify-end"><button v-if="userFieldAccess.operational_update" type="button" class="btn btn-primary" :disabled="!sensitiveChanged('operational')" @click="requestSensitiveSave('operational')">Salva organizzazione</button></div>
                         <div v-if="userFieldAccess.contract_view" class="mt-7 border-t border-gray-100 pt-6"><h4 class="text-sm font-semibold text-gray-900">Dati contrattuali riservati</h4><div class="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                             <div><label class="block text-sm font-medium text-gray-700">Matricola</label><input v-model="userForm.employee_code" class="form-control" :disabled="!userFieldAccess.contract_update" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Inquadramento</label><input v-model="userForm.contract_level" class="form-control" :disabled="!userFieldAccess.contract_update" /></div>
                             <div><label class="block text-sm font-medium text-gray-700">Stato del rapporto</label><AppSelect v-model="userForm.employment_status" :disabled="!userFieldAccess.contract_update" :options="[{ value: 'active', label: 'Attivo' }, { value: 'suspended', label: 'Sospeso' }, { value: 'ended', label: 'Terminato' }]" /></div>
                             <div><label class="block text-sm font-medium text-gray-700">Data di assunzione</label><AppDateInput v-model="userForm.hire_date" :disabled="!userFieldAccess.contract_update" /></div>
                             <div><label class="block text-sm font-medium text-gray-700">Data di licenziamento</label><AppDateInput v-model="userForm.termination_date" :disabled="!userFieldAccess.contract_update" /></div>

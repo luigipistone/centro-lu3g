@@ -87,6 +87,7 @@ const props = defineProps({
     billingStats: Object,
     clientStats: Object,
     documentSettings: Object,
+    organizationOptions: Array,
     emailSettings: Object,
     figmaSettings: Object,
     numberings: Array,
@@ -319,6 +320,48 @@ const taskSearchSelectQueries = ref({
 });
 const taskDescriptionEditor = ref(null);
 const settingsTab = ref(['log', 'sezioni'].includes(new URLSearchParams(window.location.search).get('tab')) ? new URLSearchParams(window.location.search).get('tab') : 'personalizzazione');
+const organizationDrafts = ref({ department: '', office: '' });
+const organizationEditingId = ref(null);
+const organizationEditingName = ref('');
+const organizationError = ref('');
+const organizationSaving = ref(false);
+
+function addOrganizationOption(type) {
+    const name = organizationDrafts.value[type]?.trim();
+    if (!name) return;
+    organizationError.value = '';
+    organizationSaving.value = true;
+    router.post(route('settings.organization-options.store'), { type, name }, {
+        preserveScroll: true,
+        onSuccess: () => { organizationDrafts.value[type] = ''; },
+        onError: errors => { organizationError.value = errors.name || 'Impossibile aggiungere la voce.'; },
+        onFinish: () => { organizationSaving.value = false; },
+    });
+}
+
+function saveOrganizationOption(id) {
+    const name = organizationEditingName.value.trim();
+    if (!name) return;
+    organizationError.value = '';
+    organizationSaving.value = true;
+    router.put(route('settings.organization-options.update', id), { name }, {
+        preserveScroll: true,
+        onSuccess: () => { organizationEditingId.value = null; },
+        onError: errors => { organizationError.value = errors.name || 'Impossibile modificare la voce.'; },
+        onFinish: () => { organizationSaving.value = false; },
+    });
+}
+
+function removeOrganizationOption(item) {
+    if (!window.confirm(`Rimuovere "${item.name}"?`)) return;
+    organizationError.value = '';
+    organizationSaving.value = true;
+    router.delete(route('settings.organization-options.destroy', item.id), {
+        preserveScroll: true,
+        onError: errors => { organizationError.value = errors.organization_option || 'Impossibile rimuovere la voce.'; },
+        onFinish: () => { organizationSaving.value = false; },
+    });
+}
 const sectionSwitchSaving = ref(null);
 const rolePermissionDraft = ref(JSON.parse(JSON.stringify(props.rolePermissionMatrix?.values || {})));
 const rolePermissionsSaving = ref(false);
@@ -6005,6 +6048,31 @@ function calendarDayStyle(sectionMonth, cell) {
                             <input v-model="documentSettingsForm.bank_name" class="form-control mt-0" placeholder="Banca" />
                         </div>
                     </aside>
+                    <div class="grid gap-6 md:grid-cols-2 lg:col-span-2">
+                        <section v-for="group in [{ type: 'office', title: 'Sedi di lavoro', singular: 'sede' }, { type: 'department', title: 'Reparti', singular: 'reparto' }]" :key="group.type" class="app-card">
+                            <h3 class="section-title"><span class="section-icon"><Building2 v-if="group.type === 'office'" class="h-4 w-4" :stroke-width="1.7" /><Users v-else class="h-4 w-4" :stroke-width="1.7" /></span>{{ group.title }}</h3>
+                            <div class="mt-4 space-y-2">
+                                <div v-for="item in (organizationOptions || []).filter(option => option.type === group.type)" :key="item.id" class="flex min-h-10 items-center gap-2 border-b border-gray-100 py-1.5">
+                                    <template v-if="organizationEditingId === item.id">
+                                        <input v-model="organizationEditingName" class="form-control mt-0 min-w-0 flex-1" :aria-label="`Nome ${group.singular}`" @keyup.enter="saveOrganizationOption(item.id)" @keyup.esc="organizationEditingId = null" />
+                                        <button type="button" class="icon-btn" title="Salva" :disabled="organizationSaving" @click="saveOrganizationOption(item.id)"><Check class="h-4 w-4" /></button>
+                                        <button type="button" class="icon-btn" title="Annulla" @click="organizationEditingId = null"><X class="h-4 w-4" /></button>
+                                    </template>
+                                    <template v-else>
+                                        <span class="min-w-0 flex-1 truncate text-sm text-gray-800">{{ item.name }}</span>
+                                        <button type="button" class="icon-btn" :title="`Modifica ${group.singular}`" @click="organizationEditingId = item.id; organizationEditingName = item.name; organizationError = ''"><Pencil class="h-4 w-4" /></button>
+                                        <button type="button" class="icon-btn text-red-600" :title="`Rimuovi ${group.singular}`" :disabled="organizationSaving" @click="removeOrganizationOption(item)"><Trash2 class="h-4 w-4" /></button>
+                                    </template>
+                                </div>
+                                <p v-if="!(organizationOptions || []).some(option => option.type === group.type)" class="text-sm text-gray-500">Nessuna voce configurata.</p>
+                            </div>
+                            <form class="mt-4 flex gap-2" @submit.prevent="addOrganizationOption(group.type)">
+                                <input v-model="organizationDrafts[group.type]" class="form-control mt-0 min-w-0 flex-1" :placeholder="`Nuovo ${group.singular}`" :aria-label="`Nuovo ${group.singular}`" maxlength="255" />
+                                <button type="submit" class="btn btn-primary" :disabled="organizationSaving || !organizationDrafts[group.type]?.trim()"><Plus class="h-4 w-4" />Aggiungi</button>
+                            </form>
+                        </section>
+                        <p v-if="organizationError" class="text-sm text-red-600 md:col-span-2">{{ organizationError }}</p>
+                    </div>
                 </section>
 
                 <section v-else-if="settingsTab === 'fatturazione'" class="space-y-6">
