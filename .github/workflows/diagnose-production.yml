@@ -45,3 +45,27 @@ jobs:
                 tail -n 3000 "$log" | grep -E 'Allowed memory size|memory exhausted' | tail -n 2 | sed -E 's/^\[([^]]+)\].*/memory_event=\1/' || true
               fi
             done
+            cd /var/www/vhosts/lu3g.com/centro.lu3g.com
+            /opt/plesk/php/8.3/bin/php <<'PHP'
+            <?php
+            require 'vendor/autoload.php';
+            $app = require 'bootstrap/app.php';
+            $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+            $viewerId = Illuminate\Support\Facades\DB::table('user_roles')->where('role', 'superadmin')->value('user_id');
+            $viewer = $viewerId ? App\Models\User::find($viewerId) : null;
+            if (! $viewer) { echo "profile_probe=unavailable\n"; exit; }
+            $targetIds = Illuminate\Support\Facades\DB::table('user_roles')->whereIn('role', ['superadmin', 'editor'])->limit(3)->pluck('user_id');
+            foreach ($targetIds as $index => $id) {
+                $request = Illuminate\Http\Request::create('/users/'.$id, 'GET');
+                $request->setUserResolver(fn () => $viewer);
+                $route = app('router')->getRoutes()->match($request);
+                $request->setRouteResolver(fn () => $route);
+                $start = microtime(true);
+                try {
+                    $response = app(App\Http\Controllers\CentroPageController::class)->show($request, $id)->toResponse($request);
+                    echo 'profile_probe='.($index + 1).' status='.$response->getStatusCode().' bytes='.strlen($response->getContent()).' seconds='.round(microtime(true) - $start, 2).' peak_mb='.round(memory_get_peak_usage(true) / 1048576)."\n";
+                } catch (Throwable $error) {
+                    echo 'profile_probe='.($index + 1).' error='.get_class($error)."\n";
+                }
+            }
+            PHP
