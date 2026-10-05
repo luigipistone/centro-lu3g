@@ -4478,6 +4478,11 @@ class CentroPageController extends Controller
         $date = fn ($value) => $value ? Carbon::parse($value)->format('d/m/Y') : '';
         $gender = ['female' => 'Donna', 'male' => 'Uomo', 'other' => 'Altro', 'undisclosed' => 'Non indicato'];
         $status = ['active' => 'Attivo', 'suspended' => 'Sospeso', 'ended' => 'Terminato'];
+        $smartDays = json_decode($person->smartworking_days ?: '[]', true) ?: [];
+        if (! $smartDays && $person->smartworking_day) {
+            $smartDays = [$person->smartworking_day];
+        }
+        $smartDaysLabel = collect($smartDays)->map(fn ($day) => $this->smartworkingDayLabel($day))->implode(', ');
         $rows = [
             ['Dati personali', ''],
             ['Nome e cognome', $person->name],
@@ -4498,7 +4503,7 @@ class CentroPageController extends Controller
             ['Ore settimanali', $person->weekly_hours],
             ['Part-time', $person->part_time ? 'Sì' : 'No'],
             ['Percentuale part-time', $person->part_time_percentage ? $person->part_time_percentage.'%' : ''],
-            ['Giorni smart working', implode(', ', json_decode($person->smartworking_days ?: '[]', true) ?: [])],
+            ['Giorni smart working', $smartDaysLabel],
         ];
         if ($this->userProfileFieldAccess($request)['contract_view']) {
             array_push($rows,
@@ -4568,15 +4573,12 @@ class CentroPageController extends Controller
         $options = new Options;
         $options->set('isRemoteEnabled', false);
         $dompdf = new Dompdf($options);
-        $body = collect($rows)->map(function ($row) {
-            if ($row[0] === '') return '<tr><td colspan="2" class="space"></td></tr>';
-            if (in_array($row[0], ['Dati personali', 'Rapporto di lavoro', 'Dati contrattuali riservati'], true)) {
-                return '<tr><th colspan="2">'.e($row[0]).'</th></tr>';
-            }
-
-            return '<tr><td class="label">'.e($row[0]).'</td><td>'.e((string) ($row[1] ?? '')).'</td></tr>';
-        })->implode('');
-        $html = '<html><head><meta charset="utf-8"><style>body{font-family:DejaVu Sans,sans-serif;color:#243044;font-size:10px;margin:30px}h1{font-size:20px;color:#1767d2;margin:0 0 4px}.meta{color:#6b7585;margin-bottom:22px}table{width:100%;border-collapse:collapse}td,th{padding:8px 10px;border-bottom:1px solid #e1e7ef;text-align:left}th{background:#eaf2ff;color:#184e9e;font-size:11px}.label{width:35%;color:#536176;font-weight:bold}.space{height:14px;border:0}</style></head><body><h1>Scheda persona</h1><div class="meta">'.e($person->name).' · Generata il '.e(now('Europe/Rome')->format('d/m/Y H:i')).'</div><table>'.$body.'</table></body></html>';
+        $html = view('pdf.user-profile', [
+            'person' => $person,
+            'rows' => $rows,
+            'avatar' => $this->userProfilePdfAvatar($person->avatar_url),
+            'generatedAt' => now('Europe/Rome')->format('d/m/Y H:i'),
+        ])->render();
         $dompdf->loadHtml($html, 'UTF-8');
         $dompdf->setPaper('a4');
         $dompdf->render();
@@ -4586,6 +4588,44 @@ class CentroPageController extends Controller
             'Content-Disposition' => 'attachment; filename="'.$fileName.'"',
             'Cache-Control' => 'private, no-store',
         ]);
+    }
+
+    private function userProfilePdfAvatar(?string $avatarUrl): ?string
+    {
+        if (! $avatarUrl || ! str_starts_with($avatarUrl, '/avatars/') || ! function_exists('imagecreatefromstring')) return null;
+
+        $path = 'avatars/'.basename($avatarUrl);
+        $disk = Storage::disk('local');
+        if (! $disk->exists($path)) return null;
+
+        $source = @imagecreatefromstring($disk->get($path));
+        if (! $source) return null;
+
+        $size = 112;
+        $avatar = imagecreatetruecolor($size, $size);
+        imagealphablending($avatar, false);
+        imagesavealpha($avatar, true);
+        $transparent = imagecolorallocatealpha($avatar, 0, 0, 0, 127);
+        imagefill($avatar, 0, 0, $transparent);
+        $width = imagesx($source);
+        $height = imagesy($source);
+        $side = min($width, $height);
+        imagecopyresampled($avatar, $source, 0, 0, (int) (($width - $side) / 2), (int) (($height - $side) / 2), $size, $size, $side, $side);
+        for ($y = 0; $y < $size; $y++) {
+            for ($x = 0; $x < $size; $x++) {
+                if (($x - 55.5) ** 2 + ($y - 55.5) ** 2 > 56 ** 2) {
+                    imagesetpixel($avatar, $x, $y, $transparent);
+                }
+            }
+        }
+
+        ob_start();
+        imagepng($avatar);
+        $png = ob_get_clean();
+        imagedestroy($source);
+        imagedestroy($avatar);
+
+        return 'data:image/png;base64,'.base64_encode($png);
     }
 
     public function updateUserSensitive(Request $request, string $id): RedirectResponse

@@ -144,6 +144,7 @@ class UserManagementTest extends TestCase
 
     public function test_manager_and_superadmin_can_export_a_user_profile_but_employee_cannot(): void
     {
+        Storage::fake('local');
         $superadmin = User::factory()->create();
         $manager = User::factory()->create();
         $employee = User::factory()->create();
@@ -152,10 +153,13 @@ class UserManagementTest extends TestCase
         $this->role($manager, 'admin');
         $this->role($employee, 'editor');
         $this->role($target, 'editor');
+        UploadedFile::fake()->image('avatar.png', 160, 160)->storeAs('avatars', 'export-avatar.png', 'local');
         DB::table('profiles')->insert([
             'id' => (string) Str::uuid(), 'user_id' => $target->id,
             'full_name' => $target->name, 'fiscal_code' => 'VRDGLU90A41F205X',
             'birth_place' => 'Milano', 'residence_place' => 'Monza',
+            'smartworking_days' => json_encode(['monday', 'wednesday']),
+            'avatar_url' => '/avatars/export-avatar.png',
             'created_at' => now(), 'updated_at' => now(),
         ]);
 
@@ -170,6 +174,7 @@ class UserManagementTest extends TestCase
         unlink($path);
         $this->assertStringContainsString('VRDGLU90A41F205X', $sheet);
         $this->assertStringContainsString('Monza', $sheet);
+        $this->assertStringContainsString('Lunedì, Mercoledì', $sheet);
         $this->assertDatabaseHas('audit_logs', [
             'user_id' => $manager->id, 'subject_id' => $target->id,
             'route_name' => 'users.export', 'action' => 'esportazione',
@@ -178,6 +183,7 @@ class UserManagementTest extends TestCase
         $pdf = $this->actingAs($superadmin)->get(route('users.export', [$target->id, 'pdf']));
         $pdf->assertOk()->assertDownload();
         $this->assertStringStartsWith('%PDF', $pdf->getContent());
+        $this->assertStringContainsString('/Subtype /Image', $pdf->getContent());
         $this->actingAs($employee)->get(route('users.export', [$target->id, 'xlsx']))->assertForbidden();
     }
 
