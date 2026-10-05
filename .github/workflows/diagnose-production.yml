@@ -34,4 +34,14 @@ jobs:
                 /production.ERROR|production.CRITICAL|PHP Fatal error/ { application++ }
                 END { printf "memory=%d timeout=%d upstream_closed=%d header=%d database=%d application=%d\n", memory, timeout, closed, header, database, application }
               '
+              if [ "$(basename "$log")" = 'laravel.log' ]; then
+                tail -n 3000 "$log" | awk '
+                  /production.ERROR|production.CRITICAL/ {
+                    day = substr($0, 2, 10)
+                    category = /Allowed memory size|memory exhausted/ ? "memory" : (/SQLSTATE|QueryException/ ? "database" : "other")
+                    print day, category
+                  }
+                ' | tail -n 15
+                tail -n 3000 "$log" | grep -E 'Allowed memory size|memory exhausted' | tail -n 2 | sed -E 's/^\[([^]]+)\].*/memory_event=\1/' || true
+              fi
             done
