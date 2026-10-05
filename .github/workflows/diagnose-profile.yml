@@ -1,0 +1,56 @@
+name: Diagnose profile
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Profile request and gateway logs
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.PLESK_HOST }}
+          username: ${{ secrets.PLESK_USER }}
+          key: ${{ secrets.PLESK_SSH_KEY }}
+          port: 22
+          script: |
+            cd /var/www/vhosts/lu3g.com/centro.lu3g.com
+            php -d memory_limit=512M <<'PHP'
+            <?php
+            require 'vendor/autoload.php';
+            $app = require 'bootstrap/app.php';
+            $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+            $hash = 'e93793f2252afa03f0d6d8fe44defccf26bed5478f9663e340e98492d3a548be';
+            $id = Illuminate\Support\Facades\DB::table('users')->pluck('id')->first(fn ($value) => hash('sha256', $value) === $hash);
+            echo 'target_found=' . ($id ? 'yes' : 'no') . PHP_EOL;
+            if (!$id) exit;
+            $viewerId = Illuminate\Support\Facades\DB::table('user_roles')->where('role', 'superadmin')->value('user_id');
+            $viewer = App\Models\User::find($viewerId);
+            $request = Illuminate\Http\Request::create('/users/' . $id, 'GET');
+            $request->setUserResolver(fn () => $viewer);
+            $route = $app['router']->getRoutes()->match($request);
+            $request->setRouteResolver(fn () => $route);
+            foreach (['summary', 'page'] as $probe) {
+                $start = microtime(true);
+                try {
+                    if ($probe === 'summary') {
+                        $result = $app->make(App\Services\AccountArchiveService::class)->summary($id);
+                        echo 'summary_counts=' . json_encode(array_map(fn ($v) => $v['count'] ?? null, $result)) . PHP_EOL;
+                        echo 'summary_bytes=' . strlen(json_encode($result)) . PHP_EOL;
+                    } else {
+                        $response = $app->make(App\Http\Controllers\CentroPageController::class)->show($request, $id)->toResponse($request);
+                        echo 'page_status=' . $response->getStatusCode() . ' page_bytes=' . strlen($response->getContent()) . PHP_EOL;
+                    }
+                } catch (Throwable $e) {
+                    echo $probe . '_error=' . get_class($e) . PHP_EOL;
+                }
+                echo $probe . '_seconds=' . round(microtime(true) - $start, 3) . ' peak_mb=' . round(memory_get_peak_usage(true) / 1048576, 1) . PHP_EOL;
+            }
+            PHP
+            for log in /var/www/vhosts/lu3g.com/logs/proxy_error_log /var/www/vhosts/lu3g.com/logs/error_log; do
+              if [ -f "$log" ]; then
+                echo "log=$(basename "$log") recent_502_signals=$(tail -n 20000 "$log" | grep -Eci 'upstream prematurely closed|upstream timed out|connect\(\) failed|PHP Fatal|out of memory' || true)"
+                tail -n 20000 "$log" | grep -Ei 'upstream prematurely closed|upstream timed out|connect\(\) failed|PHP Fatal|out of memory' | tail -n 5 | sed -E 's#(/users/)[0-9a-f-]+#\1[redacted]#g' || true
+              fi
+            done
