@@ -114,6 +114,73 @@ class UserManagementTest extends TestCase
         $this->assertNull(DB::table('profiles')->where('user_id', $target->id)->value('job_title'));
     }
 
+    public function test_personal_details_are_saved_and_available_in_the_user_profile(): void
+    {
+        $superadmin = User::factory()->create();
+        $target = User::factory()->create();
+        $this->role($superadmin, 'superadmin');
+        $this->role($target, 'editor');
+
+        $this->actingAs($superadmin)->put(route('users.update', $target->id), [
+            'name' => 'Giulia Verdi', 'email' => 'giulia@example.test',
+            'first_name' => 'Giulia', 'last_name' => 'Verdi',
+            'fiscal_code' => 'vrdglu90a41f205x', 'birth_date' => '1990-01-01',
+            'birth_place' => 'Milano', 'gender' => 'female',
+            'personal_email' => 'giulia.personale@example.test', 'residence_place' => 'Monza',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('profiles', [
+            'user_id' => $target->id, 'fiscal_code' => 'VRDGLU90A41F205X',
+            'birth_date' => '1990-01-01', 'birth_place' => 'Milano',
+            'gender' => 'female', 'personal_email' => 'giulia.personale@example.test',
+            'residence_place' => 'Monza',
+        ]);
+        $this->actingAs($superadmin)->get(route('users.show', $target->id))
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+                ->where('record.fiscal_code', 'VRDGLU90A41F205X')
+                ->where('record.residence_place', 'Monza')
+            );
+    }
+
+    public function test_manager_and_superadmin_can_export_a_user_profile_but_employee_cannot(): void
+    {
+        $superadmin = User::factory()->create();
+        $manager = User::factory()->create();
+        $employee = User::factory()->create();
+        $target = User::factory()->create();
+        $this->role($superadmin, 'superadmin');
+        $this->role($manager, 'admin');
+        $this->role($employee, 'editor');
+        $this->role($target, 'editor');
+        DB::table('profiles')->insert([
+            'id' => (string) Str::uuid(), 'user_id' => $target->id,
+            'full_name' => $target->name, 'fiscal_code' => 'VRDGLU90A41F205X',
+            'birth_place' => 'Milano', 'residence_place' => 'Monza',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $xlsx = $this->actingAs($manager)->get(route('users.export', [$target->id, 'xlsx']));
+        $xlsx->assertOk()->assertDownload();
+        $zip = new \ZipArchive;
+        $path = tempnam(sys_get_temp_dir(), 'test-profile-xlsx-');
+        file_put_contents($path, file_get_contents($xlsx->baseResponse->getFile()->getPathname()));
+        $this->assertTrue($zip->open($path) === true);
+        $sheet = $zip->getFromName('xl/worksheets/sheet1.xml');
+        $zip->close();
+        unlink($path);
+        $this->assertStringContainsString('VRDGLU90A41F205X', $sheet);
+        $this->assertStringContainsString('Monza', $sheet);
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $manager->id, 'subject_id' => $target->id,
+            'route_name' => 'users.export', 'action' => 'esportazione',
+        ]);
+
+        $pdf = $this->actingAs($superadmin)->get(route('users.export', [$target->id, 'pdf']));
+        $pdf->assertOk()->assertDownload();
+        $this->assertStringStartsWith('%PDF', $pdf->getContent());
+        $this->actingAs($employee)->get(route('users.export', [$target->id, 'xlsx']))->assertForbidden();
+    }
+
     public function test_superadmin_can_upload_an_avatar_for_another_user(): void
     {
         Storage::fake('local');

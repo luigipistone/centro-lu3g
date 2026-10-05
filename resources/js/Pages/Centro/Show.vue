@@ -815,6 +815,9 @@ const userForm = useForm({
     smartworking_day: props.record.smartworking_day || 'none',
     first_name: props.record.first_name || String(props.record.name || '').split(' ')[0] || '',
     last_name: props.record.last_name || String(props.record.name || '').split(' ').slice(1).join(' '),
+    fiscal_code: props.record.fiscal_code || '', birth_date: props.record.birth_date || '',
+    birth_place: props.record.birth_place || '', gender: props.record.gender || '',
+    personal_email: props.record.personal_email || '', residence_place: props.record.residence_place || '',
     department: props.record.department || '', manager_user_id: props.record.manager_user_id || '', office: props.record.office || '',
     employment_status: props.record.employment_status || 'active', hire_date: props.record.hire_date || '', termination_date: props.record.termination_date || '',
     weekly_hours: props.record.weekly_hours || 40, part_time: Boolean(props.record.part_time), part_time_percentage: props.record.part_time_percentage || '',
@@ -2349,6 +2352,9 @@ function userPayload() {
         bio: userForm.bio,
         completion_effect: userForm.completion_effect,
         first_name: userForm.first_name, last_name: userForm.last_name,
+        fiscal_code: userForm.fiscal_code, birth_date: userForm.birth_date || null,
+        birth_place: userForm.birth_place, gender: userForm.gender || null,
+        personal_email: userForm.personal_email, residence_place: userForm.residence_place,
     };
 }
 
@@ -5903,6 +5909,10 @@ onUnmounted(() => {
                                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Informazioni profilo</h3>
                                 <p class="mt-1 text-sm text-gray-500">Le modifiche si salvano automaticamente mentre lavori.</p>
                             </div>
+                            <div v-if="isAdmin" class="flex flex-wrap items-center gap-2">
+                                <a :href="route('users.export', [record.id, 'xlsx'])" class="btn btn-outline"><Download class="h-4 w-4" />Excel</a>
+                                <a :href="route('users.export', [record.id, 'pdf'])" class="btn btn-outline"><Download class="h-4 w-4" />PDF</a>
+                            </div>
                             <div
                                 v-if="userAutosaveState !== 'idle'"
                                 :class="[
@@ -5932,6 +5942,12 @@ onUnmounted(() => {
                                 <input v-model="userForm.phone" class="form-control" :disabled="!userFieldAccess.personal_update" />
                                 <div v-if="userForm.errors.phone" class="mt-1 text-sm text-red-600">{{ userForm.errors.phone }}</div>
                             </div>
+                            <div><label class="block text-sm font-medium text-gray-700">Codice fiscale</label><input v-model="userForm.fiscal_code" maxlength="16" class="form-control uppercase" :disabled="!userFieldAccess.personal_update" /><div v-if="userForm.errors.fiscal_code" class="mt-1 text-sm text-red-600">{{ userForm.errors.fiscal_code }}</div></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Data di nascita</label><AppDateInput v-model="userForm.birth_date" :disabled="!userFieldAccess.personal_update" /><div v-if="userForm.errors.birth_date" class="mt-1 text-sm text-red-600">{{ userForm.errors.birth_date }}</div></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Luogo di nascita</label><input v-model="userForm.birth_place" class="form-control" :disabled="!userFieldAccess.personal_update" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Genere</label><AppSelect v-model="userForm.gender" :disabled="!userFieldAccess.personal_update" :options="[{ value: '', label: 'Non indicato' }, { value: 'female', label: 'Donna' }, { value: 'male', label: 'Uomo' }, { value: 'other', label: 'Altro' }, { value: 'undisclosed', label: 'Preferisco non indicarlo' }]" /></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Email personale</label><input v-model="userForm.personal_email" type="email" class="form-control" :disabled="!userFieldAccess.personal_update" /><div v-if="userForm.errors.personal_email" class="mt-1 text-sm text-red-600">{{ userForm.errors.personal_email }}</div></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Luogo di residenza</label><input v-model="userForm.residence_place" class="form-control" :disabled="!userFieldAccess.personal_update" /></div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Animazione completamento</label>
                                 <AppSelect v-model="userForm.completion_effect" :options="completionEffectOptions" :disabled="!userFieldAccess.personal_update" @change="saveUserInline(0)" />

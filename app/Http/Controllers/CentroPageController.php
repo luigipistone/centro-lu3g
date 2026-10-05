@@ -2433,7 +2433,7 @@ class CentroPageController extends Controller
                 ->leftJoin('user_roles', 'user_roles.user_id', '=', 'users.id')
                 ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
                 ->where('users.id', $id)
-                ->select('users.*', 'user_roles.role', 'profiles.avatar_url', 'profiles.employee_code', 'profiles.first_name', 'profiles.last_name', 'profiles.job_title', 'profiles.department', 'profiles.manager_user_id', 'profiles.office', 'profiles.employment_status', 'profiles.hire_date', 'profiles.termination_date', 'profiles.weekly_hours', 'profiles.part_time', 'profiles.part_time_percentage', 'profiles.work_schedule', 'profiles.phone', 'profiles.bio', 'profiles.completion_effect', 'profiles.smartworking_day', 'profiles.smartworking_days', 'profiles.smartworking_rules')
+                ->select('users.*', 'user_roles.role', 'profiles.avatar_url', 'profiles.employee_code', 'profiles.first_name', 'profiles.last_name', 'profiles.fiscal_code', 'profiles.birth_date', 'profiles.birth_place', 'profiles.gender', 'profiles.personal_email', 'profiles.residence_place', 'profiles.job_title', 'profiles.department', 'profiles.manager_user_id', 'profiles.office', 'profiles.employment_status', 'profiles.hire_date', 'profiles.termination_date', 'profiles.weekly_hours', 'profiles.part_time', 'profiles.part_time_percentage', 'profiles.work_schedule', 'profiles.phone', 'profiles.bio', 'profiles.completion_effect', 'profiles.smartworking_day', 'profiles.smartworking_days', 'profiles.smartworking_rules')
                 ->first(),
             'absences' => DB::table('absence_requests')
                 ->leftJoin('users', 'users.id', '=', 'absence_requests.user_id')
@@ -4411,7 +4411,7 @@ class CentroPageController extends Controller
         $this->ensurePermission($request, 'users.profile.personal.update');
 
         $user = User::query()->findOrFail($id);
-        $previousProfile = DB::table('profiles')->where('user_id', $id)->first(['phone', 'bio', 'completion_effect', 'first_name', 'last_name']);
+        $previousProfile = DB::table('profiles')->where('user_id', $id)->first(['id', 'created_at', 'phone', 'bio', 'completion_effect', 'first_name', 'last_name', 'fiscal_code', 'birth_date', 'birth_place', 'gender', 'personal_email', 'residence_place']);
         $payload = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
@@ -4420,7 +4420,14 @@ class CentroPageController extends Controller
             'completion_effect' => ['nullable', Rule::in(['balloons', 'fireworks', 'snow', 'glitch'])],
             'first_name' => ['nullable', 'string', 'max:120'],
             'last_name' => ['nullable', 'string', 'max:120'],
+            'fiscal_code' => ['nullable', 'string', 'max:16'],
+            'birth_date' => ['nullable', 'date', 'before_or_equal:today'],
+            'birth_place' => ['nullable', 'string', 'max:255'],
+            'gender' => ['nullable', Rule::in(['female', 'male', 'other', 'undisclosed'])],
+            'personal_email' => ['nullable', 'email', 'max:255'],
+            'residence_place' => ['nullable', 'string', 'max:255'],
         ]);
+        $payload['fiscal_code'] = isset($payload['fiscal_code']) ? strtoupper(trim($payload['fiscal_code'])) : null;
 
         $user->name = trim(($payload['first_name'] ?? '').' '.($payload['last_name'] ?? '')) ?: $payload['name'];
         $user->email = $payload['email'];
@@ -4429,25 +4436,156 @@ class CentroPageController extends Controller
         DB::table('profiles')->updateOrInsert(
             ['user_id' => $user->id],
             [
-                'id' => (string) str()->uuid(),
+                'id' => $previousProfile->id ?? (string) str()->uuid(),
                 'full_name' => $user->name,
                 'first_name' => ($payload['first_name'] ?? null) ?: null,
                 'last_name' => ($payload['last_name'] ?? null) ?: null,
+                'fiscal_code' => $payload['fiscal_code'],
+                'birth_date' => $payload['birth_date'] ?? null,
+                'birth_place' => $payload['birth_place'] ?? null,
+                'gender' => $payload['gender'] ?? null,
+                'personal_email' => $payload['personal_email'] ?? null,
+                'residence_place' => $payload['residence_place'] ?? null,
                 'phone' => $payload['phone'] ?? null,
                 'bio' => $payload['bio'] ?? null,
                 'completion_effect' => $payload['completion_effect'] ?? 'balloons',
                 'updated_at' => now(),
-                'created_at' => now(),
+                'created_at' => $previousProfile->created_at ?? now(),
             ],
         );
 
-        $profileChanged = collect(['phone', 'bio', 'completion_effect', 'first_name', 'last_name'])
+        $profileChanged = collect(['phone', 'bio', 'completion_effect', 'first_name', 'last_name', 'fiscal_code', 'birth_date', 'birth_place', 'gender', 'personal_email', 'residence_place'])
             ->contains(fn ($field) => ($previousProfile?->$field ?? null) !== ($payload[$field] ?? ($field === 'completion_effect' ? 'balloons' : null)));
         if ($request->user()->id !== $id && ($user->wasChanged(['name', 'email']) || $profileChanged)) {
             $this->notifyUsers([$id], $request->user()->id, 'profile_updated', $request->user()->name.' ha aggiornato i tuoi dati personali.');
         }
 
         return back()->with('status', 'Utente aggiornato.');
+    }
+
+    public function exportUserProfile(Request $request, string $id, string $format)
+    {
+        abort_unless(in_array($this->currentUserRole($request), ['admin', 'superadmin'], true), 403);
+        $this->ensurePermission($request, 'users.view');
+
+        $person = DB::table('users')
+            ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
+            ->leftJoin('users as manager', 'manager.id', '=', 'profiles.manager_user_id')
+            ->where('users.id', $id)
+            ->first(['users.name', 'users.email', 'profiles.*', 'manager.name as manager_name']);
+        abort_if(! $person, 404);
+
+        $date = fn ($value) => $value ? Carbon::parse($value)->format('d/m/Y') : '';
+        $gender = ['female' => 'Donna', 'male' => 'Uomo', 'other' => 'Altro', 'undisclosed' => 'Non indicato'];
+        $status = ['active' => 'Attivo', 'suspended' => 'Sospeso', 'ended' => 'Terminato'];
+        $rows = [
+            ['Dati personali', ''],
+            ['Nome e cognome', $person->name],
+            ['Email aziendale', $person->email],
+            ['Email personale', $person->personal_email],
+            ['Telefono', $person->phone],
+            ['Codice fiscale', $person->fiscal_code],
+            ['Data di nascita', $date($person->birth_date)],
+            ['Luogo di nascita', $person->birth_place],
+            ['Genere', $gender[$person->gender] ?? ''],
+            ['Luogo di residenza', $person->residence_place],
+            ['', ''],
+            ['Rapporto di lavoro', ''],
+            ['Qualifica', $person->job_title],
+            ['Reparto', $person->department],
+            ['Responsabile', $person->manager_name],
+            ['Sede', $person->office],
+            ['Ore settimanali', $person->weekly_hours],
+            ['Part-time', $person->part_time ? 'Sì' : 'No'],
+            ['Percentuale part-time', $person->part_time_percentage ? $person->part_time_percentage.'%' : ''],
+            ['Giorni smart working', implode(', ', json_decode($person->smartworking_days ?: '[]', true) ?: [])],
+        ];
+        if ($this->userProfileFieldAccess($request)['contract_view']) {
+            array_push($rows,
+                ['', ''],
+                ['Dati contrattuali riservati', ''],
+                ['Matricola', $person->employee_code],
+                ['Stato del rapporto', $status[$person->employment_status] ?? ''],
+                ['Data di assunzione', $date($person->hire_date)],
+                ['Data di licenziamento', $date($person->termination_date)],
+            );
+        }
+
+        DB::table('audit_logs')->insert([
+            'id' => (string) Str::uuid(),
+            'user_id' => $request->user()->id,
+            'user_name' => $request->user()->name,
+            'user_role' => $this->currentUserRole($request),
+            'action' => 'esportazione',
+            'area' => 'users',
+            'route_name' => 'users.export',
+            'method' => 'GET',
+            'subject_id' => $id,
+            'status_code' => 200,
+            'permissions_used' => json_encode($request->attributes->get('audit_permissions_used', []), JSON_THROW_ON_ERROR),
+            'metadata' => json_encode(['format' => $format], JSON_THROW_ON_ERROR),
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $fileName = 'scheda-'.Str::slug($person->name ?: 'utente').'-'.now('Europe/Rome')->format('Ymd').'.'.$format;
+        if ($format === 'xlsx') {
+            $path = tempnam(sys_get_temp_dir(), 'centro-profilo-');
+            $zip = new \ZipArchive;
+            if ($zip->open($path, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+                abort(500, 'Impossibile creare il file Excel.');
+            }
+            $sheetRows = [];
+            foreach ($rows as $index => [$label, $value]) {
+                $style = $value === '' && in_array($label, ['Dati personali', 'Rapporto di lavoro', 'Dati contrattuali riservati'], true) ? 1 : 2;
+                $cells = [];
+                foreach ([$label, $value] as $column => $cell) {
+                    $ref = ($column === 0 ? 'A' : 'B').($index + 1);
+                    $cells[] = '<c r="'.$ref.'" t="inlineStr" s="'.($column === 0 ? $style : 0).'"><is><t>'.$this->xmlEscape((string) ($cell ?? '')).'</t></is></c>';
+                }
+                $sheetRows[] = '<row r="'.($index + 1).'">'.implode('', $cells).'</row>';
+            }
+            $sheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                .'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+                .'<cols><col min="1" max="1" width="29" customWidth="1"/><col min="2" max="2" width="42" customWidth="1"/></cols>'
+                .'<sheetData>'.implode('', $sheetRows).'</sheetData></worksheet>';
+            $zip->addFromString('[Content_Types].xml', $this->xlsxContentTypesXml());
+            $zip->addFromString('_rels/.rels', $this->xlsxRootRelsXml());
+            $zip->addFromString('xl/workbook.xml', $this->xlsxWorkbookXml('Scheda persona'));
+            $zip->addFromString('xl/_rels/workbook.xml.rels', $this->xlsxWorkbookRelsXml());
+            $zip->addFromString('xl/styles.xml', $this->xlsxStylesXml());
+            $zip->addFromString('xl/worksheets/sheet1.xml', $sheet);
+            $zip->close();
+
+            return response()->download($path, $fileName, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'Cache-Control' => 'private, no-store',
+            ])->deleteFileAfterSend(true);
+        }
+
+        $options = new Options;
+        $options->set('isRemoteEnabled', false);
+        $dompdf = new Dompdf($options);
+        $body = collect($rows)->map(function ($row) {
+            if ($row[0] === '') return '<tr><td colspan="2" class="space"></td></tr>';
+            if (in_array($row[0], ['Dati personali', 'Rapporto di lavoro', 'Dati contrattuali riservati'], true)) {
+                return '<tr><th colspan="2">'.e($row[0]).'</th></tr>';
+            }
+
+            return '<tr><td class="label">'.e($row[0]).'</td><td>'.e((string) ($row[1] ?? '')).'</td></tr>';
+        })->implode('');
+        $html = '<html><head><meta charset="utf-8"><style>body{font-family:DejaVu Sans,sans-serif;color:#243044;font-size:10px;margin:30px}h1{font-size:20px;color:#1767d2;margin:0 0 4px}.meta{color:#6b7585;margin-bottom:22px}table{width:100%;border-collapse:collapse}td,th{padding:8px 10px;border-bottom:1px solid #e1e7ef;text-align:left}th{background:#eaf2ff;color:#184e9e;font-size:11px}.label{width:35%;color:#536176;font-weight:bold}.space{height:14px;border:0}</style></head><body><h1>Scheda persona</h1><div class="meta">'.e($person->name).' · Generata il '.e(now('Europe/Rome')->format('d/m/Y H:i')).'</div><table>'.$body.'</table></body></html>';
+        $dompdf->loadHtml($html, 'UTF-8');
+        $dompdf->setPaper('a4');
+        $dompdf->render();
+
+        return response($dompdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$fileName.'"',
+            'Cache-Control' => 'private, no-store',
+        ]);
     }
 
     public function updateUserSensitive(Request $request, string $id): RedirectResponse

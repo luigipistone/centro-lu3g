@@ -46,6 +46,30 @@ class ProfileTest extends TestCase
         $this->assertNull($user->email_verified_at);
     }
 
+    public function test_personal_details_can_be_updated_from_own_profile(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->patch('/profile', [
+            'name' => $user->name,
+            'email' => $user->email,
+            'fiscal_code' => 'vrdglu90a41f205x',
+            'birth_date' => '1990-01-01',
+            'birth_place' => 'Milano',
+            'gender' => 'female',
+            'personal_email' => 'personale@example.test',
+            'residence_place' => 'Monza',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('profiles', [
+            'user_id' => $user->id,
+            'fiscal_code' => 'VRDGLU90A41F205X',
+            'birth_date' => '1990-01-01',
+            'personal_email' => 'personale@example.test',
+            'residence_place' => 'Monza',
+        ]);
+    }
+
     public function test_email_verification_status_is_unchanged_when_the_email_address_is_unchanged(): void
     {
         $user = User::factory()->create();

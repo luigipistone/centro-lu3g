@@ -2,6 +2,8 @@
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
+import AppDateInput from '@/Components/AppDateInput.vue';
+import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, onUnmounted, ref, watch } from 'vue';
@@ -36,6 +38,9 @@ const form = useForm({
     last_name: profile.last_name || user.name?.split(' ').slice(1).join(' ') || '',
     email: user.email,
     phone: profile.phone || '',
+    fiscal_code: profile.fiscal_code || '', birth_date: profile.birth_date || '',
+    birth_place: profile.birth_place || '', gender: profile.gender || '',
+    personal_email: profile.personal_email || '', residence_place: profile.residence_place || '',
     completion_effect: currentCompletionEffect,
     notification_preferences: notificationPreferences.map((preference) => ({
         category: preference.category,
@@ -91,6 +96,9 @@ function profilePayload() {
         last_name: form.last_name,
         email: form.email,
         phone: form.phone,
+        fiscal_code: form.fiscal_code, birth_date: form.birth_date || null,
+        birth_place: form.birth_place, gender: form.gender || null,
+        personal_email: form.personal_email, residence_place: form.residence_place,
         completion_effect: form.completion_effect,
         notification_preferences: form.notification_preferences.map((preference) => ({
             category: preference.category,
@@ -225,6 +233,15 @@ onUnmounted(() => {
                 <TextInput id="phone" v-model="form.phone" type="tel" class="mt-1 block w-full" autocomplete="tel" />
                 <InputError class="mt-2" :message="form.errors.phone" />
               </div>
+            </div>
+
+            <div v-if="props.section === 'personal'" class="grid gap-5 md:grid-cols-2">
+              <div><InputLabel for="fiscal_code" value="Codice fiscale" /><TextInput id="fiscal_code" v-model="form.fiscal_code" maxlength="16" class="mt-1 block w-full uppercase" /><InputError class="mt-2" :message="form.errors.fiscal_code" /></div>
+              <div><InputLabel value="Data di nascita" /><AppDateInput v-model="form.birth_date" class="mt-1" /><InputError class="mt-2" :message="form.errors.birth_date" /></div>
+              <div><InputLabel for="birth_place" value="Luogo di nascita" /><TextInput id="birth_place" v-model="form.birth_place" class="mt-1 block w-full" /></div>
+              <div><InputLabel value="Genere" /><AppSelect v-model="form.gender" class="mt-1" :options="[{ value: '', label: 'Non indicato' }, { value: 'female', label: 'Donna' }, { value: 'male', label: 'Uomo' }, { value: 'other', label: 'Altro' }, { value: 'undisclosed', label: 'Preferisco non indicarlo' }]" /></div>
+              <div><InputLabel for="personal_email" value="Email personale" /><TextInput id="personal_email" v-model="form.personal_email" type="email" class="mt-1 block w-full" autocomplete="email" /><InputError class="mt-2" :message="form.errors.personal_email" /></div>
+              <div><InputLabel for="residence_place" value="Luogo di residenza" /><TextInput id="residence_place" v-model="form.residence_place" class="mt-1 block w-full" /></div>
             </div>
 
             <div v-if="props.section === 'personal' && mustVerifyEmail && user.email_verified_at === null">
