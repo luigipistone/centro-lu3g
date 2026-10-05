@@ -6953,8 +6953,18 @@ class CentroPageController extends Controller
 
     private function taskSubtaskRows(string $taskId)
     {
+        return $this->taskSubtaskRowsForParents(collect([$taskId]))->get($taskId, collect());
+    }
+
+    private function taskSubtaskRowsForParents(Collection $parentIds): Collection
+    {
+        $parentIds = $parentIds->filter()->unique()->values();
+        if ($parentIds->isEmpty()) {
+            return collect();
+        }
+
         $subtasks = DB::table('tasks')
-            ->where('parent_task_id', $taskId)
+            ->whereIn('parent_task_id', $parentIds)
             ->orderBy('position')
             ->orderBy('created_at')
             ->get([
@@ -7012,7 +7022,7 @@ class CentroPageController extends Controller
             $subtask->blocked_dependencies_count = ($subtask->dependencies ?? collect())->where('status', '!=', 'done')->count();
 
             return $subtask;
-        });
+        })->groupBy('parent_task_id');
     }
 
     private function hydrateTaskRow(object $task): object
@@ -7510,12 +7520,13 @@ class CentroPageController extends Controller
             ->map(fn ($items) => $items->take(30)->values());
         $activity = $this->taskActivityRows($rows->pluck('id'));
         $dependencies = $this->taskDependencyRows($rows->pluck('id'));
+        $subtasks = $this->taskSubtaskRowsForParents($rows->pluck('id'));
 
-        return $rows->map(function ($row) use ($assignees, $assigneeIds, $followerIds, $comments, $activity, $dependencies) {
+        return $rows->map(function ($row) use ($assignees, $assigneeIds, $followerIds, $comments, $activity, $dependencies, $subtasks) {
             $row->assignees = ($assignees[$row->id] ?? collect())->values();
             $row->assignee_ids = ($assigneeIds[$row->id] ?? collect())->pluck('user_id')->values();
             $row->follower_ids = ($followerIds[$row->id] ?? collect())->pluck('user_id')->values();
-            $row->subtasks = $this->taskSubtaskRows($row->id);
+            $row->subtasks = $subtasks->get($row->id, collect());
             $row->comments = ($comments[$row->id] ?? collect())->values();
             $row->activity = ($activity[$row->id] ?? collect())->values();
             $row->dependencies = ($dependencies[$row->id]['dependencies'] ?? collect())->values();

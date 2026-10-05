@@ -15,6 +15,48 @@ class TaskWorkflowTest extends TestCase
     use ActsAsWorkflowAdmin;
     use RefreshDatabase;
 
+    public function test_project_task_subtasks_load_without_queries_per_task(): void
+    {
+        $user = User::factory()->create();
+        $projectId = $this->project($user);
+        $parents = collect(range(1, 12))->map(fn ($number) => [
+            'id' => (string) Str::uuid(),
+            'title' => "Task {$number}",
+            'project_id' => $projectId,
+            'task_type' => 'project',
+            'status' => 'todo',
+            'priority' => 'medium',
+            'created_by' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('tasks')->insert($parents->all());
+        DB::table('tasks')->insert($parents->map(fn ($parent) => [
+            'id' => (string) Str::uuid(),
+            'parent_task_id' => $parent['id'],
+            'title' => 'Sottoattività',
+            'project_id' => $projectId,
+            'task_type' => 'project',
+            'status' => 'todo',
+            'priority' => 'medium',
+            'created_by' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ])->all());
+
+        DB::enableQueryLog();
+        $response = $this->actingAsWorkflowAdmin($user)->get("/projects/{$projectId}");
+        $queries = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        $response->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->component('Centro/Show')
+            ->has('related.tasks', 12)
+            ->where('related.tasks.0.subtasks.0.title', 'Sottoattività')
+        );
+        $this->assertLessThan(80, count($queries));
+    }
+
     public function test_standard_tasks_require_a_project_but_ongoing_and_meetings_do_not(): void
     {
         $user = User::factory()->create();
