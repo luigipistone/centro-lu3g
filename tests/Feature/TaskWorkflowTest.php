@@ -647,6 +647,19 @@ class TaskWorkflowTest extends TestCase
             'start_date' => '2026-06-20',
             'due_date' => '2026-06-22',
         ]);
+
+        $this->actingAsWorkflowAdmin($user)
+            ->patch("/tasks/{$taskId}/schedule", [
+                'start_date' => '2026-07-01',
+                'due_date' => '2026-07-05',
+            ])
+            ->assertSessionHasErrors('due_date');
+
+        $this->assertDatabaseHas('tasks', [
+            'id' => $taskId,
+            'start_date' => '2026-06-20',
+            'due_date' => '2026-06-22',
+        ]);
     }
 
     public function test_task_dependencies_block_completion_until_dependency_is_done(): void

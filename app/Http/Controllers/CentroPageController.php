@@ -8634,6 +8634,18 @@ class CentroPageController extends Controller
         ]);
         $this->ensureTaskDatesAreWorkingDays($payload);
 
+        $originalDays = $task->start_date && $task->due_date
+            ? Carbon::parse($task->start_date)->diffInDays(Carbon::parse($task->due_date), false)
+            : 0;
+        $movedDays = ! empty($payload['start_date'])
+            ? Carbon::parse($payload['start_date'])->diffInDays(Carbon::parse($payload['due_date']), false)
+            : 0;
+        if ($originalDays !== $movedDays || ($originalDays > 0 && empty($payload['start_date']))) {
+            throw ValidationException::withMessages([
+                'due_date' => 'Lo spostamento deve mantenere la durata originale della task.',
+            ]);
+        }
+
         DB::table('tasks')->where('id', $id)->update([
             'due_date' => $payload['due_date'],
             'start_date' => $payload['start_date'] ?? null,
