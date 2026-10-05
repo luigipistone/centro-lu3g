@@ -5904,14 +5904,10 @@ onUnmounted(() => {
                                 <button type="button" class="btn bg-red-600 text-white hover:bg-red-500" @click="physicalDeleteOpen = true">Elimina definitivamente</button>
                             </div>
                         </section>
-                        <div v-if="userDetailTab === 'personal'" class="mb-5 flex flex-wrap items-center justify-between gap-3">
+                        <div v-if="userDetailTab === 'personal'" class="mb-5 flex flex-wrap items-start justify-between gap-3">
                             <div>
                                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Informazioni profilo</h3>
                                 <p class="mt-1 text-sm text-gray-500">Le modifiche si salvano automaticamente mentre lavori.</p>
-                            </div>
-                            <div v-if="isAdmin" class="flex flex-wrap items-center gap-2">
-                                <a :href="route('users.export', [record.id, 'xlsx'])" class="btn btn-outline"><Download class="h-4 w-4" />Excel</a>
-                                <a :href="route('users.export', [record.id, 'pdf'])" class="btn btn-outline"><Download class="h-4 w-4" />PDF</a>
                             </div>
                             <div
                                 v-if="userAutosaveState !== 'idle'"
@@ -5927,6 +5923,11 @@ onUnmounted(() => {
                                 <span v-else-if="userAutosaveState === 'saved'">Salvato</span>
                                 <span v-else>{{ userAutosaveError || 'Errore salvataggio' }}</span>
                             </div>
+                        </div>
+
+                        <div v-if="userDetailTab === 'personal' && isAdmin" class="mb-5 flex flex-wrap justify-end gap-2">
+                            <a :href="route('users.export', [record.id, 'xlsx'])" class="btn btn-outline"><Download class="h-4 w-4" />Excel</a>
+                            <a :href="route('users.export', [record.id, 'pdf'])" class="btn btn-outline"><Download class="h-4 w-4" />PDF</a>
                         </div>
 
                         <div v-if="userDetailTab === 'personal'" class="grid gap-4 md:grid-cols-2">

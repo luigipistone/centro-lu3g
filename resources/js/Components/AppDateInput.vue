@@ -39,6 +39,7 @@ const open = ref(false);
 const menuStyle = ref({});
 const viewDate = ref(props.modelValue ? new Date(`${props.modelValue}T00:00:00`) : new Date());
 const weekdays = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+const months = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
 const floatingUiCloseEvent = 'centro:close-floating-ui';
 
 const selectedLabel = computed(() => {
@@ -46,8 +47,6 @@ const selectedLabel = computed(() => {
     if (props.label) return props.label;
     return new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(`${props.modelValue}T00:00:00`));
 });
-
-const monthLabel = computed(() => new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' }).format(viewDate.value));
 
 const days = computed(() => {
     const year = viewDate.value.getFullYear();
@@ -97,6 +96,16 @@ function blockedHoliday(value) {
 
 function moveMonth(amount) {
     viewDate.value = new Date(viewDate.value.getFullYear(), viewDate.value.getMonth() + amount, 1);
+}
+
+function setViewMonth(month) {
+    viewDate.value = new Date(viewDate.value.getFullYear(), month, 1);
+}
+
+function setViewYear(value) {
+    const year = Number(value);
+    if (!Number.isInteger(year) || year < 1800 || year > 2100) return;
+    viewDate.value = new Date(year, viewDate.value.getMonth(), 1);
 }
 
 function updateMenuPosition() {
@@ -177,12 +186,15 @@ onUnmounted(() => {
                 :style="menuStyle"
                 @click.stop
             >
-                <div class="mb-3 flex items-center justify-between gap-3">
-                    <button type="button" class="icon-btn h-8 w-8" @click="moveMonth(-1)">
+                <div class="mb-3 flex items-center gap-1.5">
+                    <button type="button" class="icon-btn h-8 w-8 shrink-0" title="Mese precedente" @click="moveMonth(-1)">
                         <ChevronLeft class="h-4 w-4" :stroke-width="1.8" />
                     </button>
-                    <div class="text-sm font-semibold capitalize text-gray-900">{{ monthLabel }}</div>
-                    <button type="button" class="icon-btn h-8 w-8" @click="moveMonth(1)">
+                    <select class="min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-1.5 py-1.5 text-sm font-semibold text-gray-900" aria-label="Mese" :value="viewDate.getMonth()" @change="setViewMonth(Number($event.target.value))">
+                        <option v-for="(month, index) in months" :key="month" :value="index">{{ month }}</option>
+                    </select>
+                    <input type="number" class="w-[72px] rounded-md border border-gray-200 bg-white px-1 py-1.5 text-center text-sm font-semibold text-gray-900" aria-label="Anno" title="Digita l'anno" min="1800" max="2100" :value="viewDate.getFullYear()" @change="setViewYear($event.target.value)" />
+                    <button type="button" class="icon-btn h-8 w-8 shrink-0" title="Mese successivo" @click="moveMonth(1)">
                         <ChevronRight class="h-4 w-4" :stroke-width="1.8" />
                     </button>
                 </div>
