@@ -1,0 +1,37 @@
+name: Diagnose production response
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summarize server errors without request data
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.PLESK_HOST }}
+          username: ${{ secrets.PLESK_USER }}
+          key: ${{ secrets.PLESK_SSH_KEY }}
+          port: 22
+          script: |
+            for log in \
+              /var/www/vhosts/lu3g.com/centro.lu3g.com/storage/logs/laravel.log \
+              /var/www/vhosts/system/centro.lu3g.com/logs/proxy_error_log \
+              /var/www/vhosts/system/centro.lu3g.com/logs/error_log \
+              /var/www/vhosts/system/centro.lu3g.com/logs/php_error.log; do
+              if [ ! -r "$log" ]; then
+                printf 'unavailable: %s\n' "$(basename "$log")"
+                continue
+              fi
+              printf 'log: %s\n' "$(basename "$log")"
+              tail -n 3000 "$log" | awk '
+                /Allowed memory size|memory exhausted|Out of memory/ { memory++ }
+                /Maximum execution time|timed out|timeout|upstream timed out/ { timeout++ }
+                /upstream prematurely closed|connection reset by peer/ { closed++ }
+                /upstream sent too big header/ { header++ }
+                /SQLSTATE|QueryException/ { database++ }
+                /production.ERROR|production.CRITICAL|PHP Fatal error/ { application++ }
+                END { printf "memory=%d timeout=%d upstream_closed=%d header=%d database=%d application=%d\n", memory, timeout, closed, header, database, application }
+              '
+            done
