@@ -31,16 +31,21 @@ jobs:
             $request->setUserResolver(fn () => $viewer);
             $route = $app['router']->getRoutes()->match($request);
             $request->setRouteResolver(fn () => $route);
-            foreach (['summary', 'page'] as $probe) {
+            foreach (['summary', 'page', 'http_kernel'] as $probe) {
                 $start = microtime(true);
                 try {
                     if ($probe === 'summary') {
                         $result = $app->make(App\Services\AccountArchiveService::class)->summary($id);
                         echo 'summary_counts=' . json_encode(array_map(fn ($v) => $v['count'] ?? null, $result)) . PHP_EOL;
                         echo 'summary_bytes=' . strlen(json_encode($result)) . PHP_EOL;
-                    } else {
+                    } elseif ($probe === 'page') {
                         $response = $app->make(App\Http\Controllers\CentroPageController::class)->show($request, $id)->toResponse($request);
                         echo 'page_status=' . $response->getStatusCode() . ' page_bytes=' . strlen($response->getContent()) . PHP_EOL;
+                    } else {
+                        Illuminate\Support\Facades\Auth::guard('web')->setUser($viewer);
+                        $fullRequest = Illuminate\Http\Request::create('/users/' . $id, 'GET', server: ['HTTP_HOST' => 'centro.lu3g.com']);
+                        $response = $app->make(Illuminate\Contracts\Http\Kernel::class)->handle($fullRequest);
+                        echo 'http_kernel_status=' . $response->getStatusCode() . ' http_kernel_bytes=' . strlen($response->getContent()) . PHP_EOL;
                     }
                 } catch (Throwable $e) {
                     echo $probe . '_error=' . get_class($e) . PHP_EOL;
@@ -54,6 +59,17 @@ jobs:
                 tail -n 20000 "$log" | grep -Ei 'upstream prematurely closed|upstream timed out|connect\(\) failed|PHP Fatal|out of memory' | tail -n 5 | sed -E 's#(/users/)[0-9a-f-]+#\1[redacted]#g' || true
               fi
             done
+            if sudo -n true 2>/dev/null; then
+              echo 'sudo_available=yes'
+              for log in /var/www/vhosts/system/centro.lu3g.com/logs/proxy_error_log /var/www/vhosts/system/centro.lu3g.com/logs/error_log; do
+                if sudo -n test -f "$log"; then
+                  echo "subdomain_log=$(basename "$log")"
+                  sudo -n tail -n 20000 "$log" | grep -Ei 'upstream prematurely closed|upstream timed out|connect\(\) failed|PHP Fatal|out of memory' | tail -n 5 | sed -E 's#(/users/)[0-9a-f-]+#\1[redacted]#g' | cut -c 1-300 || true
+                fi
+              done
+            else
+              echo 'sudo_available=no'
+            fi
             echo "ssh_user=$(id -un)"
             for dir in /var/www/vhosts/lu3g.com/logs /var/www/vhosts/system/centro.lu3g.com/logs /var/www/vhosts/centro.lu3g.com/logs; do
               if [ -d "$dir" ]; then
