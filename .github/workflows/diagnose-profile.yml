@@ -21,6 +21,7 @@ jobs:
             require 'vendor/autoload.php';
             $app = require 'bootstrap/app.php';
             $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+            echo 'session_driver=' . config('session.driver') . PHP_EOL;
             $hash = 'e93793f2252afa03f0d6d8fe44defccf26bed5478f9663e340e98492d3a548be';
             $id = Illuminate\Support\Facades\DB::table('users')->pluck('id')->first(fn ($value) => hash('sha256', $value) === $hash);
             echo 'target_found=' . ($id ? 'yes' : 'no') . PHP_EOL;
@@ -46,6 +47,9 @@ jobs:
                         $fullRequest = Illuminate\Http\Request::create('/users/' . $id, 'GET', server: ['HTTP_HOST' => 'centro.lu3g.com']);
                         $response = $app->make(Illuminate\Contracts\Http\Kernel::class)->handle($fullRequest);
                         echo 'http_kernel_status=' . $response->getStatusCode() . ' http_kernel_bytes=' . strlen($response->getContent()) . PHP_EOL;
+                        foreach ($response->headers->all() as $name => $values) {
+                            echo 'header_size_' . $name . '=' . array_sum(array_map('strlen', $values)) . PHP_EOL;
+                        }
                     }
                 } catch (Throwable $e) {
                     echo $probe . '_error=' . get_class($e) . PHP_EOL;
