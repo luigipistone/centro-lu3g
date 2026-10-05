@@ -3590,6 +3590,13 @@ class CentroPageController extends Controller
 
     private function validatedPayload(Request $request, string $section): array
     {
+        if ($section === 'tasks' && $request->filled('project_section_id')) {
+            $sectionProjectId = DB::table('project_sections')->where('id', $request->input('project_section_id'))->value('project_id');
+            if ($sectionProjectId) {
+                $request->merge(['project_id' => $sectionProjectId]);
+            }
+        }
+
         $rules = match ($section) {
             'clients' => [
                 'name' => ['required', 'string', 'max:255'],
@@ -3637,7 +3644,7 @@ class CentroPageController extends Controller
             ],
             'tasks' => [
                 'title' => ['required', 'string', 'max:255'],
-                'project_id' => ['nullable', 'uuid', 'exists:projects,id'],
+                'project_id' => [Rule::requiredIf(fn () => in_array($request->input('task_type'), ['task', 'project'], true)), 'nullable', 'uuid', 'exists:projects,id'],
                 'project_section_id' => ['nullable', 'uuid', 'exists:project_sections,id'],
                 'client_id' => ['nullable', 'uuid', 'exists:clients,id'],
                 'service_id' => ['nullable', 'uuid', 'exists:services,id'],
@@ -3686,7 +3693,9 @@ class CentroPageController extends Controller
             unset($rules['template_id'], $rules['template_start_date']);
         }
 
-        $payload = $request->validate($rules);
+        $payload = $request->validate($rules, $section === 'tasks'
+            ? ['project_id.required' => 'Seleziona un progetto per questa task.']
+            : []);
 
         foreach ($payload as $key => $value) {
             if ($value === '') {
@@ -8138,6 +8147,11 @@ class CentroPageController extends Controller
             'assignee_ids.*' => ['uuid', 'exists:users,id'],
         ]);
         $this->ensureTaskDatesAreWorkingDays($payload);
+        if (in_array($task->task_type, ['task', 'project'], true) && ! $task->project_id) {
+            throw ValidationException::withMessages([
+                'project_id' => 'Associa prima la task madre a un progetto.',
+            ]);
+        }
 
         foreach ($payload as $key => $value) {
             if ($value === '') {
@@ -8533,6 +8547,11 @@ class CentroPageController extends Controller
 
         $task = DB::table('tasks')->where('id', $id)->first();
         abort_if(! $task, 404);
+        if (in_array($task->task_type, ['task', 'project'], true) && ! $task->project_id) {
+            throw ValidationException::withMessages([
+                'project_id' => 'Associa prima questa task a un progetto.',
+            ]);
+        }
 
         $newTaskId = (string) str()->uuid();
 

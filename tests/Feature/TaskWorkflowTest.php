@@ -15,9 +15,73 @@ class TaskWorkflowTest extends TestCase
     use ActsAsWorkflowAdmin;
     use RefreshDatabase;
 
+    public function test_standard_tasks_require_a_project_but_ongoing_and_meetings_do_not(): void
+    {
+        $user = User::factory()->create();
+        $projectId = $this->project($user);
+        $base = ['title' => 'Nuova task', 'status' => 'todo', 'priority' => 'medium'];
+
+        foreach (['task', 'project'] as $type) {
+            $this->actingAsWorkflowAdmin($user)->post('/tasks', [...$base, 'task_type' => $type])
+                ->assertSessionHasErrors('project_id');
+        }
+        $this->assertDatabaseCount('tasks', 0);
+
+        $this->actingAsWorkflowAdmin($user)->post('/tasks', [...$base, 'task_type' => 'project', 'project_id' => $projectId])
+            ->assertSessionHasNoErrors();
+        $taskId = DB::table('tasks')->where('task_type', 'project')->value('id');
+        $this->actingAsWorkflowAdmin($user)->put("/tasks/{$taskId}", [...$base, 'task_type' => 'project', 'project_id' => ''])
+            ->assertSessionHasErrors('project_id');
+        $this->assertDatabaseHas('tasks', ['id' => $taskId, 'project_id' => $projectId]);
+
+        foreach (['ongoing', 'meeting'] as $type) {
+            $this->actingAsWorkflowAdmin($user)->post('/tasks', [...$base, 'title' => $type, 'task_type' => $type])
+                ->assertSessionHasNoErrors();
+            $this->assertDatabaseHas('tasks', ['title' => $type, 'task_type' => $type, 'project_id' => null]);
+        }
+    }
+
+    public function test_task_in_a_project_section_inherits_its_project(): void
+    {
+        $user = User::factory()->create();
+        $projectId = $this->project($user);
+        $sectionId = (string) Str::uuid();
+        DB::table('project_sections')->insert([
+            'id' => $sectionId, 'project_id' => $projectId, 'name' => 'Fase',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->actingAsWorkflowAdmin($user)->post('/tasks', [
+            'title' => 'Task nella fase', 'task_type' => 'project', 'status' => 'todo',
+            'priority' => 'medium', 'project_section_id' => $sectionId,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('tasks', [
+            'title' => 'Task nella fase', 'project_id' => $projectId, 'project_section_id' => $sectionId,
+        ]);
+    }
+
+    public function test_legacy_unlinked_task_cannot_create_new_standard_copies(): void
+    {
+        $user = User::factory()->create();
+        $taskId = (string) Str::uuid();
+        DB::table('tasks')->insert([
+            'id' => $taskId, 'title' => 'Task precedente', 'task_type' => 'project',
+            'status' => 'todo', 'priority' => 'medium', 'created_by' => $user->id,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->actingAsWorkflowAdmin($user)->post("/tasks/{$taskId}/subtasks", ['title' => 'Sottoattivita'])
+            ->assertSessionHasErrors('project_id');
+        $this->actingAsWorkflowAdmin($user)->post("/tasks/{$taskId}/duplicate")
+            ->assertSessionHasErrors('project_id');
+        $this->assertDatabaseCount('tasks', 1);
+    }
+
     public function test_tasks_cannot_be_scheduled_during_a_holiday_range(): void
     {
         $user = User::factory()->create();
+        $projectId = $this->project($user);
         $taskId = (string) Str::uuid();
         DB::table('tasks')->insert([
             'id' => $taskId, 'title' => 'Task esistente', 'priority' => 'medium',
@@ -32,7 +96,7 @@ class TaskWorkflowTest extends TestCase
 
         $this->actingAsWorkflowAdmin($user)->post('/tasks', [
             'title' => 'Nuova task', 'task_type' => 'task', 'status' => 'todo',
-            'priority' => 'medium', 'due_date' => '2026-12-26',
+            'priority' => 'medium', 'due_date' => '2026-12-26', 'project_id' => $projectId,
         ])->assertSessionHasErrors('due_date');
         $this->actingAsWorkflowAdmin($user)->patch("/tasks/{$taskId}/schedule", [
             'start_date' => '2026-12-23', 'due_date' => '2026-12-29',
@@ -127,6 +191,7 @@ class TaskWorkflowTest extends TestCase
     public function test_task_can_be_created_with_assignees_and_followers(): void
     {
         $user = User::factory()->create();
+        $projectId = $this->project($user);
         $assignee = User::factory()->create();
         $follower = User::factory()->create();
 
@@ -135,6 +200,7 @@ class TaskWorkflowTest extends TestCase
             ->post('/tasks', [
                 'title' => 'Preparare piano editoriale',
                 'task_type' => 'project',
+                'project_id' => $projectId,
                 'status' => 'todo',
                 'priority' => 'high',
                 'due_date' => '2026-06-30',
@@ -218,6 +284,7 @@ class TaskWorkflowTest extends TestCase
     public function test_repeated_task_autosaves_coalesce_update_notifications(): void
     {
         $user = User::factory()->create();
+        $projectId = $this->project($user);
         $assignee = User::factory()->create();
         $taskId = (string) Str::uuid();
 
@@ -227,6 +294,7 @@ class TaskWorkflowTest extends TestCase
             'priority' => 'medium',
             'status' => 'todo',
             'task_type' => 'project',
+            'project_id' => $projectId,
             'created_by' => $user->id,
             'created_at' => now(),
             'updated_at' => now(),
@@ -245,6 +313,7 @@ class TaskWorkflowTest extends TestCase
             ->put("/tasks/{$taskId}", [
                 'title' => 'Task notifiche aggiornata',
                 'task_type' => 'project',
+                'project_id' => $projectId,
                 'status' => 'todo',
                 'priority' => 'medium',
                 'recurring_enabled' => false,
@@ -256,6 +325,7 @@ class TaskWorkflowTest extends TestCase
             ->put("/tasks/{$taskId}", [
                 'title' => 'Task notifiche aggiornata',
                 'task_type' => 'project',
+                'project_id' => $projectId,
                 'status' => 'todo',
                 'priority' => 'high',
                 'recurring_enabled' => false,
@@ -372,6 +442,7 @@ class TaskWorkflowTest extends TestCase
     public function test_task_can_be_duplicated_with_people_and_subtasks(): void
     {
         $user = User::factory()->create();
+        $projectId = $this->project($user);
         $assignee = User::factory()->create();
         $taskId = (string) Str::uuid();
         $subtaskId = (string) Str::uuid();
@@ -382,6 +453,7 @@ class TaskWorkflowTest extends TestCase
             'priority' => 'urgent',
             'status' => 'done',
             'task_type' => 'project',
+            'project_id' => $projectId,
             'due_date' => '2026-06-30',
             'created_by' => $user->id,
             'created_at' => now(),
@@ -394,6 +466,7 @@ class TaskWorkflowTest extends TestCase
             'priority' => 'low',
             'status' => 'done',
             'task_type' => 'task',
+            'project_id' => $projectId,
             'parent_task_id' => $taskId,
             'created_by' => $user->id,
             'created_at' => now(),
@@ -434,6 +507,7 @@ class TaskWorkflowTest extends TestCase
     public function test_subtask_can_be_updated_inline_from_parent_detail(): void
     {
         $user = User::factory()->create();
+        $projectId = $this->project($user);
         $parentId = (string) Str::uuid();
         $subtaskId = (string) Str::uuid();
 
@@ -443,6 +517,7 @@ class TaskWorkflowTest extends TestCase
             'priority' => 'medium',
             'status' => 'todo',
             'task_type' => 'project',
+            'project_id' => $projectId,
             'created_by' => $user->id,
             'created_at' => now(),
             'updated_at' => now(),
@@ -454,6 +529,7 @@ class TaskWorkflowTest extends TestCase
             'priority' => 'low',
             'status' => 'todo',
             'task_type' => 'task',
+            'project_id' => $projectId,
             'parent_task_id' => $parentId,
             'created_by' => $user->id,
             'created_at' => now(),
@@ -465,6 +541,7 @@ class TaskWorkflowTest extends TestCase
             ->put("/tasks/{$subtaskId}", [
                 'title' => 'Sottoattivita aggiornata',
                 'task_type' => 'task',
+                'project_id' => $projectId,
                 'status' => 'todo',
                 'priority' => 'high',
                 'due_date' => '2026-07-01',
@@ -693,6 +770,7 @@ class TaskWorkflowTest extends TestCase
     public function test_task_creation_can_create_blocking_dependency(): void
     {
         $user = User::factory()->create();
+        $projectId = $this->project($user);
         $blockedTaskId = (string) Str::uuid();
 
         DB::table('tasks')->insert([
@@ -711,6 +789,7 @@ class TaskWorkflowTest extends TestCase
             ->post('/tasks', [
                 'title' => 'Completare approvazione',
                 'task_type' => 'project',
+                'project_id' => $projectId,
                 'status' => 'todo',
                 'priority' => 'medium',
                 'recurring_enabled' => false,
@@ -727,5 +806,16 @@ class TaskWorkflowTest extends TestCase
             'task_id' => $blockedTaskId,
             'depends_on_task_id' => $createdTaskId,
         ]);
+    }
+
+    private function project(User $user): string
+    {
+        $id = (string) Str::uuid();
+        DB::table('projects')->insert([
+            'id' => $id, 'name' => 'Progetto test', 'created_by' => $user->id,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        return $id;
     }
 }

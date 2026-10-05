@@ -5677,12 +5677,13 @@ onUnmounted(() => {
                                 <AppTimeInput v-model="taskForm.due_time" @change="saveTaskInline(0)" />
                             </div>
                             <div v-if="taskForm.task_type === 'project' || taskForm.task_type === 'task'">
-                                <label class="block text-sm font-medium text-gray-700">Progetto</label>
+                                <label class="block text-sm font-medium text-gray-700">Progetto *</label>
                                 <AppSelect
                                     v-model="taskForm.project_id"
-                                    :options="namedOptions(related.taskProjects, { value: '', label: 'Nessun progetto' })"
+                                    :options="namedOptions(related.taskProjects)"
                                     searchable
                                 />
+                                <div v-if="taskForm.errors.project_id" class="mt-1 text-sm text-red-600">{{ taskForm.errors.project_id }}</div>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Cliente</label>
@@ -6951,8 +6952,8 @@ onUnmounted(() => {
                                     <input v-model="projectTaskDrawerForm.location" class="form-control" placeholder="Sala riunioni o link meeting" />
                                 </div>
                                 <div v-if="projectTaskDrawerForm.task_type === 'project' || projectTaskDrawerForm.task_type === 'task'">
-                                    <label class="block text-sm font-medium text-gray-700">Progetto</label>
-                                    <AppSelect v-model="projectTaskDrawerForm.project_id" :options="namedOptions(related.taskProjects, { value: '', label: 'Nessun progetto' })" searchable @change="saveProjectTaskDrawer(0)" />
+                                    <label class="block text-sm font-medium text-gray-700">Progetto *</label>
+                                    <AppSelect v-model="projectTaskDrawerForm.project_id" :options="namedOptions(related.taskProjects)" searchable @change="saveProjectTaskDrawer(0)" />
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Cliente</label>

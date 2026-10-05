@@ -1024,7 +1024,8 @@ function taskSearchEmptyLabel(field) {
 }
 
 function canClearTaskSearchSelect(field) {
-    return field.name !== 'priority' && !field.required;
+    return field.name !== 'priority' && !field.required
+        && !(field.name === 'project_id' && ['task', 'project'].includes(form.task_type));
 }
 
 function filteredTaskSearchOptions(field) {
@@ -3948,7 +3949,7 @@ function calendarDayStyle(sectionMonth, cell) {
                             v-show="shouldShowField(field)"
                             :class="modalFieldClass(field)"
                         >
-                            <label class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
+                            <label class="block text-sm font-medium text-gray-700">{{ field.label }}<span v-if="section === 'tasks' && field.name === 'project_id' && ['task', 'project'].includes(form.task_type)"> *</span></label>
                             <div v-if="section === 'tasks' && field.name === 'description'" class="mt-1 overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white/90 shadow-inner">
                                 <div class="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50/80 px-2 py-1.5">
                                     <button type="button" class="icon-btn h-8 w-8" title="Grassetto" @click="runTaskEditorCommand('bold')">
@@ -4594,8 +4595,9 @@ function calendarDayStyle(sectionMonth, cell) {
                                     <input v-model="calendarTaskForm.location" class="form-control" placeholder="Sala riunioni o link meeting" @input="saveCalendarTaskInline()" />
                                 </div>
                                 <div v-if="['project', 'task'].includes(calendarTaskForm.task_type)">
-                                    <label class="block text-sm font-medium text-gray-700">Progetto</label>
-                                    <AppSelect v-model="calendarTaskForm.project_id" :options="namedOptions(projects, { value: '', label: 'Nessun progetto' })" searchable @change="saveCalendarTaskInline(0)" />
+                                    <label class="block text-sm font-medium text-gray-700">Progetto *</label>
+                                    <AppSelect v-model="calendarTaskForm.project_id" :options="namedOptions(projects)" searchable @change="saveCalendarTaskInline(0)" />
+                                    <div v-if="calendarTaskForm.errors.project_id" class="mt-1 text-sm text-red-600">{{ calendarTaskForm.errors.project_id }}</div>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Cliente</label>

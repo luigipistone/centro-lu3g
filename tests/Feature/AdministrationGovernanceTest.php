@@ -234,10 +234,15 @@ class AdministrationGovernanceTest extends TestCase
     {
         $employee = User::factory()->create();
         $this->role($employee, 'editor');
+        $projectId = (string) Str::uuid();
+        DB::table('projects')->insert([
+            'id' => $projectId, 'name' => 'Progetto audit', 'created_by' => $employee->id,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
 
         $this->actingAs($employee)->post(route('tasks.store'), [
             'title' => 'Riservato', 'description' => 'Non registrare questo contenuto',
-            'task_type' => 'task', 'status' => 'todo', 'priority' => 'medium',
+            'task_type' => 'task', 'status' => 'todo', 'priority' => 'medium', 'project_id' => $projectId,
         ])->assertRedirect()->assertSessionHasNoErrors();
         $id = DB::table('tasks')->value('id');
         $created = DB::table('audit_logs')->where('route_name', 'tasks.store')->first();
