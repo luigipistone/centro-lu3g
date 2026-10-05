@@ -93,6 +93,16 @@ const hourOptions = computed(() => Array.from({ length: 14 }, (_, index) => {
     const hour = String(index + 7).padStart(2, '0');
     return { value: `${hour}:00`, label: `${hour}:00` };
 }));
+const startHourOptions = computed(() => absenceForm.type === 'permission' ? hourOptions.value.slice(0, -1) : hourOptions.value);
+const endHourOptions = computed(() => absenceForm.type !== 'permission' ? hourOptions.value : hourOptions.value.filter((option) => {
+    const hours = Number(option.value.slice(0, 2)) - Number(absenceForm.start_time?.slice(0, 2));
+    return absenceForm.start_time && hours >= 1 && hours <= 4;
+}));
+watch(() => [absenceForm.type, absenceForm.start_time], () => {
+    if (absenceForm.type === 'permission' && !endHourOptions.value.some((option) => option.value === absenceForm.end_time)) {
+        absenceForm.end_time = '';
+    }
+});
 const supplementText = ref({});
 function submitSupplement(absence) {
     router.patch(route('profile.absences.supplement', absence.id), { notes: supplementText.value[absence.id] || '' }, {
@@ -306,12 +316,12 @@ watch(() => absenceForm.type, () => {
                         </div>
                         <div v-if="absenceNeedsTime">
                             <label class="block text-sm font-medium text-gray-700">Ora inizio</label>
-                            <AppSelect v-model="absenceForm.start_time" :options="hourOptions" placeholder="Seleziona ora" />
+                            <AppSelect v-model="absenceForm.start_time" :options="startHourOptions" placeholder="Seleziona ora" />
                             <div v-if="absenceForm.errors.start_time" class="mt-1 text-sm text-red-600">{{ absenceForm.errors.start_time }}</div>
                         </div>
                         <div v-if="absenceNeedsTime">
                             <label class="block text-sm font-medium text-gray-700">Ora fine</label>
-                            <AppSelect v-model="absenceForm.end_time" :options="hourOptions" placeholder="Seleziona ora" />
+                            <AppSelect v-model="absenceForm.end_time" :options="endHourOptions" placeholder="Seleziona ora" />
                             <div v-if="absenceForm.errors.end_time" class="mt-1 text-sm text-red-600">{{ absenceForm.errors.end_time }}</div>
                         </div>
                         <div v-if="absenceForm.type === 'sickness'">

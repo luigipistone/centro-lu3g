@@ -152,6 +152,7 @@ class ProfileController extends Controller
             'medical_document' => ['nullable', 'required_if:type,sickness', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:8192'],
             'notes' => ['nullable', 'string', 'max:6000'],
         ]);
+        AttendanceService::validatePermissionHours($payload);
         if (in_array($payload['type'], ['vacation', 'sickness', 'smart_working', 'travel', 'recovery'], true)) {
             $payload['start_time'] = null;
             $payload['end_time'] = null;

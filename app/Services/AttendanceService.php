@@ -5,10 +5,32 @@ namespace App\Services;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class AttendanceService
 {
     public const TYPES = ['vacation', 'permission', 'sickness', 'late', 'smart_working', 'other', 'travel', 'recovery'];
+
+    public static function validatePermissionHours(array $payload): void
+    {
+        if (($payload['type'] ?? null) !== 'permission') {
+            return;
+        }
+
+        $start = $payload['start_time'] ?? null;
+        $end = $payload['end_time'] ?? null;
+        if (! $start) {
+            throw ValidationException::withMessages(['start_time' => 'Seleziona l\'ora di inizio del permesso.']);
+        }
+        if (! $end) {
+            throw ValidationException::withMessages(['end_time' => 'Seleziona l\'ora di fine del permesso.']);
+        }
+
+        $hours = (int) substr($end, 0, 2) - (int) substr($start, 0, 2);
+        if ($hours < 1 || $hours > 4) {
+            throw ValidationException::withMessages(['end_time' => 'Il permesso deve durare da 1 a 4 ore.']);
+        }
+    }
 
     private array $profileCache = [];
 

@@ -6894,6 +6894,7 @@ class CentroPageController extends Controller
             'status' => ['required', Rule::in(['pending', 'approved', 'rejected', 'needs_info'])],
             'notes' => ['nullable', 'string', 'max:6000'],
         ]);
+        AttendanceService::validatePermissionHours($payload);
 
         if (in_array($payload['type'], ['vacation', 'sickness', 'smart_working', 'travel', 'recovery'], true)) {
             $payload['start_time'] = null;
