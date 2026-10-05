@@ -16,7 +16,7 @@ jobs:
           port: 22
           script: |
             cd /var/www/vhosts/lu3g.com/centro.lu3g.com
-            php -d memory_limit=512M <<'PHP'
+            /opt/plesk/php/8.3/bin/php -d memory_limit=512M <<'PHP'
             <?php
             require 'vendor/autoload.php';
             $app = require 'bootstrap/app.php';
