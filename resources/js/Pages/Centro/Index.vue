@@ -7,6 +7,7 @@ import AppSelect from '@/Components/AppSelect.vue';
 import AppTimeInput from '@/Components/AppTimeInput.vue';
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
+import { addDays, daysBetween, movedTaskDates } from '@/utils/calendarTaskDates';
 import {
     ROLE_LABELS,
     activityText as formatActivityText,
@@ -3589,18 +3590,6 @@ function toggleTaskDone(task) {
     });
 }
 
-function daysBetween(start, end) {
-    const startDate = new Date(`${start}T00:00:00`);
-    const endDate = new Date(`${end}T00:00:00`);
-    return Math.round((endDate.getTime() - startDate.getTime()) / 86400000);
-}
-
-function addDays(date, days) {
-    const next = new Date(`${date}T00:00:00`);
-    next.setDate(next.getDate() + days);
-    return formatCalendarDate(next.getFullYear(), next.getMonth(), next.getDate());
-}
-
 function startCalendarDrag(task) {
     calendarDraggedTask.value = task;
 }
@@ -3610,16 +3599,27 @@ function endCalendarDrag() {
     calendarDropDate.value = null;
 }
 
-function moveCalendarTask(date) {
-    const task = calendarDraggedTask.value;
-    if (!task || !task.due_date) return;
+function calendarDateAtPointer(event) {
+    const cell = document.elementsFromPoint(event.clientX, event.clientY)
+        .find((element) => element instanceof HTMLElement && element.hasAttribute('data-calendar-date'));
+    return cell?.dataset.calendarDate || null;
+}
 
-    const start = task.start_date && task.start_date <= task.due_date ? task.start_date : task.due_date;
-    const duration = start !== task.due_date ? daysBetween(start, task.due_date) : 0;
-    const payload = {
-        due_date: duration > 0 ? addDays(date, duration) : date,
-        start_date: duration > 0 ? date : null,
-    };
+function hoverCalendarTaskDrop(event) {
+    if (!calendarDraggedTask.value) return;
+    const date = calendarDateAtPointer(event);
+    calendarDropDate.value = date && !calendarHolidays.value[date] ? date : null;
+}
+
+function moveCalendarTask(event) {
+    const date = calendarDateAtPointer(event);
+    const task = calendarDraggedTask.value;
+    if (!task || !task.due_date || !date || calendarHolidays.value[date]) {
+        endCalendarDrag();
+        return;
+    }
+
+    const payload = movedTaskDates(task, date);
 
     if (Object.keys(calendarHolidays.value).some((holiday) => holiday >= date && holiday <= payload.due_date)) {
         endCalendarDrag();
@@ -4292,6 +4292,7 @@ function calendarDayStyle(sectionMonth, cell) {
                             <div
                                 v-for="cell in sectionMonth.cells"
                                 :key="`${sectionMonth.key}-${cell.key}`"
+                                :data-calendar-date="cell.empty ? null : cell.date"
                                 :class="[
                                     'group flex min-h-[170px] flex-col bg-white p-2 transition',
                                     cell.empty ? 'bg-white/70' : '',
@@ -4302,9 +4303,8 @@ function calendarDayStyle(sectionMonth, cell) {
                                     compactWeekend && cell.weekend ? 'min-h-[170px] px-1' : '',
                                 ]"
                                 :style="calendarDayStyle(sectionMonth, cell)"
-                                @dragover.prevent="!cell.empty && !calendarHolidays[cell.date] && (calendarDropDate = cell.date)"
-                                @dragleave="calendarDropDate === cell.date && (calendarDropDate = null)"
-                                @drop.prevent="!cell.empty && !calendarHolidays[cell.date] && moveCalendarTask(cell.date)"
+                                @dragover.prevent="hoverCalendarTaskDrop($event)"
+                                @drop.prevent.stop="moveCalendarTask($event)"
                             >
                                 <template v-if="!cell.empty">
                                     <div class="mb-2 flex items-center justify-between">
