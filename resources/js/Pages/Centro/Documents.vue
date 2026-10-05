@@ -10,6 +10,9 @@ import { computed, nextTick, ref, watch } from 'vue';
 
 const props = defineProps({
     canManage: Boolean,
+    canViewUserOverview: Boolean,
+    canViewMessages: Boolean,
+    canViewGroups: Boolean,
     activeAdminSection: String,
     documents: Array,
     messages: Array,
@@ -462,7 +465,7 @@ function deleteLabel(type) {
                             Tutti i documenti
                             <span class="rounded-full bg-white/20 px-2 py-0.5 text-xs">{{ visibleDocuments.length }}</span>
                         </Link>
-                        <Link
+                        <Link v-if="canViewMessages"
                             :href="route('documents.messages')"
                             :class="['btn', activeAdminSection === 'messages' ? 'btn-primary' : 'btn-outline']"
                         >
@@ -470,7 +473,7 @@ function deleteLabel(type) {
                             Tutti i messaggi
                             <span class="rounded-full bg-white/20 px-2 py-0.5 text-xs">{{ visibleMessages.length }}</span>
                         </Link>
-                        <Link
+                        <Link v-if="canViewGroups"
                             :href="route('documents.groups')"
                             :class="['btn', activeAdminSection === 'groups' ? 'btn-primary' : 'btn-outline']"
                         >
@@ -801,7 +804,7 @@ function deleteLabel(type) {
                     </div>
                 </Teleport>
 
-                <section v-if="!canManage || activeAdminSection === 'messages'" class="space-y-4">
+                <section v-if="!canManage || (canViewMessages && activeAdminSection === 'messages')" class="space-y-4">
                     <div class="flex items-center justify-between gap-4">
                         <div>
                             <h3 class="text-base font-semibold text-gray-900">{{ canManage ? 'Tutti i messaggi' : 'Messaggi da leggere' }}</h3>
@@ -870,7 +873,7 @@ function deleteLabel(type) {
                     </div>
                 </section>
 
-                <section v-if="canManage && activeAdminSection === 'groups'" class="space-y-4">
+                <section v-if="canManage && canViewGroups && activeAdminSection === 'groups'" class="space-y-4">
                     <div class="flex items-center justify-between gap-4">
                         <div>
                             <h3 class="text-base font-semibold text-gray-900">Gruppi documenti</h3>
@@ -895,7 +898,7 @@ function deleteLabel(type) {
                     <div v-else class="surface px-5 py-12 text-center text-sm text-gray-500">Nessun gruppo creato.</div>
                 </section>
 
-                <section v-if="canManage && activeAdminSection === 'documents'" class="surface p-5">
+                <section v-if="canManage && canViewUserOverview && activeAdminSection === 'documents'" class="surface p-5">
                     <div class="mb-4">
                         <div>
                             <h3 class="text-base font-semibold text-gray-900">Documenti per utente</h3>

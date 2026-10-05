@@ -727,10 +727,12 @@ class CentroPageController extends Controller
             'attendanceHolidays' => $section === 'absences' ? DB::table('attendance_holidays')->orderBy('day')->get() : [],
             'taskHolidayRanges' => in_array($section, ['tasks', 'calendar'], true)
                 ? DB::table('attendance_holidays')->get(['day', 'end_day', 'name']) : [],
-            'attendanceEntries' => $section === 'absences' ? $this->attendanceRegistryQuery($request)->limit(10)->get() : [],
-            'attendanceEntryCount' => $section === 'absences' ? $this->attendanceRegistryQuery($request)->count() : 0,
-            'attendanceAvailability' => $section === 'absences' ? app(AttendanceService::class)->availability($request->user()->id, $this->currentUserRole($request) === 'superadmin') : [],
-            'attendanceTeamUsers' => $section === 'absences' ? DB::table('users as u')->join('profiles as p', 'p.user_id', '=', 'u.id')
+            'canViewAbsencePresence' => $section === 'absences' && ($this->currentUserRole($request) !== 'admin' || app(RolePermissionService::class)->allows('admin', 'absences.presence.view')),
+            'canViewAbsenceReports' => $section === 'absences' && ($this->currentUserRole($request) !== 'admin' || app(RolePermissionService::class)->allows('admin', 'absences.reports.view')),
+            'attendanceEntries' => $section === 'absences' && ($this->currentUserRole($request) !== 'admin' || app(RolePermissionService::class)->allows('admin', 'absences.presence.view')) ? $this->attendanceRegistryQuery($request)->limit(10)->get() : [],
+            'attendanceEntryCount' => $section === 'absences' && ($this->currentUserRole($request) !== 'admin' || app(RolePermissionService::class)->allows('admin', 'absences.presence.view')) ? $this->attendanceRegistryQuery($request)->count() : 0,
+            'attendanceAvailability' => $section === 'absences' && ($this->currentUserRole($request) !== 'admin' || app(RolePermissionService::class)->allows('admin', 'absences.presence.view')) ? app(AttendanceService::class)->availability($request->user()->id, $this->currentUserRole($request) === 'superadmin') : [],
+            'attendanceTeamUsers' => $section === 'absences' && ($this->currentUserRole($request) !== 'admin' || app(RolePermissionService::class)->allows('admin', 'absences.presence.view')) ? DB::table('users as u')->join('profiles as p', 'p.user_id', '=', 'u.id')
                 ->when($this->currentUserRole($request) === 'admin', fn ($query) => $query->where('p.manager_user_id', $request->user()->id))
                 ->orderBy('u.name')->get(['u.id', 'u.name', 'u.email', 'p.avatar_url', 'p.smartworking_day']) : [],
             'attendanceReport' => $attendanceReportRequested ? $this->attendanceReportData(
@@ -1255,15 +1257,23 @@ class CentroPageController extends Controller
     public function companyDocuments(Request $request): Response
     {
         $canManage = $this->canManageDocuments($request);
+        $permissions = app(RolePermissionService::class);
+        $role = $this->currentUserRole($request);
+        $canViewUserOverview = $canManage && $permissions->allows($role, 'documents.user_overview.view');
+        $canViewMessages = $permissions->allows($role, 'documents.messages.view');
+        $canViewGroups = $permissions->allows($role, 'documents.groups.view');
         $userId = (string) $request->user()->id;
 
         return Inertia::render('Centro/Documents', [
             'canManage' => $canManage,
+            'canViewUserOverview' => $canViewUserOverview,
+            'canViewMessages' => $canViewMessages,
+            'canViewGroups' => $canViewGroups,
             'activeAdminSection' => $canManage ? ($request->route('documentView') ?: 'documents') : null,
             'documents' => $this->companyDocumentRows($canManage ? null : $userId, $canManage)
                 ->filter(fn ($document) => $this->canAccessCompanyDocument($request, $document))->values(),
-            'messages' => $this->companyMessageRows($canManage ? null : $userId, $canManage),
-            'messageSchedules' => $canManage ? DB::table('company_message_schedules')->orderBy('next_run_at')->get()
+            'messages' => $canManage && ! $canViewMessages ? [] : $this->companyMessageRows($canManage ? null : $userId, $canManage),
+            'messageSchedules' => $canManage && $canViewMessages ? DB::table('company_message_schedules')->orderBy('next_run_at')->get()
                 ->map(function ($schedule) {
                     $schedule->next_run_label = Carbon::parse($schedule->next_run_at, 'Europe/Rome')->format('d/m/Y H:i');
 
@@ -1271,14 +1281,19 @@ class CentroPageController extends Controller
                 }) : [],
             'groups' => $canManage ? $this->documentGroupRows() : [],
             'users' => $canManage ? $this->userOptions() : [],
-            'documentUsers' => $this->currentUserRole($request) === 'superadmin' ? $this->companyDocumentUserRows() : [],
+            'documentUsers' => $canViewUserOverview ? $this->companyDocumentUserRows($request) : [],
             'documentCategories' => $this->companyDocumentCategories(),
         ]);
     }
 
     public function showCompanyDocumentsUser(Request $request, string $userId): Response
     {
-        $this->ensureSuperadmin($request);
+        $this->ensureAdmin($request);
+        $this->ensurePermission($request, 'documents.user_overview.view');
+        abort_unless($this->canManageDocuments($request), 403);
+        if ($this->currentUserRole($request) === 'admin') {
+            abort_unless(DB::table('profiles')->where('user_id', $userId)->where('manager_user_id', $request->user()->id)->exists(), 403);
+        }
 
         $user = DB::table('users')
             ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
@@ -1288,7 +1303,8 @@ class CentroPageController extends Controller
 
         return Inertia::render('Centro/DocumentUserShow', [
             'user' => $user,
-            'documents' => $this->companyDocumentRows($userId, false),
+            'documents' => $this->companyDocumentRows($userId, false)
+                ->filter(fn ($document) => $this->canAccessCompanyDocument($request, $document))->values(),
             'documentCategories' => $this->companyDocumentCategories(),
         ]);
     }
@@ -2942,7 +2958,7 @@ class CentroPageController extends Controller
     public function updateRolePermissions(Request $request): RedirectResponse
     {
         $this->ensureSuperadmin($request);
-        $definitions = collect(RolePermissionService::definitions())->pluck('key');
+        $definitions = collect(RolePermissionService::definitions())->keyBy('key');
         $payload = $request->validate([
             'permissions' => ['required', 'array'],
             'permissions.*' => ['array'],
@@ -2951,10 +2967,10 @@ class CentroPageController extends Controller
 
         DB::transaction(function () use ($payload, $definitions) {
             foreach (RolePermissionService::ROLES as $role) {
-                foreach ($definitions as $permission) {
+                foreach ($definitions as $permission => $definition) {
                     $query = DB::table('role_permissions')->where('role', $role)->where('permission', $permission);
                     $values = [
-                        'allowed' => $role === 'superadmin' || (bool) ($payload['permissions'][$role][$permission] ?? false),
+                        'allowed' => $role === 'superadmin' || ((! ($definition['managerOnly'] ?? false) || $role === 'admin') && (bool) ($payload['permissions'][$role][$permission] ?? false)),
                         'updated_at' => now(),
                     ];
                     if ($query->exists()) {
@@ -6715,10 +6731,17 @@ class CentroPageController extends Controller
         });
     }
 
-    private function companyDocumentUserRows()
+    private function companyDocumentUserRows(Request $request)
     {
-        return $this->userOptions()->map(function ($user) {
-            $documents = $this->companyDocumentRows($user->id, false);
+        $users = $this->userOptions();
+        if ($this->currentUserRole($request) === 'admin') {
+            $teamIds = DB::table('profiles')->where('manager_user_id', $request->user()->id)->pluck('user_id');
+            $users = $users->whereIn('id', $teamIds);
+        }
+
+        return $users->values()->map(function ($user) use ($request) {
+            $documents = $this->companyDocumentRows($user->id, false)
+                ->filter(fn ($document) => $this->canAccessCompanyDocument($request, $document));
             $user->documents_count = $documents->count();
             $user->read_count = $documents->filter(fn ($document) => filled($document->user_read_at))->count();
             $user->unread_count = max(0, $user->documents_count - $user->read_count);

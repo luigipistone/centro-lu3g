@@ -101,6 +101,8 @@ const props = defineProps({
     attendanceEntries: Array,
     attendanceEntryCount: Number,
     attendanceAvailability: Array,
+    canViewAbsencePresence: Boolean,
+    canViewAbsenceReports: Boolean,
     attendanceTeamUsers: Array,
     attendanceReport: Object,
     attendanceTeams: Array,
@@ -5198,7 +5200,7 @@ function calendarDayStyle(sectionMonth, cell) {
         <div v-else-if="section === 'absences'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <div class="surface flex flex-wrap gap-2 p-2">
-                    <button v-for="tab in [{ value: 'overview', label: 'Richieste', icon: CalendarX2 }, { value: 'presence', label: 'Disponibilità e presenze', icon: CalendarDays }, { value: 'reports', label: 'Report e dati', icon: FileText }, ...(isSuperadmin ? [{ value: 'rules', label: 'Regole', icon: Settings }] : [])]" :key="tab.value" type="button" :class="['settings-tab inline-flex items-center gap-2', absenceWorkspaceTab === tab.value ? 'settings-tab-active' : '']" :aria-current="absenceWorkspaceTab === tab.value ? 'page' : undefined" @click="absenceWorkspaceTab = tab.value"><component :is="tab.icon" class="h-4 w-4 shrink-0" :stroke-width="1.7" />{{ tab.label }}</button>
+                    <button v-for="tab in [{ value: 'overview', label: 'Richieste', icon: CalendarX2 }, ...(canViewAbsencePresence ? [{ value: 'presence', label: 'Disponibilità e presenze', icon: CalendarDays }] : []), ...(canViewAbsenceReports ? [{ value: 'reports', label: 'Report e dati', icon: FileText }] : []), ...(isSuperadmin ? [{ value: 'rules', label: 'Regole', icon: Settings }] : [])]" :key="tab.value" type="button" :class="['settings-tab inline-flex items-center gap-2', absenceWorkspaceTab === tab.value ? 'settings-tab-active' : '']" :aria-current="absenceWorkspaceTab === tab.value ? 'page' : undefined" @click="absenceWorkspaceTab = tab.value"><component :is="tab.icon" class="h-4 w-4 shrink-0" :stroke-width="1.7" />{{ tab.label }}</button>
                 </div>
                 <template v-if="absenceWorkspaceTab === 'overview'">
                 <div class="grid gap-6 lg:grid-cols-2">
@@ -5368,7 +5370,7 @@ function calendarDayStyle(sectionMonth, cell) {
                     </div>
                 </section>
                 </template>
-                <template v-if="absenceWorkspaceTab === 'presence'">
+                <template v-if="canViewAbsencePresence && absenceWorkspaceTab === 'presence'">
                     <section class="surface p-5">
                         <div class="flex flex-wrap items-center justify-between gap-3">
                             <div><h3 class="text-base font-semibold text-gray-900">Disponibilità del team</h3><p class="mt-0.5 text-sm text-gray-500">{{ attendanceWeekLabel }}</p></div>
@@ -5415,7 +5417,7 @@ function calendarDayStyle(sectionMonth, cell) {
                     </section>
                 </template>
                 <AttendanceReport
-                    v-if="absenceWorkspaceTab === 'reports'"
+                    v-if="canViewAbsenceReports && absenceWorkspaceTab === 'reports'"
                     :report="attendanceReport"
                     :users="isSuperadmin ? users : attendanceTeamUsers"
                     :teams="attendanceTeams"
@@ -6316,7 +6318,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                             type="checkbox"
                                             class="h-4 w-4 rounded border-gray-300 text-[hsl(var(--primary-app))] focus:ring-[hsl(var(--primary-app)/0.25)]"
                                             :checked="rolePermissionChecked(role, permission.key)"
-                                            :disabled="role === 'superadmin'"
+                                            :disabled="role === 'superadmin' || (permission.managerOnly && role !== 'admin')"
                                             @change="setRolePermission(role, permission.key, $event.target.checked)"
                                         />
                                     </td>

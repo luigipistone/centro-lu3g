@@ -17,9 +17,26 @@ class EnforceRolePermissions
             $role = (string) (DB::table('user_roles')->where('user_id', $request->user()->id)->value('role') ?: 'guest');
             $request->attributes->set('audit_permissions_used', [$permission]);
             abort_unless(app(RolePermissionService::class)->allows($role, $permission), 403);
+            if ($role === 'admin' && ($viewPermission = $this->managerViewPermission($request))) {
+                $request->attributes->set('audit_permissions_used', [$permission, $viewPermission]);
+                abort_unless(app(RolePermissionService::class)->allows($role, $viewPermission), 403);
+            }
         }
 
         return $next($request);
+    }
+
+    private function managerViewPermission(Request $request): ?string
+    {
+        $name = (string) ($request->route()?->getName() ?? '');
+
+        if ($name === 'documents.users.show') return 'documents.user_overview.view';
+        if ($name === 'documents.messages' || in_array($name, ['document-messages.store', 'document-messages.destroy'], true) || Str::startsWith($name, 'document-messages.schedules.')) return 'documents.messages.view';
+        if ($name === 'documents.groups' || Str::startsWith($name, 'document-groups.')) return 'documents.groups.view';
+        if (in_array($name, ['absences.reports.export', 'documents.reports', 'documents.reports.export'], true) || ($name === 'absences.index' && $request->query('tab') === 'reports')) return 'absences.reports.view';
+        if (in_array($name, ['attendance.registry', 'attendance.registry.export'], true)) return 'absences.presence.view';
+
+        return null;
     }
 
     private function permissionFor(Request $request): ?string

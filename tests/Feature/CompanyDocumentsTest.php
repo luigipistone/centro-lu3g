@@ -17,6 +17,32 @@ class CompanyDocumentsTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_manager_document_subsections_follow_individual_permissions(): void
+    {
+        $manager = User::factory()->create();
+        $this->role($manager, 'admin');
+
+        foreach (['documents.view', 'documents.manage'] as $permission) {
+            DB::table('role_permissions')->where('role', 'admin')->where('permission', $permission)->update(['allowed' => true]);
+        }
+
+        $this->actingAs($manager)->get(route('documents.list'))->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('canViewUserOverview', false)
+                ->where('canViewMessages', true)
+                ->where('canViewGroups', true));
+
+        DB::table('role_permissions')->where('role', 'admin')->where('permission', 'documents.messages.view')->update(['allowed' => false]);
+        DB::table('role_permissions')->where('role', 'admin')->where('permission', 'documents.groups.view')->update(['allowed' => false]);
+
+        $this->actingAs($manager)->get(route('documents.messages'))->assertForbidden();
+        $this->actingAs($manager)->get(route('documents.groups'))->assertForbidden();
+        $this->actingAs($manager)->get(route('documents.list'))->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('canViewMessages', false)
+                ->where('canViewGroups', false));
+    }
+
     public function test_admin_can_publish_document_for_user_and_user_can_mark_it_read(): void
     {
         Storage::fake('local');
