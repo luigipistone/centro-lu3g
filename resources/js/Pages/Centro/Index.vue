@@ -2621,6 +2621,32 @@ function buildCalendarGrid(year, month) {
     cells.forEach((cell, index) => {
         cell.weekIndex = Math.floor(index / 7);
     });
+    for (let week = 0; week < Math.ceil(cells.length / 7); week += 1) {
+        const weekCells = cells.filter((cell) => !cell.empty && cell.weekIndex === week);
+        const spanningTasks = [...new Map(weekCells.flatMap((cell) => cell.tasks)
+            .filter(isMultiDayTask).map((task) => [task.id, task])).values()]
+            .sort((a, b) => taskDateRange(a).start.localeCompare(taskDateRange(b).start)
+                || taskDateRange(a).end.localeCompare(taskDateRange(b).end)
+                || String(a.id).localeCompare(String(b.id)));
+        const laneEnds = [];
+        const taskLanes = new Map();
+        for (const task of spanningTasks) {
+            const { start, end } = taskDateRange(task);
+            let lane = laneEnds.findIndex((lastEnd) => lastEnd < start);
+            if (lane === -1) lane = laneEnds.length;
+            laneEnds[lane] = end;
+            taskLanes.set(task.id, lane);
+        }
+        for (const cell of weekCells) {
+            const activeSpans = cell.tasks.filter(isMultiDayTask);
+            const highestLane = Math.max(-1, ...activeSpans.map((task) => taskLanes.get(task.id)));
+            const slots = Array.from({ length: highestLane + 1 }, (_, lane) =>
+                activeSpans.find((task) => taskLanes.get(task.id) === lane)
+                || { id: `empty-lane-${cell.date}-${lane}`, placeholder: true });
+            cell.taskSlots = [...slots, ...cell.tasks.filter((task) => !isMultiDayTask(task))];
+            cell.spanningSlotCount = slots.length;
+        }
+    }
     return cells;
 }
 
@@ -3591,7 +3617,12 @@ function toggleTaskDone(task) {
 }
 
 function startCalendarDrag(task) {
-    calendarDraggedTask.value = task;
+    const original = calendarRowsWithOverrides().find((row) => row.id === task.id) || task;
+    calendarDraggedTask.value = {
+        id: original.id,
+        start_date: original.start_date,
+        due_date: original.due_date,
+    };
 }
 
 function endCalendarDrag() {
@@ -3753,12 +3784,15 @@ function collapseCalendarDay(date) {
 }
 
 function hiddenCalendarTaskCount(cell) {
-    return Math.max(0, (cell?.tasks?.length || 0) - 2);
+    const slots = cell.taskSlots || cell.tasks;
+    const shown = slots.slice(0, Math.max(2, cell.spanningSlotCount || 0));
+    return Math.max(0, cell.tasks.length - shown.filter((task) => !task.placeholder).length);
 }
 
 function visibleCalendarTasks(cell) {
-    if (isCalendarDayExpanded(cell.date)) return cell.tasks;
-    return cell.tasks.slice(0, 2);
+    const slots = cell.taskSlots || cell.tasks;
+    if (isCalendarDayExpanded(cell.date)) return slots;
+    return slots.slice(0, Math.max(2, cell.spanningSlotCount || 0));
 }
 
 function calendarWeekVisibleTaskCount(sectionMonth, cell) {
@@ -3780,7 +3814,7 @@ function calendarDayStyle(sectionMonth, cell) {
 
     const visibleCount = calendarWeekVisibleTaskCount(sectionMonth, cell);
     return {
-        minHeight: `${170 + Math.max(0, visibleCount - 2) * 54}px`,
+        minHeight: `${200 + Math.max(0, visibleCount - 2) * 54}px`,
     };
 }
 </script>
@@ -4307,6 +4341,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                 @drop.prevent.stop="moveCalendarTask($event)"
                             >
                                 <template v-if="!cell.empty">
+                                    <div :class="compactWeekend && cell.weekend ? '' : 'min-h-[84px]'">
                                     <div class="mb-2 flex items-center justify-between">
                                         <span class="flex min-w-0 items-center gap-1.5" :title="calendarHolidays[cell.date] || undefined">
                                             <span :class="['text-sm font-semibold', cell.today ? 'text-indigo-600' : 'text-gray-500']">{{ cell.day }}</span>
@@ -4363,6 +4398,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                         </span>
                                         <span v-if="calendarAttendanceForDay(cell.date).length > (compactWeekend && cell.weekend ? 2 : 4)" class="text-[10px] text-gray-500">+{{ calendarAttendanceForDay(cell.date).length - (compactWeekend && cell.weekend ? 2 : 4) }}</span>
                                     </div>
+                                    </div>
 
                                     <div v-if="compactWeekend && cell.weekend" class="flex flex-wrap justify-center gap-1 pt-1">
                                         <button
@@ -4376,11 +4412,12 @@ function calendarDayStyle(sectionMonth, cell) {
                                     </div>
 
                                     <div v-else class="flex flex-1 flex-col space-y-1.5">
+                                        <template v-for="task in visibleCalendarTasks(cell)" :key="task.id">
+                                        <div v-if="task.placeholder" class="h-[47px] shrink-0" aria-hidden="true" />
                                         <div
-                                            v-for="task in visibleCalendarTasks(cell)"
-                                            :key="task.id"
+                                            v-else
                                             :class="[
-                                                'group/task relative cursor-grab overflow-hidden border px-2 py-1.5 text-xs shadow-[inset_0_1px_0_rgba(255,255,255,0.68)] backdrop-blur-xl transition hover:border-indigo-300 hover:shadow-md active:cursor-grabbing',
+                                                'group/task relative h-[47px] shrink-0 cursor-grab overflow-hidden border px-2 py-1.5 text-xs shadow-[inset_0_1px_0_rgba(255,255,255,0.68)] backdrop-blur-xl transition hover:border-indigo-300 hover:shadow-md active:cursor-grabbing',
                                                 taskTypeClass(task.task_type),
                                                 taskSpanClass(task),
                                                 calendarTaskRenderClass(cell, task),
@@ -4435,6 +4472,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                                 </div>
                                             </div>
                                         </div>
+                                        </template>
                                         <button
                                             v-if="hiddenCalendarTaskCount(cell) && !isCalendarDayExpanded(cell.date)"
                                             type="button"
