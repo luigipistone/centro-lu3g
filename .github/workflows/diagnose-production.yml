@@ -17,9 +17,9 @@ jobs:
           script: |
             for log in \
               /var/www/vhosts/lu3g.com/centro.lu3g.com/storage/logs/laravel.log \
-              /var/www/vhosts/system/centro.lu3g.com/logs/proxy_error_log \
-              /var/www/vhosts/system/centro.lu3g.com/logs/error_log \
-              /var/www/vhosts/system/centro.lu3g.com/logs/php_error.log; do
+              /var/www/vhosts/lu3g.com/logs/proxy_error_log \
+              /var/www/vhosts/lu3g.com/logs/error_log \
+              /var/www/vhosts/lu3g.com/logs/php_error.log; do
               if [ ! -r "$log" ]; then
                 printf 'unavailable: %s\n' "$(basename "$log")"
                 continue
@@ -43,6 +43,18 @@ jobs:
                   }
                 ' | tail -n 15
                 tail -n 3000 "$log" | grep -E 'Allowed memory size|memory exhausted' | tail -n 2 | sed -E 's/^\[([^]]+)\].*/memory_event=\1/' || true
+              fi
+            done
+            for log in /var/www/vhosts/lu3g.com/logs/proxy_access_ssl_log /var/www/vhosts/lu3g.com/logs/proxy_access_log; do
+              if [ -r "$log" ]; then
+                tail -n 5000 "$log" | awk '
+                  /" (502|504) / {
+                    total++
+                    if ($0 ~ /\/users\//) users++
+                    if ($0 ~ /\/tasks\//) tasks++
+                  }
+                  END { printf "bad_gateway_total=%d users=%d tasks=%d\n", total, users, tasks }
+                '
               fi
             done
             cd /var/www/vhosts/lu3g.com/centro.lu3g.com
