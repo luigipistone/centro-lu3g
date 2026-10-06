@@ -2,10 +2,11 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import AppDateInput from '@/Components/AppDateInput.vue';
+import DocumentPdfDropzone from '@/Components/DocumentPdfDropzone.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { dateIt } from '@/utils/formatters';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { Bold, Check, FileText, Heading3, Italic, Link2, List, ListOrdered, MessageSquare, Pause, Play, Plus, Quote, Send, Trash2, Underline, Upload, Users, X } from '@lucide/vue';
+import { Bold, Check, FileText, Heading3, Italic, Link2, List, ListOrdered, MessageSquare, Pause, Play, Plus, Quote, Send, Trash2, Underline, Users, X } from '@lucide/vue';
 import { computed, nextTick, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -186,6 +187,10 @@ function closeCreateModal() {
 function submitDocument() {
     if (!documentReview.value) {
         updateDocumentDescriptionFromEditor();
+        if (!documentForm.file) {
+            documentForm.setError('file', 'Seleziona un PDF prima di continuare.');
+            return;
+        }
         if (!documentForm.audience || !documentRecipientNames.value.length || (sensitiveDocument.value && documentRecipientNames.value.length !== 1)) {
             documentForm.setError('audience', 'Seleziona i destinatari prima di continuare.');
             return;
@@ -565,15 +570,7 @@ function deleteLabel(type) {
                             </div>
                             <div class="md:col-span-2">
                                 <label class="block text-sm font-medium text-gray-700">PDF</label>
-                                <label class="mt-2 flex cursor-pointer items-center justify-between gap-3 rounded-[var(--radius)] border border-dashed border-gray-200 bg-white/70 px-4 py-4 text-sm font-semibold text-gray-600 transition hover:border-[hsl(var(--primary-app))] hover:text-[hsl(var(--primary-app))]">
-                                    <span class="flex items-center gap-2">
-                                        <Upload class="h-4 w-4" :stroke-width="1.7" />
-                                        {{ documentForm.file?.name || 'Seleziona documento PDF' }}
-                                    </span>
-                                    <span class="text-xs text-gray-400">max 20 MB</span>
-                                    <input type="file" accept="application/pdf,.pdf" class="hidden" @change="documentForm.file = $event.target.files[0]" />
-                                </label>
-                                <div v-if="documentForm.errors.file" class="mt-1 text-sm text-red-600">{{ documentForm.errors.file }}</div>
+                                <DocumentPdfDropzone v-model="documentForm.file" :error="documentForm.errors.file" @update:model-value="documentForm.clearErrors('file')" />
                             </div>
                         </div>
 

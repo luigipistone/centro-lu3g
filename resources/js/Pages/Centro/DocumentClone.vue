@@ -1,9 +1,10 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppSelect from '@/Components/AppSelect.vue';
+import DocumentPdfDropzone from '@/Components/DocumentPdfDropzone.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ChevronLeft, FileText, Plus, Upload, Users } from '@lucide/vue';
+import { ChevronLeft, FileText, Plus, Users } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -132,12 +133,7 @@ function submit() {
                             </div>
                             <div class="md:col-span-2">
                                 <span class="block text-sm font-medium text-gray-700">PDF</span>
-                                <label class="mt-2 flex cursor-pointer items-center justify-between gap-3 rounded-[var(--radius)] border border-dashed border-gray-200 bg-white/70 px-4 py-4 text-sm font-semibold text-gray-600 transition hover:border-[hsl(var(--primary-app))] hover:text-[hsl(var(--primary-app))]">
-                                    <span class="flex min-w-0 items-center gap-2"><Upload class="h-4 w-4 shrink-0" :stroke-width="1.7" /><span class="truncate">{{ form.file?.name || 'Seleziona documento PDF' }}</span></span>
-                                    <span class="shrink-0 text-xs text-gray-400">max 20 MB</span>
-                                    <input type="file" accept="application/pdf,.pdf" class="hidden" @change="form.file = $event.target.files?.[0] || null" />
-                                </label>
-                                <p v-if="form.errors.file" class="mt-1 text-sm text-red-600">{{ form.errors.file }}</p>
+                                <DocumentPdfDropzone v-model="form.file" :error="form.errors.file" @update:model-value="form.clearErrors('file')" />
                             </div>
                         </div>
 
