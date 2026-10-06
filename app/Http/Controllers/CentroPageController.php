@@ -1536,6 +1536,10 @@ class CentroPageController extends Controller
         return Inertia::render('Centro/DocumentShow', [
             'canManage' => $canManage,
             'document' => $this->companyDocumentRow($document, $isRecipient ? $userId : null),
+            'versions' => $canManage ? DB::table('company_document_versions as versions')
+                ->leftJoin('users', 'users.id', '=', 'versions.changed_by')
+                ->where('versions.company_document_id', $id)->orderByDesc('versions.version')
+                ->get(['versions.id', 'versions.version', 'versions.file_name', 'versions.created_at', 'users.name as changed_by_name']) : [],
             'readers' => $canManage ? $this->companyDocumentReaderRows($id) : [],
             'managerAccess' => $this->currentUserRole($request) === 'superadmin'
                 ? DB::table('company_document_manager_access')->where('company_document_id', $id)->pluck('user_id') : [],
@@ -1575,6 +1579,98 @@ class CentroPageController extends Controller
         }
 
         return back()->with('status', 'Categoria documento aggiornata.');
+    }
+
+    public function updateCompanyDocument(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        $document = DB::table('company_documents')->where('id', $id)->first();
+        abort_if(! $document, 404);
+        abort_unless($this->canAccessCompanyDocument($request, $document), 403);
+
+        $payload = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:5000'],
+            'category' => ['required', Rule::in(array_keys($this->companyDocumentCategories()))],
+            'document_year' => ['required', 'integer', 'min:2000', 'max:2100'],
+            'file' => ['nullable', 'file', 'mimes:pdf', 'max:20480'],
+        ]);
+        if ($this->isSensitiveCompanyDocument($document->category, $document->audience) ||
+            $this->isSensitiveCompanyDocument($payload['category'], $document->audience)) {
+            $this->ensureSuperadmin($request);
+        }
+        if ($this->isSensitiveCompanyDocumentCategory($payload['category']) &&
+            ($document->audience !== 'users' || $this->companyDocumentRecipientIds($id)->count() !== 1)) {
+            return back()->withErrors(['category' => 'Il documento deve avere un solo destinatario per questa categoria.']);
+        }
+
+        $newFile = $payload['file'] ?? null;
+        $newPath = $newFile?->store('company-documents', 'local');
+        if ($newPath) {
+            Storage::disk('local')->setVisibility($newPath, 'private');
+        }
+
+        try {
+            DB::transaction(function () use ($document, $payload, $request, $newFile, $newPath, $id) {
+                $version = (int) DB::table('company_document_versions')->where('company_document_id', $id)->max('version') + 1;
+                DB::table('company_document_versions')->insert([
+                    'id' => (string) Str::uuid(), 'company_document_id' => $id, 'version' => $version,
+                    'title' => $document->title, 'description' => $document->description,
+                    'category' => $document->category ?: 'documenti_vari', 'document_year' => $document->document_year ?: Carbon::parse($document->created_at)->year,
+                    'file_path' => $document->file_path, 'file_name' => $document->file_name,
+                    'file_mime' => $document->file_mime, 'file_size' => $document->file_size,
+                    'changed_by' => $request->user()->id, 'created_at' => now(),
+                ]);
+                DB::table('company_documents')->where('id', $id)->update([
+                    'title' => $payload['title'], 'description' => $payload['description'] ?? null,
+                    'category' => $payload['category'], 'document_year' => $payload['document_year'],
+                    'file_path' => $newPath ?: $document->file_path,
+                    'file_name' => $newFile?->getClientOriginalName() ?: $document->file_name,
+                    'file_mime' => $newFile?->getMimeType() ?: $document->file_mime,
+                    'file_size' => $newFile?->getSize() ?: $document->file_size,
+                    'updated_at' => now(),
+                ]);
+                if ($newFile) {
+                    DB::table('company_document_reads')->where('company_document_id', $id)
+                        ->update(['opened_at' => null, 'read_at' => null, 'updated_at' => now()]);
+                }
+            });
+        } catch (\Throwable $exception) {
+            if ($newPath) {
+                Storage::disk('local')->delete($newPath);
+            }
+            throw $exception;
+        }
+
+        $request->attributes->set('audit_subject_id', $id);
+        $request->attributes->set('audit_state_before', ['title' => $document->title, 'category' => $document->category, 'document_year' => $document->document_year, 'file_name' => $document->file_name]);
+        $request->attributes->set('audit_state_after', ['title' => $payload['title'], 'category' => $payload['category'], 'document_year' => $payload['document_year'], 'file_name' => $newFile?->getClientOriginalName() ?: $document->file_name]);
+        $this->notifyUsers($this->companyDocumentRecipientIds($id), $request->user()->id, 'company_document_updated',
+            'Il documento "'.$payload['title'].'" è stato aggiornato'.($newFile ? ' con un nuovo PDF.' : '.'), null, $id);
+
+        return back()->with('status', 'Documento aggiornato.');
+    }
+
+    public function viewCompanyDocumentVersionFile(Request $request, string $id, string $versionId)
+    {
+        $document = DB::table('company_documents')->where('id', $id)->first();
+        abort_if(! $document, 404);
+        abort_unless($this->canManageDocuments($request) && $this->canAccessCompanyDocument($request, $document), 403);
+        if ($this->isSensitiveCompanyDocument($document->category, $document->audience)) {
+            $this->ensureSuperadmin($request);
+        }
+        $version = DB::table('company_document_versions')->where('company_document_id', $id)->where('id', $versionId)->first();
+        abort_if(! $version || ! Storage::disk('local')->exists($version->file_path), 404);
+        if ($this->isSensitiveCompanyDocument($version->category, $document->audience)) {
+            $this->ensureSuperadmin($request);
+        }
+
+        $request->attributes->set('audit_subject_id', $id);
+
+        return response()->file(Storage::disk('local')->path($version->file_path), [
+            'Content-Type' => $version->file_mime ?: 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$version->file_name.'"',
+        ]);
     }
 
     public function viewCompanyDocumentFile(Request $request, string $id)
@@ -1673,7 +1769,8 @@ class CentroPageController extends Controller
 
         $recipients = $this->companyDocumentRecipientIds($id);
 
-        Storage::disk('local')->delete($document->file_path);
+        $paths = DB::table('company_document_versions')->where('company_document_id', $id)->pluck('file_path')->push($document->file_path)->unique();
+        Storage::disk('local')->delete($paths->all());
         DB::table('company_documents')->where('id', $id)->delete();
         $this->notifyUsers($recipients, $request->user()->id, 'company_document_removed', 'Un documento a te destinato è stato rimosso.');
 

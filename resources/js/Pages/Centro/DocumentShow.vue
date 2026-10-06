@@ -3,8 +3,8 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { dateIt, dateTimeIt } from '@/utils/formatters';
-import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { Check, ChevronLeft, FileText, X } from '@lucide/vue';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
+import { Check, ChevronLeft, FileText, Pencil, Save, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 const props = defineProps({
@@ -12,15 +12,22 @@ const props = defineProps({
     document: Object,
     readers: Array,
     documentCategories: Object,
+    versions: Array,
     managerAccess: Array,
     managerOptions: Array,
     isSuperadmin: Boolean,
 });
 
 const page = usePage();
-const selectedCategory = ref(props.document.category || 'documenti_vari');
-const savingCategory = ref(false);
 const selectedManager = ref('');
+const editing = ref(false);
+const editForm = useForm({
+    title: props.document.title || '',
+    description: props.document.description || '',
+    category: props.document.category || 'documenti_vari',
+    document_year: props.document.document_year,
+    file: null,
+});
 const availableManagers = computed(() => (props.managerOptions || []).filter((user) => !(props.managerAccess || []).includes(user.id)).map((user) => ({ value: user.id, label: user.name })));
 
 const documentCategoryOptions = computed(() => Object.entries(props.documentCategories || {}).map(([value, label]) => ({ value, label })));
@@ -45,18 +52,6 @@ function markRead() {
     });
 }
 
-function updateCategory(value) {
-    selectedCategory.value = value;
-    savingCategory.value = true;
-
-    router.patch(route('documents.category.update', props.document.id), { category: value }, {
-        preserveScroll: true,
-        onFinish: () => {
-            savingCategory.value = false;
-        },
-    });
-}
-
 function grantManagerAccess() {
     if (!selectedManager.value) return;
     router.post(route('documents.manager-access.store', props.document.id), { user_id: selectedManager.value }, {
@@ -67,6 +62,16 @@ function grantManagerAccess() {
 
 function revokeManagerAccess(userId) {
     router.delete(route('documents.manager-access.destroy', [props.document.id, userId]), { preserveScroll: true });
+}
+
+function saveDocument() {
+    editForm.post(route('documents.update', props.document.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            editing.value = false;
+            editForm.file = null;
+        },
+    });
 }
 </script>
 
@@ -80,7 +85,8 @@ function revokeManagerAccess(userId) {
                     <ChevronLeft class="h-4 w-4" :stroke-width="1.7" />
                     Documenti
                 </Link>
-                <div class="flex flex-col gap-1">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div class="flex flex-col gap-1">
                     <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ document.title }}</h2>
                     <p class="text-sm text-gray-500">
                         <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold" :style="categoryBadgeStyle(document.category)">
@@ -88,6 +94,10 @@ function revokeManagerAccess(userId) {
                         </span>
                         <span class="ml-1">· Anno {{ document.document_year }} · PDF pubblicato il {{ dateIt(document.created_at) }}</span>
                     </p>
+                  </div>
+                  <button v-if="canManage && !editing" type="button" class="btn btn-outline" @click="editing = true">
+                      <Pencil class="h-4 w-4" :stroke-width="1.7" /> Modifica
+                  </button>
                 </div>
             </div>
         </template>
@@ -116,6 +126,7 @@ function revokeManagerAccess(userId) {
                         </div>
 
                         <iframe
+                            :key="document.updated_at"
                             :src="route('documents.file', document.id)"
                             class="h-[72vh] min-h-[560px] w-full bg-white"
                             title="Anteprima PDF"
@@ -137,16 +148,43 @@ function revokeManagerAccess(userId) {
                                 </span>
                             </div>
                         </section>
-                        <section v-if="canManage" class="surface p-5">
-                            <div class="flex items-start justify-between gap-3">
-                                <div>
-                                    <h3 class="text-base font-semibold text-gray-900">Categoria</h3>
-                                    <p class="mt-1 text-sm text-gray-500">Modifica la categoria del documento.</p>
+                        <section v-if="canManage && editing" class="surface p-5">
+                            <h3 class="text-base font-semibold text-gray-900">Modifica documento</h3>
+                            <form class="mt-4 space-y-3" @submit.prevent="saveDocument">
+                                <label class="block text-sm font-medium text-gray-700">Titolo
+                                    <input v-model="editForm.title" type="text" class="input mt-1 w-full" required maxlength="255" />
+                                    <span v-if="editForm.errors.title" class="text-xs text-red-600">{{ editForm.errors.title }}</span>
+                                </label>
+                                <label class="block text-sm font-medium text-gray-700">Descrizione
+                                    <textarea v-model="editForm.description" class="input mt-1 w-full" rows="3" maxlength="5000"></textarea>
+                                    <span v-if="editForm.errors.description" class="text-xs text-red-600">{{ editForm.errors.description }}</span>
+                                </label>
+                                <label class="block text-sm font-medium text-gray-700">Categoria
+                                    <AppSelect v-model="editForm.category" class="mt-1" :options="documentCategoryOptions" />
+                                    <span v-if="editForm.errors.category" class="text-xs text-red-600">{{ editForm.errors.category }}</span>
+                                </label>
+                                <label class="block text-sm font-medium text-gray-700">Anno
+                                    <input v-model.number="editForm.document_year" type="number" min="2000" max="2100" class="input mt-1 w-full" required />
+                                    <span v-if="editForm.errors.document_year" class="text-xs text-red-600">{{ editForm.errors.document_year }}</span>
+                                </label>
+                                <label class="block text-sm font-medium text-gray-700">Sostituisci PDF
+                                    <input type="file" accept="application/pdf" class="mt-1 block w-full text-xs text-gray-600" @change="editForm.file = $event.target.files?.[0] || null" />
+                                    <span v-if="editForm.errors.file" class="text-xs text-red-600">{{ editForm.errors.file }}</span>
+                                </label>
+                                <p class="text-xs text-gray-500">I destinatari restano invariati. Un nuovo PDF azzera le conferme di lettura.</p>
+                                <div class="flex justify-end gap-2">
+                                    <button type="button" class="btn btn-outline" @click="editing = false">Annulla</button>
+                                    <button type="submit" class="btn btn-primary" :disabled="editForm.processing"><Save class="h-4 w-4" /> Salva</button>
                                 </div>
-                                <span v-if="savingCategory" class="text-xs font-semibold text-gray-400">Salvataggio...</span>
-                            </div>
-                            <div class="mt-4">
-                                <AppSelect :model-value="selectedCategory" :options="documentCategoryOptions" @update:model-value="updateCategory" />
+                            </form>
+                        </section>
+                        <section v-if="canManage && versions?.length" class="surface p-5">
+                            <h3 class="text-base font-semibold text-gray-900">Versioni precedenti</h3>
+                            <div class="mt-3 divide-y divide-gray-100">
+                                <a v-for="version in versions" :key="version.id" :href="route('documents.versions.file', [document.id, version.id])" target="_blank" class="flex items-center justify-between gap-3 py-2 text-xs text-gray-600 hover:text-[hsl(var(--primary-app))]">
+                                    <span class="min-w-0 truncate">v{{ version.version }} · {{ version.file_name }}</span>
+                                    <span class="shrink-0">{{ dateIt(version.created_at) }}</span>
+                                </a>
                             </div>
                         </section>
 

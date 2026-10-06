@@ -976,30 +976,27 @@ function deleteLabel(type) {
                             >
                                 <div class="document-year-expand-inner">
                                     <div class="mt-4 space-y-3 pb-6">
-                                    <div v-if="filteredDocumentsForYear(group).length" class="overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white">
+                                    <div v-if="filteredDocumentsForYear(group).length" class="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                                         <article
                                             v-for="document in visibleDocumentsForYear(group)"
                                             :key="document.id"
                                             role="button"
                                             tabindex="0"
-                                            :class="['group flex cursor-pointer items-center gap-3 border-b border-gray-100 px-3 py-2.5 transition-colors last:border-b-0 hover:bg-blue-50/50 focus-visible:bg-blue-50/50 focus-visible:outline-none', !canManage && !document.user_read_at ? 'bg-amber-50/40' : '']"
+                                            :class="['group flex min-w-0 cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] border border-gray-200 bg-white px-2.5 py-2 transition-colors hover:border-blue-200 hover:bg-blue-50/50 focus-visible:outline-2 focus-visible:outline-blue-400', !canManage && !document.user_read_at ? 'border-amber-200' : '']"
                                             @click="openDocument(document)"
                                             @keydown.enter.prevent="openDocument(document)"
                                             @keydown.space.prevent="openDocument(document)"
                                         >
-                                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]">
-                                                <FileText class="h-4 w-4" :stroke-width="1.7" />
+                                            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]">
+                                                <FileText class="h-3.5 w-3.5" :stroke-width="1.7" />
                                             </span>
                                             <div class="min-w-0 flex-1">
                                                 <p class="truncate text-sm font-semibold text-gray-900 transition group-hover:text-[hsl(var(--primary-app))]" :title="document.title">{{ document.title }}</p>
-                                                <p class="mt-0.5 truncate text-xs text-gray-500" :title="audienceLabel(document)">{{ audienceLabel(document) }} · {{ fileSize(document.file_size) }} <span class="sm:hidden">· {{ categoryLabel(document.category) }} · {{ dateIt(document.created_at) }}</span></p>
+                                                <p class="mt-0.5 truncate text-[11px] text-gray-500" :title="audienceLabel(document)">{{ audienceLabel(document) }} · {{ categoryLabel(document.category) }}</p>
+                                                <p class="truncate text-[11px] text-gray-400">{{ dateIt(document.created_at) }} · {{ fileSize(document.file_size) }} · {{ canManage ? `${document.read_count}/${document.recipient_count} letti` : (document.user_read_at ? 'Letto' : 'Da leggere') }}</p>
                                             </div>
-                                            <span class="hidden shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold sm:inline-flex" :style="categoryBadgeStyle(document.category)">{{ categoryLabel(document.category) }}</span>
-                                            <span class="hidden w-20 shrink-0 text-right text-xs text-gray-500 md:block">{{ dateIt(document.created_at) }}</span>
-                                            <span v-if="canManage" class="w-16 shrink-0 text-right text-xs font-semibold text-gray-700">{{ document.read_count }}/{{ document.recipient_count }} letti</span>
-                                            <span v-else :class="['shrink-0 text-xs font-semibold', document.user_read_at ? 'text-emerald-700' : 'text-amber-700']">{{ document.user_read_at ? 'Letto' : 'Da leggere' }}</span>
-                                            <button v-if="canManage && (isSuperadmin || (!sensitiveDocumentCategories.includes(document.category) && document.audience !== 'users'))" type="button" class="icon-btn h-7 w-7 shrink-0 text-red-600 hover:bg-red-50" title="Elimina documento" @click.stop="removeDocument(document)">
-                                                <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                            <button v-if="canManage && (isSuperadmin || (!sensitiveDocumentCategories.includes(document.category) && document.audience !== 'users'))" type="button" class="icon-btn h-6 w-6 shrink-0 self-start text-red-600 hover:bg-red-50" title="Elimina documento" @click.stop="removeDocument(document)">
+                                                <Trash2 class="h-3.5 w-3.5" :stroke-width="1.7" />
                                             </button>
                                         </article>
                                     </div>

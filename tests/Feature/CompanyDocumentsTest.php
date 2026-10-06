@@ -133,6 +133,41 @@ class CompanyDocumentsTest extends TestCase
         $this->assertDatabaseCount('document_groups', 0);
     }
 
+    public function test_document_edit_preserves_previous_pdf_and_resets_read_confirmation(): void
+    {
+        Storage::fake('local');
+        $admin = User::factory()->create();
+        $user = User::factory()->create();
+        $this->role($admin, 'superadmin');
+        $this->role($user, 'editor');
+
+        $this->actingAs($admin)->post(route('documents.store'), [
+            'title' => 'Prima versione', 'category' => 'documenti_vari', 'audience' => 'users',
+            'user_ids' => [$user->id], 'publication_confirmed' => true,
+            'file' => UploadedFile::fake()->create('prima.pdf', 10, 'application/pdf'),
+        ])->assertSessionHasNoErrors();
+        $id = DB::table('company_documents')->value('id');
+        $oldPath = DB::table('company_documents')->value('file_path');
+        $this->actingAs($user)->post(route('documents.read', $id))->assertSessionHasNoErrors();
+
+        $this->actingAs($user)->post(route('documents.update', $id), [
+            'title' => 'Nuova versione', 'category' => 'documenti_vari', 'document_year' => 2026,
+        ])->assertForbidden();
+        $this->actingAs($admin)->post(route('documents.update', $id), [
+            'title' => 'Nuova versione', 'description' => 'Testo aggiornato',
+            'category' => 'documenti_vari', 'document_year' => 2026,
+            'file' => UploadedFile::fake()->create('seconda.pdf', 12, 'application/pdf'),
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('company_documents', ['id' => $id, 'title' => 'Nuova versione', 'file_name' => 'seconda.pdf']);
+        $this->assertDatabaseHas('company_document_versions', ['company_document_id' => $id, 'version' => 1, 'file_path' => $oldPath]);
+        $this->assertDatabaseHas('company_document_reads', ['company_document_id' => $id, 'user_id' => $user->id, 'read_at' => null]);
+        Storage::disk('local')->assertExists($oldPath);
+        $versionId = DB::table('company_document_versions')->value('id');
+        $this->actingAs($admin)->get(route('documents.versions.file', [$id, $versionId]))->assertOk();
+        $this->actingAs($user)->get(route('documents.versions.file', [$id, $versionId]))->assertForbidden();
+    }
+
     public function test_sensitive_document_requires_one_recipient_and_manager_access_is_explicit(): void
     {
         Storage::fake('local');

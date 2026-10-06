@@ -110,6 +110,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/document-messages/{id}/read', [CentroPageController::class, 'markCompanyMessageRead'])->name('document-messages.read');
     Route::delete('/document-messages/{id}', [CentroPageController::class, 'destroyCompanyMessage'])->name('document-messages.destroy');
     Route::patch('/documents/{id}/category', [CentroPageController::class, 'updateCompanyDocumentCategory'])->name('documents.category.update');
+    Route::post('/documents/{id}/update', [CentroPageController::class, 'updateCompanyDocument'])->name('documents.update');
+    Route::get('/documents/{id}/versions/{versionId}/file', [CentroPageController::class, 'viewCompanyDocumentVersionFile'])->name('documents.versions.file');
     Route::post('/documents/{id}/manager-access', [CentroPageController::class, 'grantCompanyDocumentManagerAccess'])->name('documents.manager-access.store');
     Route::delete('/documents/{id}/manager-access/{userId}', [CentroPageController::class, 'revokeCompanyDocumentManagerAccess'])->name('documents.manager-access.destroy');
     Route::get('/documents/{id}', [CentroPageController::class, 'showCompanyDocument'])->name('documents.show');
