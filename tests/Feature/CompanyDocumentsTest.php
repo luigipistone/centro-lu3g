@@ -70,9 +70,9 @@ class CompanyDocumentsTest extends TestCase
         $documentId = DB::table('company_documents')->value('id');
         $this->assertNotNull($documentId);
         $this->actingAs($admin)->get(route('documents.list'))
-            ->assertInertia(fn (Assert $page) => $page->where('documents.0.recipient_ids.0', $user->id));
+            ->assertInertia(fn (Assert $page) => $page->has('documents', 0));
         $this->actingAs($user)->get(route('documents.list'))
-            ->assertInertia(fn (Assert $page) => $page->missing('documents.0.recipient_ids'));
+            ->assertInertia(fn (Assert $page) => $page->has('documents', 1)->where('documents.0.id', $documentId));
         $this->assertDatabaseHas('company_document_reads', [
             'company_document_id' => $documentId,
             'user_id' => $user->id,
@@ -114,6 +114,29 @@ class CompanyDocumentsTest extends TestCase
                 ->where('user.id', $user->id)
                 ->has('documents', 1)
             );
+    }
+
+    public function test_all_documents_list_only_includes_documents_for_everyone(): void
+    {
+        Storage::fake('local');
+        $admin = User::factory()->create();
+        $employee = User::factory()->create();
+        $this->role($admin, 'superadmin');
+        $this->role($employee, 'editor');
+
+        foreach ([['Personale', 'users'], ['Generale', 'all']] as [$title, $audience]) {
+            $this->actingAs($admin)->post(route('documents.store'), [
+                'title' => $title, 'category' => 'documenti_vari', 'audience' => $audience,
+                'user_ids' => $audience === 'users' ? [$employee->id] : [],
+                'publication_confirmed' => true,
+                'file' => UploadedFile::fake()->create($title.'.pdf', 10, 'application/pdf'),
+            ])->assertSessionHasNoErrors();
+        }
+
+        $this->actingAs($admin)->get(route('documents.list'))
+            ->assertInertia(fn (Assert $page) => $page->has('documents', 1)->where('documents.0.title', 'Generale'));
+        $this->actingAs($employee)->get(route('documents.list'))
+            ->assertInertia(fn (Assert $page) => $page->has('documents', 2));
     }
 
     public function test_admin_cannot_create_empty_document_group(): void

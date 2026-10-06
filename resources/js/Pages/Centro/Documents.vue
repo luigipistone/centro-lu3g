@@ -35,7 +35,6 @@ const messageBodyEditor = ref(null);
 const createModal = ref(null);
 const documentReview = ref(false);
 const selectedCategory = ref('all');
-const selectedPerson = ref('all');
 const isSuperadmin = computed(() => page.props.auth?.user?.role === 'superadmin');
 const activeAdminSection = computed(() => props.activeAdminSection || null);
 
@@ -105,10 +104,6 @@ const categoryOptions = computed(() => [
     { value: 'all', label: 'Tutte le categorie' },
     ...Object.entries(props.documentCategories || {}).map(([value, label]) => ({ value, label })),
 ]);
-const personOptions = computed(() => [
-    { value: 'all', label: 'Tutte le persone' },
-    ...(props.users || []).map((user) => ({ value: user.id, label: user.name })),
-]);
 const documentCategoryOptions = computed(() => categoryOptions.value.filter((option) => option.value !== 'all' && (isSuperadmin.value || !sensitiveDocumentCategories.includes(option.value))));
 const documentYearGroups = computed(() => {
     const grouped = visibleDocuments.value.reduce((carry, document) => {
@@ -130,11 +125,10 @@ function documentYear(document) {
 
 function filteredDocumentsForYear(group) {
     return group.documents.filter((document) =>
-        (selectedCategory.value === 'all' || (document.category || 'documenti_vari') === selectedCategory.value)
-        && (selectedPerson.value === 'all' || (document.recipient_ids || []).includes(selectedPerson.value)));
+        selectedCategory.value === 'all' || (document.category || 'documenti_vari') === selectedCategory.value);
 }
 
-watch([selectedCategory, selectedPerson], () => {
+watch(selectedCategory, () => {
     yearVisibleCounts.value = { [selectedDocumentYear.value || currentYear]: 20 };
 });
 
@@ -939,15 +933,11 @@ function deleteLabel(type) {
                         </div>
                         <div class="flex w-full flex-wrap gap-2 sm:w-auto">
                             <AppSelect v-model="selectedCategory" class="w-full sm:w-56" :options="categoryOptions" searchable />
-                            <AppSelect v-if="canViewUserOverview" v-model="selectedPerson" class="w-full sm:w-56" :options="personOptions" searchable />
                         </div>
                     </div>
-                    <div v-if="selectedCategory !== 'all' || selectedPerson !== 'all'" class="flex flex-wrap gap-2">
-                        <button v-if="selectedCategory !== 'all'" type="button" class="inline-flex items-center gap-1.5 rounded-full bg-[hsl(var(--primary-app)/0.10)] px-3 py-1.5 text-xs font-semibold text-[hsl(var(--primary-app-dark))]" @click="selectedCategory = 'all'">
+                    <div v-if="selectedCategory !== 'all'" class="flex flex-wrap gap-2">
+                        <button type="button" class="inline-flex items-center gap-1.5 rounded-full bg-[hsl(var(--primary-app)/0.10)] px-3 py-1.5 text-xs font-semibold text-[hsl(var(--primary-app-dark))]" @click="selectedCategory = 'all'">
                             {{ categoryLabel(selectedCategory) }} <X class="h-3.5 w-3.5" :stroke-width="1.8" />
-                        </button>
-                        <button v-if="selectedPerson !== 'all'" type="button" class="inline-flex items-center gap-1.5 rounded-full bg-[hsl(var(--primary-app)/0.10)] px-3 py-1.5 text-xs font-semibold text-[hsl(var(--primary-app-dark))]" @click="selectedPerson = 'all'">
-                            {{ personOptions.find((person) => person.value === selectedPerson)?.label }} <X class="h-3.5 w-3.5" :stroke-width="1.8" />
                         </button>
                     </div>
 
@@ -997,7 +987,7 @@ function deleteLabel(type) {
                                             </button>
                                         </article>
                                     </div>
-                                    <div v-else class="rounded-[var(--radius-sm)] border border-gray-200 bg-white/70 px-5 py-8 text-center text-sm text-gray-500">Nessun documento con i filtri selezionati.</div>
+                                    <div v-else class="rounded-[var(--radius-sm)] border border-gray-200 bg-white/70 px-5 py-8 text-center text-sm text-gray-500">{{ selectedCategory === 'all' ? 'Nessun documento per questo anno.' : 'Nessun documento con il filtro selezionato.' }}</div>
 
                                     <div v-if="filteredDocumentsForYear(group).length > visibleDocumentsForYear(group).length" class="flex justify-center">
                                         <button type="button" class="btn btn-outline" @click="showMoreYearDocuments(group.year)">Carica altri</button>
@@ -1008,7 +998,7 @@ function deleteLabel(type) {
                         </section>
                     </div>
                     <div v-else class="rounded-[var(--radius-sm)] border border-gray-200 bg-white/70 px-5 py-12 text-center text-sm text-gray-500">
-                        Nessun documento disponibile.
+                        {{ canManage ? 'Nessun documento destinato a tutti.' : 'Nessun documento disponibile.' }}
                     </div>
                 </section>
             </div>
