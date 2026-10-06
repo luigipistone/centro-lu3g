@@ -1000,7 +1000,7 @@ function deleteLabel(type) {
                                             </button>
                                         </article>
                                     </div>
-                                    <div v-else class="surface px-5 py-8 text-center text-sm text-gray-500">Nessun documento con i filtri selezionati.</div>
+                                    <div v-else class="rounded-[var(--radius-sm)] border border-gray-200 bg-white/70 px-5 py-8 text-center text-sm text-gray-500">Nessun documento con i filtri selezionati.</div>
 
                                     <div v-if="filteredDocumentsForYear(group).length > visibleDocumentsForYear(group).length" class="flex justify-center">
                                         <button type="button" class="btn btn-outline" @click="showMoreYearDocuments(group.year)">Carica altri</button>
@@ -1010,7 +1010,7 @@ function deleteLabel(type) {
                             </div>
                         </section>
                     </div>
-                    <div v-else class="surface px-5 py-12 text-center text-sm text-gray-500">
+                    <div v-else class="rounded-[var(--radius-sm)] border border-gray-200 bg-white/70 px-5 py-12 text-center text-sm text-gray-500">
                         Nessun documento disponibile.
                     </div>
                 </section>
