@@ -4,7 +4,7 @@ import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { dateIt, dateTimeIt } from '@/utils/formatters';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { Check, ChevronLeft, FileText, Pencil, Save, X } from '@lucide/vue';
+import { Check, ChevronLeft, FileText, Pencil, Save, Upload, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 const props = defineProps({
@@ -158,14 +158,16 @@ function saveDocument() {
                         <section v-if="canManage && editing" class="surface p-5">
                             <h3 class="text-base font-semibold text-gray-900">Modifica documento</h3>
                             <form class="mt-4 space-y-3" @submit.prevent="saveDocument">
-                                <label class="block text-sm font-medium text-gray-700">Titolo
-                                    <input v-model="editForm.title" type="text" class="input mt-1 w-full" required maxlength="255" />
-                                    <span v-if="editForm.errors.title" class="text-xs text-red-600">{{ editForm.errors.title }}</span>
-                                </label>
-                                <label class="block text-sm font-medium text-gray-700">Descrizione
-                                    <textarea v-model="editForm.description" class="input mt-1 w-full" rows="3" maxlength="5000"></textarea>
-                                    <span v-if="editForm.errors.description" class="text-xs text-red-600">{{ editForm.errors.description }}</span>
-                                </label>
+                                <div>
+                                    <label for="document-edit-title" class="block text-sm font-medium text-gray-700">Titolo</label>
+                                    <input id="document-edit-title" v-model="editForm.title" type="text" class="form-control" required maxlength="255" />
+                                    <div v-if="editForm.errors.title" class="mt-1 text-sm text-red-600">{{ editForm.errors.title }}</div>
+                                </div>
+                                <div>
+                                    <label for="document-edit-description" class="block text-sm font-medium text-gray-700">Descrizione</label>
+                                    <textarea id="document-edit-description" v-model="editForm.description" class="form-control" rows="3" maxlength="5000"></textarea>
+                                    <div v-if="editForm.errors.description" class="mt-1 text-sm text-red-600">{{ editForm.errors.description }}</div>
+                                </div>
                                 <label class="block text-sm font-medium text-gray-700">Categoria
                                     <AppSelect v-model="editForm.category" class="mt-1" :options="documentCategoryOptions" />
                                     <span v-if="editForm.errors.category" class="text-xs text-red-600">{{ editForm.errors.category }}</span>
@@ -174,10 +176,15 @@ function saveDocument() {
                                     <AppSelect v-model="editForm.document_year" class="mt-1" :options="documentYearOptions" searchable />
                                     <span v-if="editForm.errors.document_year" class="text-xs text-red-600">{{ editForm.errors.document_year }}</span>
                                 </label>
-                                <label class="block text-sm font-medium text-gray-700">Sostituisci PDF
-                                    <input type="file" accept="application/pdf" class="mt-1 block w-full text-xs text-gray-600" @change="editForm.file = $event.target.files?.[0] || null" />
-                                    <span v-if="editForm.errors.file" class="text-xs text-red-600">{{ editForm.errors.file }}</span>
-                                </label>
+                                <div>
+                                    <span class="block text-sm font-medium text-gray-700">Sostituisci PDF</span>
+                                    <label class="mt-2 flex cursor-pointer items-center justify-between gap-3 rounded-[var(--radius)] border border-dashed border-gray-200 bg-white/70 px-4 py-4 text-sm font-semibold text-gray-600 transition hover:border-[hsl(var(--primary-app))] hover:text-[hsl(var(--primary-app))]">
+                                        <span class="flex min-w-0 items-center gap-2"><Upload class="h-4 w-4 shrink-0" :stroke-width="1.7" /><span class="truncate">{{ editForm.file?.name || 'Seleziona documento PDF' }}</span></span>
+                                        <span class="shrink-0 text-xs text-gray-400">max 20 MB</span>
+                                        <input type="file" accept="application/pdf,.pdf" class="hidden" @change="editForm.file = $event.target.files?.[0] || null" />
+                                    </label>
+                                    <div v-if="editForm.errors.file" class="mt-1 text-sm text-red-600">{{ editForm.errors.file }}</div>
+                                </div>
                                 <p class="text-xs text-gray-500">I destinatari restano invariati. Un nuovo PDF azzera le conferme di lettura.</p>
                                 <div class="flex justify-end gap-2">
                                     <button type="button" class="btn btn-outline" @click="editing = false">Annulla</button>
