@@ -102,6 +102,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/documents/reports/export', [CentroPageController::class, 'exportAttendanceReport'])->name('documents.reports.export');
     Route::get('/documents/users/{userId}', [CentroPageController::class, 'showCompanyDocumentsUser'])->name('documents.users.show');
     Route::get('/documents/archive/{year}', [CentroPageController::class, 'companyDocumentArchive'])->whereNumber('year')->name('documents.archive');
+    Route::get('/documents/{id}/clone', [CentroPageController::class, 'cloneCompanyDocument'])->name('documents.clone');
     Route::post('/document-messages', [CentroPageController::class, 'storeCompanyMessage'])->name('document-messages.store');
     Route::post('/document-messages/schedules', [CentroPageController::class, 'storeCompanyMessageSchedule'])->name('document-messages.schedules.store');
     Route::patch('/document-messages/schedules/{id}', [CentroPageController::class, 'updateCompanyMessageSchedule'])->name('document-messages.schedules.update');

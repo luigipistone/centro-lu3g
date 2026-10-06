@@ -168,6 +168,44 @@ class CompanyDocumentsTest extends TestCase
         $this->actingAs($user)->get(route('documents.versions.file', [$id, $versionId]))->assertForbidden();
     }
 
+    public function test_cloning_document_prefills_metadata_but_requires_a_new_pdf(): void
+    {
+        Storage::fake('local');
+        $admin = User::factory()->create();
+        $user = User::factory()->create();
+        $this->role($admin, 'superadmin');
+        $this->role($user, 'editor');
+
+        $this->actingAs($admin)->post(route('documents.store'), [
+            'title' => 'Originale', 'description' => 'Descrizione', 'category' => 'documenti_vari',
+            'document_year' => 2025, 'audience' => 'users', 'user_ids' => [$user->id],
+            'publication_confirmed' => true,
+            'file' => UploadedFile::fake()->create('originale.pdf', 10, 'application/pdf'),
+        ])->assertSessionHasNoErrors();
+        $id = DB::table('company_documents')->value('id');
+        $originalPath = DB::table('company_documents')->value('file_path');
+
+        $this->actingAs($user)->get(route('documents.clone', $id))->assertForbidden();
+        $this->actingAs($admin)->get(route('documents.clone', $id))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->component('Centro/DocumentClone')
+            ->where('source.title', 'Originale')
+            ->where('source.document_year', 2025)
+            ->where('source.user_ids.0', $user->id)
+            ->missing('source.file_path'));
+
+        $payload = [
+            'title' => 'Copia', 'description' => 'Descrizione', 'category' => 'documenti_vari',
+            'document_year' => 2025, 'audience' => 'users', 'user_ids' => [$user->id],
+            'publication_confirmed' => true,
+        ];
+        $this->actingAs($admin)->post(route('documents.store'), $payload)->assertSessionHasErrors('file');
+        $this->actingAs($admin)->post(route('documents.store'), [
+            ...$payload, 'file' => UploadedFile::fake()->create('copia.pdf', 11, 'application/pdf'),
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('company_documents', 2);
+        $this->assertNotEquals($originalPath, DB::table('company_documents')->where('title', 'Copia')->value('file_path'));
+    }
+
     public function test_sensitive_document_requires_one_recipient_and_manager_access_is_explicit(): void
     {
         Storage::fake('local');

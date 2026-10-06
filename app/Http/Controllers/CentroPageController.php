@@ -1550,6 +1550,36 @@ class CentroPageController extends Controller
         ]);
     }
 
+    public function cloneCompanyDocument(Request $request, string $id): Response
+    {
+        $this->ensureAdmin($request);
+        $document = DB::table('company_documents')->where('id', $id)->first();
+        abort_if(! $document, 404);
+        abort_unless($this->canManageDocuments($request) && $this->canAccessCompanyDocument($request, $document), 403);
+        if ($this->isSensitiveCompanyDocument($document->category, $document->audience)) {
+            $this->ensureSuperadmin($request);
+        }
+
+        $source = $this->companyDocumentRow($document);
+
+        return Inertia::render('Centro/DocumentClone', [
+            'source' => [
+                'id' => $source->id,
+                'title' => $source->title,
+                'description' => $source->description,
+                'category' => $source->category,
+                'document_year' => $source->document_year,
+                'audience' => $source->audience,
+                'user_ids' => $source->user_ids,
+                'group_ids' => $source->group_ids,
+            ],
+            'users' => $this->userOptions(),
+            'groups' => $this->documentGroupRows(),
+            'documentCategories' => $this->companyDocumentCategories(),
+            'isSuperadmin' => $this->currentUserRole($request) === 'superadmin',
+        ]);
+    }
+
     public function updateCompanyDocumentCategory(Request $request, string $id): RedirectResponse
     {
         $this->ensureAdmin($request);

@@ -4,7 +4,7 @@ import AppSelect from '@/Components/AppSelect.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { dateIt, dateTimeIt } from '@/utils/formatters';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { Check, ChevronLeft, FileText, Pencil, Save, Upload, X } from '@lucide/vue';
+import { Check, ChevronLeft, Copy, FileText, Pencil, Save, Upload, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 const props = defineProps({
@@ -102,9 +102,12 @@ function saveDocument() {
                         <span class="ml-1">· Anno {{ document.document_year }} · PDF pubblicato il {{ dateIt(document.created_at) }}</span>
                     </p>
                   </div>
-                  <button v-if="canManage && !editing" type="button" class="btn btn-outline" @click="editing = true">
-                      <Pencil class="h-4 w-4" :stroke-width="1.7" /> Modifica
-                  </button>
+                  <div v-if="canManage" class="flex flex-wrap gap-2">
+                      <Link :href="route('documents.clone', document.id)" class="btn btn-outline"><Copy class="h-4 w-4" :stroke-width="1.7" /> Clona</Link>
+                      <button v-if="!editing" type="button" class="btn btn-outline" @click="editing = true">
+                          <Pencil class="h-4 w-4" :stroke-width="1.7" /> Modifica
+                      </button>
+                  </div>
                 </div>
             </div>
         </template>
