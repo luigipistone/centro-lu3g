@@ -1328,7 +1328,7 @@ class CentroPageController extends Controller
             'canViewMessages' => $canViewMessages,
             'canViewGroups' => $canViewGroups,
             'activeAdminSection' => $canManage ? ($request->route('documentView') ?: 'documents') : null,
-            'documents' => $this->companyDocumentRows($canManage ? null : $userId, $canManage)
+            'documents' => $this->companyDocumentRows($canManage ? null : $userId, $canManage, null, $canViewUserOverview)
                 ->filter(fn ($document) => $this->canAccessCompanyDocument($request, $document))->values(),
             'messages' => $canManage && ! $canViewMessages ? [] : $this->companyMessageRows($canManage ? null : $userId, $canManage),
             'messageSchedules' => $canManage && $canViewMessages ? DB::table('company_message_schedules')->orderBy('next_run_at')->get()
@@ -6295,7 +6295,7 @@ class CentroPageController extends Controller
         return $this->companyMessageRecipientIds($message->id)->contains($request->user()?->id);
     }
 
-    private function companyDocumentRows(?string $userId = null, bool $adminView = false, ?int $year = null)
+    private function companyDocumentRows(?string $userId = null, bool $adminView = false, ?int $year = null, bool $includeRecipientIds = false)
     {
         $query = DB::table('company_documents')
             ->leftJoin('users', 'users.id', '=', 'company_documents.created_by')
@@ -6321,10 +6321,10 @@ class CentroPageController extends Controller
 
         $documents = $query->limit($adminView ? 300 : 150)->get();
 
-        return $documents->map(fn ($document) => $this->companyDocumentRow($document, $userId));
+        return $documents->map(fn ($document) => $this->companyDocumentRow($document, $userId, $includeRecipientIds));
     }
 
-    private function companyDocumentRow(object $document, ?string $userId = null): object
+    private function companyDocumentRow(object $document, ?string $userId = null, bool $includeRecipientIds = false): object
     {
         $recipientIds = $this->companyDocumentRecipientIds($document->id);
         $readRows = DB::table('company_document_reads')
@@ -6333,6 +6333,9 @@ class CentroPageController extends Controller
             ->keyBy('user_id');
 
         $document->recipient_count = $recipientIds->count();
+        if ($includeRecipientIds) {
+            $document->recipient_ids = $recipientIds->values();
+        }
         $document->read_count = $readRows->filter(fn ($row) => filled($row->read_at))->count();
         $document->opened_count = $readRows->filter(fn ($row) => filled($row->opened_at))->count();
         $document->category = $document->category ?: 'documenti_vari';

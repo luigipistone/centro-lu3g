@@ -28,12 +28,13 @@ const confirmDelete = ref(null);
 const confirmDeleteText = ref('');
 const selectedDocumentYear = ref(new Date().getFullYear());
 const hoveredDocumentYear = ref(null);
-const yearVisibleCounts = ref({ [new Date().getFullYear()]: 5 });
+const yearVisibleCounts = ref({ [new Date().getFullYear()]: 20 });
 const documentDescriptionEditor = ref(null);
 const messageBodyEditor = ref(null);
 const createModal = ref(null);
 const documentReview = ref(false);
-const categoryFilters = ref({});
+const selectedCategory = ref('all');
+const selectedPerson = ref('all');
 const isSuperadmin = computed(() => page.props.auth?.user?.role === 'superadmin');
 const activeAdminSection = computed(() => props.activeAdminSection || null);
 
@@ -103,6 +104,10 @@ const categoryOptions = computed(() => [
     { value: 'all', label: 'Tutte le categorie' },
     ...Object.entries(props.documentCategories || {}).map(([value, label]) => ({ value, label })),
 ]);
+const personOptions = computed(() => [
+    { value: 'all', label: 'Tutte le persone' },
+    ...(props.users || []).map((user) => ({ value: user.id, label: user.name })),
+]);
 const documentCategoryOptions = computed(() => categoryOptions.value.filter((option) => option.value !== 'all' && (isSuperadmin.value || !sensitiveDocumentCategories.includes(option.value))));
 const documentYearGroups = computed(() => {
     const grouped = visibleDocuments.value.reduce((carry, document) => {
@@ -122,34 +127,24 @@ function documentYear(document) {
     return Number.isFinite(year) ? year : currentYear;
 }
 
-function categoryFilterFor(year) {
-    return categoryFilters.value[year] || 'all';
-}
-
-function setCategoryFilter(year, value) {
-    categoryFilters.value = { ...categoryFilters.value, [year]: value };
-    yearVisibleCounts.value = { ...yearVisibleCounts.value, [year]: 5 };
-}
-
-function filterDocumentsByCategory(documents, year) {
-    const category = categoryFilterFor(year);
-    if (category === 'all') return documents;
-
-    return documents.filter((document) => (document.category || 'documenti_vari') === category);
-}
-
 function filteredDocumentsForYear(group) {
-    return filterDocumentsByCategory(group.documents, group.year);
+    return group.documents.filter((document) =>
+        (selectedCategory.value === 'all' || (document.category || 'documenti_vari') === selectedCategory.value)
+        && (selectedPerson.value === 'all' || (document.recipient_ids || []).includes(selectedPerson.value)));
 }
+
+watch([selectedCategory, selectedPerson], () => {
+    yearVisibleCounts.value = { [selectedDocumentYear.value || currentYear]: 20 };
+});
 
 function visibleDocumentsForYear(group) {
-    return filteredDocumentsForYear(group).slice(0, yearVisibleCounts.value[group.year] || 5);
+    return filteredDocumentsForYear(group).slice(0, yearVisibleCounts.value[group.year] || 20);
 }
 
 function toggleDocumentYear(year) {
     selectedDocumentYear.value = selectedDocumentYear.value === year ? null : year;
     if (!yearVisibleCounts.value[year]) {
-        yearVisibleCounts.value = { ...yearVisibleCounts.value, [year]: 5 };
+        yearVisibleCounts.value = { ...yearVisibleCounts.value, [year]: 20 };
     }
 }
 
@@ -407,7 +402,7 @@ function fileSize(bytes) {
 function showMoreYearDocuments(year) {
     yearVisibleCounts.value = {
         ...yearVisibleCounts.value,
-        [year]: (yearVisibleCounts.value[year] || 5) + 5,
+        [year]: (yearVisibleCounts.value[year] || 20) + 20,
     };
 }
 
@@ -945,13 +940,18 @@ function deleteLabel(type) {
                             <h3 class="text-base font-semibold text-gray-900">{{ canManage ? 'Tutti i documenti' : 'I miei documenti' }}</h3>
                             <p class="mt-1 text-sm text-gray-500">Documenti {{ currentYear }} in evidenza e archivio diviso per anno.</p>
                         </div>
-                        <div v-if="selectedDocumentYear" class="w-full max-w-[260px]">
-                            <AppSelect
-                                :model-value="categoryFilterFor(selectedDocumentYear)"
-                                :options="categoryOptions"
-                                @update:model-value="setCategoryFilter(selectedDocumentYear, $event)"
-                            />
+                        <div class="flex w-full flex-wrap gap-2 sm:w-auto">
+                            <AppSelect v-model="selectedCategory" class="w-full sm:w-56" :options="categoryOptions" searchable />
+                            <AppSelect v-if="canViewUserOverview" v-model="selectedPerson" class="w-full sm:w-56" :options="personOptions" searchable />
                         </div>
+                    </div>
+                    <div v-if="selectedCategory !== 'all' || selectedPerson !== 'all'" class="flex flex-wrap gap-2">
+                        <button v-if="selectedCategory !== 'all'" type="button" class="inline-flex items-center gap-1.5 rounded-full bg-[hsl(var(--primary-app)/0.10)] px-3 py-1.5 text-xs font-semibold text-[hsl(var(--primary-app-dark))]" @click="selectedCategory = 'all'">
+                            {{ categoryLabel(selectedCategory) }} <X class="h-3.5 w-3.5" :stroke-width="1.8" />
+                        </button>
+                        <button v-if="selectedPerson !== 'all'" type="button" class="inline-flex items-center gap-1.5 rounded-full bg-[hsl(var(--primary-app)/0.10)] px-3 py-1.5 text-xs font-semibold text-[hsl(var(--primary-app-dark))]" @click="selectedPerson = 'all'">
+                            {{ personOptions.find((person) => person.value === selectedPerson)?.label }} <X class="h-3.5 w-3.5" :stroke-width="1.8" />
+                        </button>
                     </div>
 
                     <div v-if="visibleDocuments.length" class="document-year-stack">
@@ -975,45 +975,35 @@ function deleteLabel(type) {
                                 :aria-hidden="selectedDocumentYear !== group.year"
                             >
                                 <div class="document-year-expand-inner">
-                                    <div class="mt-5 space-y-4 pb-7">
-                                    <div v-if="filteredDocumentsForYear(group).length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                    <div class="mt-4 space-y-3 pb-6">
+                                    <div v-if="filteredDocumentsForYear(group).length" class="overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white">
                                         <article
                                             v-for="document in visibleDocumentsForYear(group)"
                                             :key="document.id"
                                             role="button"
                                             tabindex="0"
-                                            :class="['surface document-preview-card group cursor-pointer p-4 transition hover:-translate-y-0.5', !canManage && !document.user_read_at ? 'ring-1 ring-amber-100' : '']"
+                                            :class="['group flex cursor-pointer items-center gap-3 border-b border-gray-100 px-3 py-2.5 transition-colors last:border-b-0 hover:bg-blue-50/50 focus-visible:bg-blue-50/50 focus-visible:outline-none', !canManage && !document.user_read_at ? 'bg-amber-50/40' : '']"
                                             @click="openDocument(document)"
                                             @keydown.enter.prevent="openDocument(document)"
                                             @keydown.space.prevent="openDocument(document)"
                                         >
-                                            <div class="flex items-start justify-between gap-3">
-                                                <div class="flex min-w-0 items-center gap-3">
-                                                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]">
-                                                        <FileText class="h-5 w-5" :stroke-width="1.7" />
-                                                    </span>
-                                                    <div class="min-w-0">
-                                                        <p class="line-clamp-2 text-sm font-semibold text-gray-900 transition group-hover:text-[hsl(var(--primary-app))]">{{ document.title }}</p>
-                                                        <p class="mt-1 text-xs text-gray-500">{{ audienceLabel(document) }} · {{ fileSize(document.file_size) }}</p>
-                                                        <p class="mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold" :style="categoryBadgeStyle(document.category)">{{ categoryLabel(document.category) }}</p>
-                                                    </div>
-                                                </div>
-                                                <button v-if="canManage && (isSuperadmin || (!sensitiveDocumentCategories.includes(document.category) && document.audience !== 'users'))" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina documento" @click.stop="removeDocument(document)">
-                                                    <Trash2 class="h-4 w-4" :stroke-width="1.7" />
-                                                </button>
+                                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]">
+                                                <FileText class="h-4 w-4" :stroke-width="1.7" />
+                                            </span>
+                                            <div class="min-w-0 flex-1">
+                                                <p class="truncate text-sm font-semibold text-gray-900 transition group-hover:text-[hsl(var(--primary-app))]" :title="document.title">{{ document.title }}</p>
+                                                <p class="mt-0.5 truncate text-xs text-gray-500" :title="audienceLabel(document)">{{ audienceLabel(document) }} · {{ fileSize(document.file_size) }} <span class="sm:hidden">· {{ categoryLabel(document.category) }} · {{ dateIt(document.created_at) }}</span></p>
                                             </div>
-                                            <div v-if="document.description" class="mt-3 line-clamp-2 text-sm text-gray-500" v-html="document.description"></div>
-                                            <div class="mt-4 flex items-center justify-between gap-3 text-xs text-gray-500">
-                                                <span>{{ dateIt(document.created_at) }}</span>
-                                                <span v-if="canManage" class="font-semibold text-gray-700">{{ document.read_count }}/{{ document.recipient_count }} letti</span>
-                                                <span v-else :class="['inline-flex items-center gap-1 rounded-full px-2 py-1 font-semibold', document.user_read_at ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700']">
-                                                    <Check v-if="document.user_read_at" class="h-3.5 w-3.5" :stroke-width="1.8" />
-                                                    {{ document.user_read_at ? 'Letto' : 'Da leggere' }}
-                                                </span>
-                                            </div>
+                                            <span class="hidden shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold sm:inline-flex" :style="categoryBadgeStyle(document.category)">{{ categoryLabel(document.category) }}</span>
+                                            <span class="hidden w-20 shrink-0 text-right text-xs text-gray-500 md:block">{{ dateIt(document.created_at) }}</span>
+                                            <span v-if="canManage" class="w-16 shrink-0 text-right text-xs font-semibold text-gray-700">{{ document.read_count }}/{{ document.recipient_count }} letti</span>
+                                            <span v-else :class="['shrink-0 text-xs font-semibold', document.user_read_at ? 'text-emerald-700' : 'text-amber-700']">{{ document.user_read_at ? 'Letto' : 'Da leggere' }}</span>
+                                            <button v-if="canManage && (isSuperadmin || (!sensitiveDocumentCategories.includes(document.category) && document.audience !== 'users'))" type="button" class="icon-btn h-7 w-7 shrink-0 text-red-600 hover:bg-red-50" title="Elimina documento" @click.stop="removeDocument(document)">
+                                                <Trash2 class="h-4 w-4" :stroke-width="1.7" />
+                                            </button>
                                         </article>
                                     </div>
-                                    <div v-else class="surface px-5 py-8 text-center text-sm text-gray-500">Nessun documento per questa categoria.</div>
+                                    <div v-else class="surface px-5 py-8 text-center text-sm text-gray-500">Nessun documento con i filtri selezionati.</div>
 
                                     <div v-if="filteredDocumentsForYear(group).length > visibleDocumentsForYear(group).length" class="flex justify-center">
                                         <button type="button" class="btn btn-outline" @click="showMoreYearDocuments(group.year)">Carica altri</button>

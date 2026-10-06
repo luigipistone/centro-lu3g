@@ -69,6 +69,10 @@ class CompanyDocumentsTest extends TestCase
 
         $documentId = DB::table('company_documents')->value('id');
         $this->assertNotNull($documentId);
+        $this->actingAs($admin)->get(route('documents.list'))
+            ->assertInertia(fn (Assert $page) => $page->where('documents.0.recipient_ids.0', $user->id));
+        $this->actingAs($user)->get(route('documents.list'))
+            ->assertInertia(fn (Assert $page) => $page->missing('documents.0.recipient_ids'));
         $this->assertDatabaseHas('company_document_reads', [
             'company_document_id' => $documentId,
             'user_id' => $user->id,
