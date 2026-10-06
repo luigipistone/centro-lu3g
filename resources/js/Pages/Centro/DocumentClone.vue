@@ -9,6 +9,7 @@ import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
     source: Object,
+    returnUserId: String,
     users: Array,
     groups: Array,
     documentCategories: Object,
@@ -75,7 +76,7 @@ function submit() {
         return;
     }
     form.publication_confirmed = true;
-    form.post(route('documents.store'));
+    form.post(props.returnUserId ? route('documents.store', { from_user: props.returnUserId }) : route('documents.store'));
 }
 </script>
 
@@ -84,7 +85,7 @@ function submit() {
     <AuthenticatedLayout>
         <template #header>
             <div class="flex flex-col gap-2">
-                <Link :href="route('documents.show', source.id)" class="inline-flex items-center gap-1 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]">
+                <Link :href="returnUserId ? route('documents.show', { id: source.id, from_user: returnUserId }) : route('documents.show', source.id)" class="inline-flex items-center gap-1 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]">
                     <ChevronLeft class="h-4 w-4" :stroke-width="1.7" /> Documento originale
                 </Link>
                 <h2 class="text-xl font-semibold leading-tight text-gray-800">Clona documento</h2>
@@ -165,7 +166,7 @@ function submit() {
 
                     <div class="flex justify-end gap-2 border-t border-gray-100 pt-4">
                         <button v-if="review" type="button" class="btn btn-outline" @click="review = false">Indietro</button>
-                        <Link v-else :href="route('documents.show', source.id)" class="btn btn-outline">Annulla</Link>
+                        <Link v-else :href="returnUserId ? route('documents.show', { id: source.id, from_user: returnUserId }) : route('documents.show', source.id)" class="btn btn-outline">Annulla</Link>
                         <button type="submit" class="btn btn-primary" :disabled="form.processing"><Plus class="h-4 w-4" :stroke-width="1.7" /> {{ review ? 'Conferma e pubblica' : 'Continua' }}</button>
                     </div>
                 </form>

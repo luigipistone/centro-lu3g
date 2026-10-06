@@ -9,6 +9,7 @@ import { computed, ref } from 'vue';
 
 const props = defineProps({
     canManage: Boolean,
+    returnUserId: String,
     document: Object,
     readers: Array,
     documentCategories: Object,
@@ -88,7 +89,7 @@ function saveDocument() {
     <AuthenticatedLayout>
         <template #header>
             <div class="flex flex-col gap-2">
-                <Link :href="route('documents.list')" class="inline-flex items-center gap-1 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]">
+                <Link :href="returnUserId ? route('documents.users.show', returnUserId) : route('documents.list')" class="inline-flex items-center gap-1 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]">
                     <ChevronLeft class="h-4 w-4" :stroke-width="1.7" />
                     Documenti
                 </Link>
@@ -103,7 +104,7 @@ function saveDocument() {
                     </p>
                   </div>
                   <div v-if="canManage" class="flex flex-wrap gap-2">
-                      <Link :href="route('documents.clone', document.id)" class="btn btn-outline"><Copy class="h-4 w-4" :stroke-width="1.7" /> Clona</Link>
+                      <Link :href="returnUserId ? route('documents.clone', { id: document.id, from_user: returnUserId }) : route('documents.clone', document.id)" class="btn btn-outline"><Copy class="h-4 w-4" :stroke-width="1.7" /> Clona</Link>
                       <button v-if="!editing" type="button" class="btn btn-outline" @click="editing = true">
                           <Pencil class="h-4 w-4" :stroke-width="1.7" /> Modifica
                       </button>

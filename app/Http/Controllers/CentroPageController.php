@@ -1516,7 +1516,10 @@ class CentroPageController extends Controller
             $documentId,
         );
 
-        return redirect()->route('documents.list')->with('status', 'Documento pubblicato.');
+        $returnUserId = $this->companyDocumentReturnUserId($request);
+
+        return redirect()->route($returnUserId ? 'documents.users.show' : 'documents.list', $returnUserId ? ['userId' => $returnUserId] : [])
+            ->with('status', 'Documento pubblicato.');
     }
 
     public function showCompanyDocument(Request $request, string $id): Response
@@ -1535,6 +1538,7 @@ class CentroPageController extends Controller
 
         return Inertia::render('Centro/DocumentShow', [
             'canManage' => $canManage,
+            'returnUserId' => $this->companyDocumentReturnUserId($request),
             'document' => $this->companyDocumentRow($document, $isRecipient ? $userId : null),
             'versions' => $canManage ? DB::table('company_document_versions as versions')
                 ->leftJoin('users', 'users.id', '=', 'versions.changed_by')
@@ -1563,6 +1567,7 @@ class CentroPageController extends Controller
         $source = $this->companyDocumentRow($document);
 
         return Inertia::render('Centro/DocumentClone', [
+            'returnUserId' => $this->companyDocumentReturnUserId($request),
             'source' => [
                 'id' => $source->id,
                 'title' => $source->title,
@@ -7114,6 +7119,22 @@ class CentroPageController extends Controller
 
             return $group;
         });
+    }
+
+    private function companyDocumentReturnUserId(Request $request): ?string
+    {
+        $userId = $request->query('from_user');
+        if (! is_string($userId) || ! Str::isUuid($userId) || ! $this->canManageDocuments($request) ||
+            ! app(RolePermissionService::class)->allows($this->currentUserRole($request), 'documents.user_overview.view')) {
+            return null;
+        }
+
+        if ($this->currentUserRole($request) === 'admin' &&
+            ! DB::table('profiles')->where('user_id', $userId)->where('manager_user_id', $request->user()->id)->exists()) {
+            return null;
+        }
+
+        return DB::table('users')->where('id', $userId)->exists() ? $userId : null;
     }
 
     private function companyDocumentUserRows(Request $request)

@@ -5,7 +5,7 @@ import UserAvatar from '@/Components/UserAvatar.vue';
 import { dateIt, dateTimeIt } from '@/utils/formatters';
 import { Head, Link } from '@inertiajs/vue3';
 import { Check, ChevronLeft, FileText } from '@lucide/vue';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
     user: Object,
@@ -13,13 +13,14 @@ const props = defineProps({
     documentCategories: Object,
 });
 
-const categoryFilters = ref({});
+const selectedCategory = ref('all');
 const readCount = computed(() => (props.documents || []).filter((document) => document.user_read_at).length);
 const unreadCount = computed(() => Math.max(0, (props.documents || []).length - readCount.value));
 const currentYear = new Date().getFullYear();
-const selectedDocumentYear = ref(currentYear);
+const latestDocumentYear = (props.documents || []).reduce((latest, document) => Math.max(latest, documentYear(document)), 0) || currentYear;
+const selectedDocumentYear = ref(latestDocumentYear);
 const hoveredDocumentYear = ref(null);
-const yearVisibleCounts = ref({ [currentYear]: 5 });
+const yearVisibleCounts = ref({ [selectedDocumentYear.value]: 8 });
 const categoryOptions = computed(() => [
     { value: 'all', label: 'Tutte le categorie' },
     ...Object.entries(props.documentCategories || {}).map(([value, label]) => ({ value, label })),
@@ -36,7 +37,7 @@ const documentYearGroups = computed(() => {
 
     return Object.entries(groups)
         .sort(([yearA], [yearB]) => Number(yearB) - Number(yearA))
-        .map(([year, documents]) => ({ year, documents, total: documents.length }));
+        .map(([year, documents]) => ({ year: Number(year), documents, total: documents.length }));
 });
 
 function documentYear(document) {
@@ -44,61 +45,33 @@ function documentYear(document) {
     return Number.isFinite(year) ? year : currentYear;
 }
 
-function categoryFilterFor(year) {
-    return categoryFilters.value[year] || 'all';
-}
-
-function setCategoryFilter(year, value) {
-    categoryFilters.value = { ...categoryFilters.value, [year]: value };
-    yearVisibleCounts.value = { ...yearVisibleCounts.value, [year]: 5 };
-}
-
-function filterDocumentsByCategory(documents, year) {
-    const category = categoryFilterFor(year);
-    if (category === 'all') return documents;
-
-    return documents.filter((document) => (document.category || 'documenti_vari') === category);
-}
+watch(selectedCategory, () => {
+    yearVisibleCounts.value = { [selectedDocumentYear.value || currentYear]: 8 };
+});
 
 function categoryLabel(category) {
     return props.documentCategories?.[category || 'documenti_vari'] || 'Documenti Vari';
 }
 
-function categoryBadgeStyle(category) {
-    return {
-        compensi: { backgroundColor: '#DCFCE7', color: '#166534' },
-        contratti: { backgroundColor: '#DBEAFE', color: '#1E40AF' },
-        corsi_attestati: { backgroundColor: '#FEF3C7', color: '#92400E' },
-        documenti_identita: { backgroundColor: '#EDE9FE', color: '#5B21B6' },
-        documenti_vari: { backgroundColor: '#F1F5F9', color: '#334155' },
-    }[category || 'documenti_vari'] || { backgroundColor: '#F1F5F9', color: '#334155' };
-}
-
-function audienceLabel(document) {
-    if (document.audience === 'all') return 'Tutti';
-    if (document.audience === 'groups') return 'Gruppi';
-    return 'Utente';
-}
-
 function filteredDocumentsForYear(group) {
-    return filterDocumentsByCategory(group.documents, group.year);
+    return group.documents.filter((document) => selectedCategory.value === 'all' || (document.category || 'documenti_vari') === selectedCategory.value);
 }
 
 function visibleDocumentsForYear(group) {
-    return filteredDocumentsForYear(group).slice(0, yearVisibleCounts.value[group.year] || 5);
+    return filteredDocumentsForYear(group).slice(0, yearVisibleCounts.value[group.year] || 8);
 }
 
 function showMoreYearDocuments(year) {
     yearVisibleCounts.value = {
         ...yearVisibleCounts.value,
-        [year]: (yearVisibleCounts.value[year] || 5) + 5,
+        [year]: (yearVisibleCounts.value[year] || 8) + 8,
     };
 }
 
 function toggleDocumentYear(year) {
     selectedDocumentYear.value = selectedDocumentYear.value === year ? null : year;
     if (!yearVisibleCounts.value[year]) {
-        yearVisibleCounts.value = { ...yearVisibleCounts.value, [year]: 5 };
+        yearVisibleCounts.value = { ...yearVisibleCounts.value, [year]: 8 };
     }
 }
 
@@ -149,14 +122,10 @@ function yearScaleClass(year) {
                     <div class="flex flex-wrap items-end justify-between gap-4">
                         <div>
                             <h3 class="text-base font-semibold text-gray-900">Documenti assegnati</h3>
-                            <p class="mt-1 text-sm text-gray-500">Documenti {{ currentYear }} in evidenza e archivio diviso per anno.</p>
+                            <p class="mt-1 text-sm text-gray-500">Documenti {{ latestDocumentYear }} in evidenza e archivio diviso per anno.</p>
                         </div>
-                        <div v-if="selectedDocumentYear" class="w-full max-w-[260px]">
-                            <AppSelect
-                                :model-value="categoryFilterFor(selectedDocumentYear)"
-                                :options="categoryOptions"
-                                @update:model-value="setCategoryFilter(selectedDocumentYear, $event)"
-                            />
+                        <div class="w-full max-w-[260px]">
+                            <AppSelect v-model="selectedCategory" :options="categoryOptions" searchable />
                         </div>
                     </div>
 
@@ -181,35 +150,29 @@ function yearScaleClass(year) {
                                 :aria-hidden="selectedDocumentYear !== group.year"
                             >
                                 <div class="document-year-expand-inner">
-                                    <div class="mt-5 space-y-4 pb-7">
-                                        <div v-if="filteredDocumentsForYear(group).length" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                    <div class="mt-4 space-y-3 pb-6">
+                                        <div v-if="filteredDocumentsForYear(group).length" class="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                                             <Link
                                                 v-for="document in visibleDocumentsForYear(group)"
                                                 :key="document.id"
-                                                :href="route('documents.show', document.id)"
-                                                class="surface document-preview-card group p-4 transition hover:-translate-y-0.5"
+                                                :href="route('documents.show', { id: document.id, from_user: user.id })"
+                                                class="group min-w-0 rounded-[var(--radius-sm)] border border-gray-200 bg-white p-3 transition-colors hover:border-blue-200 hover:bg-blue-50/50 focus-visible:outline-2 focus-visible:outline-blue-400"
                                             >
-                                                <div class="flex items-start justify-between gap-3">
-                                                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]">
-                                                        <FileText class="h-5 w-5" :stroke-width="1.7" />
+                                                <div class="flex items-start justify-between gap-2">
+                                                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]">
+                                                        <FileText class="h-4 w-4" :stroke-width="1.7" />
                                                     </span>
-                                                    <span :class="['inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold', document.user_read_at ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700']">
-                                                        <Check v-if="document.user_read_at" class="h-3.5 w-3.5" :stroke-width="1.8" />
-                                                        {{ document.user_read_at ? 'Letto' : 'Da leggere' }}
+                                                    <span :class="['inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold', document.user_read_at ? 'bg-emerald-50 text-emerald-700' : document.user_opened_at ? 'bg-sky-50 text-sky-700' : 'bg-amber-50 text-amber-700']">
+                                                        <Check v-if="document.user_read_at" class="h-3 w-3" :stroke-width="1.8" />
+                                                        {{ document.user_read_at ? 'Letto' : document.user_opened_at ? 'Aperto' : 'Da leggere' }}
                                                     </span>
                                                 </div>
-                                                <p class="mt-3 line-clamp-2 text-sm font-semibold text-gray-900">{{ document.title }}</p>
-                                                <p class="mt-1 text-xs text-gray-500">{{ audienceLabel(document) }} · {{ dateIt(document.created_at) }}</p>
-                                                <p class="mt-2 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold" :style="categoryBadgeStyle(document.category)">
-                                                    {{ categoryLabel(document.category) }}
-                                                </p>
-                                                <div class="mt-4 rounded-[var(--radius-sm)] bg-gray-50 px-3 py-2 text-xs text-gray-500">
-                                                    <p>{{ document.user_opened_at ? `Aperto ${dateTimeIt(document.user_opened_at)}` : 'Non ancora aperto' }}</p>
-                                                    <p class="mt-1">{{ document.user_read_at ? `Letto ${dateTimeIt(document.user_read_at)}` : 'Conferma lettura mancante' }}</p>
-                                                </div>
+                                                <p class="mt-2 truncate text-sm font-semibold text-gray-900" :title="document.title">{{ document.title }}</p>
+                                                <p class="mt-1 truncate text-xs text-gray-500">{{ categoryLabel(document.category) }} · {{ dateIt(document.created_at) }}</p>
+                                                <p class="mt-1 truncate text-xs text-gray-400">{{ document.user_read_at ? `Letto ${dateTimeIt(document.user_read_at)}` : document.user_opened_at ? `Aperto ${dateTimeIt(document.user_opened_at)}` : 'Non ancora aperto' }}</p>
                                             </Link>
                                         </div>
-                                        <div v-else class="surface px-5 py-8 text-center text-sm text-gray-500">Nessun documento per questa categoria.</div>
+                                        <div v-else class="rounded-[var(--radius-sm)] border border-gray-200 bg-white/70 px-5 py-8 text-center text-sm text-gray-500">{{ selectedCategory === 'all' ? 'Nessun documento per questo anno.' : 'Nessun documento con il filtro selezionato.' }}</div>
 
                                         <div v-if="filteredDocumentsForYear(group).length > visibleDocumentsForYear(group).length" class="flex justify-center">
                                             <button type="button" class="btn btn-outline" @click="showMoreYearDocuments(group.year)">Carica altri</button>
@@ -219,7 +182,7 @@ function yearScaleClass(year) {
                             </div>
                         </section>
                     </div>
-                    <div v-else class="surface px-5 py-12 text-center text-sm text-gray-500">
+                    <div v-else class="rounded-[var(--radius-sm)] border border-gray-200 bg-white/70 px-5 py-12 text-center text-sm text-gray-500">
                         Nessun documento assegnato a questo utente.
                     </div>
                 </section>
@@ -304,14 +267,6 @@ function yearScaleClass(year) {
 .document-year-expand-inner {
     min-height: 0;
     overflow: hidden;
-}
-
-.document-preview-card {
-    box-shadow: 0 5px 14px rgb(28 42 73 / 0.055);
-}
-
-.document-preview-card:hover {
-    box-shadow: 0 8px 20px rgb(28 42 73 / 0.075);
 }
 
 @media (prefers-reduced-motion: reduce) {

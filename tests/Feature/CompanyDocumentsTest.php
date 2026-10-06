@@ -229,6 +229,10 @@ class CompanyDocumentsTest extends TestCase
             ->where('source.document_year', 2025)
             ->where('source.user_ids.0', $user->id)
             ->missing('source.file_path'));
+        $this->actingAs($admin)->get(route('documents.show', ['id' => $id, 'from_user' => $user->id]))
+            ->assertInertia(fn (Assert $page) => $page->where('returnUserId', $user->id));
+        $this->actingAs($admin)->get(route('documents.clone', ['id' => $id, 'from_user' => $user->id]))
+            ->assertInertia(fn (Assert $page) => $page->where('returnUserId', $user->id));
 
         $payload = [
             'title' => 'Copia', 'description' => 'Descrizione', 'category' => 'documenti_vari',
@@ -236,9 +240,9 @@ class CompanyDocumentsTest extends TestCase
             'publication_confirmed' => true,
         ];
         $this->actingAs($admin)->post(route('documents.store'), $payload)->assertSessionHasErrors('file');
-        $this->actingAs($admin)->post(route('documents.store'), [
+        $this->actingAs($admin)->post(route('documents.store', ['from_user' => $user->id]), [
             ...$payload, 'file' => UploadedFile::fake()->create('copia.pdf', 11, 'application/pdf'),
-        ])->assertSessionHasNoErrors();
+        ])->assertRedirect(route('documents.users.show', $user->id))->assertSessionHasNoErrors();
         $this->assertDatabaseCount('company_documents', 2);
         $this->assertNotEquals($originalPath, DB::table('company_documents')->where('title', 'Copia')->value('file_path'));
     }
