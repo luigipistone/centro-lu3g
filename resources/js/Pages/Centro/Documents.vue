@@ -887,17 +887,17 @@ function deleteLabel(type) {
                 <section v-if="canManage && canViewUserOverview && activeAdminSection === 'documents'" class="space-y-4">
                     <h3 class="text-base font-semibold text-gray-900">Documenti per utente</h3>
 
-                    <div v-if="documentUsers.length" class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+                    <div v-if="documentUsers.length" class="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
                         <Link
                             v-for="user in documentUsers"
                             :key="user.id"
                             :href="route('documents.users.show', user.id)"
                             :aria-label="`${user.name}: ${user.read_count} letti, ${user.opened_count} aperti, ${user.unread_count} da leggere`"
                             :title="user.name"
-                            class="flex min-w-0 items-center justify-between gap-3 rounded-[var(--radius-sm)] border border-gray-200/70 bg-white/55 px-3 py-2 transition-colors hover:border-gray-300 hover:bg-white focus-visible:outline-2 focus-visible:outline-[hsl(var(--primary-app))]"
+                            class="flex min-w-0 items-center justify-between gap-3 rounded-[var(--radius-sm)] border border-gray-200/70 bg-white/55 px-3 py-3 transition-colors hover:border-gray-300 hover:bg-white focus-visible:outline-2 focus-visible:outline-[hsl(var(--primary-app))]"
                         >
-                            <UserAvatar :user="user" size="sm" />
-                            <div class="flex shrink-0 items-center gap-3 text-sm font-semibold tabular-nums">
+                            <UserAvatar :user="user" size="md" />
+                            <div class="flex shrink-0 items-center gap-3 text-[15px] font-semibold tabular-nums">
                                 <span class="text-emerald-700" :title="`${user.read_count} letti`">{{ user.read_count }}</span>
                                 <span class="text-sky-700" :title="`${user.opened_count} aperti`">{{ user.opened_count }}</span>
                                 <span class="text-amber-700" :title="`${user.unread_count} da leggere`">{{ user.unread_count }}</span>
