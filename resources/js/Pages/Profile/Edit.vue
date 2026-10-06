@@ -2,6 +2,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppDateInput from '@/Components/AppDateInput.vue';
 import AppSelect from '@/Components/AppSelect.vue';
+import DossierAssignedDocuments from '@/Components/DossierAssignedDocuments.vue';
 import DeleteUserForm from './Partials/DeleteUserForm.vue';
 import UpdatePasswordForm from './Partials/UpdatePasswordForm.vue';
 import UpdateProfileInformationForm from './Partials/UpdateProfileInformationForm.vue';
@@ -44,7 +45,6 @@ const profileTabs = [
     { value: 'security', label: 'Sicurezza', icon: ShieldCheck },
 ];
 const employmentStatusLabels = { active: 'Attivo', suspended: 'Sospeso', ended: 'Terminato' };
-const documentCategoryLabels = { compensation: 'Compensi', contracts: 'Contratti', courses: 'Corsi e attestati', identity: "Documenti d'identità", other: 'Documenti vari' };
 const dossierStatusLabels = { missing: 'Mancante', valid: 'Valido', expiring: 'In scadenza', expired: 'Scaduto', replaced: 'Sostituito' };
 const dossierStatusClasses = { missing: 'bg-red-50 text-red-700', expired: 'bg-red-50 text-red-700', expiring: 'bg-amber-50 text-amber-700', valid: 'bg-emerald-50 text-emerald-700', replaced: 'bg-gray-100 text-gray-500' };
 const activeEmployeeDossierItems = computed(() => props.employeeDossier.items.filter((item) => !item.replaced_at));
@@ -276,14 +276,9 @@ watch(() => absenceForm.type, () => {
                         </div>
                     </div>
                     <p v-else class="mt-6 text-sm text-gray-500">Il fascicolo personale non contiene ancora documenti strutturati.</p>
-                    <h3 class="mt-8 border-t border-gray-100 pt-6 text-sm font-semibold text-gray-900">Documenti aziendali assegnati</h3>
-                    <div v-if="dossierDocuments.length" class="mt-6 divide-y divide-gray-100 rounded-[var(--radius-sm)] border border-gray-100">
-                        <InertiaLink v-for="document in dossierDocuments" :key="document.id" :href="route('documents.show', document.id)" class="flex items-center justify-between gap-4 px-4 py-3 transition hover:bg-gray-50">
-                            <div><p class="text-sm font-semibold text-gray-900">{{ document.title }}</p><p class="mt-1 text-xs text-gray-500">{{ documentCategoryLabels[document.category] || 'Documento' }} · {{ formatDate(String(document.created_at).slice(0, 10)) }}</p></div>
-                            <span :class="['rounded-full px-3 py-1 text-xs font-semibold', document.read_at ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700']">{{ document.read_at ? 'Letto' : 'Da leggere' }}</span>
-                        </InertiaLink>
-                    </div>
-                    <p v-else class="mt-6 text-sm text-gray-500">Nessun documento assegnato.</p>
+                </section>
+                <section v-if="profileTab === 'dossier'" class="surface p-4 sm:p-8">
+                    <DossierAssignedDocuments :documents="dossierDocuments" read-field="read_at" />
                 </section>
 
                 <section v-if="profileTab === 'absences'" class="surface p-4 sm:p-8">

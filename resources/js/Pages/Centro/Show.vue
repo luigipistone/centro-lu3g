@@ -3,6 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppDateInput from '@/Components/AppDateInput.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import AppTimeInput from '@/Components/AppTimeInput.vue';
+import DossierAssignedDocuments from '@/Components/DossierAssignedDocuments.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import {
     activityText as formatActivityText,
@@ -6033,7 +6034,9 @@ onUnmounted(() => {
                                 <div v-for="item in historicalDossierItems" :key="item.id" class="flex items-center gap-3 py-3 opacity-70"><div class="min-w-0 flex-1"><p class="truncate text-sm font-semibold text-gray-700">{{ item.title }} · v{{ item.version }}</p><p class="text-xs text-gray-500">{{ item.type_label }} · sostituito</p></div><a v-if="item.file_path" :href="route('users.dossier-items.file', [record.id, item.id])" target="_blank" class="icon-btn h-9 w-9"><FileText class="h-4 w-4" /></a></div>
                             </div>
                         </div>
-                        <div class="mt-7 border-t border-gray-100 pt-6"><h4 class="text-sm font-semibold text-gray-900">Documenti aziendali assegnati</h4><div v-if="related.dossierDocuments?.length" class="mt-3 divide-y divide-gray-100 rounded-[var(--radius-sm)] border border-gray-100"><Link v-for="document in related.dossierDocuments" :key="document.id" :href="route('documents.show', document.id)" class="flex items-center justify-between gap-4 px-4 py-3 transition hover:bg-gray-50"><span class="text-sm font-semibold text-gray-900">{{ document.title }}</span><span :class="['rounded-full px-3 py-1 text-xs font-semibold', document.user_read_at ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700']">{{ document.user_read_at ? 'Letto' : 'Da leggere' }}</span></Link></div><p v-else class="mt-3 text-sm text-gray-500">Nessun documento aziendale assegnato.</p></div>
+                    </section>
+                    <section v-if="userDetailTab === 'dossier'" class="surface rounded-md p-5">
+                        <DossierAssignedDocuments :documents="related.dossierDocuments || []" />
                     </section>
                 </section>
 

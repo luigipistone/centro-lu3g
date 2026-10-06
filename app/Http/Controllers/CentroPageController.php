@@ -2750,7 +2750,7 @@ class CentroPageController extends Controller
                 'organizationOptions' => DB::table('employee_organization_options')->orderBy('name')->get(),
                 'fieldAccess' => $this->userProfileFieldAccess($request),
                 'managerOptions' => $this->userOptions()->where('id', '!=', $id)->values(),
-                'dossierDocuments' => $this->companyDocumentRows($id, false),
+                'dossierDocuments' => $this->companyDocumentRows($id, false, null, null, null),
                 'employeeDossier' => $this->employeeDossierData($request, $id),
                 'performance' => $this->userPerformanceStats($id),
                 'linkedAccountSummary' => app(AccountArchiveService::class)->summary($id),
@@ -6427,7 +6427,7 @@ class CentroPageController extends Controller
         return $this->companyMessageRecipientIds($message->id)->contains($request->user()?->id);
     }
 
-    private function companyDocumentRows(?string $userId = null, bool $adminView = false, ?int $year = null, ?string $audience = null)
+    private function companyDocumentRows(?string $userId = null, bool $adminView = false, ?int $year = null, ?string $audience = null, ?int $limit = 150)
     {
         $query = DB::table('company_documents')
             ->leftJoin('users', 'users.id', '=', 'company_documents.created_by')
@@ -6455,7 +6455,7 @@ class CentroPageController extends Controller
             });
         }
 
-        $documents = $query->limit($adminView ? 300 : 150)->get();
+        $documents = $query->when($limit !== null, fn ($query) => $query->limit($adminView ? max($limit, 300) : $limit))->get();
 
         return $documents->map(fn ($document) => $this->companyDocumentRow($document, $userId));
     }

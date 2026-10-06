@@ -322,7 +322,7 @@ class ProfileController extends Controller
             })
             ->whereIn('d.id', $ids)
             ->orderByDesc('d.created_at')
-            ->select('d.id', 'd.title', 'd.category', 'd.created_at', 'r.read_at')
+            ->select('d.id', 'd.title', 'd.category', 'd.document_year', 'd.created_at', 'r.read_at')
             ->get()->map(fn ($row) => (array) $row)->all();
     }
 
