@@ -31,6 +31,13 @@ const editForm = useForm({
 const availableManagers = computed(() => (props.managerOptions || []).filter((user) => !(props.managerAccess || []).includes(user.id)).map((user) => ({ value: user.id, label: user.name })));
 
 const documentCategoryOptions = computed(() => Object.entries(props.documentCategories || {}).map(([value, label]) => ({ value, label })));
+const documentYearOptions = computed(() => {
+    const latestYear = Math.min(2100, Math.max(new Date().getFullYear() + 1, Number(props.document.document_year) || 2000));
+    return Array.from({ length: latestYear - 1999 }, (_, index) => ({
+        value: latestYear - index,
+        label: String(latestYear - index),
+    }));
+});
 
 function categoryLabel(category) {
     return props.documentCategories?.[category || 'documenti_vari'] || 'Documenti Vari';
@@ -164,7 +171,7 @@ function saveDocument() {
                                     <span v-if="editForm.errors.category" class="text-xs text-red-600">{{ editForm.errors.category }}</span>
                                 </label>
                                 <label class="block text-sm font-medium text-gray-700">Anno
-                                    <input v-model.number="editForm.document_year" type="number" min="2000" max="2100" class="input mt-1 w-full" required />
+                                    <AppSelect v-model="editForm.document_year" class="mt-1" :options="documentYearOptions" searchable />
                                     <span v-if="editForm.errors.document_year" class="text-xs text-red-600">{{ editForm.errors.document_year }}</span>
                                 </label>
                                 <label class="block text-sm font-medium text-gray-700">Sostituisci PDF
