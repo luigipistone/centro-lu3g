@@ -884,41 +884,23 @@ function deleteLabel(type) {
                     <div v-else class="surface px-5 py-12 text-center text-sm text-gray-500">Nessun gruppo creato.</div>
                 </section>
 
-                <section v-if="canManage && canViewUserOverview && activeAdminSection === 'documents'" class="surface p-5">
-                    <div class="mb-4">
-                        <div>
-                            <h3 class="text-base font-semibold text-gray-900">Documenti per utente</h3>
-                            <p class="mt-1 text-sm text-gray-500">Apri il box di un utente per vedere tutti i suoi documenti e lo stato di lettura.</p>
-                        </div>
-                    </div>
+                <section v-if="canManage && canViewUserOverview && activeAdminSection === 'documents'" class="space-y-4">
+                    <h3 class="text-base font-semibold text-gray-900">Documenti per utente</h3>
 
-                    <div v-if="documentUsers.length" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div v-if="documentUsers.length" class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
                         <Link
                             v-for="user in documentUsers"
                             :key="user.id"
                             :href="route('documents.users.show', user.id)"
-                            class="rounded-[var(--radius)] border border-white bg-white/72 p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]"
+                            :aria-label="`${user.name}: ${user.read_count} letti, ${user.opened_count} aperti, ${user.unread_count} da leggere`"
+                            :title="user.name"
+                            class="flex min-w-0 items-center justify-between gap-3 rounded-[var(--radius-sm)] border border-gray-200/70 bg-white/55 px-3 py-2 transition-colors hover:border-gray-300 hover:bg-white focus-visible:outline-2 focus-visible:outline-[hsl(var(--primary-app))]"
                         >
-                            <div class="flex items-center gap-3">
-                                <UserAvatar :user="user" size="md" />
-                                <div class="min-w-0">
-                                    <p class="truncate text-sm font-semibold text-gray-900">{{ user.name }}</p>
-                                    <p class="truncate text-xs text-gray-500">{{ user.email }}</p>
-                                </div>
-                            </div>
-                            <div class="mt-4 grid grid-cols-3 gap-1.5 text-center">
-                                <div class="rounded-[var(--radius-sm)] bg-gray-50 px-1.5 py-1.5">
-                                    <p class="text-sm font-semibold text-gray-900">{{ user.documents_count }}</p>
-                                    <p class="whitespace-nowrap text-[9px] font-semibold uppercase tracking-normal text-gray-400">Totali</p>
-                                </div>
-                                <div class="rounded-[var(--radius-sm)] bg-emerald-50 px-1.5 py-1.5">
-                                    <p class="text-sm font-semibold text-emerald-700">{{ user.read_count }}</p>
-                                    <p class="whitespace-nowrap text-[9px] font-semibold uppercase tracking-normal text-emerald-500">Letti</p>
-                                </div>
-                                <div class="rounded-[var(--radius-sm)] bg-amber-50 px-1.5 py-1.5">
-                                    <p class="text-sm font-semibold text-amber-700">{{ user.unread_count }}</p>
-                                    <p class="whitespace-nowrap text-[9px] font-semibold uppercase tracking-normal text-amber-500">Da leggere</p>
-                                </div>
+                            <UserAvatar :user="user" size="sm" />
+                            <div class="flex shrink-0 items-center gap-3 text-sm font-semibold tabular-nums">
+                                <span class="text-emerald-700" :title="`${user.read_count} letti`">{{ user.read_count }}</span>
+                                <span class="text-sky-700" :title="`${user.opened_count} aperti`">{{ user.opened_count }}</span>
+                                <span class="text-amber-700" :title="`${user.unread_count} da leggere`">{{ user.unread_count }}</span>
                             </div>
                         </Link>
                     </div>

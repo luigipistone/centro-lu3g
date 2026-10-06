@@ -7129,7 +7129,8 @@ class CentroPageController extends Controller
                 ->filter(fn ($document) => $this->canAccessCompanyDocument($request, $document));
             $user->documents_count = $documents->count();
             $user->read_count = $documents->filter(fn ($document) => filled($document->user_read_at))->count();
-            $user->unread_count = max(0, $user->documents_count - $user->read_count);
+            $user->opened_count = $documents->filter(fn ($document) => blank($document->user_read_at) && filled($document->user_opened_at))->count();
+            $user->unread_count = max(0, $user->documents_count - $user->read_count - $user->opened_count);
 
             return $user;
         });

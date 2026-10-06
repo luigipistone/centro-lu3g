@@ -95,6 +95,13 @@ class CompanyDocumentsTest extends TestCase
                 ->where('document.user_read_at', null)
             );
 
+        $this->actingAs($admin)->get(route('documents.list'))
+            ->assertInertia(fn (Assert $page) => $page->where('documentUsers', function ($users) use ($user) {
+                $overview = collect($users)->firstWhere('id', $user->id);
+
+                return data_get($overview, 'opened_count') === 1 && data_get($overview, 'unread_count') === 0;
+            }));
+
         $this
             ->actingAs($user)
             ->post(route('documents.read', $documentId))
@@ -104,6 +111,13 @@ class CompanyDocumentsTest extends TestCase
             ->where('company_document_id', $documentId)
             ->where('user_id', $user->id)
             ->value('read_at'));
+
+        $this->actingAs($admin)->get(route('documents.list'))
+            ->assertInertia(fn (Assert $page) => $page->where('documentUsers', function ($users) use ($user) {
+                $overview = collect($users)->firstWhere('id', $user->id);
+
+                return data_get($overview, 'read_count') === 1 && data_get($overview, 'opened_count') === 0;
+            }));
 
         $this
             ->actingAs($admin)
