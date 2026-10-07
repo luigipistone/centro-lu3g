@@ -95,6 +95,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/attendance/registry/{kind}/export', [CentroPageController::class, 'exportAttendanceRegistry'])->whereIn('kind', ['entries'])->name('attendance.registry.export');
     Route::get('/documents', [CentroPageController::class, 'companyDocuments'])->name('documents.index');
     Route::post('/documents', [CentroPageController::class, 'storeCompanyDocument'])->name('documents.store');
+    Route::post('/documents/compensi/bulk', [CentroPageController::class, 'storeCompanyCompensationDocuments'])->name('documents.compensi.bulk.store');
+    Route::post('/documents/compensi/bulk/check', [CentroPageController::class, 'checkCompanyCompensationDocuments'])->name('documents.compensi.bulk.check');
     Route::get('/documents/list', [CentroPageController::class, 'companyDocuments'])->defaults('documentView', 'documents')->name('documents.list');
     Route::get('/documents/messages', [CentroPageController::class, 'companyDocuments'])->defaults('documentView', 'messages')->name('documents.messages');
     Route::get('/documents/groups', [CentroPageController::class, 'companyDocuments'])->defaults('documentView', 'groups')->name('documents.groups');

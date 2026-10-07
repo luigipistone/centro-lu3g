@@ -17,6 +17,67 @@ class CompanyDocumentsTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_only_superadmin_can_publish_compensation_folder_with_monthly_titles(): void
+    {
+        Storage::fake('local');
+        $superadmin = User::factory()->create();
+        $manager = User::factory()->create();
+        $recipient = User::factory()->create();
+        $this->role($superadmin, 'superadmin');
+        $this->role($manager, 'admin');
+        $this->role($recipient, 'editor');
+        $payload = [
+            'user_id' => $recipient->id,
+            'publication_confirmed' => true,
+            'files' => [
+                UploadedFile::fake()->create('ced.1.25.pdf', 12, 'application/pdf'),
+                UploadedFile::fake()->create('ced.2.25.pdf', 12, 'application/pdf'),
+            ],
+        ];
+
+        $this->actingAs($manager)->post(route('documents.compensi.bulk.store'), $payload)->assertForbidden();
+        $this->actingAs($manager)->postJson(route('documents.compensi.bulk.check'), [
+            'user_id' => $recipient->id, 'titles' => ['Compenso Gennaio 2025'],
+        ])->assertForbidden();
+        $this->assertDatabaseCount('company_documents', 0);
+
+        $this->actingAs($superadmin)->post(route('documents.compensi.bulk.store'), $payload)
+            ->assertRedirect(route('documents.users.show', $recipient->id))->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('company_documents', ['title' => 'Compenso Gennaio 2025', 'category' => 'compensi', 'document_year' => 2025, 'audience' => 'users']);
+        $this->assertDatabaseHas('company_documents', ['title' => 'Compenso Febbraio 2025', 'category' => 'compensi', 'document_year' => 2025]);
+        $this->assertDatabaseCount('company_document_user', 2);
+        $this->assertDatabaseHas('notifications', ['user_id' => $recipient->id, 'type' => 'company_document_created']);
+        $this->actingAs($superadmin)->postJson(route('documents.compensi.bulk.check'), [
+            'user_id' => $recipient->id,
+            'titles' => ['Compenso Gennaio 2025', 'Compenso Marzo 2025'],
+        ])->assertOk()->assertJsonPath('existing.0', 'Compenso Gennaio 2025')->assertJsonCount(1, 'existing');
+
+        $this->actingAs($superadmin)->post(route('documents.compensi.bulk.store'), [
+            'user_id' => $recipient->id,
+            'publication_confirmed' => true,
+            'files' => [UploadedFile::fake()->create('ced.1.25.pdf', 12, 'application/pdf')],
+        ])->assertSessionHasErrors('files');
+        $this->assertDatabaseCount('company_documents', 2);
+    }
+
+    public function test_compensation_folder_rejects_invalid_month_without_partial_publication(): void
+    {
+        Storage::fake('local');
+        $superadmin = User::factory()->create();
+        $recipient = User::factory()->create();
+        $this->role($superadmin, 'superadmin');
+
+        $this->actingAs($superadmin)->post(route('documents.compensi.bulk.store'), [
+            'user_id' => $recipient->id,
+            'publication_confirmed' => true,
+            'files' => [
+                UploadedFile::fake()->create('ced.1.25.pdf', 12, 'application/pdf'),
+                UploadedFile::fake()->create('ced.13.25.pdf', 12, 'application/pdf'),
+            ],
+        ])->assertSessionHasErrors('files');
+        $this->assertDatabaseCount('company_documents', 0);
+    }
+
     public function test_manager_document_subsections_follow_individual_permissions(): void
     {
         $manager = User::factory()->create();

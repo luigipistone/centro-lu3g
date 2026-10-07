@@ -1522,6 +1522,132 @@ class CentroPageController extends Controller
             ->with('status', 'Documento pubblicato.');
     }
 
+    public function checkCompanyCompensationDocuments(Request $request): JsonResponse
+    {
+        $this->ensureSuperadmin($request);
+        $payload = $request->validate([
+            'user_id' => ['required', 'uuid', 'exists:users,id'],
+            'titles' => ['required', 'array', 'min:1', 'max:100'],
+            'titles.*' => ['required', 'string', 'max:255'],
+        ]);
+
+        $existing = DB::table('company_documents as d')
+            ->join('company_document_user as du', 'du.company_document_id', '=', 'd.id')
+            ->where('du.user_id', $payload['user_id'])
+            ->where('d.category', 'compensi')
+            ->whereIn('d.title', $payload['titles'])
+            ->pluck('d.title')
+            ->unique()
+            ->values();
+
+        return response()->json(['existing' => $existing]);
+    }
+
+    public function storeCompanyCompensationDocuments(Request $request): JsonResponse|RedirectResponse
+    {
+        $this->ensureSuperadmin($request);
+
+        $payload = $request->validate([
+            'user_id' => ['required', 'uuid', 'exists:users,id'],
+            'publication_confirmed' => ['required', 'accepted'],
+            'notify_recipient' => ['sometimes', 'boolean'],
+            'files' => ['required', 'array', 'min:1', 'max:60'],
+            'files.*' => ['required', 'file', 'mimes:pdf', 'max:20480'],
+        ]);
+
+        $months = [1 => 'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+        $documents = [];
+        foreach ($payload['files'] as $file) {
+            $name = $file->getClientOriginalName();
+            if (! preg_match('/^ced\.(0?[1-9]|1[0-2])\.(\d{2})\.pdf$/i', $name, $match)) {
+                throw ValidationException::withMessages(['files' => 'Sono ammessi solo PDF mensili con nome ced.mese.anno.pdf (mesi da 1 a 12).']);
+            }
+
+            $month = (int) $match[1];
+            $year = 2000 + (int) $match[2];
+            $title = 'Compenso '.$months[$month].' '.$year;
+            $key = $year.'-'.$month;
+            if (isset($documents[$key])) {
+                throw ValidationException::withMessages(['files' => 'La cartella contiene due file per '.$title.'.']);
+            }
+
+            $alreadyPublished = DB::table('company_documents as d')
+                ->join('company_document_user as du', 'du.company_document_id', '=', 'd.id')
+                ->where('du.user_id', $payload['user_id'])
+                ->where('d.category', 'compensi')
+                ->where('d.document_year', $year)
+                ->where('d.title', $title)
+                ->exists();
+            if ($alreadyPublished) {
+                throw ValidationException::withMessages(['files' => $title.' risulta già pubblicato per questa persona.']);
+            }
+
+            $documents[$key] = compact('file', 'title', 'year');
+        }
+
+        $storedPaths = [];
+        $published = [];
+        try {
+            DB::transaction(function () use ($documents, $payload, $request, &$storedPaths, &$published) {
+                $now = now();
+                foreach ($documents as $document) {
+                    $file = $document['file'];
+                    $path = $file->store('company-documents', 'local');
+                    $storedPaths[] = $path;
+                    Storage::disk('local')->setVisibility($path, 'private');
+                    $id = (string) Str::uuid();
+                    DB::table('company_documents')->insert([
+                        'id' => $id,
+                        'title' => $document['title'],
+                        'description' => null,
+                        'category' => 'compensi',
+                        'document_year' => $document['year'],
+                        'audience' => 'users',
+                        'file_path' => $path,
+                        'file_name' => $file->getClientOriginalName(),
+                        'file_mime' => 'application/pdf',
+                        'file_size' => $file->getSize() ?: 0,
+                        'created_by' => $request->user()->id,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ]);
+                    DB::table('company_document_user')->insert([
+                        'id' => (string) Str::uuid(),
+                        'company_document_id' => $id,
+                        'user_id' => $payload['user_id'],
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ]);
+                    $published[] = $id;
+                }
+            });
+        } catch (\Throwable $exception) {
+            Storage::disk('local')->delete($storedPaths);
+            throw $exception;
+        }
+
+        foreach ($published as $id) {
+            $this->ensureCompanyDocumentReadRows($id, collect([$payload['user_id']]));
+        }
+        if ($request->boolean('notify_recipient', true)) {
+            $this->notifyUsers(
+                collect([$payload['user_id']]),
+                $request->user()->id,
+                'company_document_created',
+                $request->user()->name.' ha pubblicato nuovi documenti nella categoria Compensi.',
+            );
+        }
+        $request->attributes->set('audit_subject_id', $payload['user_id']);
+        $request->attributes->set('audit_state_after', ['category' => 'compensi', 'document_ids' => $published, 'count' => count($published)]);
+
+        if ($request->expectsJson()) {
+            return response()->json(['published' => count($published)]);
+        }
+
+        return redirect()->route('documents.users.show', ['userId' => $payload['user_id']])
+            ->with('status', count($published).' documenti Compensi pubblicati.');
+    }
+
     public function showCompanyDocument(Request $request, string $id): Response
     {
         $document = DB::table('company_documents')->where('id', $id)->first();
