@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Services\PayslipRecognitionService;
 use App\Services\ScheduledCompanyMessageService;
 use Carbon\Carbon;
+use Dompdf\Dompdf;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +18,74 @@ use Tests\TestCase;
 class CompanyDocumentsTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_payslip_recognition_extracts_period_and_employee_from_compact_text(): void
+    {
+        $text = '097620309644984939309SETTEMBRE 202600011565'."\n".
+            '000024 SAPONARA GRETA SPNGRT95L63F205Q 24H011';
+        $result = app(PayslipRecognitionService::class)->recognizeText($text);
+
+        $this->assertSame('Compenso Settembre 2026', $result['title']);
+        $this->assertSame('SAPONARA GRETA', $result['name']);
+        $this->assertSame('SPNGRT95L63F205Q', $result['fiscal_code']);
+    }
+
+    public function test_payslip_recognition_page_and_upload_are_superadmin_only(): void
+    {
+        $manager = User::factory()->create();
+        $superadmin = User::factory()->create();
+        $this->role($manager, 'admin');
+        $this->role($superadmin, 'superadmin');
+
+        $this->actingAs($manager)->get(route('documents.compensi.recognition'))->assertForbidden();
+        $this->actingAs($manager)->postJson(route('documents.compensi.recognition.preview'), [])->assertForbidden();
+        $this->actingAs($manager)->postJson(route('documents.compensi.recognition.publish'), [])->assertForbidden();
+        $this->actingAs($superadmin)->get(route('documents.compensi.recognition'))
+            ->assertOk()->assertInertia(fn (Assert $page) => $page->component('Centro/PayslipRecognition')->has('users'));
+    }
+
+    public function test_payslip_preview_requires_explicit_publication_and_blocks_duplicates(): void
+    {
+        Storage::fake('local');
+        $superadmin = User::factory()->create();
+        $recipient = User::factory()->create(['name' => 'Greta Saponara']);
+        $this->role($superadmin, 'superadmin');
+        DB::table('profiles')->where('user_id', $recipient->id)->update(['fiscal_code' => 'SPNGRT95L63F205Q']);
+
+        $makePdf = function (): UploadedFile {
+            $pdf = new Dompdf;
+            $pdf->loadHtml('<p>SETTEMBRE 2026</p><p>000024 SAPONARA GRETA SPNGRT95L63F205Q</p>');
+            $pdf->render();
+            $path = tempnam(sys_get_temp_dir(), 'payslip');
+            file_put_contents($path, $pdf->output());
+
+            return new UploadedFile($path, 'CED.9.26-9.pdf', 'application/pdf', null, true);
+        };
+
+        $this->actingAs($superadmin)->postJson(route('documents.compensi.recognition.preview'), [
+            'files' => [$makePdf()],
+        ])->assertOk()->assertJsonPath('rows.0.user_id', $recipient->id)
+            ->assertJsonPath('rows.0.title', 'Compenso Settembre 2026');
+        $this->assertDatabaseCount('company_documents', 0);
+
+        $this->actingAs($superadmin)->post(route('documents.compensi.recognition.publish'), [
+            'files' => [$makePdf()], 'user_ids' => [$recipient->id], 'selected' => [true],
+        ])->assertSessionHasErrors('publication_confirmed');
+        $this->assertDatabaseCount('company_documents', 0);
+
+        $this->actingAs($superadmin)->postJson(route('documents.compensi.recognition.publish'), [
+            'files' => [$makePdf()], 'user_ids' => [$recipient->id], 'selected' => [true],
+            'publication_confirmed' => true,
+        ])->assertOk()->assertJsonPath('published', 1);
+        $this->assertDatabaseHas('company_documents', ['title' => 'Compenso Settembre 2026', 'category' => 'compensi', 'audience' => 'users']);
+        $this->assertDatabaseCount('company_document_user', 1);
+
+        $this->actingAs($superadmin)->post(route('documents.compensi.recognition.publish'), [
+            'files' => [$makePdf()], 'user_ids' => [$recipient->id], 'selected' => [true],
+            'publication_confirmed' => true,
+        ])->assertSessionHasErrors('files');
+        $this->assertDatabaseCount('company_documents', 1);
+    }
 
     public function test_only_superadmin_can_publish_compensation_folder_with_monthly_titles(): void
     {

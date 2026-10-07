@@ -7,7 +7,7 @@ import CompensationBulkModal from '@/Components/CompensationBulkModal.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { dateIt } from '@/utils/formatters';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { Bold, Check, FileText, FolderUp, Heading3, Italic, Link2, List, ListOrdered, MessageSquare, Pause, Play, Plus, Quote, Send, Trash2, Underline, Users, X } from '@lucide/vue';
+import { Bold, Check, FileSearch, FileText, FolderUp, Heading3, Italic, Link2, List, ListOrdered, MessageSquare, Pause, Play, Plus, Quote, Send, Trash2, Underline, Users, X } from '@lucide/vue';
 import { computed, nextTick, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -483,6 +483,9 @@ function deleteLabel(type) {
                         </Link>
                     </div>
                     <div v-if="activeAdminSection === 'documents'" class="flex items-center gap-2">
+                        <Link v-if="isSuperadmin" :href="route('documents.compensi.recognition')" class="btn btn-outline" title="Riconosci cedolini" aria-label="Riconosci cedolini">
+                            <FileSearch class="h-4 w-4" :stroke-width="1.7" />
+                        </Link>
                         <button v-if="isSuperadmin" type="button" class="btn btn-outline" title="Carica una cartella di Compensi" aria-label="Carica una cartella di Compensi" @click="createModal = 'compensi'">
                             <FolderUp class="h-4 w-4" :stroke-width="1.7" />
                         </button>

@@ -97,6 +97,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/documents', [CentroPageController::class, 'storeCompanyDocument'])->name('documents.store');
     Route::post('/documents/compensi/bulk', [CentroPageController::class, 'storeCompanyCompensationDocuments'])->name('documents.compensi.bulk.store');
     Route::post('/documents/compensi/bulk/check', [CentroPageController::class, 'checkCompanyCompensationDocuments'])->name('documents.compensi.bulk.check');
+    Route::get('/documents/compensi/riconoscimento', [CentroPageController::class, 'companyPayslipRecognition'])->name('documents.compensi.recognition');
+    Route::post('/documents/compensi/riconoscimento/preview', [CentroPageController::class, 'previewCompanyPayslips'])->name('documents.compensi.recognition.preview');
+    Route::post('/documents/compensi/riconoscimento/publish', [CentroPageController::class, 'publishCompanyPayslips'])->name('documents.compensi.recognition.publish');
     Route::get('/documents/list', [CentroPageController::class, 'companyDocuments'])->defaults('documentView', 'documents')->name('documents.list');
     Route::get('/documents/messages', [CentroPageController::class, 'companyDocuments'])->defaults('documentView', 'messages')->name('documents.messages');
     Route::get('/documents/groups', [CentroPageController::class, 'companyDocuments'])->defaults('documentView', 'groups')->name('documents.groups');

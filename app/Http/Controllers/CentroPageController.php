@@ -8,6 +8,7 @@ use App\Services\AttendanceService;
 use App\Services\CentroBackupService;
 use App\Services\CentroNotificationService;
 use App\Services\RolePermissionService;
+use App\Services\PayslipRecognitionService;
 use App\Services\SectionAvailabilityService;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
@@ -1520,6 +1521,138 @@ class CentroPageController extends Controller
 
         return redirect()->route($returnUserId ? 'documents.users.show' : 'documents.list', $returnUserId ? ['userId' => $returnUserId] : [])
             ->with('status', 'Documento pubblicato.');
+    }
+
+    public function companyPayslipRecognition(Request $request): Response
+    {
+        $this->ensureSuperadmin($request);
+
+        return Inertia::render('Centro/PayslipRecognition', [
+            'users' => DB::table('users')
+                ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
+                ->select('users.id', 'users.name', 'profiles.fiscal_code')
+                ->orderBy('users.name')
+                ->get(),
+        ]);
+    }
+
+    public function previewCompanyPayslips(Request $request, PayslipRecognitionService $recognizer): JsonResponse
+    {
+        $this->ensureSuperadmin($request);
+        $payload = $request->validate([
+            'files' => ['required', 'array', 'min:1', 'max:60'],
+            'files.*' => ['required', 'file', 'mimes:pdf', 'max:20480'],
+        ]);
+        $users = DB::table('users')->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
+            ->select('users.id', 'users.name', 'profiles.fiscal_code')->get();
+        $rows = [];
+        foreach ($payload['files'] as $index => $file) {
+            $data = $recognizer->recognize($file->getRealPath());
+            $matches = $data ? $users->filter(function ($user) use ($data) {
+                if ($user->fiscal_code) {
+                    return strtoupper($user->fiscal_code) === $data['fiscal_code'];
+                }
+                $tokens = preg_split('/\s+/u', mb_strtoupper($user->name));
+                $payslipName = mb_strtoupper($data['name']);
+
+                return count($tokens) >= 2 && collect($tokens)->every(fn ($token) => mb_strlen($token) > 1 && preg_match('/(?:^|\s)'.preg_quote($token, '/').'(?=\s|$)/u', $payslipName));
+            })->values() : collect();
+            $user = $matches->count() === 1 ? $matches->first() : null;
+            $duplicate = $user && $data && DB::table('company_documents as d')
+                ->join('company_document_user as du', 'du.company_document_id', '=', 'd.id')
+                ->where('du.user_id', $user->id)->where('d.category', 'compensi')
+                ->where('d.document_year', $data['year'])->where('d.title', $data['title'])->exists();
+            $rows[] = [
+                'index' => $index,
+                'file_name' => $file->getClientOriginalName(),
+                'name' => $data['name'] ?? null,
+                'title' => $data['title'] ?? null,
+                'month' => $data['month'] ?? null,
+                'year' => $data['year'] ?? null,
+                'user_id' => $user?->id,
+                'match' => $user ? ($user->fiscal_code && strtoupper($user->fiscal_code) === $data['fiscal_code'] ? 'fiscal_code' : 'name') : null,
+                'duplicate' => (bool) $duplicate,
+            ];
+        }
+
+        return response()->json(['rows' => $rows]);
+    }
+
+    public function publishCompanyPayslips(Request $request, PayslipRecognitionService $recognizer): JsonResponse
+    {
+        $this->ensureSuperadmin($request);
+        $payload = $request->validate([
+            'publication_confirmed' => ['required', 'accepted'],
+            'files' => ['required', 'array', 'min:1', 'max:60'],
+            'files.*' => ['required', 'file', 'mimes:pdf', 'max:20480'],
+            'user_ids' => ['required', 'array'],
+            'user_ids.*' => ['nullable', 'uuid', 'exists:users,id'],
+            'selected' => ['required', 'array'],
+            'selected.*' => ['boolean'],
+        ]);
+        $documents = [];
+        foreach ($payload['files'] as $index => $file) {
+            if (! filter_var($payload['selected'][$index] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+                continue;
+            }
+            $userId = $payload['user_ids'][$index] ?? null;
+            $data = $recognizer->recognize($file->getRealPath());
+            if (! $userId || ! $data) {
+                throw ValidationException::withMessages(['files' => 'Controlla destinatario e periodo di ogni cedolino selezionato.']);
+            }
+            $key = $userId.'-'.$data['year'].'-'.$data['month'];
+            if (isset($documents[$key]) || DB::table('company_documents as d')
+                ->join('company_document_user as du', 'du.company_document_id', '=', 'd.id')
+                ->where('du.user_id', $userId)->where('d.category', 'compensi')
+                ->where('d.document_year', $data['year'])->where('d.title', $data['title'])->exists()) {
+                throw ValidationException::withMessages(['files' => $data['title'].' è duplicato per il destinatario selezionato.']);
+            }
+            $documents[$key] = ['file' => $file, 'user_id' => $userId, 'data' => $data];
+        }
+        if (! $documents) {
+            throw ValidationException::withMessages(['files' => 'Seleziona almeno un cedolino da pubblicare.']);
+        }
+
+        $paths = [];
+        $published = [];
+        try {
+            DB::transaction(function () use ($documents, $request, &$paths, &$published) {
+                $now = now();
+                foreach ($documents as $document) {
+                    $file = $document['file'];
+                    $path = $file->store('company-documents', 'local');
+                    $paths[] = $path;
+                    Storage::disk('local')->setVisibility($path, 'private');
+                    $id = (string) Str::uuid();
+                    DB::table('company_documents')->insert([
+                        'id' => $id, 'title' => $document['data']['title'], 'description' => null,
+                        'category' => 'compensi', 'document_year' => $document['data']['year'],
+                        'audience' => 'users', 'file_path' => $path,
+                        'file_name' => $file->getClientOriginalName(), 'file_mime' => 'application/pdf',
+                        'file_size' => $file->getSize() ?: 0, 'created_by' => $request->user()->id,
+                        'created_at' => $now, 'updated_at' => $now,
+                    ]);
+                    DB::table('company_document_user')->insert([
+                        'id' => (string) Str::uuid(), 'company_document_id' => $id,
+                        'user_id' => $document['user_id'], 'created_at' => $now, 'updated_at' => $now,
+                    ]);
+                    $published[] = ['id' => $id, 'user_id' => $document['user_id']];
+                }
+            });
+        } catch (\Throwable $exception) {
+            Storage::disk('local')->delete($paths);
+            throw $exception;
+        }
+        foreach ($published as $document) {
+            $this->ensureCompanyDocumentReadRows($document['id'], collect([$document['user_id']]));
+        }
+        foreach (collect($published)->pluck('user_id')->unique() as $userId) {
+            $this->notifyUsers(collect([$userId]), $request->user()->id, 'company_document_created',
+                $request->user()->name.' ha pubblicato nuovi documenti nella categoria Compensi.');
+        }
+        $request->attributes->set('audit_state_after', ['category' => 'compensi', 'document_ids' => collect($published)->pluck('id')->all(), 'count' => count($published)]);
+
+        return response()->json(['published' => count($published)]);
     }
 
     public function checkCompanyCompensationDocuments(Request $request): JsonResponse
