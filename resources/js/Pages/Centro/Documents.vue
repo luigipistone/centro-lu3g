@@ -57,7 +57,7 @@ const bulkError = ref('');
 const bulkAlreadyPresent = ref([]);
 const compensationMonths = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
 const bulkFileRows = computed(() => bulkForm.files.map((file) => {
-    const match = /^ced\.(0?[1-9]|1[0-2])\.(\d{2})\.pdf$/i.exec(file.name);
+    const match = /(?:^|[-_ ])ced\.(0?[1-9]|1[0-2])\.(\d{2})\.pdf$/i.exec(file.name);
     if (!match || file.size > 20 * 1024 * 1024) return { file, valid: false, title: '' };
     const month = Number(match[1]);
     return { file, valid: true, title: `Compenso ${compensationMonths[month - 1]} ${2000 + Number(match[2])}` };
@@ -585,7 +585,7 @@ function deleteLabel(type) {
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Cartella</label>
                                 <input ref="bulkFolderInput" type="file" accept=".pdf,application/pdf" multiple webkitdirectory directory class="form-control" :disabled="bulkBusy" @change="selectCompensationFolder" />
-                                <p class="mt-1 text-xs text-gray-500">Sono riconosciuti i mesi da 1 a 12 nel formato ced.mese.anno.pdf. I file con altri nomi o oltre 20 MB non saranno caricati.</p>
+                                <p class="mt-1 text-xs text-gray-500">Sono riconosciuti i mesi da 1 a 12 nel formato ced.mese.anno.pdf, anche con un nome prima di ced. File diversi o oltre 20 MB non saranno caricati.</p>
                                 <p v-if="bulkForm.errors.files" class="mt-1 text-sm text-red-600">{{ bulkForm.errors.files }}</p>
                             </div>
                             <div v-if="bulkForm.files.length" class="space-y-3">

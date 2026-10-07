@@ -1559,8 +1559,8 @@ class CentroPageController extends Controller
         $documents = [];
         foreach ($payload['files'] as $file) {
             $name = $file->getClientOriginalName();
-            if (! preg_match('/^ced\.(0?[1-9]|1[0-2])\.(\d{2})\.pdf$/i', $name, $match)) {
-                throw ValidationException::withMessages(['files' => 'Sono ammessi solo PDF mensili con nome ced.mese.anno.pdf (mesi da 1 a 12).']);
+            if (! preg_match('/(?:^|[-_ ])ced\.(0?[1-9]|1[0-2])\.(\d{2})\.pdf$/i', $name, $match)) {
+                throw ValidationException::withMessages(['files' => 'Sono ammessi PDF mensili con nome ced.mese.anno.pdf, anche preceduto dal nome della persona.']);
             }
 
             $month = (int) $match[1];

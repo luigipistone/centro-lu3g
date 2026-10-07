@@ -30,7 +30,7 @@ class CompanyDocumentsTest extends TestCase
             'user_id' => $recipient->id,
             'publication_confirmed' => true,
             'files' => [
-                UploadedFile::fake()->create('ced.1.25.pdf', 12, 'application/pdf'),
+                UploadedFile::fake()->create('Alessia-ced.1.25.pdf', 12, 'application/pdf'),
                 UploadedFile::fake()->create('ced.2.25.pdf', 12, 'application/pdf'),
             ],
         ];
@@ -74,6 +74,13 @@ class CompanyDocumentsTest extends TestCase
                 UploadedFile::fake()->create('ced.1.25.pdf', 12, 'application/pdf'),
                 UploadedFile::fake()->create('ced.13.25.pdf', 12, 'application/pdf'),
             ],
+        ])->assertSessionHasErrors('files');
+        $this->assertDatabaseCount('company_documents', 0);
+
+        $this->actingAs($superadmin)->post(route('documents.compensi.bulk.store'), [
+            'user_id' => $recipient->id,
+            'publication_confirmed' => true,
+            'files' => [UploadedFile::fake()->create('Alessia-ced.4.25-extra.pdf', 12, 'application/pdf')],
         ])->assertSessionHasErrors('files');
         $this->assertDatabaseCount('company_documents', 0);
     }
