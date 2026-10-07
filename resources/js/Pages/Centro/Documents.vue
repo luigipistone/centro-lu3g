@@ -43,6 +43,7 @@ const documentForm = useForm({
     title: '',
     description: '',
     category: 'documenti_vari',
+    document_year: new Date().getFullYear(),
     audience: '',
     publication_confirmed: false,
     file: null,
@@ -93,7 +94,7 @@ watch(() => documentForm.category, () => {
     documentForm.group_ids = [];
     documentReview.value = false;
 });
-watch(() => [documentForm.title, documentForm.audience, documentForm.file, ...documentForm.user_ids, ...documentForm.group_ids], () => {
+watch(() => [documentForm.title, documentForm.document_year, documentForm.audience, documentForm.file, ...documentForm.user_ids, ...documentForm.group_ids], () => {
     documentReview.value = false;
 });
 
@@ -106,6 +107,10 @@ const categoryOptions = computed(() => [
     ...Object.entries(props.documentCategories || {}).map(([value, label]) => ({ value, label })),
 ]);
 const documentCategoryOptions = computed(() => categoryOptions.value.filter((option) => option.value !== 'all' && (isSuperadmin.value || !sensitiveDocumentCategories.includes(option.value))));
+const creationYearOptions = Array.from({ length: new Date().getFullYear() - 1998 }, (_, index) => ({
+    value: new Date().getFullYear() + 1 - index,
+    label: String(new Date().getFullYear() + 1 - index),
+}));
 const documentYearGroups = computed(() => {
     const grouped = visibleDocuments.value.reduce((carry, document) => {
         const year = documentYear(document);
@@ -525,6 +530,11 @@ function deleteLabel(type) {
                                 <AppSelect v-model="documentForm.audience" :options="documentAudienceOptions" placeholder="Seleziona destinatari" />
                                 <div v-if="documentForm.errors.audience" class="mt-1 text-sm text-red-600">{{ documentForm.errors.audience }}</div>
                             </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Anno</label>
+                                <AppSelect v-model="documentForm.document_year" :options="creationYearOptions" searchable />
+                                <div v-if="documentForm.errors.document_year" class="mt-1 text-sm text-red-600">{{ documentForm.errors.document_year }}</div>
+                            </div>
                             <div class="md:col-span-2">
                                 <label class="block text-sm font-medium text-gray-700">Descrizione</label>
                                 <div class="mt-1 overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white/90 shadow-inner">
@@ -613,7 +623,7 @@ function deleteLabel(type) {
 
                         <div v-if="documentReview" class="rounded-[var(--radius-sm)] border border-blue-100 bg-blue-50/60 p-4">
                             <p class="text-sm font-semibold text-gray-900">Conferma pubblicazione</p>
-                            <p class="mt-1 text-sm text-gray-600">{{ documentForm.title }} · {{ props.documentCategories?.[documentForm.category] }}</p>
+                            <p class="mt-1 text-sm text-gray-600">{{ documentForm.title }} · {{ props.documentCategories?.[documentForm.category] }} · {{ documentForm.document_year }}</p>
                             <p class="mt-2 text-xs font-semibold uppercase text-gray-500">Destinatari</p>
                             <p class="mt-1 text-sm text-gray-800">{{ documentRecipientNames.join(', ') }}</p>
                         </div>

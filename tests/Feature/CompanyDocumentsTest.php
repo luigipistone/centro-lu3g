@@ -127,6 +127,7 @@ class CompanyDocumentsTest extends TestCase
                 'title' => 'Policy interna',
                 'description' => 'Da leggere con attenzione.',
                 'category' => 'documenti_vari',
+                'document_year' => 2024,
                 'audience' => 'users',
                 'user_ids' => [$user->id],
                 'publication_confirmed' => true,
@@ -137,6 +138,7 @@ class CompanyDocumentsTest extends TestCase
 
         $documentId = DB::table('company_documents')->value('id');
         $this->assertNotNull($documentId);
+        $this->assertDatabaseHas('company_documents', ['id' => $documentId, 'document_year' => 2024]);
         $this->actingAs($admin)->get(route('documents.list'))
             ->assertInertia(fn (Assert $page) => $page->has('documents', 0));
         $this->actingAs($user)->get(route('documents.list'))

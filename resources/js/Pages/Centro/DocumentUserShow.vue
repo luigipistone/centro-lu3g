@@ -23,6 +23,7 @@ const documentForm = useForm({
     title: '',
     description: '',
     category: 'documenti_vari',
+    document_year: new Date().getFullYear(),
     audience: 'users',
     user_ids: [props.user.id],
     group_ids: [],
@@ -31,6 +32,10 @@ const documentForm = useForm({
 });
 const creationCategories = computed(() => Object.entries(props.documentCategories || {})
     .map(([value, label]) => ({ value, label })));
+const creationYearOptions = Array.from({ length: new Date().getFullYear() - 1998 }, (_, index) => ({
+    value: new Date().getFullYear() + 1 - index,
+    label: String(new Date().getFullYear() + 1 - index),
+}));
 watch(() => props.user.id, (id) => {
     createModal.value = null;
     documentReview.value = false;
@@ -260,13 +265,16 @@ function yearScaleClass(year) {
                             <div><label class="block text-sm font-medium text-gray-700">Titolo</label><input v-model="documentForm.title" class="form-control" required placeholder="Es. Compenso Gennaio 2026" /><p v-if="documentForm.errors.title" class="mt-1 text-sm text-red-600">{{ documentForm.errors.title }}</p></div>
                             <div><label class="block text-sm font-medium text-gray-700">Categoria</label><AppSelect v-model="documentForm.category" :options="creationCategories" /><p v-if="documentForm.errors.category" class="mt-1 text-sm text-red-600">{{ documentForm.errors.category }}</p></div>
                         </div>
-                        <div><label class="block text-sm font-medium text-gray-700">Destinatario</label><div class="mt-1 flex items-center gap-2 rounded-[var(--radius-sm)] border border-gray-200 bg-gray-50 px-3 py-2"><UserAvatar :user="user" size="xs" /><span class="text-sm font-semibold text-gray-800">{{ user.name }}</span></div></div>
+                        <div class="grid gap-4 md:grid-cols-2">
+                            <div><label class="block text-sm font-medium text-gray-700">Destinatario</label><div class="mt-1 flex min-h-11 items-center gap-2 rounded-[var(--radius-sm)] border border-gray-200 bg-gray-50 px-3 py-2"><UserAvatar :user="user" size="xs" /><span class="text-sm font-semibold text-gray-800">{{ user.name }}</span></div></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Anno</label><AppSelect v-model="documentForm.document_year" :options="creationYearOptions" searchable /><p v-if="documentForm.errors.document_year" class="mt-1 text-sm text-red-600">{{ documentForm.errors.document_year }}</p></div>
+                        </div>
                         <div><label class="block text-sm font-medium text-gray-700">Descrizione</label><textarea v-model="documentForm.description" rows="4" class="form-control" placeholder="Nota interna opzionale..."></textarea><p v-if="documentForm.errors.description" class="mt-1 text-sm text-red-600">{{ documentForm.errors.description }}</p></div>
                         <div><label class="block text-sm font-medium text-gray-700">PDF</label><DocumentPdfDropzone v-model="documentForm.file" :error="documentForm.errors.file" @update:model-value="documentForm.clearErrors('file')" /></div>
                     </div>
                     <div v-else class="rounded-[var(--radius-sm)] border border-blue-100 bg-blue-50/60 p-4">
                         <p class="text-sm font-semibold text-gray-900">Conferma pubblicazione</p>
-                        <p class="mt-1 text-sm text-gray-600">{{ documentForm.title }} · {{ documentCategories?.[documentForm.category] }}</p>
+                        <p class="mt-1 text-sm text-gray-600">{{ documentForm.title }} · {{ documentCategories?.[documentForm.category] }} · {{ documentForm.document_year }}</p>
                         <p class="mt-2 text-xs font-semibold uppercase text-gray-500">Destinatario</p>
                         <p class="mt-1 text-sm text-gray-800">{{ user.name }}</p>
                     </div>
