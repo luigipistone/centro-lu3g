@@ -3,6 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import AppDateInput from '@/Components/AppDateInput.vue';
 import DocumentPdfDropzone from '@/Components/DocumentPdfDropzone.vue';
+import CompensationBulkModal from '@/Components/CompensationBulkModal.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { dateIt } from '@/utils/formatters';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
@@ -48,81 +49,6 @@ const documentForm = useForm({
     user_ids: [],
     group_ids: [],
 });
-
-const bulkForm = useForm({ user_id: '', files: [], publication_confirmed: false });
-const bulkFolderInput = ref(null);
-const bulkBusy = ref(false);
-const bulkUploaded = ref(0);
-const bulkError = ref('');
-const bulkAlreadyPresent = ref([]);
-const compensationMonths = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
-const bulkFileRows = computed(() => bulkForm.files.map((file) => {
-    const match = /(?:^|[-_ ])ced\.(0?[1-9]|1[0-2])\.(\d{2})\.pdf$/i.exec(file.name);
-    if (!match || file.size > 20 * 1024 * 1024) return { file, valid: false, title: '' };
-    const month = Number(match[1]);
-    return { file, valid: true, title: `Compenso ${compensationMonths[month - 1]} ${2000 + Number(match[2])}` };
-}));
-const bulkValidRows = computed(() => bulkFileRows.value.filter((row) => row.valid));
-const bulkSkippedRows = computed(() => bulkFileRows.value.filter((row) => !row.valid));
-const bulkHasDuplicates = computed(() => new Set(bulkValidRows.value.map((row) => row.title)).size !== bulkValidRows.value.length);
-const bulkRecipientName = computed(() => (props.users || []).find((user) => user.id === bulkForm.user_id)?.name || '');
-
-function selectCompensationFolder(event) {
-    bulkForm.files = [...(event.target.files || [])];
-    bulkUploaded.value = 0;
-    bulkError.value = '';
-    bulkAlreadyPresent.value = [];
-    bulkForm.clearErrors();
-}
-
-async function submitCompensations() {
-    if (!bulkForm.user_id || !bulkValidRows.value.length || bulkHasDuplicates.value || bulkBusy.value) return;
-    bulkBusy.value = true;
-    bulkError.value = '';
-    bulkUploaded.value = 0;
-    try {
-        const check = await window.axios.post(route('documents.compensi.bulk.check'), {
-            user_id: bulkForm.user_id,
-            titles: bulkValidRows.value.map((row) => row.title),
-        });
-        bulkAlreadyPresent.value = check.data.existing || [];
-        const pending = bulkValidRows.value.filter((row) => !bulkAlreadyPresent.value.includes(row.title));
-        if (!pending.length) {
-            bulkError.value = 'Tutti i compensi selezionati sono già presenti per questa persona.';
-            return;
-        }
-        for (const row of pending) {
-            const data = new FormData();
-            data.append('user_id', bulkForm.user_id);
-            data.append('publication_confirmed', '1');
-            data.append('notify_recipient', bulkUploaded.value === 0 ? '1' : '0');
-            data.append('files[]', row.file, row.file.name);
-            await window.axios.post(route('documents.compensi.bulk.store'), data);
-            bulkUploaded.value += 1;
-        }
-        const userId = bulkForm.user_id;
-        bulkBusy.value = false;
-        closeBulkModal();
-        router.visit(route('documents.users.show', userId));
-    } catch (error) {
-        bulkError.value = error.response?.data?.errors?.files?.[0]
-            || error.response?.data?.message
-            || 'Caricamento interrotto. I documenti già pubblicati restano disponibili; riprova per completare i restanti.';
-    } finally {
-        bulkBusy.value = false;
-    }
-}
-
-function closeBulkModal() {
-    if (bulkBusy.value) return;
-    createModal.value = null;
-    bulkForm.reset();
-    bulkForm.clearErrors();
-    bulkUploaded.value = 0;
-    bulkError.value = '';
-    bulkAlreadyPresent.value = [];
-    if (bulkFolderInput.value) bulkFolderInput.value.value = '';
-}
 
 const groupForm = useForm({
     name: '',
@@ -571,44 +497,7 @@ function deleteLabel(type) {
                 </nav>
 
                 <Teleport to="body">
-                    <div v-if="isSuperadmin && createModal === 'compensi'" class="fixed inset-0 z-[8000] flex items-center justify-center bg-black/15 px-4 py-6 backdrop-blur-sm" @click.self="closeBulkModal">
-                        <form class="surface max-h-[calc(100dvh-3rem)] w-full max-w-2xl space-y-5 overflow-y-auto bg-white p-5" @submit.prevent="submitCompensations">
-                            <div class="flex items-start justify-between gap-4">
-                                <div><h3 class="text-base font-semibold text-gray-900">Carica Compensi</h3><p class="mt-1 text-sm text-gray-500">Seleziona la persona e la cartella dei cedolini.</p></div>
-                                <button type="button" class="icon-btn" aria-label="Chiudi" :disabled="bulkBusy" @click="closeBulkModal"><X class="h-4 w-4" /></button>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Destinatario</label>
-                                <AppSelect v-model="bulkForm.user_id" :options="[{ value: '', label: 'Seleziona una persona' }, ...(users || []).map((user) => ({ value: user.id, label: user.name }))]" :disabled="bulkBusy" searchable />
-                                <p v-if="bulkForm.errors.user_id" class="mt-1 text-sm text-red-600">{{ bulkForm.errors.user_id }}</p>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Cartella</label>
-                                <input ref="bulkFolderInput" type="file" accept=".pdf,application/pdf" multiple webkitdirectory directory class="form-control" :disabled="bulkBusy" @change="selectCompensationFolder" />
-                                <p class="mt-1 text-xs text-gray-500">Sono riconosciuti i mesi da 1 a 12 nel formato ced.mese.anno.pdf, anche con un nome prima di ced. File diversi o oltre 20 MB non saranno caricati.</p>
-                                <p v-if="bulkForm.errors.files" class="mt-1 text-sm text-red-600">{{ bulkForm.errors.files }}</p>
-                            </div>
-                            <div v-if="bulkForm.files.length" class="space-y-3">
-                                <div class="flex items-center justify-between text-sm font-semibold text-gray-900"><span>Anteprima pubblicazione</span><span>{{ bulkValidRows.length }} documenti</span></div>
-                                <p class="text-sm text-gray-600">Destinatario: <strong>{{ bulkRecipientName || 'Da selezionare' }}</strong> · Categoria: <strong>Compensi</strong></p>
-                                <div v-if="bulkValidRows.length" class="max-h-52 divide-y divide-gray-100 overflow-y-auto rounded-[var(--radius-sm)] border border-gray-100">
-                                    <div v-for="row in bulkValidRows" :key="row.file.name" class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm"><span class="font-medium text-gray-900">{{ row.title }}</span><span class="text-xs text-gray-500">{{ row.file.name }}</span></div>
-                                </div>
-                                <div v-if="bulkSkippedRows.length" class="rounded-[var(--radius-sm)] border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                                    <p class="font-semibold">Da verificare, esclusi dal caricamento ({{ bulkSkippedRows.length }})</p>
-                                    <p class="mt-1 break-words">{{ bulkSkippedRows.map((row) => row.file.name).join(', ') }}</p>
-                                </div>
-                                <p v-if="bulkHasDuplicates" class="text-sm text-red-600">Sono presenti due file per lo stesso mese: lascia una sola copia nella cartella.</p>
-                                <p v-if="bulkAlreadyPresent.length" class="text-sm text-amber-700">Già presenti per questa persona, saltati: {{ bulkAlreadyPresent.join(', ') }}.</p>
-                                <p v-if="bulkBusy" class="text-sm font-semibold text-gray-700">Pubblicati {{ bulkUploaded }} di {{ bulkValidRows.length - bulkAlreadyPresent.length }} documenti...</p>
-                                <p v-if="bulkError" class="text-sm text-red-600" role="alert">{{ bulkError }}</p>
-                            </div>
-                            <div class="flex justify-end gap-2 border-t border-gray-100 pt-4">
-                                <button type="button" class="btn btn-outline" :disabled="bulkBusy" @click="closeBulkModal">Annulla</button>
-                                <button type="submit" class="btn btn-primary" :disabled="!bulkForm.user_id || !bulkValidRows.length || bulkHasDuplicates || bulkBusy">{{ bulkBusy ? 'Pubblicazione...' : `Pubblica ${bulkValidRows.length} documenti` }}</button>
-                            </div>
-                        </form>
-                    </div>
+                    <CompensationBulkModal v-if="isSuperadmin && createModal === 'compensi'" :users="users || []" @close="createModal = null" />
                     <div v-if="canManage && createModal === 'document'" class="fixed inset-0 z-[8000] flex items-center justify-center bg-black/15 px-4 py-6 backdrop-blur-sm" @click.self="closeCreateModal">
                     <form class="surface max-h-[calc(100dvh-3rem)] w-full max-w-3xl space-y-5 overflow-y-auto bg-white p-5" @submit.prevent="submitDocument">
                         <div class="flex items-start justify-between gap-4">

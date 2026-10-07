@@ -1,10 +1,12 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppSelect from '@/Components/AppSelect.vue';
+import CompensationBulkModal from '@/Components/CompensationBulkModal.vue';
+import DocumentPdfDropzone from '@/Components/DocumentPdfDropzone.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { dateIt, dateTimeIt } from '@/utils/formatters';
-import { Head, Link } from '@inertiajs/vue3';
-import { Check, ChevronLeft, FileText } from '@lucide/vue';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
+import { Check, ChevronLeft, FileText, FolderUp, Plus, X } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -12,6 +14,55 @@ const props = defineProps({
     documents: Array,
     documentCategories: Object,
 });
+
+const page = usePage();
+const isSuperadmin = computed(() => page.props.auth?.user?.role === 'superadmin');
+const createModal = ref(null);
+const documentReview = ref(false);
+const documentForm = useForm({
+    title: '',
+    description: '',
+    category: 'documenti_vari',
+    audience: 'users',
+    user_ids: [props.user.id],
+    group_ids: [],
+    publication_confirmed: false,
+    file: null,
+});
+const creationCategories = computed(() => Object.entries(props.documentCategories || {})
+    .map(([value, label]) => ({ value, label })));
+watch(() => props.user.id, (id) => {
+    createModal.value = null;
+    documentReview.value = false;
+    documentForm.reset();
+    documentForm.user_ids = [id];
+});
+
+function closeDocumentModal() {
+    createModal.value = null;
+    documentReview.value = false;
+    documentForm.reset();
+    documentForm.clearErrors();
+}
+
+function submitDocument() {
+    if (!documentReview.value) {
+        documentForm.clearErrors();
+        if (!documentForm.file) {
+            documentForm.setError('file', 'Seleziona un PDF prima di continuare.');
+            return;
+        }
+        documentReview.value = true;
+        return;
+    }
+    documentForm.publication_confirmed = true;
+    documentForm.post(route('documents.store', { from_user: props.user.id }), {
+        forceFormData: true,
+        preserveScroll: true,
+        onError: () => { documentReview.value = false; documentForm.publication_confirmed = false; },
+        onSuccess: closeDocumentModal,
+    });
+}
 
 const selectedCategory = ref('all');
 const readCount = computed(() => (props.documents || []).filter((document) => document.user_read_at).length);
@@ -103,6 +154,14 @@ function yearScaleClass(year) {
 
         <div class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
+                <div v-if="isSuperadmin" class="flex justify-end gap-2">
+                    <button type="button" class="btn btn-outline" title="Carica una cartella di Compensi" aria-label="Carica una cartella di Compensi" @click="createModal = 'compensi'">
+                        <FolderUp class="h-4 w-4" :stroke-width="1.7" />
+                    </button>
+                    <button type="button" class="btn btn-primary" @click="createModal = 'document'">
+                        <Plus class="h-4 w-4" :stroke-width="1.7" /> Nuovo documento
+                    </button>
+                </div>
                 <section class="grid gap-4 sm:grid-cols-3">
                     <div class="surface p-4">
                         <p class="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">Documenti</p>
@@ -188,6 +247,36 @@ function yearScaleClass(year) {
                 </section>
             </div>
         </div>
+        <Teleport to="body">
+            <CompensationBulkModal v-if="isSuperadmin && createModal === 'compensi'" :key="user.id" :users="[user]" :initial-user-id="user.id" @close="createModal = null" />
+            <div v-if="isSuperadmin && createModal === 'document'" class="fixed inset-0 z-[8000] flex items-center justify-center bg-black/15 px-4 py-6 backdrop-blur-sm" @click.self="closeDocumentModal">
+                <form class="surface max-h-[calc(100dvh-3rem)] w-full max-w-3xl space-y-5 overflow-y-auto bg-white p-5" @submit.prevent="submitDocument">
+                    <div class="flex items-start justify-between gap-4">
+                        <div><h3 class="text-base font-semibold text-gray-900">Nuovo documento</h3><p class="mt-1 text-sm text-gray-500">Carica un PDF per {{ user.name }}.</p></div>
+                        <button type="button" class="icon-btn" aria-label="Chiudi" :disabled="documentForm.processing" @click="closeDocumentModal"><X class="h-4 w-4" :stroke-width="1.7" /></button>
+                    </div>
+                    <div v-if="!documentReview" class="space-y-4">
+                        <div class="grid gap-4 md:grid-cols-2">
+                            <div><label class="block text-sm font-medium text-gray-700">Titolo</label><input v-model="documentForm.title" class="form-control" required placeholder="Es. Compenso Gennaio 2026" /><p v-if="documentForm.errors.title" class="mt-1 text-sm text-red-600">{{ documentForm.errors.title }}</p></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Categoria</label><AppSelect v-model="documentForm.category" :options="creationCategories" /><p v-if="documentForm.errors.category" class="mt-1 text-sm text-red-600">{{ documentForm.errors.category }}</p></div>
+                        </div>
+                        <div><label class="block text-sm font-medium text-gray-700">Destinatario</label><div class="mt-1 flex items-center gap-2 rounded-[var(--radius-sm)] border border-gray-200 bg-gray-50 px-3 py-2"><UserAvatar :user="user" size="xs" /><span class="text-sm font-semibold text-gray-800">{{ user.name }}</span></div></div>
+                        <div><label class="block text-sm font-medium text-gray-700">Descrizione</label><textarea v-model="documentForm.description" rows="4" class="form-control" placeholder="Nota interna opzionale..."></textarea><p v-if="documentForm.errors.description" class="mt-1 text-sm text-red-600">{{ documentForm.errors.description }}</p></div>
+                        <div><label class="block text-sm font-medium text-gray-700">PDF</label><DocumentPdfDropzone v-model="documentForm.file" :error="documentForm.errors.file" @update:model-value="documentForm.clearErrors('file')" /></div>
+                    </div>
+                    <div v-else class="rounded-[var(--radius-sm)] border border-blue-100 bg-blue-50/60 p-4">
+                        <p class="text-sm font-semibold text-gray-900">Conferma pubblicazione</p>
+                        <p class="mt-1 text-sm text-gray-600">{{ documentForm.title }} · {{ documentCategories?.[documentForm.category] }}</p>
+                        <p class="mt-2 text-xs font-semibold uppercase text-gray-500">Destinatario</p>
+                        <p class="mt-1 text-sm text-gray-800">{{ user.name }}</p>
+                    </div>
+                    <div class="flex justify-end gap-2">
+                        <button v-if="documentReview" type="button" class="btn btn-outline" @click="documentReview = false">Indietro</button>
+                        <button type="submit" class="btn btn-primary" :disabled="documentForm.processing">{{ documentForm.processing ? 'Pubblicazione...' : documentReview ? 'Conferma e pubblica' : 'Continua' }}</button>
+                    </div>
+                </form>
+            </div>
+        </Teleport>
     </AuthenticatedLayout>
 </template>
 
