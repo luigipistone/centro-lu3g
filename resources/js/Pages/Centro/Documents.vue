@@ -522,17 +522,17 @@ function deleteLabel(type) {
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Categoria</label>
-                                <AppSelect v-model="documentForm.category" :options="documentCategoryOptions" />
+                                <AppSelect v-model="documentForm.category" class="mt-1" :options="documentCategoryOptions" />
                                 <div v-if="documentForm.errors.category" class="mt-1 text-sm text-red-600">{{ documentForm.errors.category }}</div>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Destinatari</label>
-                                <AppSelect v-model="documentForm.audience" :options="documentAudienceOptions" placeholder="Seleziona destinatari" />
+                                <AppSelect v-model="documentForm.audience" class="mt-1" :options="documentAudienceOptions" placeholder="Seleziona destinatari" />
                                 <div v-if="documentForm.errors.audience" class="mt-1 text-sm text-red-600">{{ documentForm.errors.audience }}</div>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Anno</label>
-                                <AppSelect v-model="documentForm.document_year" :options="creationYearOptions" searchable />
+                                <AppSelect v-model="documentForm.document_year" class="mt-1" :options="creationYearOptions" searchable />
                                 <div v-if="documentForm.errors.document_year" class="mt-1 text-sm text-red-600">{{ documentForm.errors.document_year }}</div>
                             </div>
                             <div class="md:col-span-2">
