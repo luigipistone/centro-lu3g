@@ -3,6 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppDateInput from '@/Components/AppDateInput.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import AppTimeInput from '@/Components/AppTimeInput.vue';
+import DocumentPdfDropzone from '@/Components/DocumentPdfDropzone.vue';
 import DossierAssignedDocuments from '@/Components/DossierAssignedDocuments.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import {
@@ -862,7 +863,6 @@ const sensitiveSectionLabels = {
 const employeeDossier = computed(() => props.related?.employeeDossier || { items: [], summary: [], types: [], access: {} });
 const dossierModalOpen = ref(false);
 const dossierConfirmOpen = ref(false);
-const dossierFileInput = ref(null);
 const dossierForm = useForm({
     type: 'identity_document', title: '', identifier: '', issued_at: '', expires_at: '', level: '',
     fitness_status: 'fit', notes: '', accepted: false, replaces_id: '', file: null,
@@ -7291,7 +7291,7 @@ onUnmounted(() => {
                     <div v-if="selectedDossierType.classification === 'medical'"><label class="block text-sm font-medium text-gray-700">Giudizio di idoneità</label><AppSelect v-model="dossierForm.fitness_status" :options="[{ value: 'fit', label: 'Idoneità valida' }, { value: 'fit_with_limits', label: 'Idoneità con limitazioni' }, { value: 'pending', label: 'Visita da programmare' }, { value: 'expired', label: 'Idoneità scaduta' }]" /></div>
                     <label v-if="dossierForm.type === 'policy'" class="flex min-h-[44px] items-center gap-3 self-end"><input v-model="dossierForm.accepted" type="checkbox" class="rounded border-gray-300" /><span class="text-sm font-medium text-gray-700">Documento firmato o policy accettata</span></label>
                     <div class="md:col-span-2"><label class="block text-sm font-medium text-gray-700">Note</label><textarea v-model="dossierForm.notes" rows="3" class="form-control" :placeholder="selectedDossierType.classification === 'medical' ? 'Solo informazioni amministrative necessarie, senza diagnosi.' : 'Dettagli utili...'" /></div>
-                    <div class="md:col-span-2"><label class="block text-sm font-medium text-gray-700">Allegato riservato</label><input ref="dossierFileInput" type="file" class="form-control file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-blue-700" @change="dossierForm.file = $event.target.files?.[0] || null" /><p v-if="dossierForm.replaces_id" class="mt-1 text-xs text-gray-500">La versione precedente verrà conservata nello storico.</p><p v-if="dossierForm.errors.file" class="mt-1 text-sm text-red-600">{{ dossierForm.errors.file }}</p></div>
+                    <div class="md:col-span-2"><label class="block text-sm font-medium text-gray-700">Allegato riservato</label><DocumentPdfDropzone v-model="dossierForm.file" :error="dossierForm.errors.file" allow-images @update:model-value="dossierForm.clearErrors('file')" /><p v-if="dossierForm.replaces_id" class="mt-1 text-xs text-gray-500">La versione precedente verrà conservata nello storico.</p></div>
                 </div>
                 <div class="mt-6 flex justify-end gap-2"><button type="button" class="btn btn-outline" @click="dossierModalOpen = false">Annulla</button><button type="submit" class="btn btn-primary" :disabled="dossierForm.processing">{{ dossierForm.replaces_id ? 'Salva nuova versione' : 'Salva nel fascicolo' }}</button></div>
             </form>
