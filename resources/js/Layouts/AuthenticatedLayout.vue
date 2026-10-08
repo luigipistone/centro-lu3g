@@ -45,10 +45,11 @@ const completionEffect = ref(null);
 const SIDEBAR_MIN_WIDTH = 84;
 const SIDEBAR_MAX_WIDTH = 360;
 const SIDEBAR_COLLAPSE_AT = 132;
+const page = usePage();
 const sidebarWidth = ref(256);
+const sidebarStorageKey = computed(() => `centro:sidebar-width:${page.props.auth?.user?.id || 'guest'}`);
 const sidebarResizing = ref(false);
 const sidebarCollapsed = computed(() => sidebarWidth.value < SIDEBAR_COLLAPSE_AT);
-const page = usePage();
 const notificationPermission = ref('unsupported');
 const notificationStatusMessage = ref('');
 const notificationPermissionBusy = ref(false);
@@ -69,7 +70,7 @@ function stopSidebarResize() {
     if (!sidebarResizing.value) return;
     sidebarResizing.value = false;
     document.body.classList.remove('sidebar-is-resizing');
-    window.localStorage.setItem('centro:sidebar-width', String(Math.round(sidebarWidth.value)));
+    window.localStorage.setItem(sidebarStorageKey.value, String(Math.round(sidebarWidth.value)));
     window.removeEventListener('pointermove', resizeSidebar);
     window.removeEventListener('pointerup', stopSidebarResize);
     window.removeEventListener('pointercancel', stopSidebarResize);
@@ -271,8 +272,9 @@ watch(latestUnreadNotification, (notification) => {
 });
 
 onMounted(() => {
-    const savedSidebarWidth = Number(window.localStorage.getItem('centro:sidebar-width'));
-    if (Number.isFinite(savedSidebarWidth)) {
+    const storedSidebarWidth = window.localStorage.getItem(sidebarStorageKey.value);
+    const savedSidebarWidth = Number(storedSidebarWidth);
+    if (storedSidebarWidth !== null && storedSidebarWidth !== '' && Number.isFinite(savedSidebarWidth)) {
         sidebarWidth.value = Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, savedSidebarWidth));
     }
     initializeTheme();

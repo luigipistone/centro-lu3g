@@ -305,6 +305,36 @@ class CompanyDocumentsTest extends TestCase
         $this->actingAs($manager)->get(route('documents.show', $managerDocumentId))->assertOk();
     }
 
+    public function test_existing_documents_are_marked_read_once_without_affecting_new_documents(): void
+    {
+        Storage::fake('local');
+        $superadmin = User::factory()->create();
+        $employee = User::factory()->create();
+        $this->role($superadmin, 'superadmin');
+        $this->role($employee, 'editor');
+
+        $this->actingAs($superadmin)->post(route('documents.store'), [
+            'title' => 'Documento importato', 'category' => 'documenti_vari', 'audience' => 'all',
+            'publication_confirmed' => true,
+            'file' => UploadedFile::fake()->create('importato.pdf', 10, 'application/pdf'),
+        ])->assertSessionHasNoErrors();
+        $oldId = DB::table('company_documents')->where('title', 'Documento importato')->value('id');
+        DB::table('company_document_reads')->where('company_document_id', $oldId)->where('user_id', $employee->id)->delete();
+
+        $migration = require database_path('migrations/2026_10_08_000100_mark_existing_company_documents_read.php');
+        $migration->up();
+        $this->assertNotNull(DB::table('company_document_reads')->where('company_document_id', $oldId)->where('user_id', $employee->id)->value('read_at'));
+        $this->assertNotNull(DB::table('company_document_reads')->where('company_document_id', $oldId)->where('user_id', $superadmin->id)->value('read_at'));
+
+        $this->actingAs($superadmin)->post(route('documents.store'), [
+            'title' => 'Documento nuovo', 'category' => 'documenti_vari', 'audience' => 'users',
+            'user_ids' => [$employee->id], 'publication_confirmed' => true,
+            'file' => UploadedFile::fake()->create('nuovo.pdf', 10, 'application/pdf'),
+        ])->assertSessionHasNoErrors();
+        $newId = DB::table('company_documents')->where('title', 'Documento nuovo')->value('id');
+        $this->assertNull(DB::table('company_document_reads')->where('company_document_id', $newId)->where('user_id', $employee->id)->value('read_at'));
+    }
+
     public function test_admin_cannot_create_empty_document_group(): void
     {
         $admin = User::factory()->create();
