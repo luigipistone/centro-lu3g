@@ -1,6 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppSelect from '@/Components/AppSelect.vue';
+import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import CompensationBulkModal from '@/Components/CompensationBulkModal.vue';
 import DocumentPdfDropzone from '@/Components/DocumentPdfDropzone.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
@@ -70,6 +71,7 @@ function submitDocument() {
 }
 
 const selectedCategory = ref('all');
+const search = ref('');
 const readCount = computed(() => (props.documents || []).filter((document) => document.user_read_at).length);
 const unreadCount = computed(() => Math.max(0, (props.documents || []).length - readCount.value));
 const currentYear = new Date().getFullYear();
@@ -101,7 +103,11 @@ function documentYear(document) {
     return Number.isFinite(year) ? year : currentYear;
 }
 
-watch(selectedCategory, () => {
+watch([selectedCategory, search], () => {
+    const firstMatchingYear = documentYearGroups.value.find((group) => filteredDocumentsForYear(group).length)?.year;
+    if (firstMatchingYear && !documentYearGroups.value.some((group) => group.year === selectedDocumentYear.value && filteredDocumentsForYear(group).length)) {
+        selectedDocumentYear.value = firstMatchingYear;
+    }
     yearVisibleCounts.value = { [selectedDocumentYear.value || currentYear]: 8 };
 });
 
@@ -109,9 +115,29 @@ function categoryLabel(category) {
     return props.documentCategories?.[category || 'documenti_vari'] || 'Documenti Vari';
 }
 
-function filteredDocumentsForYear(group) {
-    return group.documents.filter((document) => selectedCategory.value === 'all' || (document.category || 'documenti_vari') === selectedCategory.value);
+function searchableText(value) {
+    return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
+
+function filteredDocumentsForYear(group) {
+    const query = searchableText(search.value.trim());
+    return group.documents.filter((document) => {
+        if (selectedCategory.value !== 'all' && (document.category || 'documenti_vari') !== selectedCategory.value) return false;
+        if (!query) return true;
+        return searchableText([
+            document.title,
+            document.description,
+            document.file_name,
+            categoryLabel(document.category),
+            documentYear(document),
+        ].join(' ')).includes(query);
+    });
+}
+
+const displayedDocumentYearGroups = computed(() => selectedCategory.value === 'all' && !search.value.trim()
+    ? documentYearGroups.value
+    : documentYearGroups.value.filter((group) => filteredDocumentsForYear(group).length));
+const hasFilteredDocuments = computed(() => displayedDocumentYearGroups.value.length > 0);
 
 function visibleDocumentsForYear(group) {
     return filteredDocumentsForYear(group).slice(0, yearVisibleCounts.value[group.year] || 8);
@@ -188,13 +214,14 @@ function yearScaleClass(year) {
                             <h3 class="text-base font-semibold text-gray-900">Documenti assegnati</h3>
                             <p class="mt-1 text-sm text-gray-500">Documenti {{ latestDocumentYear }} in evidenza e archivio diviso per anno.</p>
                         </div>
-                        <div class="w-full max-w-[260px]">
-                            <AppSelect v-model="selectedCategory" :options="categoryOptions" searchable />
+                        <div class="flex w-full flex-wrap items-center gap-3 sm:w-auto">
+                            <ClearableSearchInput v-model="search" class="w-full sm:w-[260px]" input-class="mt-0 h-[38px]" placeholder="Cerca documenti" aria-label="Cerca nei documenti della persona" />
+                            <AppSelect v-model="selectedCategory" class="w-full sm:w-[260px]" :options="categoryOptions" searchable />
                         </div>
                     </div>
 
-                    <div v-if="documents.length" class="document-year-stack">
-                        <section v-for="group in documentYearGroups" :key="group.year" class="document-year-section">
+                    <div v-if="documents.length && hasFilteredDocuments" class="document-year-stack">
+                        <section v-for="group in displayedDocumentYearGroups" :key="group.year" class="document-year-section">
                             <button
                                 type="button"
                                 :class="['document-year-button origin-left', yearScaleClass(group.year)]"
@@ -206,7 +233,7 @@ function yearScaleClass(year) {
                                 @click="toggleDocumentYear(group.year)"
                             >
                                 <span class="text-2xl font-semibold leading-none">{{ group.year }}</span>
-                                <span v-if="selectedDocumentYear === group.year" class="text-xs font-medium text-gray-400">{{ group.total }} {{ group.total === 1 ? 'documento' : 'documenti' }}</span>
+                                <span v-if="selectedDocumentYear === group.year" class="text-xs font-medium text-gray-400">{{ filteredDocumentsForYear(group).length }} {{ filteredDocumentsForYear(group).length === 1 ? 'documento' : 'documenti' }}</span>
                             </button>
 
                             <div
@@ -236,7 +263,7 @@ function yearScaleClass(year) {
                                                 <p class="mt-1 truncate text-xs text-gray-400">{{ document.user_read_at ? `Letto ${dateTimeIt(document.user_read_at)}` : document.user_opened_at ? `Aperto ${dateTimeIt(document.user_opened_at)}` : 'Non ancora aperto' }}</p>
                                             </Link>
                                         </div>
-                                        <div v-else class="rounded-[var(--radius-sm)] border border-gray-200 bg-white/70 px-5 py-8 text-center text-sm text-gray-500">{{ selectedCategory === 'all' ? 'Nessun documento per questo anno.' : 'Nessun documento con il filtro selezionato.' }}</div>
+                                        <div v-else class="rounded-[var(--radius-sm)] border border-gray-200 bg-white/70 px-5 py-8 text-center text-sm text-gray-500">Nessun documento con i filtri selezionati per questo anno.</div>
 
                                         <div v-if="filteredDocumentsForYear(group).length > visibleDocumentsForYear(group).length" class="flex justify-center">
                                             <button type="button" class="btn btn-outline" @click="showMoreYearDocuments(group.year)">Carica altri</button>
@@ -247,7 +274,7 @@ function yearScaleClass(year) {
                         </section>
                     </div>
                     <div v-else class="rounded-[var(--radius-sm)] border border-gray-200 bg-white/70 px-5 py-12 text-center text-sm text-gray-500">
-                        Nessun documento assegnato a questo utente.
+                        {{ documents.length ? 'Nessun documento trovato.' : 'Nessun documento assegnato a questo utente.' }}
                     </div>
                 </section>
             </div>
