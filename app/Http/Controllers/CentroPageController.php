@@ -1329,7 +1329,7 @@ class CentroPageController extends Controller
             'canViewMessages' => $canViewMessages,
             'canViewGroups' => $canViewGroups,
             'activeAdminSection' => $canManage ? ($request->route('documentView') ?: 'documents') : null,
-            'documents' => $this->companyDocumentRows($canManage ? null : $userId, $canManage, null, $canManage ? 'all' : null)
+            'documents' => $this->companyDocumentRows($userId, false)
                 ->filter(fn ($document) => $this->canAccessCompanyDocument($request, $document))->values(),
             'messages' => $canManage && ! $canViewMessages ? [] : $this->companyMessageRows($canManage ? null : $userId, $canManage),
             'messageSchedules' => $canManage && $canViewMessages ? DB::table('company_message_schedules')->orderBy('next_run_at')->get()
@@ -6647,9 +6647,10 @@ class CentroPageController extends Controller
             return true;
         }
 
-        if ($role === 'admin' && $this->isSensitiveCompanyDocument($document->category, $document->audience)) {
-            return DB::table('company_document_manager_access')
-                ->where('company_document_id', $document->id)->where('user_id', $request->user()->id)->exists();
+        if ($role === 'admin' && $this->isSensitiveCompanyDocument($document->category, $document->audience)
+            && DB::table('company_document_manager_access')->where('company_document_id', $document->id)
+                ->where('user_id', $request->user()->id)->exists()) {
+            return true;
         }
 
         if ($this->isSensitiveCompanyDocumentCategory($document->category) && $document->audience !== 'users') {
@@ -6658,6 +6659,10 @@ class CentroPageController extends Controller
 
         if ($this->companyDocumentRecipientIds($document->id)->contains($request->user()?->id)) {
             return true;
+        }
+
+        if ($role === 'admin' && $this->isSensitiveCompanyDocument($document->category, $document->audience)) {
+            return false;
         }
 
         if ($role === 'admin' && $this->canManageDocuments($request)) {

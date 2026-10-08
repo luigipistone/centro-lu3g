@@ -270,27 +270,39 @@ class CompanyDocumentsTest extends TestCase
             );
     }
 
-    public function test_all_documents_list_only_includes_documents_for_everyone(): void
+    public function test_document_list_shows_own_and_common_documents_for_every_role(): void
     {
         Storage::fake('local');
         $admin = User::factory()->create();
+        $manager = User::factory()->create();
         $employee = User::factory()->create();
         $this->role($admin, 'superadmin');
+        $this->role($manager, 'admin');
         $this->role($employee, 'editor');
+        DB::table('role_permissions')->where('role', 'admin')->where('permission', 'documents.manage')->update(['allowed' => true]);
 
-        foreach ([['Personale', 'users'], ['Generale', 'all']] as [$title, $audience]) {
+        foreach ([
+            ['Admin personale', 'users', [$admin->id], 'documenti_vari'],
+            ['Manager personale', 'users', [$manager->id], 'compensi'],
+            ['Dipendente personale', 'users', [$employee->id], 'documenti_vari'],
+            ['Generale', 'all', [], 'documenti_vari'],
+        ] as [$title, $audience, $userIds, $category]) {
             $this->actingAs($admin)->post(route('documents.store'), [
-                'title' => $title, 'category' => 'documenti_vari', 'audience' => $audience,
-                'user_ids' => $audience === 'users' ? [$employee->id] : [],
+                'title' => $title, 'category' => $category, 'audience' => $audience,
+                'user_ids' => $userIds,
                 'publication_confirmed' => true,
                 'file' => UploadedFile::fake()->create($title.'.pdf', 10, 'application/pdf'),
             ])->assertSessionHasNoErrors();
         }
 
         $this->actingAs($admin)->get(route('documents.list'))
-            ->assertInertia(fn (Assert $page) => $page->has('documents', 1)->where('documents.0.title', 'Generale'));
+            ->assertInertia(fn (Assert $page) => $page->has('documents', 2)->where('documents', fn ($documents) => collect($documents)->pluck('title')->sort()->values()->all() === ['Admin personale', 'Generale']));
+        $this->actingAs($manager)->get(route('documents.list'))
+            ->assertInertia(fn (Assert $page) => $page->has('documents', 2)->where('documents', fn ($documents) => collect($documents)->pluck('title')->sort()->values()->all() === ['Generale', 'Manager personale']));
         $this->actingAs($employee)->get(route('documents.list'))
-            ->assertInertia(fn (Assert $page) => $page->has('documents', 2));
+            ->assertInertia(fn (Assert $page) => $page->has('documents', 2)->where('documents', fn ($documents) => collect($documents)->pluck('title')->sort()->values()->all() === ['Dipendente personale', 'Generale']));
+        $managerDocumentId = DB::table('company_documents')->where('title', 'Manager personale')->value('id');
+        $this->actingAs($manager)->get(route('documents.show', $managerDocumentId))->assertOk();
     }
 
     public function test_admin_cannot_create_empty_document_group(): void

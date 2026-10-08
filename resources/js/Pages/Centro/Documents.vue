@@ -487,7 +487,7 @@ function deleteLabel(type) {
                             :class="['btn', activeAdminSection === 'documents' ? 'btn-primary' : 'btn-outline']"
                         >
                             <FileText class="h-4 w-4" :stroke-width="1.7" />
-                            Tutti i documenti
+                            I miei documenti
                             <span class="rounded-full bg-white/20 px-2 py-0.5 text-xs">{{ visibleDocuments.length }}</span>
                         </Link>
                         <Link v-if="canViewMessages"
@@ -955,7 +955,7 @@ function deleteLabel(type) {
                 <section v-if="!canManage || activeAdminSection === 'documents'" class="space-y-4">
                     <div class="flex flex-wrap items-end justify-between gap-4">
                         <div>
-                            <h3 class="text-base font-semibold text-gray-900">{{ canManage ? 'Tutti i documenti' : 'I miei documenti' }}</h3>
+                            <h3 class="text-base font-semibold text-gray-900">I miei documenti</h3>
                             <p class="mt-1 text-sm text-gray-500">Documenti {{ currentYear }} in evidenza e archivio diviso per anno.</p>
                         </div>
                         <div class="flex w-full flex-wrap items-center gap-3 sm:w-auto">
@@ -997,7 +997,7 @@ function deleteLabel(type) {
                                             :key="document.id"
                                             role="button"
                                             tabindex="0"
-                                            :class="['group flex min-w-0 cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] border border-gray-200 bg-white px-2.5 py-2 transition-colors hover:border-blue-200 hover:bg-blue-50/50 focus-visible:outline-2 focus-visible:outline-blue-400', !canManage && !document.user_read_at ? 'border-amber-200' : '']"
+                                            :class="['group flex min-w-0 cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] border border-gray-200 bg-white px-2.5 py-2 transition-colors hover:border-blue-200 hover:bg-blue-50/50 focus-visible:outline-2 focus-visible:outline-blue-400', !document.user_read_at ? 'border-amber-200' : '']"
                                             @click="openDocument(document)"
                                             @keydown.enter.prevent="openDocument(document)"
                                             @keydown.space.prevent="openDocument(document)"
@@ -1008,7 +1008,7 @@ function deleteLabel(type) {
                                             <div class="min-w-0 flex-1">
                                                 <p class="truncate text-sm font-semibold text-gray-900 transition group-hover:text-[hsl(var(--primary-app))]" :title="document.title">{{ document.title }}</p>
                                                 <p class="mt-0.5 truncate text-[11px] text-gray-500" :title="audienceLabel(document)">{{ audienceLabel(document) }} · {{ categoryLabel(document.category) }}</p>
-                                                <p class="truncate text-[11px] text-gray-400">{{ dateIt(document.created_at) }} · {{ fileSize(document.file_size) }} · {{ canManage ? `${document.read_count}/${document.recipient_count} letti` : (document.user_read_at ? 'Letto' : 'Da leggere') }}</p>
+                                                <p class="truncate text-[11px] text-gray-400">{{ dateIt(document.created_at) }} · {{ fileSize(document.file_size) }} · {{ document.user_read_at ? 'Letto' : document.user_opened_at ? 'Aperto' : 'Da leggere' }}</p>
                                             </div>
                                             <button v-if="canManage && (isSuperadmin || (!sensitiveDocumentCategories.includes(document.category) && document.audience !== 'users'))" type="button" class="icon-btn h-6 w-6 shrink-0 self-start text-red-600 hover:bg-red-50" title="Elimina documento" @click.stop="removeDocument(document)">
                                                 <Trash2 class="h-3.5 w-3.5" :stroke-width="1.7" />
@@ -1026,7 +1026,7 @@ function deleteLabel(type) {
                         </section>
                     </div>
                     <div v-else class="rounded-[var(--radius-sm)] border border-gray-200 bg-white/70 px-5 py-12 text-center text-sm text-gray-500">
-                        {{ visibleDocuments.length ? 'Nessun documento trovato.' : canManage ? 'Nessun documento destinato a tutti.' : 'Nessun documento disponibile.' }}
+                        {{ visibleDocuments.length ? 'Nessun documento trovato.' : 'Nessun documento disponibile.' }}
                     </div>
                 </section>
             </div>
