@@ -2370,7 +2370,6 @@ class CentroPageController extends Controller
         if ($view === 'vault-detail') {
             $selectedVault = $vaults->firstWhere('id', $request->route('id'));
             abort_if(! $selectedVault, 404);
-            abort_unless($selectedVault->can_edit, 403);
         }
 
         if ($view === 'group-detail') {
@@ -2497,6 +2496,27 @@ class CentroPageController extends Controller
         });
 
         return back()->with('status', 'Cassaforte aggiornata.');
+    }
+
+    public function updatePasswordVaultOverviewVisibility(Request $request, string $id): RedirectResponse
+    {
+        abort_if($this->isGuest($request), 403);
+        abort_unless($this->visiblePasswordVaultIds($request)->contains($id), 403);
+        $payload = $request->validate(['show_in_overview' => ['required', 'boolean']]);
+
+        DB::table('password_vault_user_preferences')->upsert(
+            [[
+                'password_vault_id' => $id,
+                'user_id' => $request->user()->id,
+                'show_in_overview' => $payload['show_in_overview'],
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]],
+            ['password_vault_id', 'user_id'],
+            ['show_in_overview', 'updated_at'],
+        );
+
+        return back();
     }
 
     public function destroyPasswordVault(Request $request, string $id): RedirectResponse
@@ -6075,13 +6095,18 @@ class CentroPageController extends Controller
             ->select('password_vault_id', DB::raw('COUNT(*) as total'))
             ->groupBy('password_vault_id')
             ->pluck('total', 'password_vault_id');
+        $overviewVisibility = DB::table('password_vault_user_preferences')
+            ->where('user_id', $request->user()->id)
+            ->whereIn('password_vault_id', $vaults->pluck('id'))
+            ->pluck('show_in_overview', 'password_vault_id');
 
         return $vaults
-            ->map(function ($vault) use ($request, $userShares, $groupShares, $itemCounts) {
+            ->map(function ($vault) use ($request, $userShares, $groupShares, $itemCounts, $overviewVisibility) {
                 $vault->items_count = (int) ($itemCounts[$vault->id] ?? 0);
                 $vault->user_ids = ($userShares[$vault->id] ?? collect())->pluck('user_id')->values();
                 $vault->group_ids = ($groupShares[$vault->id] ?? collect())->pluck('password_group_id')->values();
                 $vault->can_edit = $this->canEditPasswordVault($request, $vault);
+                $vault->show_in_overview = (bool) ($overviewVisibility[$vault->id] ?? true);
 
                 return $vault;
             });

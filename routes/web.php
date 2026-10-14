@@ -139,6 +139,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/passwords/compromised', [CentroPageController::class, 'passwords'])->defaults('view', 'compromised')->name('passwords.compromised');
     Route::post('/passwords/vaults', [CentroPageController::class, 'storePasswordVault'])->name('passwords.vaults.store');
     Route::put('/passwords/vaults/{id}', [CentroPageController::class, 'updatePasswordVault'])->name('passwords.vaults.update');
+    Route::patch('/passwords/vaults/{id}/overview-visibility', [CentroPageController::class, 'updatePasswordVaultOverviewVisibility'])->name('passwords.vaults.overview-visibility');
     Route::delete('/passwords/vaults/{id}', [CentroPageController::class, 'destroyPasswordVault'])->name('passwords.vaults.destroy');
     Route::post('/passwords/groups', [CentroPageController::class, 'storePasswordGroup'])->name('passwords.groups.store');
     Route::put('/passwords/groups/{id}', [CentroPageController::class, 'updatePasswordGroup'])->name('passwords.groups.update');

@@ -40,6 +40,8 @@ const deleteTarget = ref(null);
 const deleteText = ref('');
 const vaultEditor = ref(null);
 const groupEditor = ref(null);
+const overviewVisibilitySaving = ref(false);
+const overviewVisibilityError = ref('');
 const initialClientId = new URLSearchParams(String(page.url || '').split('?')[1] || '').get('client_id') || 'all';
 const activeClientId = ref(initialClientId);
 const activeCategoryFilters = ref([]);
@@ -158,9 +160,14 @@ const baseFilteredItems = computed(() => {
     });
 });
 
+const hiddenOverviewVaultIds = computed(() => new Set((props.vaults || []).filter((vault) => vault.show_in_overview === false).map((vault) => vault.id)));
+const overviewItems = computed(() => baseFilteredItems.value.filter((item) => !hiddenOverviewVaultIds.value.has(item.password_vault_id)));
+
 const visibleItems = computed(() => {
     return baseFilteredItems.value.filter((item) => {
-        return activeVaultId.value === 'all' || item.password_vault_id === activeVaultId.value;
+        return activeVaultId.value === 'all'
+            ? !hiddenOverviewVaultIds.value.has(item.password_vault_id)
+            : item.password_vault_id === activeVaultId.value;
     }).sort((first, second) => String(first.title || first.url || '').localeCompare(String(second.title || second.url || ''), 'it', { sensitivity: 'base' }));
 });
 
@@ -307,7 +314,7 @@ function vaultFilterPillStyle(vault = null) {
 
 function vaultFilterCount(vaultId = 'all') {
     if (vaultId === 'all') {
-        return baseFilteredItems.value.length;
+        return overviewItems.value.length;
     }
 
     return baseFilteredItems.value.filter((item) => item.password_vault_id === vaultId).length;
@@ -703,6 +710,19 @@ function saveVault() {
     }
 }
 
+function toggleVaultOverviewVisibility() {
+    if (!props.selectedVault || overviewVisibilitySaving.value) return;
+    overviewVisibilitySaving.value = true;
+    overviewVisibilityError.value = '';
+    router.patch(route('passwords.vaults.overview-visibility', props.selectedVault.id), {
+        show_in_overview: !props.selectedVault.show_in_overview,
+    }, {
+        preserveScroll: true,
+        onError: () => { overviewVisibilityError.value = 'Non è stato possibile salvare la preferenza.'; },
+        onFinish: () => { overviewVisibilitySaving.value = false; },
+    });
+}
+
 function resetGroupForm(group = null) {
     groupEditor.value = group;
     groupForm.defaults({
@@ -965,10 +985,10 @@ if (props.selectedGroup) {
                         <article
                             v-for="vault in vaults"
                             :key="vault.id"
-                            :class="['content-card project-preview-card group relative flex min-h-[190px] flex-col border p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg', vault.can_edit ? 'cursor-pointer' : '']"
+                            class="content-card project-preview-card group relative flex min-h-[190px] cursor-pointer flex-col border p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg"
                             :style="vaultCardStyle(vault)"
                         >
-                            <Link v-if="vault.can_edit" :href="route('passwords.vaults.show', vault.id)" class="absolute inset-0 z-0 rounded-[inherit]" :aria-label="`Apri cassaforte ${vault.name}`" />
+                            <Link :href="route('passwords.vaults.show', vault.id)" class="absolute inset-0 z-0 rounded-[inherit]" :aria-label="`Apri cassaforte ${vault.name}`" />
                             <div class="pointer-events-none relative z-10 flex items-start justify-between gap-3">
                                 <div class="min-w-0">
                                     <p class="truncate text-sm font-semibold">
@@ -1002,8 +1022,19 @@ if (props.selectedGroup) {
                             <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                         </button>
                     </div>
-                    <h3 class="mb-5 text-base font-semibold text-gray-900">{{ currentView === 'vault-create' ? 'Nuova cassaforte' : 'Modifica cassaforte' }}</h3>
-                    <div class="max-w-3xl space-y-5">
+                    <div v-if="selectedVault" class="mb-6 flex max-w-3xl items-center justify-between gap-4 border-b border-gray-100 pb-6">
+                        <div class="min-w-0">
+                            <p class="mb-1 text-sm font-medium text-gray-500">{{ selectedVault.name }}</p>
+                            <h3 class="text-base font-semibold text-gray-900">Mostra in tutte le password</h3>
+                            <p class="mt-1 text-sm text-gray-500">Questa preferenza riguarda solo il tuo account. La cassaforte rimane sempre accessibile dal suo filtro.</p>
+                            <p v-if="overviewVisibilityError" class="mt-2 text-xs text-red-600">{{ overviewVisibilityError }}</p>
+                        </div>
+                        <button type="button" role="switch" :aria-checked="selectedVault.show_in_overview" :aria-label="'Mostra ' + selectedVault.name + ' in tutte le password'" :disabled="overviewVisibilitySaving" :class="['relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50', selectedVault.show_in_overview ? 'bg-blue-600' : 'bg-gray-300']" @click="toggleVaultOverviewVisibility">
+                            <span :class="['absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform', selectedVault.show_in_overview ? 'translate-x-5' : 'translate-x-0']" />
+                        </button>
+                    </div>
+                    <h3 v-if="currentView === 'vault-create' || selectedVault?.can_edit" class="mb-5 text-base font-semibold text-gray-900">{{ currentView === 'vault-create' ? 'Nuova cassaforte' : 'Modifica cassaforte' }}</h3>
+                    <div v-if="currentView === 'vault-create' || selectedVault?.can_edit" class="max-w-3xl space-y-5">
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Nome</label>
                             <input v-model="vaultForm.name" class="form-control" />
