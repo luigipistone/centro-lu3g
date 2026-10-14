@@ -22,7 +22,7 @@ const groupSize = ref(2);
 const extractAll = ref(true);
 const pageSelection = ref('');
 const mergeExtracted = ref(false);
-const results = ref([]);
+const result = ref(null);
 const error = ref('');
 const baseName = computed(() => file.value?.name.replace(/\.pdf$/i, '') || 'documento');
 const modes = [
@@ -36,7 +36,7 @@ const plannedCount = computed(() => {
 });
 
 watch([mode, ranges, mergeRanges, groupSize, extractAll, pageSelection, mergeExtracted], () => {
-    results.value = [];
+    result.value = null;
     error.value = '';
 }, { deep: true });
 
@@ -47,7 +47,7 @@ function formatBytes(bytes) {
 function clearFile() {
     file.value = null;
     pageCount.value = 0;
-    results.value = [];
+    result.value = null;
     error.value = '';
     if (input.value) input.value.value = '';
 }
@@ -154,7 +154,7 @@ function plannedGroups() {
 async function split() {
     if (!file.value || processing.value) return;
     error.value = '';
-    results.value = [];
+    result.value = null;
     let groups;
     try { groups = plannedGroups(); } catch (cause) { error.value = cause.message; return; }
     processing.value = true;
@@ -162,17 +162,24 @@ async function split() {
     totalOutputs.value = groups.length;
     try {
         const source = await PDFDocument.load(await file.value.arrayBuffer());
+        const outputs = {};
         for (const [index, group] of groups.entries()) {
             const output = await PDFDocument.create();
             const pages = await output.copyPages(source, group.pages);
             pages.forEach(page => output.addPage(page));
-            results.value.push({ id: index, name: `${baseName.value}-${group.suffix}.pdf`, label: group.label, data: await output.save() });
+            outputs[`${String(index + 1).padStart(3, '0')}-${baseName.value}-${group.suffix}.pdf`] = await output.save();
             progress.value = index + 1;
             await new Promise(resolve => setTimeout(resolve, 0));
         }
+        if (groups.length === 1) {
+            const [name, data] = Object.entries(outputs)[0];
+            result.value = { name: name.replace(/^001-/, ''), data, count: 1, type: 'application/pdf' };
+        } else {
+            result.value = { name: `${baseName.value}-diviso.zip`, data: zipSync(outputs, { level: 0 }), count: groups.length, type: 'application/zip' };
+        }
     } catch {
-        results.value = [];
-        error.value = 'Non è stato possibile dividere il PDF. Verifica il file e riprova.';
+        result.value = null;
+        error.value = 'Non è stato possibile creare i file. Verifica il PDF o prova con meno pagine.';
     } finally {
         processing.value = false;
     }
@@ -189,14 +196,6 @@ function download(data, name, type = 'application/pdf') {
     window.setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 
-function downloadAll() {
-    try {
-        const contents = Object.fromEntries(results.value.map((result, index) => [`${index + 1}-${result.name}`, result.data]));
-        download(zipSync(contents, { level: 0 }), `${baseName.value}-diviso.zip`, 'application/zip');
-    } catch {
-        error.value = 'Impossibile creare l’archivio. Scarica i PDF singolarmente.';
-    }
-}
 </script>
 
 <template>
@@ -234,7 +233,10 @@ function downloadAll() {
                     </section>
                 </div>
                 <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
-                <section v-if="results.length" class="surface p-5 sm:p-6"><div class="flex flex-wrap items-center justify-between gap-3"><div><h3 class="text-base font-semibold text-gray-900">Risultati</h3><p class="mt-1 text-sm text-gray-500">{{ results.length }} {{ results.length === 1 ? 'PDF creato' : 'PDF creati' }}</p></div><button v-if="results.length > 1" type="button" class="btn btn-primary" @click="downloadAll"><Download class="h-4 w-4" /> Scarica tutti</button></div><div class="mt-4 divide-y divide-gray-100 border-t border-gray-100"><div v-for="result in results" :key="result.id" class="flex flex-wrap items-center justify-between gap-3 py-3"><div class="min-w-0"><p class="truncate text-sm font-semibold text-gray-900">{{ result.name }}</p><p class="text-xs text-gray-500">{{ result.label }} · {{ formatBytes(result.data.length) }}</p></div><button type="button" class="btn btn-outline shrink-0" @click="download(result.data, result.name)"><Download class="h-4 w-4" /> Scarica</button></div></div></section>
+                <section v-if="result" class="surface flex flex-wrap items-center justify-between gap-4 p-5 sm:p-6">
+                    <div class="min-w-0"><h3 class="text-base font-semibold text-gray-900">Divisione completata</h3><p class="mt-1 text-sm text-gray-500">{{ result.count }} {{ result.count === 1 ? 'PDF' : 'PDF nello ZIP' }} · {{ formatBytes(result.data.length) }}</p></div>
+                    <button type="button" class="btn btn-primary shrink-0" @click="download(result.data, result.name, result.type)"><Download class="h-4 w-4" /> {{ result.count === 1 ? 'Scarica PDF' : 'Scarica ZIP' }}</button>
+                </section>
             </div>
         </div>
     </AuthenticatedLayout>
