@@ -193,7 +193,7 @@ function isLightColor(value) {
     const b = parseInt(color.slice(5, 7), 16);
     const luminance = ((0.2126 * r) + (0.7152 * g) + (0.0722 * b)) / 255;
 
-    return luminance > 0.62;
+    return luminance > 0.70;
 }
 
 function vaultCardStyle(vault) {
