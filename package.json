@@ -23,6 +23,7 @@
         "@lucide/vue": "^1.17.0",
         "@wasm-zoo/ghostscript": "^0.7.2",
         "axios": "^1.17.0",
-        "fflate": "^0.8.3"
+        "fflate": "^0.8.3",
+        "pdf-lib": "^1.17.1"
     }
 }
