@@ -55,7 +55,9 @@ class FavoritesTest extends TestCase
         ])->assertRedirect();
 
         $this->actingAs($recipient)->get(route('favorites.index'))->assertOk()->assertSee('Portale');
+        $this->actingAs($recipient)->get(route('favorites.folders.show', $folderId))->assertOk()->assertSee('Portale');
         $this->actingAs($outsider)->get(route('favorites.index'))->assertOk()->assertDontSee('Portale');
+        $this->actingAs($outsider)->get(route('favorites.folders.show', $folderId))->assertNotFound();
         $this->actingAs($outsider)->delete(route('favorites.folders.destroy', $folderId))->assertNotFound();
         $this->actingAs($superadmin)->get(route('favorites.index'))->assertOk()->assertSee('Portale');
     }
@@ -69,6 +71,7 @@ class FavoritesTest extends TestCase
         $this->actingAs($employee)->post(route('favorites.folders.store'), ['name' => 'Privata', 'visibility' => 'personal']);
         $folderId = DB::table('favorite_folders')->where('name', 'Privata')->value('id');
         $this->actingAs($manager)->get(route('favorites.index'))->assertOk()->assertDontSee('Privata');
+        $this->actingAs($manager)->get(route('favorites.folders.show', $folderId))->assertNotFound();
         $this->actingAs($manager)->delete(route('favorites.folders.destroy', $folderId))->assertNotFound();
     }
 

@@ -151,6 +151,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/passwords/items/{id}/compromise-check', [CentroPageController::class, 'checkPasswordItemCompromise'])->name('passwords.items.compromise-check');
     Route::delete('/passwords/items/{id}', [CentroPageController::class, 'destroyPasswordItem'])->name('passwords.items.destroy');
     Route::get('/favorites', [FavoriteController::class, 'index'])->name('favorites.index');
+    Route::get('/favorites/folders', [FavoriteController::class, 'index'])->defaults('view', 'folders')->name('favorites.folders');
+    Route::get('/favorites/folders/create', [FavoriteController::class, 'index'])->defaults('view', 'folder-create')->name('favorites.folders.create');
+    Route::get('/favorites/folders/{id}', [FavoriteController::class, 'index'])->defaults('view', 'folder-detail')->name('favorites.folders.show');
     Route::post('/favorites/folders', [FavoriteController::class, 'storeFolder'])->name('favorites.folders.store');
     Route::put('/favorites/folders/{id}', [FavoriteController::class, 'updateFolder'])->name('favorites.folders.update');
     Route::delete('/favorites/folders/{id}', [FavoriteController::class, 'destroyFolder'])->name('favorites.folders.destroy');

@@ -29,17 +29,17 @@ class FavoriteController extends Controller
         $userId = $request->user()->id;
         $query = DB::table('favorite_folders as f');
         if (! $this->isSuperadmin($request)) {
-            $query->where(function ($q) use ($userId) {
+            $query->where(function ($q) use ($userId, $request) {
                 $q->where('f.created_by', $userId)
                     ->orWhereExists(fn ($sub) => $sub->selectRaw('1')->from('favorite_folder_user as fu')
                         ->whereColumn('fu.folder_id', 'f.id')->where('fu.user_id', $userId))
                     ->orWhereExists(fn ($sub) => $sub->selectRaw('1')->from('favorite_folder_group as fg')
                         ->join('password_group_user as pgu', 'pgu.password_group_id', '=', 'fg.group_id')
                         ->whereColumn('fg.folder_id', 'f.id')->where('pgu.user_id', $userId));
+                if ($this->canManage($request)) {
+                    $q->orWhere('f.visibility', 'shared');
+                }
             });
-            if ($this->canManage($request)) {
-                $query->orWhere('f.visibility', 'shared');
-            }
         }
         return $query;
     }
@@ -58,7 +58,10 @@ class FavoriteController extends Controller
 
     public function index(Request $request): Response
     {
+        $view = $request->route('view', 'items');
         $folders = $this->visibleFolders($request)->select('f.*')->orderBy('f.name')->get();
+        $selectedFolder = $view === 'folder-detail' ? $folders->firstWhere('id', $request->route('id')) : null;
+        if ($view === 'folder-detail') abort_unless($selectedFolder, 404);
         $ids = $folders->pluck('id');
         $items = $ids->isEmpty() ? collect() : DB::table('favorite_items')
             ->whereIn('folder_id', $ids)->orderBy('title')->get();
@@ -77,6 +80,8 @@ class FavoriteController extends Controller
             'users' => $this->canManage($request) ? $users : [],
             'groups' => $this->canManage($request) ? $groups : [],
             'canManage' => $this->canManage($request),
+            'view' => $view,
+            'selectedFolderId' => $selectedFolder?->id,
         ]);
     }
 
@@ -85,6 +90,7 @@ class FavoriteController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'visibility' => ['required', 'in:personal,shared'],
+            'color' => ['sometimes', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'user_ids' => ['array'], 'user_ids.*' => ['uuid', 'exists:users,id'],
             'group_ids' => ['array'], 'group_ids.*' => ['uuid', 'exists:password_groups,id'],
         ]);
@@ -117,7 +123,7 @@ class FavoriteController extends Controller
             $id = (string) Str::uuid();
             DB::table('favorite_folders')->insert([
                 'id' => $id, 'name' => $data['name'], 'visibility' => $data['visibility'],
-                'created_by' => $request->user()->id, 'created_at' => now(), 'updated_at' => now(),
+                'created_by' => $request->user()->id, 'color' => $data['color'] ?? '#0B6EF3', 'created_at' => now(), 'updated_at' => now(),
             ]);
             $this->syncRecipients($id, $data);
         });
@@ -129,9 +135,9 @@ class FavoriteController extends Controller
         $folder = $this->folder($request, $id);
         abort_unless($this->canWrite($request, $folder), 403);
         $data = $this->folderData($request);
-        DB::transaction(function () use ($id, $data) {
+        DB::transaction(function () use ($id, $data, $folder) {
             DB::table('favorite_folders')->where('id', $id)->update([
-                'name' => $data['name'], 'visibility' => $data['visibility'], 'updated_at' => now(),
+                'name' => $data['name'], 'visibility' => $data['visibility'], 'color' => $data['color'] ?? $folder->color, 'updated_at' => now(),
             ]);
             $this->syncRecipients($id, $data);
         });
