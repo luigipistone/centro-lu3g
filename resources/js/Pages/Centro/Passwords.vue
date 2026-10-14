@@ -193,7 +193,7 @@ function isLightColor(value) {
     const b = parseInt(color.slice(5, 7), 16);
     const luminance = ((0.2126 * r) + (0.7152 * g) + (0.0722 * b)) / 255;
 
-    return luminance > 0.70;
+    return luminance > 0.80;
 }
 
 function vaultCardStyle(vault) {
@@ -203,6 +203,7 @@ function vaultCardStyle(vault) {
     return {
         backgroundColor,
         color: light ? '#111827' : '#ffffff',
+        textShadow: light ? 'none' : '0 1px 2px rgba(15, 23, 42, 0.34)',
         borderColor: light ? 'rgba(17, 24, 39, 0.14)' : 'rgba(255, 255, 255, 0.24)',
         boxShadow: light ? '0 18px 40px rgba(28, 42, 73, 0.12)' : '0 18px 40px rgba(15, 23, 42, 0.22)',
     };
@@ -242,6 +243,7 @@ function vaultFilterPillStyle(vault = null) {
         backgroundColor,
         borderColor: vault ? (light ? 'rgba(17, 24, 39, 0.16)' : 'rgba(255, 255, 255, 0.26)') : 'rgba(229, 231, 235, 0.95)',
         color: light ? '#111827' : '#ffffff',
+        textShadow: light ? 'none' : '0 1px 2px rgba(15, 23, 42, 0.34)',
     };
 }
 
