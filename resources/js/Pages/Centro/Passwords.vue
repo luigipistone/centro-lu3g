@@ -4,7 +4,7 @@ import AppSelect from '@/Components/AppSelect.vue';
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, BarChart3, Bold, Boxes, Building2, Cable, ChevronDown, Copy, Database, ExternalLink, FileUp, Globe2, Italic, KeyRound, List, ListOrdered, Mail, Megaphone, Network, PanelsTopLeft, Pencil, Plus, Quote, Router, Server, Share2, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
+import { ArrowLeft, BarChart3, Bold, Boxes, Building2, Cable, ChevronDown, Copy, Database, Download, ExternalLink, FileUp, Globe2, Italic, KeyRound, List, ListOrdered, Mail, Megaphone, Network, PanelsTopLeft, Pencil, Plus, Quote, Router, Server, Share2, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -99,6 +99,18 @@ function importCsv() {
             if (csvInput.value) csvInput.value.value = '';
         },
     });
+}
+
+function downloadCsvTemplate() {
+    const content = '\uFEFFTitolo;Nome utente;Password;URL;Note\r\n';
+    const url = URL.createObjectURL(new Blob([content], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'modello-importazione-password.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 const maskedRevealedPassword = computed(() => revealedPassword.value ? '•'.repeat(Math.min(Math.max(revealedPassword.value.length, 8), 24)) : '');
@@ -889,19 +901,25 @@ if (props.selectedGroup) {
                     <div v-else class="surface px-6 py-12 text-center text-sm text-gray-500">Nessuna password disponibile.</div>
                 </section>
 
-                <section v-if="currentView === 'import'" class="surface mx-auto max-w-3xl p-5 sm:p-7">
-                    <div class="mb-6 flex items-start gap-3">
-                        <Link :href="route('passwords.index')" class="icon-btn h-9 w-9 shrink-0" title="Torna alle password" aria-label="Torna alle password">
-                            <ArrowLeft class="h-4 w-4" :stroke-width="1.7" />
-                        </Link>
-                        <div>
-                            <h3 class="text-lg font-semibold text-gray-900">Importa password da CSV</h3>
-                            <p class="mt-1 text-sm text-gray-500">Usa le colonne Titolo, Nome utente e Password. URL e Note sono facoltative.</p>
+                <section v-if="currentView === 'import'" class="surface p-4 sm:p-6">
+                    <div class="mb-6 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-5">
+                        <div class="flex min-w-0 items-start gap-3">
+                            <Link :href="route('passwords.index')" class="icon-btn h-9 w-9 shrink-0" title="Torna alle password" aria-label="Torna alle password">
+                                <ArrowLeft class="h-4 w-4" :stroke-width="1.7" />
+                            </Link>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Importa password da CSV</h3>
+                                <p class="mt-1 text-sm text-gray-500">Usa le colonne Titolo, Nome utente e Password. URL e Note sono facoltative.</p>
+                            </div>
                         </div>
+                        <button type="button" class="btn btn-outline shrink-0" @click="downloadCsvTemplate">
+                            <Download class="h-4 w-4" :stroke-width="1.7" />
+                            Scarica modello CSV
+                        </button>
                     </div>
 
-                    <div v-if="personalVaults?.length" class="space-y-5">
-                        <div>
+                    <div v-if="personalVaults?.length" class="space-y-6">
+                        <div class="max-w-xl">
                             <label class="mb-2 block text-sm font-medium text-gray-700">Cassaforte personale</label>
                             <AppSelect v-model="csvForm.password_vault_id" :options="personalVaults.map((vault) => ({ value: vault.id, label: vault.name }))" placeholder="Seleziona cassaforte" />
                             <p v-if="csvForm.errors.password_vault_id" class="mt-1 text-xs text-red-600">{{ csvForm.errors.password_vault_id }}</p>
@@ -910,7 +928,7 @@ if (props.selectedGroup) {
                             <label class="mb-2 block text-sm font-medium text-gray-700">File CSV</label>
                             <input ref="csvInput" class="sr-only" type="file" accept=".csv,.txt,text/csv" @change="selectCsvFile($event.target.files?.[0])" />
                             <div
-                                class="flex min-h-[150px] cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-6 text-center transition"
+                                class="flex min-h-[150px] w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-6 text-center transition"
                                 :class="csvDragging ? 'border-[hsl(var(--primary-app))] bg-[hsl(var(--primary-app)/0.06)]' : 'border-gray-200 bg-gray-50 hover:border-[hsl(var(--primary-app)/0.5)]'"
                                 role="button" tabindex="0" aria-label="Seleziona o trascina un file CSV"
                                 @click="csvInput?.click()" @keydown.enter.prevent="csvInput?.click()" @keydown.space.prevent="csvInput?.click()"
@@ -922,8 +940,8 @@ if (props.selectedGroup) {
                             </div>
                             <p v-if="csvError || csvForm.errors.file" class="mt-1 text-xs text-red-600">{{ csvError || csvForm.errors.file }}</p>
                         </div>
-                        <p class="text-xs text-gray-500">I titoli già presenti nella cassaforte vengono saltati. Il file non viene conservato.</p>
-                        <div class="flex justify-end">
+                        <div class="flex flex-wrap items-center justify-between gap-4 border-t border-gray-100 pt-5">
+                            <p class="text-xs text-gray-500">I titoli già presenti nella cassaforte vengono saltati. Il file non viene conservato.</p>
                             <button type="button" class="btn btn-primary" :disabled="!csvForm.file || !csvForm.password_vault_id || csvForm.processing" @click="importCsv">
                                 <FileUp class="h-4 w-4" :stroke-width="1.7" />
                                 {{ csvForm.processing ? 'Importazione...' : 'Importa password' }}
