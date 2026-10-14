@@ -118,4 +118,39 @@ class FavoritesTest extends TestCase
         $this->actingAs($member)->get(route('favorites.folders.show', $folderId))->assertNotFound();
         $this->actingAs($outsider)->get(route('favorites.folders.show', $folderId))->assertOk();
     }
+
+    public function test_categories_and_featured_state_follow_the_individual_favorite(): void
+    {
+        $employee = User::factory()->create();
+        $other = User::factory()->create();
+        $this->role($employee, 'editor');
+        $this->role($other, 'editor');
+
+        $this->actingAs($employee)->post(route('favorites.categories.store'), ['name' => 'Strumenti'])->assertRedirect();
+        $categoryId = DB::table('favorite_categories')->where('name', 'Strumenti')->value('id');
+        $this->actingAs($employee)->post(route('favorites.categories.store'), ['name' => 'strumenti'])->assertSessionHasErrors('name');
+        $this->actingAs($employee)->post(route('favorites.folders.store'), ['name' => 'Miei link', 'visibility' => 'personal']);
+        $folderId = DB::table('favorite_folders')->where('name', 'Miei link')->value('id');
+
+        $this->actingAs($employee)->post(route('favorites.items.store'), [
+            'folder_id' => $folderId, 'title' => 'Figma', 'url' => 'https://figma.com',
+            'category_ids' => [$categoryId], 'is_featured' => true,
+        ])->assertRedirect();
+        $itemId = DB::table('favorite_items')->where('title', 'Figma')->value('id');
+        $this->assertDatabaseHas('favorite_items', ['id' => $itemId, 'is_featured' => true]);
+        $this->assertDatabaseHas('favorite_item_category', ['item_id' => $itemId, 'category_id' => $categoryId]);
+        $this->actingAs($employee)->get(route('favorites.index'))->assertSee('Figma')->assertSee('Strumenti');
+        $this->actingAs($other)->get(route('favorites.index'))->assertDontSee('Figma');
+
+        $this->actingAs($employee)->put(route('favorites.items.update', $itemId), [
+            'folder_id' => $folderId, 'title' => 'Figma', 'url' => 'https://figma.com',
+            'category_ids' => [], 'is_featured' => false,
+        ])->assertRedirect();
+        $this->assertDatabaseHas('favorite_items', ['id' => $itemId, 'is_featured' => false]);
+        $this->assertDatabaseMissing('favorite_item_category', ['item_id' => $itemId]);
+        $this->actingAs($other)->put(route('favorites.items.update', $itemId), [
+            'folder_id' => $folderId, 'title' => 'Non mio', 'url' => 'https://example.com',
+            'is_featured' => true,
+        ])->assertNotFound();
+    }
 }

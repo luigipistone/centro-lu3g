@@ -160,6 +160,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/favorites/groups', [FavoriteController::class, 'storeGroup'])->name('favorites.groups.store');
     Route::put('/favorites/groups/{id}', [FavoriteController::class, 'updateGroup'])->name('favorites.groups.update');
     Route::delete('/favorites/groups/{id}', [FavoriteController::class, 'destroyGroup'])->name('favorites.groups.destroy');
+    Route::post('/favorites/categories', [FavoriteController::class, 'storeCategory'])->name('favorites.categories.store');
     Route::post('/favorites/folders', [FavoriteController::class, 'storeFolder'])->name('favorites.folders.store');
     Route::put('/favorites/folders/{id}', [FavoriteController::class, 'updateFolder'])->name('favorites.folders.update');
     Route::delete('/favorites/folders/{id}', [FavoriteController::class, 'destroyFolder'])->name('favorites.folders.destroy');

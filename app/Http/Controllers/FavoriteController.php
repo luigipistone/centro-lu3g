@@ -66,6 +66,9 @@ class FavoriteController extends Controller
         $ids = $folders->pluck('id');
         $items = $ids->isEmpty() ? collect() : DB::table('favorite_items')
             ->whereIn('folder_id', $ids)->orderBy('title')->get();
+        $itemIds = $items->pluck('id');
+        $itemCategories = $itemIds->isEmpty() ? collect() : DB::table('favorite_item_category')->whereIn('item_id', $itemIds)->get();
+        $categories = DB::table('favorite_categories')->orderBy('name')->get(['id', 'name']);
         $users = DB::table('users')->where('account_status', 'active')->select('id', 'name', 'email')->orderBy('name')->get();
         $groupQuery = DB::table('favorite_groups')->orderBy('name');
         if (! $this->canManage($request)) {
@@ -85,7 +88,10 @@ class FavoriteController extends Controller
                 'group_ids' => $folderGroups->where('folder_id', $folder->id)->pluck('group_id')->values(),
                 'can_edit' => $this->canWrite($request, $folder),
             ]),
-            'items' => $items,
+            'items' => $items->map(fn ($item) => [...(array) $item,
+                'category_ids' => $itemCategories->where('item_id', $item->id)->pluck('category_id')->values(),
+            ]),
+            'categories' => $categories,
             'users' => $this->canManage($request) ? $users : [],
             'groups' => $groups->map(fn ($group) => [...(array) $group,
                 'user_ids' => $this->canManage($request) ? $members->where('group_id', $group->id)->pluck('user_id')->values() : [],
@@ -220,6 +226,20 @@ class FavoriteController extends Controller
         return back()->with('success', 'Gruppo eliminato.');
     }
 
+    public function storeCategory(Request $request): RedirectResponse
+    {
+        $data = $request->validate(['name' => ['required', 'string', 'max:120']]);
+        $name = trim($data['name']);
+        if (DB::table('favorite_categories')->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->exists()) {
+            throw ValidationException::withMessages(['name' => 'Questa categoria esiste già.']);
+        }
+        DB::table('favorite_categories')->insert([
+            'id' => (string) Str::uuid(), 'name' => $name, 'created_by' => $request->user()->id,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        return back()->with('success', 'Categoria aggiunta.');
+    }
+
     private function itemData(Request $request): array
     {
         $data = $request->validate([
@@ -227,6 +247,8 @@ class FavoriteController extends Controller
             'title' => ['required', 'string', 'max:180'],
             'url' => ['required', 'string', 'max:2048'],
             'description' => ['nullable', 'string', 'max:2000'],
+            'category_ids' => ['array'], 'category_ids.*' => ['uuid', 'exists:favorite_categories,id'],
+            'is_featured' => ['boolean'],
         ]);
         $url = filter_var($data['url'], FILTER_VALIDATE_URL);
         if (! $url || ! in_array(strtolower(parse_url($url, PHP_URL_SCHEME) ?: ''), ['http', 'https'], true)) {
@@ -239,12 +261,17 @@ class FavoriteController extends Controller
     {
         $data = $this->itemData($request);
         abort_unless($this->canWrite($request, $this->folder($request, $data['folder_id'])), 403);
-        DB::table('favorite_items')->insert([
-            'id' => (string) Str::uuid(), 'folder_id' => $data['folder_id'],
-            'created_by' => $request->user()->id, 'title' => $data['title'],
-            'url' => $data['url'], 'description' => $data['description'] ?? null,
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
+        DB::transaction(function () use ($request, $data) {
+            $id = (string) Str::uuid();
+            DB::table('favorite_items')->insert([
+                'id' => $id, 'folder_id' => $data['folder_id'],
+                'created_by' => $request->user()->id, 'title' => $data['title'],
+                'url' => $data['url'], 'description' => $data['description'] ?? null,
+                'is_featured' => $data['is_featured'] ?? false,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $this->syncItemCategories($id, $data['category_ids'] ?? []);
+        });
         return back()->with('success', 'Preferito aggiunto.');
     }
 
@@ -261,11 +288,23 @@ class FavoriteController extends Controller
         abort_unless($this->canWrite($request, $this->folder($request, $item->folder_id)), 403);
         $data = $this->itemData($request);
         abort_unless($this->canWrite($request, $this->folder($request, $data['folder_id'])), 403);
-        DB::table('favorite_items')->where('id', $id)->update([
-            'folder_id' => $data['folder_id'], 'title' => $data['title'],
-            'url' => $data['url'], 'description' => $data['description'] ?? null, 'updated_at' => now(),
-        ]);
+        DB::transaction(function () use ($id, $data) {
+            DB::table('favorite_items')->where('id', $id)->update([
+                'folder_id' => $data['folder_id'], 'title' => $data['title'],
+                'url' => $data['url'], 'description' => $data['description'] ?? null,
+                'is_featured' => $data['is_featured'] ?? false, 'updated_at' => now(),
+            ]);
+            $this->syncItemCategories($id, $data['category_ids'] ?? []);
+        });
         return back()->with('success', 'Preferito aggiornato.');
+    }
+
+    private function syncItemCategories(string $id, array $categoryIds): void
+    {
+        DB::table('favorite_item_category')->where('item_id', $id)->delete();
+        foreach (array_unique($categoryIds) as $categoryId) {
+            DB::table('favorite_item_category')->insert(['item_id' => $id, 'category_id' => $categoryId]);
+        }
     }
 
     public function destroyItem(Request $request, string $id): RedirectResponse
