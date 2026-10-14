@@ -167,12 +167,12 @@ function downloadAll() {
         <div class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <div class="grid items-stretch gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-                    <section class="surface min-w-0 p-5 sm:p-6">
+                    <section class="surface flex min-w-0 flex-col p-5 sm:p-6">
                         <div class="mb-5 flex items-center justify-between gap-3">
                             <h3 class="text-base font-semibold text-gray-900">File PDF</h3>
                             <button v-if="files.length" type="button" class="inline-flex items-center gap-1 text-sm font-semibold text-gray-500 hover:text-gray-800" :disabled="processing" @click="clearFiles"><Trash2 class="h-4 w-4" /> Rimuovi tutti</button>
                         </div>
-                        <div role="button" tabindex="0" :aria-label="files.length ? 'Aggiungi PDF' : 'Seleziona o trascina file PDF'" :class="['flex min-h-44 cursor-pointer flex-col items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-dashed px-5 py-8 text-center transition focus-visible:outline-2 focus-visible:outline-[hsl(var(--primary-app))]', dragDepth ? 'border-[hsl(var(--primary-app))] bg-[hsl(var(--primary-app)/0.08)]' : 'border-gray-200 bg-gray-50/70 hover:border-[hsl(var(--primary-app)/0.6)] hover:bg-[hsl(var(--primary-app)/0.04)]', processing ? 'pointer-events-none opacity-60' : '']" @click="input?.click()" @keydown.enter.prevent="input?.click()" @keydown.space.prevent="input?.click()" @dragenter.prevent="dragDepth++" @dragover.prevent @dragleave.prevent="dragDepth = Math.max(0, dragDepth - 1)" @drop.prevent="onDrop">
+                        <div role="button" tabindex="0" :aria-label="files.length ? 'Aggiungi PDF' : 'Seleziona o trascina file PDF'" :class="['flex min-h-44 flex-1 cursor-pointer flex-col items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-dashed px-5 py-8 text-center transition focus-visible:outline-2 focus-visible:outline-[hsl(var(--primary-app))]', dragDepth ? 'border-[hsl(var(--primary-app))] bg-[hsl(var(--primary-app)/0.08)]' : 'border-gray-200 bg-gray-50/70 hover:border-[hsl(var(--primary-app)/0.6)] hover:bg-[hsl(var(--primary-app)/0.04)]', processing ? 'pointer-events-none opacity-60' : '']" @click="input?.click()" @keydown.enter.prevent="input?.click()" @keydown.space.prevent="input?.click()" @dragenter.prevent="dragDepth++" @dragover.prevent @dragleave.prevent="dragDepth = Math.max(0, dragDepth - 1)" @drop.prevent="onDrop">
                             <span class="flex h-12 w-12 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]"><Upload class="h-6 w-6" :stroke-width="1.7" /></span>
                             <span class="text-sm font-semibold text-gray-800">Trascina qui i PDF o selezionali</span>
                             <span class="text-xs text-gray-500">Fino a 10 file, 40 MB ciascuno</span>
@@ -217,7 +217,6 @@ function downloadAll() {
                         </div>
                     </div>
                 </section>
-                <p class="text-xs text-gray-400">Motore PDF: <a href="https://www.ghostscript.com/licensing/" target="_blank" rel="noopener noreferrer" class="underline hover:text-gray-600">Ghostscript (AGPL)</a> · <a href="https://github.com/ttomohisa/wasm-zoo" target="_blank" rel="noopener noreferrer" class="underline hover:text-gray-600">Codice sorgente</a></p>
             </div>
         </div>
     </AuthenticatedLayout>
