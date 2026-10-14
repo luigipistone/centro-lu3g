@@ -35,7 +35,8 @@ class PasswordCsvImportTest extends TestCase
         $this->actingAs($user)->post(route('passwords.import.store'), [
             'password_vault_id' => $vaultId,
             'file' => UploadedFile::fake()->createWithContent('import.csv', $csv),
-        ])->assertRedirect(route('passwords.import'));
+        ])->assertRedirect(route('passwords.import'))
+            ->assertSessionHas('status', '1 password importate. 2 già presenti, 0 righe non valide.');
 
         $item = DB::table('password_items')->where('password_vault_id', $vaultId)->where('title', 'Mio Sito')->first();
         $this->assertNotNull($item);

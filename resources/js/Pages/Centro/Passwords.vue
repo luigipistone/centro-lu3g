@@ -4,7 +4,7 @@ import AppSelect from '@/Components/AppSelect.vue';
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, BarChart3, Bold, Boxes, Building2, Cable, ChevronDown, Copy, Database, Download, ExternalLink, FileUp, Globe2, Italic, KeyRound, List, ListOrdered, Mail, Megaphone, Network, PanelsTopLeft, Pencil, Plus, Quote, Router, Server, Share2, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
+import { ArrowLeft, BarChart3, Bold, Boxes, Building2, Cable, CheckCircle2, ChevronDown, Copy, Database, Download, ExternalLink, FileUp, Globe2, Italic, KeyRound, List, ListOrdered, Mail, Megaphone, Network, PanelsTopLeft, Pencil, Plus, Quote, Router, Server, Share2, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -68,11 +68,13 @@ const passwordListSentinel = ref(null);
 const csvInput = ref(null);
 const csvDragging = ref(false);
 const csvError = ref('');
+const csvResult = ref(page.props.flash?.status || '');
 const csvForm = useForm({ password_vault_id: '', file: null });
 let passwordListObserver = null;
 
 function selectCsvFile(file) {
     csvError.value = '';
+    csvResult.value = '';
     if (!file) return;
     if (!/\.(csv|txt)$/i.test(file.name)) {
         csvError.value = 'Seleziona un file CSV.';
@@ -92,9 +94,11 @@ function dropCsvFile(event) {
 
 function importCsv() {
     if (!csvForm.file || !csvForm.password_vault_id || csvForm.processing) return;
+    csvResult.value = '';
     csvForm.post(route('passwords.import.store'), {
         forceFormData: true,
-        onSuccess: () => {
+        onSuccess: (response) => {
+            csvResult.value = response.props.flash?.status || 'Importazione completata.';
             csvForm.file = null;
             if (csvInput.value) csvInput.value.value = '';
         },
@@ -916,6 +920,11 @@ if (props.selectedGroup) {
                             <Download class="h-4 w-4" :stroke-width="1.7" />
                             Scarica modello CSV
                         </button>
+                    </div>
+
+                    <div v-if="csvResult" class="mb-6 flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900" role="status" aria-live="polite">
+                        <CheckCircle2 class="mt-0.5 h-4 w-4 shrink-0" :stroke-width="1.7" />
+                        <span>{{ csvResult }}</span>
                     </div>
 
                     <div v-if="personalVaults?.length" class="space-y-6">
