@@ -166,10 +166,7 @@ function downloadAll() {
         </template>
         <div class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
-                <div class="flex items-center gap-3 border-b border-gray-200 pb-3">
-                    <h3 class="flex items-center gap-2 text-base font-semibold text-gray-900"><FileText class="h-5 w-5 text-[hsl(var(--primary-app))]" :stroke-width="1.7" /> Comprimi PDF</h3>
-                </div>
-                <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+                <div class="grid items-stretch gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
                     <section class="surface min-w-0 p-5 sm:p-6">
                         <div class="mb-5 flex items-center justify-between gap-3">
                             <h3 class="text-base font-semibold text-gray-900">File PDF</h3>
