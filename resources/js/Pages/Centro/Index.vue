@@ -4559,10 +4559,10 @@ function calendarDayStyle(sectionMonth, cell) {
                             <button
                                 v-if="calendarTaskParentStack.length"
                                 type="button"
-                                class="mb-2 inline-flex items-center gap-1 text-xs font-semibold text-gray-500 transition hover:text-indigo-600"
+                                class="mb-2 inline-flex items-center gap-1 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]"
                                 @click="returnToCalendarParentTask"
                             >
-                                <ChevronLeft class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                <ChevronLeft class="h-4 w-4" :stroke-width="1.7" />
                                 Torna alla task genitore
                             </button>
                             <div class="flex items-center gap-2">

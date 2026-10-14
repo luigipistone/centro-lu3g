@@ -4079,9 +4079,9 @@ onUnmounted(() => {
                 <div class="min-w-0 max-w-full">
                     <Link
                         :href="backHref()"
-                        class="inline-flex items-center gap-1 text-xs font-medium text-gray-500 transition hover:text-indigo-600"
+                        class="inline-flex items-center gap-1 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]"
                     >
-                        <ChevronLeft class="h-3.5 w-3.5" :stroke-width="1.8" />
+                        <ChevronLeft class="h-4 w-4" :stroke-width="1.7" />
                         {{ backLabel() }}
                     </Link>
                     <div class="mt-1 flex items-center gap-2">
@@ -6881,10 +6881,10 @@ onUnmounted(() => {
                             <button
                                 v-if="projectTaskParentStack.length"
                                 type="button"
-                                class="mb-2 inline-flex items-center gap-1 text-xs font-semibold text-gray-500 transition hover:text-indigo-600"
+                                class="mb-2 inline-flex items-center gap-1 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]"
                                 @click="returnToProjectDrawerParentTask"
                             >
-                                <ChevronLeft class="h-3.5 w-3.5" :stroke-width="1.8" />
+                                <ChevronLeft class="h-4 w-4" :stroke-width="1.7" />
                                 Torna alla task genitore
                             </button>
                             <div class="flex items-center gap-2">

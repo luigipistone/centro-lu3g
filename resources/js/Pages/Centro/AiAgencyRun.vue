@@ -87,7 +87,7 @@ const statusLabel = { draft: 'Da analizzare', analyzing: 'Analisi in corso', nee
         <template #header>
             <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                 <div>
-                    <Link :href="route('ai-agency.index')" class="mb-2 inline-flex items-center gap-1 text-xs font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]"><ChevronLeft class="h-3.5 w-3.5" />Agenzia AI</Link>
+                    <Link :href="route('ai-agency.index')" class="mb-2 inline-flex items-center gap-1 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]"><ChevronLeft class="h-4 w-4" :stroke-width="1.7" /> Agenzia AI</Link>
                     <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ run.project_name }}</h2>
                     <p class="mt-1 text-sm text-gray-500">{{ run.client_name || 'Processo strategico del progetto' }}</p>
                 </div>
