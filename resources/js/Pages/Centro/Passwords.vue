@@ -176,13 +176,16 @@ const categoryFilterOptions = computed(() => (props.credentialCategories || []).
 })));
 const formSubcategoryOptions = computed(() => [{ value: '', label: 'Nessuna' }, ...(selectedCategoryDefinition.value.subcategories || []).map((value) => ({ value, label: value }))]);
 const availableCategoryFields = computed(() => (props.passwordCategoryFields || []).filter((field) => field.category === itemForm.category && !itemForm.custom_fields.some((selected) => selected.label.toLowerCase() === field.label.toLowerCase())));
+const strengthLabels = ['Molto debole', 'Debole', 'Discreta', 'Buona', 'Forte'];
+const strengthScore = (value) => Math.min(4, Math.max(0, Number(value) || 0));
+const strengthColorClass = (value) => strengthScore(value) >= 3 ? 'bg-emerald-500' : strengthScore(value) === 2 ? 'bg-amber-500' : 'bg-red-500';
 const strengthPreview = computed(() => {
     const value = itemForm.password || '';
     let score = value.length >= 12 ? 1 : 0;
     if (value.length >= 16) score++;
     if (/[a-z]/.test(value) && /[A-Z]/.test(value)) score++;
     if (/\d/.test(value) && /[^a-zA-Z\d]/.test(value)) score++;
-    return { score: Math.min(4, score), length: value.length, label: ['Molto debole', 'Debole', 'Discreta', 'Buona', 'Forte'][Math.min(4, score)] };
+    return { score: strengthScore(score), length: value.length, label: strengthLabels[strengthScore(score)] };
 });
 const visibleRotationHistory = computed(() => {
     const history = editingItem.value?.rotation_history || [];
@@ -374,19 +377,6 @@ function addNewCustomField() {
 
 function removeCustomField(index) {
     itemForm.custom_fields = itemForm.custom_fields.filter((_, fieldIndex) => fieldIndex !== index);
-}
-
-function riskLabel(value) {
-    return { critical: 'Critico', high: 'Alto', medium: 'Medio', low: 'Basso' }[value] || 'Basso';
-}
-
-function riskDotClass(value) {
-    return {
-        critical: 'bg-red-500',
-        high: 'bg-orange-500',
-        medium: 'bg-amber-400',
-        low: 'bg-emerald-500',
-    }[value] || 'bg-gray-400';
 }
 
 function refreshLocalSecurity(item) {
@@ -893,7 +883,7 @@ if (props.selectedGroup) {
                                         {{ item.client_name }}
                                     </span>
                                 </div>
-                                <span :class="['h-2.5 w-2.5 shrink-0 rounded-full', riskDotClass(item.risk_level)]" :title="`Rischio ${riskLabel(item.risk_level).toLowerCase()}`" :aria-label="`Rischio ${riskLabel(item.risk_level)}`"></span>
+                                <span :class="['h-2.5 w-2.5 shrink-0 rounded-full', strengthColorClass(item.strength_score)]" :title="`Forza: ${strengthLabels[strengthScore(item.strength_score)]}`" :aria-label="`Forza: ${strengthLabels[strengthScore(item.strength_score)]}`"></span>
                             </div>
                         </article>
                     </div>
@@ -1219,7 +1209,7 @@ if (props.selectedGroup) {
                         <p v-if="editPasswordError" class="mt-2 text-sm text-red-600">{{ editPasswordError }}</p>
                         <div v-if="editPasswordLoaded || !editingItem" class="mt-2 flex items-center gap-3">
                             <div class="grid flex-1 grid-cols-4 gap-1">
-                                <span v-for="index in 4" :key="index" :class="['h-1.5 rounded-full', index <= strengthPreview.score ? (strengthPreview.score >= 3 ? 'bg-emerald-500' : strengthPreview.score === 2 ? 'bg-amber-500' : 'bg-red-500') : 'bg-gray-200']"></span>
+                                <span v-for="index in 4" :key="index" :class="['h-1.5 rounded-full', index <= strengthPreview.score ? strengthColorClass(strengthPreview.score) : 'bg-gray-200']"></span>
                             </div>
                             <span class="shrink-0 text-xs font-semibold text-gray-500">{{ strengthPreview.length }} caratteri · {{ strengthPreview.label }}</span>
                         </div>
