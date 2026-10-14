@@ -17,6 +17,33 @@ class FavoritesTest extends TestCase
         DB::table('user_roles')->insert(['id' => (string) Str::uuid(), 'user_id' => $user->id, 'role' => $role]);
     }
 
+    public function test_administration_bookmark_import_is_categorized_and_idempotent(): void
+    {
+        $admin = User::factory()->create();
+        $folderId = (string) Str::uuid();
+        DB::table('favorite_folders')->insert([
+            'id' => $folderId, 'name' => 'Amministrazione', 'visibility' => 'personal',
+            'created_by' => $admin->id, 'color' => '#0B6EF3',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $migration = require database_path('migrations/2026_10_14_000500_import_administration_favorites.php');
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(24, DB::table('favorite_items')->where('folder_id', $folderId)->count());
+        $this->assertSame(6, DB::table('favorite_categories')->count());
+        $this->assertDatabaseHas('favorite_items', [
+            'folder_id' => $folderId, 'title' => 'Fatture',
+            'url' => 'https://drive.google.com/drive/u/0/folders/1Q_Sb0_RFqhk6Cck1pI_ANazyQi6W6UpG',
+        ]);
+        $this->assertDatabaseHas('favorite_items', [
+            'folder_id' => $folderId, 'title' => 'Regali Natale',
+            'url' => 'https://drive.google.com/drive/u/0/folders/1SuJxZ0bVDyDlayr-JDQO4-9JSoTsvvUB',
+        ]);
+        $this->assertSame(24, DB::table('favorite_item_category')->count());
+    }
+
     public function test_employee_can_create_personal_favorites_but_cannot_share_them(): void
     {
         $employee = User::factory()->create();
