@@ -79,13 +79,13 @@ async function publish() {
     <AuthenticatedLayout>
         <template #header>
             <div class="flex flex-col gap-2">
-                <h2 class="text-xl font-semibold leading-tight text-gray-800">Documenti</h2>
+                <Link :href="route('documents.list')" class="inline-flex items-center gap-2 self-start text-sm font-medium text-gray-600 hover:text-[hsl(var(--primary-app))]"><ArrowLeft class="h-4 w-4" :stroke-width="1.7" /> Tutti i documenti</Link>
+                <h2 class="text-xl font-semibold leading-tight text-gray-800">Riconosci cedolini</h2>
                 <p class="text-sm text-gray-500">Riconoscimento e pubblicazione dei cedolini.</p>
             </div>
         </template>
         <div class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
-                <Link :href="route('documents.list')" class="inline-flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-[hsl(var(--primary-app))]"><ArrowLeft class="h-4 w-4" :stroke-width="1.7" /> Tutti i documenti</Link>
                 <div class="surface bg-white p-5">
                     <div class="mb-4 flex items-center gap-2">
                         <Files class="h-5 w-5 text-[hsl(var(--primary-app))]" :stroke-width="1.7" />

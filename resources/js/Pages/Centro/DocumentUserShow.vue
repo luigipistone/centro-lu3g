@@ -175,9 +175,9 @@ function yearScaleClass(year) {
                 </Link>
                 <div class="flex items-center gap-3">
                     <UserAvatar :user="user" size="md" />
-                    <div>
-                        <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ user.name }}</h2>
-                        <p class="text-sm text-gray-500">{{ user.email }}</p>
+                    <div class="min-w-0">
+                        <h2 class="break-words text-xl font-semibold leading-tight text-gray-800">{{ user.name }}</h2>
+                        <p class="truncate text-sm text-gray-500">{{ user.email }}</p>
                     </div>
                 </div>
             </div>

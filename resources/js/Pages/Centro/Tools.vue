@@ -160,14 +160,13 @@ function downloadAll() {
     <AuthenticatedLayout>
         <template #header>
             <div class="flex flex-col gap-1">
-                <h2 class="text-xl font-semibold leading-tight text-gray-800">Strumenti</h2>
-                <p class="text-sm text-gray-500">Comprimi PDF</p>
+                <Link :href="route('tools.index')" class="mb-1 inline-flex items-center gap-1 self-start text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]"><ArrowLeft class="h-4 w-4" :stroke-width="1.7" /> Strumenti</Link>
+                <h2 class="text-xl font-semibold leading-tight text-gray-800">Comprimi PDF</h2>
             </div>
         </template>
         <div class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <div class="flex items-center gap-3 border-b border-gray-200 pb-3">
-                    <Link :href="route('tools.index')" class="icon-btn h-9 w-9 shrink-0" title="Torna agli strumenti" aria-label="Torna agli strumenti"><ArrowLeft class="h-4 w-4" :stroke-width="1.7" /></Link>
                     <h3 class="flex items-center gap-2 text-base font-semibold text-gray-900"><FileText class="h-5 w-5 text-[hsl(var(--primary-app))]" :stroke-width="1.7" /> Comprimi PDF</h3>
                 </div>
                 <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">

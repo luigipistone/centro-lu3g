@@ -4075,8 +4075,8 @@ onUnmounted(() => {
 
     <AuthenticatedLayout>
         <template #header>
-            <div class="flex items-center justify-between gap-4">
-                <div>
+            <div class="flex flex-wrap items-start justify-between gap-4">
+                <div class="min-w-0 max-w-full">
                     <Link
                         :href="backHref()"
                         class="inline-flex items-center gap-1 text-xs font-medium text-gray-500 transition hover:text-indigo-600"
@@ -4086,7 +4086,7 @@ onUnmounted(() => {
                     </Link>
                     <div class="mt-1 flex items-center gap-2">
                         <span v-if="section === 'projects'" class="h-3 w-3 rounded-full" :style="{ backgroundColor: normalizeHexColor(projectForm.color) }"></span>
-                        <h2 class="text-xl font-semibold leading-tight text-gray-800">
+                        <h2 class="min-w-0 break-words text-xl font-semibold leading-tight text-gray-800">
                             {{ section === 'projects' ? projectForm.name : (section === 'clients' ? clientForm.name : (section === 'users' ? userForm.name : (section === 'absences' ? 'Richiesta assenza' : (record.name || record.title || record.number)))) }}
                         </h2>
                     </div>
@@ -4566,7 +4566,7 @@ onUnmounted(() => {
                 </div>
             </div>
 
-            <div v-else :class="['mx-auto grid max-w-[1600px] gap-6 px-4 sm:px-6 lg:px-8', section === 'users' ? 'lg:grid-cols-1' : 'lg:grid-cols-[1fr_360px]']">
+            <div v-else :class="['mx-auto grid max-w-[1600px] grid-cols-1 gap-6 px-4 sm:px-6 lg:px-8', section === 'users' ? 'lg:grid-cols-1' : 'lg:grid-cols-[minmax(0,1fr)_360px]']">
                 <section v-if="section === 'clients'" class="space-y-6">
                     <div v-if="related.passwordCredentialsCount !== null && related.passwordCredentialsCount !== undefined" class="flex justify-end">
                         <Link :href="route('passwords.index', { client_id: record.id })" class="btn btn-outline">
@@ -5853,12 +5853,12 @@ onUnmounted(() => {
                     </div>
                 </section>
 
-                <section v-if="section === 'users'" class="space-y-6 lg:order-1">
+                <section v-if="section === 'users'" class="min-w-0 space-y-6 lg:order-1">
                     <nav class="surface flex w-full gap-2 overflow-x-auto p-2" aria-label="Sezioni utente">
-                        <button v-for="tab in userDetailTabs" :key="tab.value" type="button" :class="['settings-tab inline-flex shrink-0 items-center gap-2', userDetailTab === tab.value ? 'settings-tab-active' : '']" :aria-current="userDetailTab === tab.value ? 'page' : undefined" @click="userDetailTab = tab.value"><component :is="tab.icon" class="h-4 w-4 shrink-0" :stroke-width="1.7" />{{ tab.label }}</button>
+                        <button v-for="tab in userDetailTabs" :key="tab.value" type="button" :class="['settings-tab inline-flex flex-none items-center gap-2 whitespace-nowrap', userDetailTab === tab.value ? 'settings-tab-active' : '']" :aria-current="userDetailTab === tab.value ? 'page' : undefined" @click="userDetailTab = tab.value"><component :is="tab.icon" class="h-4 w-4 shrink-0" :stroke-width="1.7" />{{ tab.label }}</button>
                     </nav>
                     <section v-if="userDetailTab === 'personal'" class="surface rounded-md p-5">
-                        <div class="flex flex-wrap items-center gap-4 rounded-md border border-gray-100 bg-gray-50 p-4">
+                        <div class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-4 rounded-md border border-gray-100 bg-gray-50 p-4 sm:flex sm:flex-wrap">
                             <UserAvatar :user="userPreview()" size="lg" />
                             <div class="min-w-0 flex-1">
                                 <div class="text-sm font-semibold text-gray-900">Foto personale</div>
@@ -5866,7 +5866,7 @@ onUnmounted(() => {
                                 <div v-if="userAvatarForm.errors.avatar" class="mt-2 text-sm text-red-600">{{ userAvatarForm.errors.avatar }}</div>
                             </div>
                             <input ref="userAvatarInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" @change="uploadUserAvatar" />
-                            <button v-if="userFieldAccess.personal_update" type="button" class="btn btn-outline" :disabled="userAvatarForm.processing" @click="chooseUserAvatar">
+                            <button v-if="userFieldAccess.personal_update" type="button" class="btn btn-outline col-span-2 justify-self-start" :disabled="userAvatarForm.processing" @click="chooseUserAvatar">
                                 {{ userAvatarForm.processing ? 'Caricamento...' : 'Carica foto' }}
                             </button>
                         </div>
@@ -6328,7 +6328,7 @@ onUnmounted(() => {
                     </dl>
                 </section>
 
-                <aside :class="['space-y-6', section === 'users' ? 'lg:order-2' : '']">
+                <aside :class="['min-w-0 space-y-6', section === 'users' ? 'lg:order-2' : '']">
                     <section v-if="section === 'clients'" class="surface rounded-md p-5">
                         <div class="flex items-start justify-between gap-3">
                             <div>

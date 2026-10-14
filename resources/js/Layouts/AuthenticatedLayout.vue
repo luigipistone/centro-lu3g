@@ -515,7 +515,7 @@ const groups = computed(() => {
             ></button>
         </aside>
 
-        <div class="desktop-shell" :style="{ '--sidebar-width': `${sidebarWidth}px` }">
+        <div class="desktop-shell min-w-0" :style="{ '--sidebar-width': `${sidebarWidth}px` }">
             <nav class="sticky top-0 z-30 border-b border-white/60 bg-white/68 shadow-[0_16px_40px_rgba(28,42,73,0.08)] backdrop-blur-2xl lg:hidden">
                 <div class="px-4 sm:px-6">
                     <div class="flex h-16 justify-between">
@@ -552,7 +552,7 @@ const groups = computed(() => {
                                 </span>
                             </Link>
                             <!-- Settings Dropdown -->
-                            <div class="relative">
+                            <div class="relative hidden lg:block">
                                 <Dropdown align="right" width="48">
                                     <template #trigger>
                                         <span class="inline-flex rounded-2xl">
@@ -582,6 +582,9 @@ const groups = computed(() => {
                             </div>
 
                             <button
+                                type="button"
+                                :aria-label="showingNavigationDropdown ? 'Chiudi menu' : 'Apri menu'"
+                                :aria-expanded="showingNavigationDropdown"
                                 @click="
                                     showingNavigationDropdown =
                                         !showingNavigationDropdown
@@ -598,7 +601,7 @@ const groups = computed(() => {
                 <button
                     v-if="showingNavigationDropdown"
                     type="button"
-                    class="fixed inset-0 top-16 z-20 bg-transparent sm:hidden"
+                    class="fixed inset-0 top-16 z-20 bg-transparent lg:hidden"
                     aria-label="Chiudi menu"
                     @click="showingNavigationDropdown = false"
                 ></button>
@@ -609,7 +612,7 @@ const groups = computed(() => {
                         block: showingNavigationDropdown,
                         hidden: !showingNavigationDropdown,
                     }"
-                    class="relative z-30 border-t border-white/60 bg-white/70 backdrop-blur-2xl sm:hidden"
+                    class="relative z-30 max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-white/60 bg-white/95 backdrop-blur-2xl lg:hidden"
                 >
                     <div class="space-y-1 pb-3 pt-2">
                         <template v-for="group in groups" :key="group.label">
@@ -635,6 +638,7 @@ const groups = computed(() => {
                                     :key="name"
                                     :href="route(name)"
                                     :active="route().current(name) || (name === 'tools.index' && route().current('tools.*'))"
+                                    @click="showingNavigationDropdown = false"
                                 >
                                     {{ label }}
                                 </ResponsiveNavLink>
@@ -658,6 +662,7 @@ const groups = computed(() => {
                         </div>
 
                         <div class="mt-3 space-y-1">
+                            <ResponsiveNavLink :href="route('profile.edit')" @click="showingNavigationDropdown = false">Profilo</ResponsiveNavLink>
                             <ResponsiveNavLink href="/esci-app">
                                 Esci
                             </ResponsiveNavLink>
@@ -667,13 +672,13 @@ const groups = computed(() => {
             </nav>
 
             <header class="relative z-[2000] overflow-visible border-b border-white/70 bg-white/72 backdrop-blur-xl" v-if="$slots.header">
-                <div class="relative z-[2001] overflow-visible px-4 py-6 sm:px-6 lg:px-8">
+                <div class="relative z-[2001] min-w-0 overflow-visible px-4 py-6 sm:px-6 lg:px-8">
                     <slot name="header" />
                 </div>
             </header>
 
             <!-- Page Content -->
-            <main class="relative min-h-[calc(100vh-4rem)]">
+            <main class="relative min-h-[calc(100vh-4rem)] min-w-0">
                 <slot />
             </main>
         </div>

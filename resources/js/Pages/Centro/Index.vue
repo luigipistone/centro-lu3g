@@ -4287,13 +4287,13 @@ function calendarDayStyle(sectionMonth, cell) {
 
         <div v-if="section === 'calendar'" class="py-8">
             <div class="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
-                <div class="mb-4 flex items-center justify-between gap-3 overflow-x-auto pb-1">
-                    <div class="flex shrink-0 items-center gap-2">
+                <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div class="flex items-center justify-between gap-2 sm:justify-start">
                         <button type="button" class="icon-btn" @click="changeMonth(-1)">
                             <span class="sr-only">Mese precedente</span>
                             <ChevronLeft class="h-4 w-4" :stroke-width="1.7" />
                         </button>
-                        <div class="min-w-[190px] text-center text-lg font-bold text-gray-950">
+                        <div class="min-w-0 text-center text-lg font-bold text-gray-950 sm:min-w-[190px]">
                             {{ monthNames[calendarMonth] }} {{ calendarYear }}
                         </div>
                         <button type="button" class="icon-btn" @click="changeMonth(1)">
@@ -4302,11 +4302,11 @@ function calendarDayStyle(sectionMonth, cell) {
                         </button>
                     </div>
 
-                    <div class="flex shrink-0 items-center gap-2">
-                        <div class="w-80 shrink-0">
+                    <div class="grid min-w-0 gap-2 sm:grid-cols-2 lg:flex lg:items-center">
+                        <div class="min-w-0 lg:w-80">
                             <AppSelect v-model="calendarType" :options="calendarTypeOptions" />
                         </div>
-                        <div v-if="!isGuest" ref="calendarPeopleMenu" class="relative z-30 w-64 shrink-0">
+                        <div v-if="!isGuest" ref="calendarPeopleMenu" class="relative z-30 min-w-0 lg:w-64">
                             <button
                                 type="button"
                                 :class="[
@@ -4344,15 +4344,15 @@ function calendarDayStyle(sectionMonth, cell) {
                                 </div>
                             </Teleport>
                         </div>
-                        <label class="inline-flex h-[38px] shrink-0 items-center gap-2 rounded-[var(--radius-sm)] border border-white/70 bg-white/58 px-3 text-sm font-medium text-gray-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.62)] backdrop-blur-xl">
+                        <label class="inline-flex h-[38px] items-center gap-2 rounded-[var(--radius-sm)] border border-white/70 bg-white/58 px-3 text-sm font-medium text-gray-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.62)] backdrop-blur-xl">
                             <input v-model="compactWeekend" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
                             Weekend
                         </label>
                     </div>
                 </div>
 
-                <div ref="calendarScrollArea" class="surface max-h-[calc(100vh-210px)] min-h-[620px] overflow-y-auto" @scroll.passive="handleCalendarScroll">
-                    <section v-for="sectionMonth in calendarMonthSections" :key="sectionMonth.key" class="overflow-visible border-b border-gray-100 last:border-b-0" :data-current-calendar-month="sectionMonth.delta === 0">
+                <div ref="calendarScrollArea" class="surface max-h-[calc(100dvh-210px)] min-h-[620px] overflow-auto" @scroll.passive="handleCalendarScroll">
+                    <section v-for="sectionMonth in calendarMonthSections" :key="sectionMonth.key" class="min-w-[840px] border-b border-gray-100 last:border-b-0 lg:min-w-0" :data-current-calendar-month="sectionMonth.delta === 0">
                         <div class="border-b border-gray-100 bg-white px-4 py-3">
                             <h3 class="text-sm font-bold uppercase tracking-wide text-gray-500">{{ sectionMonth.label }}</h3>
                         </div>
@@ -5162,8 +5162,8 @@ function calendarDayStyle(sectionMonth, cell) {
 
         <div v-else-if="section === 'projects'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
-                <div class="grid gap-3 lg:grid-cols-[minmax(220px,0.82fr)_165px_215px_auto_auto]">
-                    <ClearableSearchInput v-model="projectSearch" input-class="mt-0" placeholder="Cerca per progetto, cliente o descrizione..." />
+                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(220px,0.82fr)_165px_215px_auto_auto]">
+                    <ClearableSearchInput v-model="projectSearch" class="sm:col-span-2 xl:col-span-1" input-class="mt-0" placeholder="Cerca per progetto, cliente o descrizione..." />
                     <AppSelect v-model="projectStatus" :options="projectStatusOptions" />
                     <div ref="projectPeopleMenu" class="relative z-30">
                         <button
@@ -5283,7 +5283,7 @@ function calendarDayStyle(sectionMonth, cell) {
 
         <div v-else-if="section === 'absences'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
-                <div class="surface flex flex-wrap gap-2 p-2">
+                <div class="surface flex flex-nowrap gap-2 overflow-x-auto p-2 sm:flex-wrap sm:overflow-visible">
                     <button v-for="tab in [{ value: 'overview', label: 'Richieste', icon: CalendarX2 }, ...(canViewAbsencePresence ? [{ value: 'presence', label: 'Disponibilità e presenze', icon: CalendarDays }] : []), ...(canViewAbsenceReports ? [{ value: 'reports', label: 'Report e dati', icon: FileText }] : []), ...(isSuperadmin ? [{ value: 'rules', label: 'Regole', icon: Settings }] : [])]" :key="tab.value" type="button" :class="['settings-tab inline-flex items-center gap-2', absenceWorkspaceTab === tab.value ? 'settings-tab-active' : '']" :aria-current="absenceWorkspaceTab === tab.value ? 'page' : undefined" @click="absenceWorkspaceTab = tab.value"><component :is="tab.icon" class="h-4 w-4 shrink-0" :stroke-width="1.7" />{{ tab.label }}</button>
                 </div>
                 <template v-if="absenceWorkspaceTab === 'overview'">
@@ -5791,8 +5791,8 @@ function calendarDayStyle(sectionMonth, cell) {
                         </button>
                     </div>
                 </div>
-                <div class="grid gap-3 md:grid-cols-[1fr_150px_150px_150px_auto_auto_auto]">
-                    <ClearableSearchInput v-model="taskSearch" input-class="mt-0" placeholder="Cerca task, cliente, progetto o servizio..." />
+                <div class="grid gap-3 sm:grid-cols-2 2xl:grid-cols-[minmax(0,1fr)_150px_150px_150px_auto_auto_auto]">
+                    <ClearableSearchInput v-model="taskSearch" class="sm:col-span-2 2xl:col-span-1" input-class="mt-0" placeholder="Cerca task, cliente, progetto o servizio..." />
                     <AppSelect v-model="taskStatus" :options="taskStatusOptions" />
                     <AppSelect v-model="taskPriority" :options="taskPriorityOptions" />
                     <AppSelect v-model="taskType" :options="taskTypeOptions" />
@@ -5985,7 +5985,7 @@ function calendarDayStyle(sectionMonth, cell) {
                         v-for="tab in settingsTabs"
                         :key="tab[0]"
                         type="button"
-                        :class="['settings-tab', settingsTab === tab[0] ? 'settings-tab-active' : '']"
+                        :class="['settings-tab flex-none whitespace-nowrap', settingsTab === tab[0] ? 'settings-tab-active' : '']"
                         @click="settingsTab = tab[0]"
                     >
                         <component :is="tab[2]" class="h-4 w-4" :stroke-width="1.7" />

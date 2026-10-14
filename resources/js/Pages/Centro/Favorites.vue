@@ -139,12 +139,13 @@ function remove(kind, id) {
 </script>
 
 <template>
-    <Head title="Preferiti" />
+    <Head :title="currentView === 'folder-create' ? 'Nuova cartella' : currentView === 'folder-detail' ? (selectedFolder?.name || 'Cartella') : currentView === 'group-create' ? 'Nuovo gruppo' : currentView === 'group-detail' ? (selectedGroup?.name || 'Gruppo') : 'Preferiti'" />
     <AuthenticatedLayout>
         <template #header>
             <div class="flex flex-col gap-1">
-                <h2 class="text-xl font-semibold leading-tight text-gray-800">Preferiti</h2>
-                <p class="text-sm text-gray-500">Link personali e condivisi, organizzati per cartella.</p>
+                <Link v-if="['folder-create', 'folder-detail', 'group-create', 'group-detail'].includes(currentView)" :href="route(currentView.startsWith('folder-') ? 'favorites.folders' : 'favorites.groups')" class="mb-1 inline-flex items-center gap-1 self-start text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]"><ArrowLeft class="h-4 w-4" :stroke-width="1.7" /> {{ currentView.startsWith('folder-') ? 'Cartelle' : 'Gruppi' }}</Link>
+                <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ currentView === 'folder-create' ? 'Nuova cartella' : currentView === 'folder-detail' ? (selectedFolder?.name || 'Cartella') : currentView === 'group-create' ? 'Nuovo gruppo' : currentView === 'group-detail' ? (selectedGroup?.name || 'Gruppo') : 'Preferiti' }}</h2>
+                <p v-if="!['folder-create', 'folder-detail', 'group-create', 'group-detail'].includes(currentView)" class="text-sm text-gray-500">Link personali e condivisi, organizzati per cartella.</p>
             </div>
         </template>
         <div class="py-8">
@@ -211,7 +212,7 @@ function remove(kind, id) {
                     <div v-else class="surface px-6 py-12 text-center text-sm text-gray-500">Nessuna cartella disponibile.</div>
                 </section>
                 <section v-if="['folder-create', 'folder-detail'].includes(currentView)" class="surface p-5">
-                    <div class="mb-6 flex items-center justify-between gap-3"><Link :href="route('favorites.folders')" class="inline-flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-900"><ArrowLeft class="h-4 w-4" :stroke-width="1.7" /> Cartelle</Link><button v-if="selectedFolder?.can_edit" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina cartella" @click="remove('folder', selectedFolder.id)"><Trash2 class="h-4 w-4" :stroke-width="1.7" /></button></div>
+                    <div v-if="selectedFolder?.can_edit" class="mb-6 flex justify-end"><button type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina cartella" @click="remove('folder', selectedFolder.id)"><Trash2 class="h-4 w-4" :stroke-width="1.7" /></button></div>
                     <h3 v-if="currentView === 'folder-create' || selectedFolder?.can_edit" class="mb-5 text-base font-semibold text-gray-900">{{ currentView === 'folder-create' ? 'Nuova cartella' : 'Modifica cartella' }}</h3>
                     <div v-if="currentView === 'folder-create' || selectedFolder?.can_edit" class="max-w-3xl space-y-5">
                         <div><label class="block text-sm font-medium text-gray-700">Nome</label><input v-model="form.name" class="form-control" maxlength="120" /><p v-if="form.errors.name" class="mt-1 text-xs text-red-600">{{ form.errors.name }}</p></div>
@@ -235,7 +236,7 @@ function remove(kind, id) {
                     <div v-else class="surface px-6 py-12 text-center text-sm text-gray-500">Nessun gruppo disponibile.</div>
                 </section>
                 <section v-if="['group-create', 'group-detail'].includes(currentView)" class="surface p-5">
-                    <div class="mb-6 flex items-center justify-between gap-3"><Link :href="route('favorites.groups')" class="inline-flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-900"><ArrowLeft class="h-4 w-4" :stroke-width="1.7" /> Gruppi</Link><button v-if="selectedGroup" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina gruppo" @click="remove('group', selectedGroup.id)"><Trash2 class="h-4 w-4" :stroke-width="1.7" /></button></div>
+                    <div v-if="selectedGroup" class="mb-6 flex justify-end"><button type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina gruppo" @click="remove('group', selectedGroup.id)"><Trash2 class="h-4 w-4" :stroke-width="1.7" /></button></div>
                     <h3 class="mb-5 text-base font-semibold text-gray-900">{{ currentView === 'group-create' ? 'Nuovo gruppo' : 'Modifica gruppo' }}</h3>
                     <div class="max-w-3xl space-y-5">
                         <div><label class="block text-sm font-medium text-gray-700">Nome</label><input v-model="groupForm.name" class="form-control" maxlength="120" /><p v-if="groupForm.errors.name" class="mt-1 text-xs text-red-600">{{ groupForm.errors.name }}</p></div>

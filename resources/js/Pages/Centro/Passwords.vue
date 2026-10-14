@@ -779,13 +779,14 @@ if (props.selectedGroup) {
 </script>
 
 <template>
-    <Head title="Password" />
+    <Head :title="currentView === 'import' ? 'Importa password da CSV' : currentView === 'vault-create' ? 'Nuova cassaforte' : currentView === 'vault-detail' ? (selectedVault?.name || 'Cassaforte') : currentView === 'group-create' ? 'Nuovo gruppo' : currentView === 'group-detail' ? (selectedGroup?.name || 'Gruppo') : 'Password'" />
 
     <AuthenticatedLayout>
         <template #header>
             <div class="flex flex-col gap-1">
-                <h2 class="text-xl font-semibold leading-tight text-gray-800">Password</h2>
-                <p class="text-sm text-gray-500">Credenziali condivise, casseforti e accessi protetti.</p>
+                <Link v-if="currentView === 'import' || ['vault-detail', 'vault-create', 'group-detail', 'group-create'].includes(currentView)" :href="route(currentView === 'import' ? 'passwords.index' : currentView.startsWith('vault-') ? 'passwords.vaults' : 'passwords.groups')" class="mb-1 inline-flex items-center gap-1 self-start text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]"><ArrowLeft class="h-4 w-4" :stroke-width="1.7" /> {{ currentView === 'import' ? 'Password' : currentView.startsWith('vault-') ? 'Casseforti' : 'Gruppi' }}</Link>
+                <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ currentView === 'import' ? 'Importa password da CSV' : currentView === 'vault-create' ? 'Nuova cassaforte' : currentView === 'vault-detail' ? (selectedVault?.name || 'Cassaforte') : currentView === 'group-create' ? 'Nuovo gruppo' : currentView === 'group-detail' ? (selectedGroup?.name || 'Gruppo') : 'Password' }}</h2>
+                <p v-if="!['import', 'vault-create', 'vault-detail', 'group-create', 'group-detail'].includes(currentView)" class="text-sm text-gray-500">Credenziali condivise, casseforti e accessi protetti.</p>
             </div>
         </template>
 
@@ -919,9 +920,6 @@ if (props.selectedGroup) {
                 <section v-if="currentView === 'import'" class="surface p-4 sm:p-6">
                     <div class="mb-6 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-5">
                         <div class="flex min-w-0 items-start gap-3">
-                            <Link :href="route('passwords.index')" class="icon-btn h-9 w-9 shrink-0" title="Torna alle password" aria-label="Torna alle password">
-                                <ArrowLeft class="h-4 w-4" :stroke-width="1.7" />
-                            </Link>
                             <div>
                                 <h3 class="text-lg font-semibold text-gray-900">Importa password da CSV</h3>
                                 <p class="mt-1 text-sm text-gray-500">Usa le colonne Titolo, Nome utente e Password. URL e Note sono facoltative.</p>
@@ -1014,10 +1012,7 @@ if (props.selectedGroup) {
 
                 <section v-if="['vault-detail', 'vault-create'].includes(currentView)" class="surface p-5">
                     <div class="mb-6 flex items-center justify-between gap-3">
-                        <Link :href="route('passwords.vaults')" class="inline-flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-900">
-                            <ArrowLeft class="h-4 w-4" :stroke-width="1.7" />
-                            Casseforti
-                        </Link>
+                        <span></span>
                         <button v-if="manageable && selectedVault" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700" title="Elimina cassaforte" @click="openDelete(selectedVault, 'vault')">
                             <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                         </button>
@@ -1130,10 +1125,7 @@ if (props.selectedGroup) {
 
                 <section v-if="['group-detail', 'group-create'].includes(currentView)" class="surface p-5">
                     <div class="mb-6 flex items-center justify-between gap-3">
-                        <Link :href="route('passwords.groups')" class="inline-flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-900">
-                            <ArrowLeft class="h-4 w-4" :stroke-width="1.7" />
-                            Gruppi
-                        </Link>
+                        <span></span>
                         <button v-if="manageable && selectedGroup" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700" title="Elimina gruppo" @click="openDelete(selectedGroup, 'group')">
                             <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                         </button>

@@ -210,9 +210,9 @@ watch(() => absenceForm.type, () => {
         </template>
 
         <div class="py-8">
-            <div class="mx-auto max-w-[1600px] space-y-6 sm:px-6 lg:px-8">
+            <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <nav class="surface flex w-full gap-2 overflow-x-auto p-2" aria-label="Sezioni profilo">
-                    <button v-for="tab in profileTabs" :key="tab.value" type="button" :class="['settings-tab inline-flex shrink-0 items-center gap-2', profileTab === tab.value ? 'settings-tab-active' : '']" :aria-current="profileTab === tab.value ? 'page' : undefined" @click="profileTab = tab.value">
+                    <button v-for="tab in profileTabs" :key="tab.value" type="button" :class="['settings-tab inline-flex flex-none items-center gap-2 whitespace-nowrap', profileTab === tab.value ? 'settings-tab-active' : '']" :aria-current="profileTab === tab.value ? 'page' : undefined" @click="profileTab = tab.value">
                         <component :is="tab.icon" class="h-4 w-4 shrink-0" :stroke-width="1.7" />
                         {{ tab.label }}
                     </button>
