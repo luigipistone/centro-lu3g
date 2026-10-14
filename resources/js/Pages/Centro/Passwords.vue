@@ -4,7 +4,7 @@ import AppSelect from '@/Components/AppSelect.vue';
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, BarChart3, Bold, Boxes, Building2, Cable, ChevronDown, Copy, Database, ExternalLink, Globe2, Italic, KeyRound, List, ListOrdered, Mail, Megaphone, Network, PanelsTopLeft, Pencil, Plus, Quote, Router, Server, Share2, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
+import { ArrowLeft, BarChart3, Bold, Boxes, Building2, Cable, ChevronDown, Copy, Database, ExternalLink, FileUp, Globe2, Italic, KeyRound, List, ListOrdered, Mail, Megaphone, Network, PanelsTopLeft, Pencil, Plus, Quote, Router, Server, Share2, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -12,6 +12,7 @@ const props = defineProps({
     canManage: Boolean,
     canCreateVaults: Boolean,
     vaults: Array,
+    personalVaults: Array,
     groups: Array,
     items: Array,
     users: Array,
@@ -64,7 +65,41 @@ const generator = ref({
 const PASSWORD_BATCH_SIZE = 60;
 const visibleItemLimit = ref(PASSWORD_BATCH_SIZE);
 const passwordListSentinel = ref(null);
+const csvInput = ref(null);
+const csvDragging = ref(false);
+const csvError = ref('');
+const csvForm = useForm({ password_vault_id: '', file: null });
 let passwordListObserver = null;
+
+function selectCsvFile(file) {
+    csvError.value = '';
+    if (!file) return;
+    if (!/\.(csv|txt)$/i.test(file.name)) {
+        csvError.value = 'Seleziona un file CSV.';
+        return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+        csvError.value = 'Il file non può superare 10 MB.';
+        return;
+    }
+    csvForm.file = file;
+}
+
+function dropCsvFile(event) {
+    csvDragging.value = false;
+    selectCsvFile(event.dataTransfer?.files?.[0]);
+}
+
+function importCsv() {
+    if (!csvForm.file || !csvForm.password_vault_id || csvForm.processing) return;
+    csvForm.post(route('passwords.import.store'), {
+        forceFormData: true,
+        onSuccess: () => {
+            csvForm.file = null;
+            if (csvInput.value) csvInput.value.value = '';
+        },
+    });
+}
 
 const maskedRevealedPassword = computed(() => revealedPassword.value ? '•'.repeat(Math.min(Math.max(revealedPassword.value.length, 8), 24)) : '');
 
@@ -81,6 +116,7 @@ const navDescriptions = {
 };
 
 const navViewMatches = (itemView) => currentView.value === itemView
+    || (currentView.value === 'import' && itemView === 'items')
     || (currentView.value === 'vault-detail' && itemView === 'vaults')
     || (currentView.value === 'vault-create' && itemView === 'vaults')
     || (currentView.value === 'group-detail' && itemView === 'groups')
@@ -766,10 +802,15 @@ if (props.selectedGroup) {
                                     searchable
                                 />
                             </div>
-                            <button type="button" class="btn btn-primary h-[38px]" @click="openCreateItem">
-                                <Plus class="h-4 w-4" :stroke-width="1.7" />
-                                Password
-                            </button>
+                            <div class="flex items-center gap-2">
+                                <Link :href="route('passwords.import')" class="icon-btn h-[38px] w-[38px] border border-gray-200 bg-white" title="Importa password da CSV" aria-label="Importa password da CSV">
+                                    <FileUp class="h-4 w-4" :stroke-width="1.7" />
+                                </Link>
+                                <button type="button" class="btn btn-primary h-[38px]" @click="openCreateItem">
+                                    <Plus class="h-4 w-4" :stroke-width="1.7" />
+                                    Password
+                                </button>
+                            </div>
                         </div>
                         <div v-if="activeCategoryFilters.length" class="mt-3 flex flex-wrap gap-2">
                             <button v-for="filter in activeCategoryFilters" :key="filter" type="button" class="inline-flex items-center gap-1.5 rounded-full bg-[hsl(var(--primary-app)/0.10)] px-3 py-1.5 text-xs font-semibold text-[hsl(var(--primary-app-dark))]" @click="removeCategoryFilter(filter)">
@@ -846,6 +887,53 @@ if (props.selectedGroup) {
                         </button>
                     </div>
                     <div v-else class="surface px-6 py-12 text-center text-sm text-gray-500">Nessuna password disponibile.</div>
+                </section>
+
+                <section v-if="currentView === 'import'" class="surface mx-auto max-w-3xl p-5 sm:p-7">
+                    <div class="mb-6 flex items-start gap-3">
+                        <Link :href="route('passwords.index')" class="icon-btn h-9 w-9 shrink-0" title="Torna alle password" aria-label="Torna alle password">
+                            <ArrowLeft class="h-4 w-4" :stroke-width="1.7" />
+                        </Link>
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-900">Importa password da CSV</h3>
+                            <p class="mt-1 text-sm text-gray-500">Usa le colonne Titolo, Nome utente e Password. URL e Note sono facoltative.</p>
+                        </div>
+                    </div>
+
+                    <div v-if="personalVaults?.length" class="space-y-5">
+                        <div>
+                            <label class="mb-2 block text-sm font-medium text-gray-700">Cassaforte personale</label>
+                            <AppSelect v-model="csvForm.password_vault_id" :options="personalVaults.map((vault) => ({ value: vault.id, label: vault.name }))" placeholder="Seleziona cassaforte" />
+                            <p v-if="csvForm.errors.password_vault_id" class="mt-1 text-xs text-red-600">{{ csvForm.errors.password_vault_id }}</p>
+                        </div>
+                        <div>
+                            <label class="mb-2 block text-sm font-medium text-gray-700">File CSV</label>
+                            <input ref="csvInput" class="sr-only" type="file" accept=".csv,.txt,text/csv" @change="selectCsvFile($event.target.files?.[0])" />
+                            <div
+                                class="flex min-h-[150px] cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-6 text-center transition"
+                                :class="csvDragging ? 'border-[hsl(var(--primary-app))] bg-[hsl(var(--primary-app)/0.06)]' : 'border-gray-200 bg-gray-50 hover:border-[hsl(var(--primary-app)/0.5)]'"
+                                role="button" tabindex="0" aria-label="Seleziona o trascina un file CSV"
+                                @click="csvInput?.click()" @keydown.enter.prevent="csvInput?.click()" @keydown.space.prevent="csvInput?.click()"
+                                @dragenter.prevent="csvDragging = true" @dragover.prevent="csvDragging = true" @dragleave.prevent="csvDragging = false" @drop.prevent="dropCsvFile"
+                            >
+                                <FileUp class="h-7 w-7 text-[hsl(var(--primary-app))]" :stroke-width="1.5" />
+                                <span class="text-sm font-semibold text-gray-800">{{ csvForm.file ? csvForm.file.name : 'Trascina qui il CSV o scegli un file' }}</span>
+                                <span class="text-xs text-gray-500">{{ csvForm.file ? `${(csvForm.file.size / 1024).toFixed(0)} KB` : 'CSV fino a 10 MB' }}</span>
+                            </div>
+                            <p v-if="csvError || csvForm.errors.file" class="mt-1 text-xs text-red-600">{{ csvError || csvForm.errors.file }}</p>
+                        </div>
+                        <p class="text-xs text-gray-500">I titoli già presenti nella cassaforte vengono saltati. Il file non viene conservato.</p>
+                        <div class="flex justify-end">
+                            <button type="button" class="btn btn-primary" :disabled="!csvForm.file || !csvForm.password_vault_id || csvForm.processing" @click="importCsv">
+                                <FileUp class="h-4 w-4" :stroke-width="1.7" />
+                                {{ csvForm.processing ? 'Importazione...' : 'Importa password' }}
+                            </button>
+                        </div>
+                    </div>
+                    <div v-else class="rounded-lg border border-gray-200 bg-gray-50 p-5 text-sm text-gray-600">
+                        Non hai ancora una cassaforte personale in cui importare le password.
+                        <Link v-if="canCreateVaults" :href="route('passwords.vaults.create')" class="ml-1 font-semibold text-[hsl(var(--primary-app))] hover:underline">Crea cassaforte</Link>
+                    </div>
                 </section>
 
                 <section v-if="currentView === 'vaults'" class="space-y-6">

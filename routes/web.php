@@ -128,6 +128,8 @@ Route::middleware('auth')->group(function () {
     Route::put('/document-groups/{id}', [CentroPageController::class, 'updateDocumentGroup'])->name('document-groups.update');
     Route::delete('/document-groups/{id}', [CentroPageController::class, 'destroyDocumentGroup'])->name('document-groups.destroy');
     Route::get('/passwords', [CentroPageController::class, 'passwords'])->name('passwords.index');
+    Route::get('/passwords/import', [CentroPageController::class, 'passwords'])->defaults('view', 'import')->name('passwords.import');
+    Route::post('/passwords/import', [CentroPageController::class, 'importPasswordCsv'])->name('passwords.import.store');
     Route::get('/passwords/vaults', [CentroPageController::class, 'passwords'])->defaults('view', 'vaults')->name('passwords.vaults');
     Route::get('/passwords/vaults/create', [CentroPageController::class, 'passwords'])->defaults('view', 'vault-create')->name('passwords.vaults.create');
     Route::get('/passwords/vaults/{id}', [CentroPageController::class, 'passwords'])->defaults('view', 'vault-detail')->name('passwords.vaults.show');

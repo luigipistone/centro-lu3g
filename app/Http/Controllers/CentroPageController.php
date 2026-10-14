@@ -9,6 +9,7 @@ use App\Services\CentroBackupService;
 use App\Services\CentroNotificationService;
 use App\Services\RolePermissionService;
 use App\Services\PayslipRecognitionService;
+use App\Services\PasswordCsvImportService;
 use App\Services\SectionAvailabilityService;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
@@ -2351,7 +2352,7 @@ class CentroPageController extends Controller
         $view = $request->route('view', 'items');
         $selectedVault = null;
         $selectedGroup = null;
-        $needsVaults = in_array($view, ['items', 'compromised', 'vaults', 'vault-create', 'vault-detail'], true);
+        $needsVaults = in_array($view, ['items', 'import', 'compromised', 'vaults', 'vault-create', 'vault-detail'], true);
         $needsGroups = in_array($view, ['vault-create', 'vault-detail', 'groups', 'group-create', 'group-detail'], true);
         $needsUsers = in_array($view, ['vault-create', 'vault-detail', 'groups', 'group-create', 'group-detail'], true);
         $needsItems = in_array($view, ['items', 'compromised'], true);
@@ -2383,6 +2384,7 @@ class CentroPageController extends Controller
             'canManage' => $this->canManagePasswords($request),
             'canCreateVaults' => ! $this->isGuest($request),
             'vaults' => $vaults,
+            'personalVaults' => $view === 'import' ? $vaults->filter(fn ($vault) => $vault->visibility === 'personal' && $vault->created_by === $request->user()->id)->values() : [],
             'groups' => $groups,
             'items' => $needsItems ? $this->passwordItemRows($request) : [],
             'users' => $needsUsers ? $this->userOptions() : [],
@@ -2605,6 +2607,52 @@ class CentroPageController extends Controller
         $this->notifyUsers($this->passwordItemNotificationUserIds($itemId)->reject(fn ($id) => $id === $request->user()->id), $request->user()->id, 'password_created', 'Una credenziale condivisa è stata aggiunta.');
 
         return back()->with('status', 'Password salvata.');
+    }
+
+    public function importPasswordCsv(Request $request, PasswordCsvImportService $csv): RedirectResponse
+    {
+        abort_if($this->isGuest($request), 403);
+        $payload = $request->validate([
+            'password_vault_id' => ['required', 'uuid'],
+            'file' => ['required', 'file', 'extensions:csv,txt', 'max:10240'],
+        ]);
+        $vaultId = $payload['password_vault_id'];
+        abort_unless(DB::table('password_vaults')->where('id', $vaultId)
+            ->where('visibility', 'personal')->where('created_by', $request->user()->id)->exists(), 403);
+
+        [$records, $invalid] = $csv->read($payload['file']);
+        $existing = DB::table('password_items')->where('password_vault_id', $vaultId)->pluck('title')
+            ->mapWithKeys(fn ($title) => [$csv->titleKey($title) => true])->all();
+        $created = 0;
+        $duplicates = 0;
+        DB::transaction(function () use ($records, $vaultId, $request, $csv, &$existing, &$created, &$duplicates) {
+            foreach ($records as $record) {
+                $key = $csv->titleKey($record['title']);
+                if (isset($existing[$key])) {
+                    $duplicates++;
+                    continue;
+                }
+                $existing[$key] = true;
+                $itemId = (string) Str::uuid();
+                DB::table('password_items')->insert($this->passwordItemPayloadForDatabase([
+                    ...$record,
+                    'category' => 'other',
+                    'credential_status' => 'active',
+                    'password_vault_id' => $vaultId,
+                ], [
+                    'id' => $itemId,
+                    'created_by' => $request->user()->id,
+                    'updated_by' => $request->user()->id,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]));
+                $this->logPasswordAction($itemId, $request->user()->id, 'created', 'Credenziale importata da CSV.');
+                $created++;
+            }
+        });
+        $request->attributes->set('audit_subject_id', $vaultId);
+
+        return redirect()->route('passwords.import')->with('status', "$created password importate. $duplicates già presenti, $invalid righe non valide.");
     }
 
     public function updatePasswordItem(Request $request, string $id): RedirectResponse
