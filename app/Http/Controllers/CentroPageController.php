@@ -2384,7 +2384,9 @@ class CentroPageController extends Controller
             'canManage' => $this->canManagePasswords($request),
             'canCreateVaults' => ! $this->isGuest($request),
             'vaults' => $vaults,
-            'personalVaults' => $view === 'import' ? $vaults->filter(fn ($vault) => $vault->visibility === 'personal' && $vault->created_by === $request->user()->id)->values() : [],
+            'importVaults' => $view === 'import' ? $vaults->filter(fn ($vault) => $this->currentUserRole($request) === 'superadmin'
+                || ($vault->visibility === 'personal' && $vault->created_by === $request->user()->id))->values() : [],
+            'canImportSharedVaults' => $this->currentUserRole($request) === 'superadmin',
             'groups' => $groups,
             'items' => $needsItems ? $this->passwordItemRows($request) : [],
             'users' => $needsUsers ? $this->userOptions() : [],
@@ -2617,17 +2619,20 @@ class CentroPageController extends Controller
             'file' => ['required', 'file', 'extensions:csv,txt', 'max:10240'],
         ]);
         $vaultId = $payload['password_vault_id'];
-        abort_unless(DB::table('password_vaults')->where('id', $vaultId)
-            ->where('visibility', 'personal')->where('created_by', $request->user()->id)->exists(), 403);
+        $allowedVault = DB::table('password_vaults')->where('id', $vaultId);
+        if ($this->currentUserRole($request) !== 'superadmin') {
+            $allowedVault->where('visibility', 'personal')->where('created_by', $request->user()->id);
+        }
+        abort_unless($allowedVault->exists(), 403);
 
         [$records, $invalid] = $csv->read($payload['file']);
-        $existing = DB::table('password_items')->where('password_vault_id', $vaultId)->pluck('title')
-            ->mapWithKeys(fn ($title) => [$csv->titleKey($title) => true])->all();
+        $existing = DB::table('password_items')->where('password_vault_id', $vaultId)->get(['title', 'username', 'url'])
+            ->mapWithKeys(fn ($item) => [$csv->identityKey((array) $item) => true])->all();
         $created = 0;
         $duplicates = 0;
         DB::transaction(function () use ($records, $vaultId, $request, $csv, &$existing, &$created, &$duplicates) {
             foreach ($records as $record) {
-                $key = $csv->titleKey($record['title']);
+                $key = $csv->identityKey($record);
                 if (isset($existing[$key])) {
                     $duplicates++;
                     continue;

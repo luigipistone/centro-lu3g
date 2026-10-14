@@ -23,13 +23,14 @@ class PasswordCsvImportTest extends TestCase
             'id' => (string) Str::uuid(),
             'password_vault_id' => $vaultId,
             'title' => 'Già presente',
+            'username' => 'admin',
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
         $csv = "\xEF\xBB\xBFTitolo;Nome Utente;Password;URL;Note\n"
             . "MIO SITO;utente@example.it;Segreto!123;https://example.it;Una nota\n"
-            . "mio sito;altro;Diversa;;\n"
+            . "mio sito;utente@example.it;Diversa;https://example.it;\n"
             . "Già presente;admin;Altro;;\n";
 
         $this->actingAs($user)->post(route('passwords.import.store'), [
@@ -75,6 +76,31 @@ class PasswordCsvImportTest extends TestCase
             'password_vault_id' => $vaultId,
             'file' => UploadedFile::fake()->createWithContent('import.csv', "Titolo,Password\nTest,secret\n"),
         ])->assertSessionHasErrors('file');
+    }
+
+    public function test_superadmin_imports_headerless_export_into_shared_vault_without_losing_homonyms(): void
+    {
+        $user = User::factory()->create();
+        DB::table('user_roles')->insert(['id' => (string) Str::uuid(), 'user_id' => $user->id, 'role' => 'superadmin']);
+        $vaultId = $this->vault($user, 'shared');
+        $csv = "user1,note uno,Segreto1,,Accesso,STESSO TITOLO,https://example.it,\n"
+            . "user2,note due,Segreto2,,Accesso,STESSO TITOLO,https://example.it,\n"
+            . "user2,note due,Segreto2,,Accesso,STESSO TITOLO,https://example.it,\n"
+            . ",nota privata,,,Nota sicura,Da escludere,,\n";
+
+        $this->actingAs($user)->post(route('passwords.import.store'), [
+            'password_vault_id' => $vaultId,
+            'file' => UploadedFile::fake()->createWithContent('export.csv', $csv),
+        ])->assertRedirect(route('passwords.import'))
+            ->assertSessionHas('status', '2 password importate. 1 già presenti, 1 righe non valide.');
+
+        $items = DB::table('password_items')->where('password_vault_id', $vaultId)->orderBy('username')->get();
+        $this->assertCount(2, $items);
+        $this->assertSame('Stesso Titolo', $items[0]->title);
+        $this->assertSame('user1', $items[0]->username);
+        $this->assertSame('note uno', $items[0]->notes);
+        $this->assertSame('Segreto1', Crypt::decryptString($items[0]->encrypted_password));
+        $this->assertSame('user2', $items[1]->username);
     }
 
     private function role(User $user): void

@@ -24,7 +24,13 @@ class PasswordCsvImportService
                 ->sortByDesc(fn ($separator) => count(str_getcsv($firstLine, $separator)))
                 ->first();
             rewind($handle);
-            $headers = array_map(fn ($value) => $this->header((string) $value), fgetcsv($handle, 0, $delimiter) ?: []);
+            $firstRow = fgetcsv($handle, 0, $delimiter) ?: [];
+            $exportWithoutHeaders = count($firstRow) === 8 && in_array($firstRow[4] ?? null, ['Accesso', 'Password', 'Nota sicura', 'Identità'], true);
+            if ($exportWithoutHeaders) {
+                rewind($handle);
+                return $this->readLegacyExport($handle, $delimiter);
+            }
+            $headers = array_map(fn ($value) => $this->header((string) $value), $firstRow);
             $columns = [
                 'title' => $this->column($headers, ['titolo', 'title', 'nome', 'name']),
                 'username' => $this->column($headers, ['nome utente', 'username', 'user name', 'utente', 'login']),
@@ -76,6 +82,55 @@ class PasswordCsvImportService
     public function titleKey(string $title): string
     {
         return mb_strtolower(preg_replace('/\s+/u', ' ', trim($title)));
+    }
+
+    public function identityKey(array $record): string
+    {
+        return implode("\0", [
+            $this->titleKey((string) ($record['title'] ?? '')),
+            mb_strtolower(trim((string) ($record['username'] ?? ''))),
+            mb_strtolower(trim((string) ($record['url'] ?? ''))),
+        ]);
+    }
+
+    private function readLegacyExport($handle, string $delimiter): array
+    {
+        $records = [];
+        $skipped = 0;
+        $line = 0;
+        while (($row = fgetcsv($handle, 0, $delimiter)) !== false) {
+            $line++;
+            if ($line > 5000) {
+                throw ValidationException::withMessages(['file' => 'Il CSV supera il limite di 5.000 righe.']);
+            }
+            if (! in_array($row[4] ?? null, ['Accesso', 'Password'], true)) {
+                $skipped++;
+                continue;
+            }
+            $title = trim((string) ($row[5] ?? ''));
+            $username = trim((string) ($row[0] ?? ''));
+            $password = (string) ($row[2] ?? '');
+            $url = trim((string) ($row[6] ?? ''));
+            $notes = trim((string) ($row[1] ?? ''));
+            if ($title === '' || $password === '' || mb_strlen($title) > 255 || mb_strlen($username) > 255
+                || mb_strlen($password) > 2000 || mb_strlen($url) > 1000 || mb_strlen($notes) > 10000) {
+                $skipped++;
+                continue;
+            }
+            $records[] = [
+                'title' => Str::title(Str::lower($title)),
+                'username' => $username,
+                'password' => $password,
+                'url' => $url,
+                'notes' => $notes,
+            ];
+        }
+
+        if ($records === []) {
+            throw ValidationException::withMessages(['file' => 'Nessuna credenziale valida nel CSV.']);
+        }
+
+        return [$records, $skipped];
     }
 
     private function header(string $value): string

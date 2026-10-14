@@ -12,7 +12,8 @@ const props = defineProps({
     canManage: Boolean,
     canCreateVaults: Boolean,
     vaults: Array,
-    personalVaults: Array,
+    importVaults: Array,
+    canImportSharedVaults: Boolean,
     groups: Array,
     items: Array,
     users: Array,
@@ -917,10 +918,10 @@ if (props.selectedGroup) {
                         <span>{{ csvResult }}</span>
                     </div>
 
-                    <div v-if="personalVaults?.length" class="space-y-6">
+                    <div v-if="importVaults?.length" class="space-y-6">
                         <div class="max-w-xl">
-                            <label class="mb-2 block text-sm font-medium text-gray-700">Cassaforte personale</label>
-                            <AppSelect v-model="csvForm.password_vault_id" :options="personalVaults.map((vault) => ({ value: vault.id, label: vault.name }))" placeholder="Seleziona cassaforte" />
+                            <label class="mb-2 block text-sm font-medium text-gray-700">{{ canImportSharedVaults ? 'Cassaforte' : 'Cassaforte personale' }}</label>
+                            <AppSelect v-model="csvForm.password_vault_id" :options="importVaults.map((vault) => ({ value: vault.id, label: vault.name }))" placeholder="Seleziona cassaforte" />
                             <p v-if="csvForm.errors.password_vault_id" class="mt-1 text-xs text-red-600">{{ csvForm.errors.password_vault_id }}</p>
                         </div>
                         <div>
@@ -940,7 +941,7 @@ if (props.selectedGroup) {
                             <p v-if="csvError || csvForm.errors.file" class="mt-1 text-xs text-red-600">{{ csvError || csvForm.errors.file }}</p>
                         </div>
                         <div class="flex flex-wrap items-center justify-between gap-4 border-t border-gray-100 pt-5">
-                            <p class="text-xs text-gray-500">I titoli già presenti nella cassaforte vengono saltati. Il file non viene conservato.</p>
+                            <p class="text-xs text-gray-500">Le voci già presenti con lo stesso titolo, nome utente e sito vengono saltate. Il file non viene conservato.</p>
                             <button type="button" class="btn btn-primary" :disabled="!csvForm.file || !csvForm.password_vault_id || csvForm.processing" @click="importCsv">
                                 <FileUp class="h-4 w-4" :stroke-width="1.7" />
                                 {{ csvForm.processing ? 'Importazione...' : 'Importa password' }}
