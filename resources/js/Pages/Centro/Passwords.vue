@@ -186,14 +186,14 @@ function normalizeHexColor(value, fallback = '#0B6EF3') {
     return fallback;
 }
 
-function isLightColor(value) {
+function isLightColor(value, threshold = 0.80) {
     const color = normalizeHexColor(value);
     const r = parseInt(color.slice(1, 3), 16);
     const g = parseInt(color.slice(3, 5), 16);
     const b = parseInt(color.slice(5, 7), 16);
     const luminance = ((0.2126 * r) + (0.7152 * g) + (0.0722 * b)) / 255;
 
-    return luminance > 0.80;
+    return luminance > threshold;
 }
 
 function vaultCardStyle(vault) {
@@ -203,7 +203,7 @@ function vaultCardStyle(vault) {
     return {
         backgroundColor,
         color: light ? '#111827' : '#ffffff',
-        textShadow: light ? 'none' : '0 1px 2px rgba(15, 23, 42, 0.34)',
+        textShadow: light ? 'none' : '0 1px 2px rgba(15, 23, 42, 0.72), 0 0 1px rgba(15, 23, 42, 0.56)',
         borderColor: light ? 'rgba(17, 24, 39, 0.14)' : 'rgba(255, 255, 255, 0.24)',
         boxShadow: light ? '0 18px 40px rgba(28, 42, 73, 0.12)' : '0 18px 40px rgba(15, 23, 42, 0.22)',
     };
@@ -211,15 +211,17 @@ function vaultCardStyle(vault) {
 
 function vaultMutedStyle(vault) {
     return {
-        color: isLightColor(vault?.color || '#0B6EF3') ? 'rgba(17, 24, 39, 0.68)' : 'rgba(255, 255, 255, 0.78)',
+        color: isLightColor(vault?.color || '#0B6EF3', 0.62) ? 'rgba(17, 24, 39, 0.68)' : 'rgba(255, 255, 255, 0.78)',
+        textShadow: 'none',
     };
 }
 
 function vaultChipStyle(vault) {
-    const light = isLightColor(vault?.color || '#0B6EF3');
+    const light = isLightColor(vault?.color || '#0B6EF3', 0.62);
 
     return {
         color: light ? '#111827' : '#ffffff',
+        textShadow: 'none',
         borderColor: light ? 'rgba(17, 24, 39, 0.14)' : 'rgba(255, 255, 255, 0.28)',
         backgroundColor: light ? 'rgba(255, 255, 255, 0.46)' : 'rgba(255, 255, 255, 0.16)',
     };
@@ -243,7 +245,7 @@ function vaultFilterPillStyle(vault = null) {
         backgroundColor,
         borderColor: vault ? (light ? 'rgba(17, 24, 39, 0.16)' : 'rgba(255, 255, 255, 0.26)') : 'rgba(229, 231, 235, 0.95)',
         color: light ? '#111827' : '#ffffff',
-        textShadow: light ? 'none' : '0 1px 2px rgba(15, 23, 42, 0.34)',
+        textShadow: light ? 'none' : '0 1px 2px rgba(15, 23, 42, 0.72), 0 0 1px rgba(15, 23, 42, 0.56)',
     };
 }
 
