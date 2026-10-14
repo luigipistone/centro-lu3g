@@ -40,8 +40,6 @@ deploy() {
 
     log "Running database migrations"
     "$PHP_BIN" artisan migrate --force
-    log "Checking general favorites import"
-    "$PHP_BIN" artisan tinker --execute='echo "general_folders=".DB::table("favorite_folders")->where("name", "Generale")->count()." imported_links=".DB::table("favorite_items")->whereIn("folder_id", DB::table("favorite_folders")->where("name", "Generale")->select("id"))->count().PHP_EOL;'
 
     log "Refreshing Laravel caches"
     "$PHP_BIN" artisan optimize:clear
