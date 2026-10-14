@@ -33,9 +33,9 @@ class FavoriteController extends Controller
                 $q->where('f.created_by', $userId)
                     ->orWhereExists(fn ($sub) => $sub->selectRaw('1')->from('favorite_folder_user as fu')
                         ->whereColumn('fu.folder_id', 'f.id')->where('fu.user_id', $userId))
-                    ->orWhereExists(fn ($sub) => $sub->selectRaw('1')->from('favorite_folder_group as fg')
-                        ->join('password_group_user as pgu', 'pgu.password_group_id', '=', 'fg.group_id')
-                        ->whereColumn('fg.folder_id', 'f.id')->where('pgu.user_id', $userId));
+                    ->orWhereExists(fn ($sub) => $sub->selectRaw('1')->from('favorite_folder_team as fg')
+                        ->join('favorite_group_user as fgu', 'fgu.group_id', '=', 'fg.group_id')
+                        ->whereColumn('fg.folder_id', 'f.id')->where('fgu.user_id', $userId));
                 if ($this->canManage($request)) {
                     $q->orWhere('f.visibility', 'shared');
                 }
@@ -62,13 +62,22 @@ class FavoriteController extends Controller
         $folders = $this->visibleFolders($request)->select('f.*')->orderBy('f.name')->get();
         $selectedFolder = $view === 'folder-detail' ? $folders->firstWhere('id', $request->route('id')) : null;
         if ($view === 'folder-detail') abort_unless($selectedFolder, 404);
+        if (in_array($view, ['group-create', 'group-detail'], true)) abort_unless($this->canManage($request), 403);
         $ids = $folders->pluck('id');
         $items = $ids->isEmpty() ? collect() : DB::table('favorite_items')
             ->whereIn('folder_id', $ids)->orderBy('title')->get();
         $users = DB::table('users')->where('account_status', 'active')->select('id', 'name', 'email')->orderBy('name')->get();
-        $groups = DB::table('password_groups')->select('id', 'name')->orderBy('name')->get();
+        $groupQuery = DB::table('favorite_groups')->orderBy('name');
+        if (! $this->canManage($request)) {
+            $groupQuery->whereIn('id', DB::table('favorite_group_user')->where('user_id', $request->user()->id)->select('group_id'));
+        }
+        $groups = $groupQuery->get();
+        $groupIds = $groups->pluck('id');
+        $members = $groupIds->isEmpty() ? collect() : DB::table('favorite_group_user')->whereIn('group_id', $groupIds)->get();
+        $selectedGroup = $view === 'group-detail' ? $groups->firstWhere('id', $request->route('id')) : null;
+        if ($view === 'group-detail') abort_unless($selectedGroup, 404);
         $folderUsers = $ids->isEmpty() ? collect() : DB::table('favorite_folder_user')->whereIn('folder_id', $ids)->get();
-        $folderGroups = $ids->isEmpty() ? collect() : DB::table('favorite_folder_group')->whereIn('folder_id', $ids)->get();
+        $folderGroups = $ids->isEmpty() ? collect() : DB::table('favorite_folder_team')->whereIn('folder_id', $ids)->get();
 
         return Inertia::render('Centro/Favorites', [
             'folders' => $folders->map(fn ($folder) => [...(array) $folder,
@@ -78,10 +87,14 @@ class FavoriteController extends Controller
             ]),
             'items' => $items,
             'users' => $this->canManage($request) ? $users : [],
-            'groups' => $this->canManage($request) ? $groups : [],
+            'groups' => $groups->map(fn ($group) => [...(array) $group,
+                'user_ids' => $this->canManage($request) ? $members->where('group_id', $group->id)->pluck('user_id')->values() : [],
+                'members_count' => $members->where('group_id', $group->id)->count(),
+            ]),
             'canManage' => $this->canManage($request),
             'view' => $view,
             'selectedFolderId' => $selectedFolder?->id,
+            'selectedGroupId' => $selectedGroup?->id,
         ]);
     }
 
@@ -92,7 +105,7 @@ class FavoriteController extends Controller
             'visibility' => ['required', 'in:personal,shared'],
             'color' => ['sometimes', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'user_ids' => ['array'], 'user_ids.*' => ['uuid', 'exists:users,id'],
-            'group_ids' => ['array'], 'group_ids.*' => ['uuid', 'exists:password_groups,id'],
+            'group_ids' => ['array'], 'group_ids.*' => ['uuid', 'exists:favorite_groups,id'],
         ]);
         if ($data['visibility'] === 'shared') {
             abort_unless($this->canManage($request), 403);
@@ -106,13 +119,13 @@ class FavoriteController extends Controller
     private function syncRecipients(string $id, array $data): void
     {
         DB::table('favorite_folder_user')->where('folder_id', $id)->delete();
-        DB::table('favorite_folder_group')->where('folder_id', $id)->delete();
+        DB::table('favorite_folder_team')->where('folder_id', $id)->delete();
         if ($data['visibility'] !== 'shared') return;
         foreach (array_unique($data['user_ids'] ?? []) as $userId) {
             DB::table('favorite_folder_user')->insert(['folder_id' => $id, 'user_id' => $userId]);
         }
         foreach (array_unique($data['group_ids'] ?? []) as $groupId) {
-            DB::table('favorite_folder_group')->insert(['folder_id' => $id, 'group_id' => $groupId]);
+            DB::table('favorite_folder_team')->insert(['folder_id' => $id, 'group_id' => $groupId]);
         }
     }
 
@@ -150,6 +163,61 @@ class FavoriteController extends Controller
         abort_unless($this->canWrite($request, $folder), 403);
         DB::table('favorite_folders')->where('id', $id)->delete();
         return back()->with('success', 'Cartella eliminata.');
+    }
+
+    private function groupData(Request $request): array
+    {
+        return $request->validate([
+            'name' => ['required', 'string', 'max:120'],
+            'description' => ['nullable', 'string', 'max:2000'],
+            'user_ids' => ['array'],
+            'user_ids.*' => ['uuid', 'exists:users,id'],
+        ]);
+    }
+
+    private function syncGroupMembers(string $id, array $userIds): void
+    {
+        DB::table('favorite_group_user')->where('group_id', $id)->delete();
+        foreach (array_unique($userIds) as $userId) {
+            DB::table('favorite_group_user')->insert(['group_id' => $id, 'user_id' => $userId]);
+        }
+    }
+
+    public function storeGroup(Request $request): RedirectResponse
+    {
+        abort_unless($this->canManage($request), 403);
+        $data = $this->groupData($request);
+        DB::transaction(function () use ($request, $data) {
+            $id = (string) Str::uuid();
+            DB::table('favorite_groups')->insert([
+                'id' => $id, 'name' => $data['name'], 'description' => $data['description'] ?? null,
+                'created_by' => $request->user()->id, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $this->syncGroupMembers($id, $data['user_ids'] ?? []);
+        });
+        return back()->with('success', 'Gruppo creato.');
+    }
+
+    public function updateGroup(Request $request, string $id): RedirectResponse
+    {
+        abort_unless($this->canManage($request), 403);
+        abort_unless(DB::table('favorite_groups')->where('id', $id)->exists(), 404);
+        $data = $this->groupData($request);
+        DB::transaction(function () use ($id, $data) {
+            DB::table('favorite_groups')->where('id', $id)->update([
+                'name' => $data['name'], 'description' => $data['description'] ?? null, 'updated_at' => now(),
+            ]);
+            $this->syncGroupMembers($id, $data['user_ids'] ?? []);
+        });
+        return back()->with('success', 'Gruppo aggiornato.');
+    }
+
+    public function destroyGroup(Request $request, string $id): RedirectResponse
+    {
+        abort_unless($this->canManage($request), 403);
+        abort_unless(DB::table('favorite_groups')->where('id', $id)->exists(), 404);
+        DB::table('favorite_groups')->where('id', $id)->delete();
+        return back()->with('success', 'Gruppo eliminato.');
     }
 
     private function itemData(Request $request): array

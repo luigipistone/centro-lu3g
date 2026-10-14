@@ -3,21 +3,23 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, Bookmark, ExternalLink, Folder, Pencil, Plus, Trash2, X } from '@lucide/vue';
+import { ArrowLeft, Bookmark, ExternalLink, Folder, Pencil, Plus, Trash2, Users, X } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 
-const props = defineProps({ folders: Array, items: Array, users: Array, groups: Array, canManage: Boolean, view: String, selectedFolderId: String });
+const props = defineProps({ folders: Array, items: Array, users: Array, groups: Array, canManage: Boolean, view: String, selectedFolderId: String, selectedGroupId: String });
 const page = usePage();
 const selected = ref('all');
 const search = ref('');
 const editor = ref(null);
 const editing = ref(null);
 const form = useForm({ name: '', color: '#0B6EF3', visibility: 'personal', user_ids: [], group_ids: [], folder_id: '', title: '', url: '', description: '' });
+const groupForm = useForm({ name: '', description: '', user_ids: [] });
 const folderList = computed(() => props.folders || []);
 const currentView = computed(() => props.view || 'items');
 const selectedFolder = computed(() => folderList.value.find(folder => folder.id === props.selectedFolderId));
+const selectedGroup = computed(() => (props.groups || []).find(group => group.id === props.selectedGroupId));
 const folderColors = ['#0B6EF3', '#22C55E', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4', '#111827'];
-const nav = [{ view: 'items', route: 'favorites.index', label: 'Preferiti', description: 'Link salvati' }, { view: 'folders', route: 'favorites.folders', label: 'Cartelle', description: 'Spazi personali e condivisi' }];
+const nav = [{ view: 'items', route: 'favorites.index', label: 'Preferiti', description: 'Link salvati' }, { view: 'folders', route: 'favorites.folders', label: 'Cartelle', description: 'Spazi personali e condivisi' }, { view: 'groups', route: 'favorites.groups', label: 'Gruppi', description: 'Accessi condivisi' }];
 function light(color, threshold = 0.62) {
     const hex = /^#[0-9a-fA-F]{6}$/.test(color || '') ? color : '#0B6EF3';
     const rgb = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
@@ -51,6 +53,23 @@ watch(() => [props.view, props.selectedFolderId], () => {
     form.group_ids = [...(selectedFolder.value?.group_ids || [])];
     editor.value = 'folder';
 }, { immediate: true });
+watch(() => [props.view, props.selectedGroupId], () => {
+    if (!['group-create', 'group-detail'].includes(currentView.value)) return;
+    groupForm.reset(); groupForm.clearErrors();
+    groupForm.name = selectedGroup.value?.name || '';
+    groupForm.description = selectedGroup.value?.description || '';
+    groupForm.user_ids = [...(selectedGroup.value?.user_ids || [])];
+}, { immediate: true });
+
+function saveGroup() {
+    const options = { onSuccess: () => router.visit(route('favorites.groups')) };
+    if (selectedGroup.value) groupForm.put(route('favorites.groups.update', selectedGroup.value.id), options);
+    else groupForm.post(route('favorites.groups.store'), options);
+}
+
+function toggleGroupUser(id) {
+    groupForm.user_ids = groupForm.user_ids.includes(id) ? groupForm.user_ids.filter(value => value !== id) : [...groupForm.user_ids, id];
+}
 
 function openFolder(folder = null) {
     router.visit(route(folder ? 'favorites.folders.show' : 'favorites.folders.create', ...(folder ? [folder.id] : [])));
@@ -80,10 +99,10 @@ function save() {
     }
 }
 function remove(kind, id) {
-    const message = kind === 'folder' ? 'Eliminare la cartella e tutti i preferiti contenuti?' : 'Eliminare questo preferito?';
+    const message = kind === 'folder' ? 'Eliminare la cartella e tutti i preferiti contenuti?' : kind === 'group' ? 'Eliminare il gruppo? Le cartelle condivise con questo gruppo non saranno più accessibili ai suoi membri.' : 'Eliminare questo preferito?';
     if (!window.confirm(message)) return;
-    router.delete(route(kind === 'folder' ? 'favorites.folders.destroy' : 'favorites.items.destroy', id), {
-        preserveScroll: true, onSuccess: () => { if (kind === 'folder') router.visit(route('favorites.folders')); },
+    router.delete(route(kind === 'folder' ? 'favorites.folders.destroy' : kind === 'group' ? 'favorites.groups.destroy' : 'favorites.items.destroy', id), {
+        preserveScroll: true, onSuccess: () => { if (kind === 'folder') router.visit(route('favorites.folders')); if (kind === 'group') router.visit(route('favorites.groups')); },
     });
 }
 </script>
@@ -100,10 +119,10 @@ function remove(kind, id) {
         <div class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <div v-if="page.props.flash?.success" class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{{ page.props.flash.success }}</div>
-                <nav class="grid gap-3 md:grid-cols-2">
-                    <Link v-for="entry in nav" :key="entry.view" :href="route(entry.route)" :class="['surface flex items-center justify-between gap-3 p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]', (currentView === entry.view || (entry.view === 'folders' && currentView.startsWith('folder-'))) ? 'ring-1 ring-[hsl(var(--primary-app)/0.25)]' : '']">
+                <nav class="grid gap-3 md:grid-cols-3">
+                    <Link v-for="entry in nav" :key="entry.view" :href="route(entry.route)" :class="['surface flex items-center justify-between gap-3 p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]', (currentView === entry.view || (entry.view === 'folders' && currentView.startsWith('folder-')) || (entry.view === 'groups' && currentView.startsWith('group-'))) ? 'ring-1 ring-[hsl(var(--primary-app)/0.25)]' : '']">
                         <span><span class="block text-sm font-semibold text-gray-900">{{ entry.label }}</span><span class="mt-1 block text-xs text-gray-500">{{ entry.description }}</span></span>
-                        <Folder v-if="entry.view === 'folders'" class="h-5 w-5 text-[hsl(var(--primary-app))]" :stroke-width="1.7" /><Bookmark v-else class="h-5 w-5 text-[hsl(var(--primary-app))]" :stroke-width="1.7" />
+                        <Folder v-if="entry.view === 'folders'" class="h-5 w-5 text-[hsl(var(--primary-app))]" :stroke-width="1.7" /><Users v-else-if="entry.view === 'groups'" class="h-5 w-5 text-[hsl(var(--primary-app))]" :stroke-width="1.7" /><Bookmark v-else class="h-5 w-5 text-[hsl(var(--primary-app))]" :stroke-width="1.7" />
                     </Link>
                 </nav>
                 <section v-if="currentView === 'items'" class="space-y-5">
@@ -159,6 +178,28 @@ function remove(kind, id) {
                         <button type="button" class="btn btn-primary" :disabled="form.processing || !form.name.trim()" @click="save">Salva cartella</button>
                     </div>
                     <div v-if="selectedFolder" class="mt-8 border-t border-gray-100 pt-6"><div class="mb-4 flex items-center justify-between"><h3 class="text-base font-semibold text-gray-900">Preferiti</h3><button v-if="selectedFolder.can_edit" type="button" class="btn btn-primary" @click="openItem()"><Plus class="h-4 w-4" :stroke-width="1.7" /> Preferito</button></div><div v-if="items.some(item => item.folder_id === selectedFolder.id)" class="divide-y divide-gray-100"><div v-for="item in items.filter(item => item.folder_id === selectedFolder.id)" :key="item.id" class="flex items-center justify-between gap-3 py-3"><div class="min-w-0"><a :href="item.url" target="_blank" rel="noopener noreferrer" class="text-sm font-semibold text-gray-900 hover:text-[hsl(var(--primary-app))]">{{ item.title }} <ExternalLink class="inline h-3.5 w-3.5" /></a><p class="mt-1 truncate text-xs text-gray-500">{{ item.url }}</p></div><button v-if="selectedFolder.can_edit" type="button" class="icon-btn h-8 w-8 shrink-0" title="Modifica" @click="openItem(item)"><Pencil class="h-4 w-4" /></button></div></div><p v-else class="text-sm text-gray-500">Nessun preferito in questa cartella.</p></div>
+                </section>
+                <section v-if="currentView === 'groups'" class="space-y-6">
+                    <div v-if="canManage" class="flex justify-end"><Link :href="route('favorites.groups.create')" class="btn btn-primary"><Plus class="h-4 w-4" :stroke-width="1.7" /> Aggiungi gruppo</Link></div>
+                    <div v-if="groups.length" class="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        <article v-for="group in groups" :key="group.id" class="surface relative min-h-[190px] p-5 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]" :class="canManage ? 'cursor-pointer' : ''">
+                            <Link v-if="canManage" :href="route('favorites.groups.show', group.id)" class="absolute inset-0 z-0 rounded-[inherit]" :aria-label="`Apri gruppo ${group.name}`" />
+                            <div class="pointer-events-none relative z-10 flex items-start justify-between gap-3"><div class="min-w-0"><p class="truncate text-sm font-semibold text-gray-900">{{ group.name }}</p><p class="mt-1 text-xs text-gray-500">{{ group.members_count }} membri</p></div><button v-if="canManage" type="button" class="pointer-events-auto icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina gruppo" @click.stop="remove('group', group.id)"><Trash2 class="h-4 w-4" :stroke-width="1.7" /></button></div>
+                            <p v-if="group.description" class="relative z-10 mt-4 line-clamp-2 text-sm text-gray-500">{{ group.description }}</p>
+                            <div v-if="canManage" class="pointer-events-none relative z-10 mt-4 flex flex-wrap gap-1"><span v-for="id in group.user_ids.slice(0, 3)" :key="id" class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">{{ users.find(user => user.id === id)?.name }}</span><span v-if="group.user_ids.length > 3" class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">+{{ group.user_ids.length - 3 }}</span></div>
+                        </article>
+                    </div>
+                    <div v-else class="surface px-6 py-12 text-center text-sm text-gray-500">Nessun gruppo disponibile.</div>
+                </section>
+                <section v-if="['group-create', 'group-detail'].includes(currentView)" class="surface p-5">
+                    <div class="mb-6 flex items-center justify-between gap-3"><Link :href="route('favorites.groups')" class="inline-flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-900"><ArrowLeft class="h-4 w-4" :stroke-width="1.7" /> Gruppi</Link><button v-if="selectedGroup" type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina gruppo" @click="remove('group', selectedGroup.id)"><Trash2 class="h-4 w-4" :stroke-width="1.7" /></button></div>
+                    <h3 class="mb-5 text-base font-semibold text-gray-900">{{ currentView === 'group-create' ? 'Nuovo gruppo' : 'Modifica gruppo' }}</h3>
+                    <div class="max-w-3xl space-y-5">
+                        <div><label class="block text-sm font-medium text-gray-700">Nome</label><input v-model="groupForm.name" class="form-control" maxlength="120" /><p v-if="groupForm.errors.name" class="mt-1 text-xs text-red-600">{{ groupForm.errors.name }}</p></div>
+                        <div><label class="block text-sm font-medium text-gray-700">Descrizione</label><textarea v-model="groupForm.description" class="form-control" rows="4" maxlength="2000" /><p v-if="groupForm.errors.description" class="mt-1 text-xs text-red-600">{{ groupForm.errors.description }}</p></div>
+                        <div class="rounded-[var(--radius)] bg-gray-50/80 p-4"><p class="text-sm font-semibold text-gray-900">Utenti</p><div class="mt-3 flex flex-wrap gap-2"><button v-for="user in users" :key="user.id" type="button" :class="['rounded-full border px-3 py-1.5 text-xs font-semibold transition', groupForm.user_ids.includes(user.id) ? 'border-[hsl(var(--primary-app))] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app-dark))]' : 'border-white bg-white text-gray-600 hover:border-gray-200']" @click="toggleGroupUser(user.id)">{{ user.name }}</button></div><p v-if="groupForm.errors.user_ids" class="mt-2 text-xs text-red-600">{{ groupForm.errors.user_ids }}</p></div>
+                        <button type="button" class="btn btn-primary" :disabled="groupForm.processing || !groupForm.name.trim()" @click="saveGroup">Salva gruppo</button>
+                    </div>
                 </section>
             </div>
         </div>

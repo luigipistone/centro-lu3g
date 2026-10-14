@@ -154,6 +154,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/favorites/folders', [FavoriteController::class, 'index'])->defaults('view', 'folders')->name('favorites.folders');
     Route::get('/favorites/folders/create', [FavoriteController::class, 'index'])->defaults('view', 'folder-create')->name('favorites.folders.create');
     Route::get('/favorites/folders/{id}', [FavoriteController::class, 'index'])->defaults('view', 'folder-detail')->name('favorites.folders.show');
+    Route::get('/favorites/groups', [FavoriteController::class, 'index'])->defaults('view', 'groups')->name('favorites.groups');
+    Route::get('/favorites/groups/create', [FavoriteController::class, 'index'])->defaults('view', 'group-create')->name('favorites.groups.create');
+    Route::get('/favorites/groups/{id}', [FavoriteController::class, 'index'])->defaults('view', 'group-detail')->name('favorites.groups.show');
+    Route::post('/favorites/groups', [FavoriteController::class, 'storeGroup'])->name('favorites.groups.store');
+    Route::put('/favorites/groups/{id}', [FavoriteController::class, 'updateGroup'])->name('favorites.groups.update');
+    Route::delete('/favorites/groups/{id}', [FavoriteController::class, 'destroyGroup'])->name('favorites.groups.destroy');
     Route::post('/favorites/folders', [FavoriteController::class, 'storeFolder'])->name('favorites.folders.store');
     Route::put('/favorites/folders/{id}', [FavoriteController::class, 'updateFolder'])->name('favorites.folders.update');
     Route::delete('/favorites/folders/{id}', [FavoriteController::class, 'destroyFolder'])->name('favorites.folders.destroy');

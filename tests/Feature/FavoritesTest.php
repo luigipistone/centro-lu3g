@@ -85,4 +85,37 @@ class FavoritesTest extends TestCase
         $this->actingAs($employee)->get(route('favorites.index'))->assertStatus(503);
         $this->actingAs($manager)->get(route('favorites.index'))->assertOk();
     }
+
+    public function test_favorite_groups_are_independent_and_control_folder_access(): void
+    {
+        $manager = User::factory()->create();
+        $member = User::factory()->create();
+        $outsider = User::factory()->create();
+        $this->role($manager, 'admin');
+        $this->role($member, 'editor');
+        $this->role($outsider, 'editor');
+
+        $this->actingAs($manager)->post(route('favorites.groups.store'), [
+            'name' => 'Team creativo', 'description' => 'Risorse condivise', 'user_ids' => [$member->id],
+        ])->assertRedirect();
+        $groupId = DB::table('favorite_groups')->where('name', 'Team creativo')->value('id');
+        $this->assertNotNull($groupId);
+        $this->assertDatabaseMissing('password_groups', ['id' => $groupId]);
+        $this->assertDatabaseHas('favorite_group_user', ['group_id' => $groupId, 'user_id' => $member->id]);
+
+        $this->actingAs($manager)->post(route('favorites.folders.store'), [
+            'name' => 'Link team', 'visibility' => 'shared', 'group_ids' => [$groupId],
+        ])->assertRedirect();
+        $folderId = DB::table('favorite_folders')->where('name', 'Link team')->value('id');
+        $this->assertDatabaseHas('favorite_folder_team', ['folder_id' => $folderId, 'group_id' => $groupId]);
+        $this->actingAs($member)->get(route('favorites.folders.show', $folderId))->assertOk();
+        $this->actingAs($outsider)->get(route('favorites.folders.show', $folderId))->assertNotFound();
+        $this->actingAs($member)->post(route('favorites.groups.store'), ['name' => 'Non autorizzato'])->assertForbidden();
+
+        $this->actingAs($manager)->put(route('favorites.groups.update', $groupId), [
+            'name' => 'Team creativo', 'user_ids' => [$outsider->id],
+        ])->assertRedirect();
+        $this->actingAs($member)->get(route('favorites.folders.show', $folderId))->assertNotFound();
+        $this->actingAs($outsider)->get(route('favorites.folders.show', $folderId))->assertOk();
+    }
 }
