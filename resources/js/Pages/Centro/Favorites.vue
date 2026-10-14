@@ -38,11 +38,11 @@ function folderChipStyle(folder) {
 function toggleShare(field, id) {
     form[field] = form[field].includes(id) ? form[field].filter(value => value !== id) : [...form[field], id];
 }
-const visibleItems = computed(() => (props.items || []).filter(item =>
-    (selected.value === 'all' || item.folder_id === selected.value)
-    && (!categoryFilters.value.length || categoryFilters.value.some(id => item.category_ids?.includes(id)))
+const baseFilteredItems = computed(() => (props.items || []).filter(item =>
+    (!categoryFilters.value.length || categoryFilters.value.some(id => item.category_ids?.includes(id)))
     && `${item.title} ${item.url} ${item.description || ''}`.toLocaleLowerCase().includes(search.value.toLocaleLowerCase()),
 ));
+const visibleItems = computed(() => baseFilteredItems.value.filter(item => selected.value === 'all' || item.folder_id === selected.value));
 const featuredItems = computed(() => visibleItems.value.filter(item => item.is_featured));
 const regularItems = computed(() => visibleItems.value.filter(item => !item.is_featured));
 const itemSections = computed(() => [
@@ -50,6 +50,10 @@ const itemSections = computed(() => [
     ...(regularItems.value.length ? [{ key: 'regular', title: featuredItems.value.length ? 'Tutti i preferiti' : '', items: regularItems.value }] : []),
 ]);
 const categoryName = id => (props.categories || []).find(category => category.id === id)?.name || '';
+const folderFilterCount = id => id === 'all' ? baseFilteredItems.value.length : baseFilteredItems.value.filter(item => item.folder_id === id).length;
+function removeCategoryFilter(id) {
+    categoryFilters.value = categoryFilters.value.filter(value => value !== id);
+}
 const folderById = id => folderList.value.find(folder => folder.id === id);
 const writableFolders = computed(() => folderList.value.filter(folder => folder.can_edit));
 const activeFolder = computed(() => folderById(selected.value));
@@ -157,17 +161,23 @@ function remove(kind, id) {
                     <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                         <div class="grid w-full flex-1 gap-3 md:grid-cols-2">
                             <ClearableSearchInput v-model="search" input-class="h-[38px]" placeholder="Cerca preferiti" />
-                            <AppSelect v-model="categoryFilters" :options="categories.map(category => ({ value: category.id, label: category.name }))" placeholder="Categorie" multiple searchable />
+                            <AppSelect v-model="categoryFilters" class="favorite-filter-control" :options="categories.map(category => ({ value: category.id, label: category.name }))" placeholder="Categorie" multiple searchable />
                         </div>
                         <div class="flex items-center gap-2">
                             <button type="button" class="btn btn-primary h-[38px]" :disabled="!writableFolders.length" @click="openItem()"><Plus class="h-4 w-4" :stroke-width="1.7" /> Preferito</button>
                         </div>
                     </div>
+                    <div v-if="categoryFilters.length" class="mt-3 flex flex-wrap gap-2">
+                        <button v-for="id in categoryFilters" :key="id" type="button" class="inline-flex items-center gap-1.5 rounded-full bg-[hsl(var(--primary-app)/0.10)] px-3 py-1.5 text-xs font-semibold text-[hsl(var(--primary-app-dark))]" :aria-label="`Rimuovi filtro ${categoryName(id)}`" @click="removeCategoryFilter(id)">
+                            {{ categoryName(id) }}
+                            <X class="h-3.5 w-3.5" :stroke-width="1.8" />
+                        </button>
+                    </div>
                 </div>
                 <div class="flex flex-wrap gap-2">
-                    <button type="button" class="favorite-filter-pill" :class="{ 'is-active': selected === 'all' }" :style="{ backgroundColor: '#ffffff', color: '#111827' }" @click="selected = 'all'">Tutte <span>{{ items.length }}</span></button>
+                    <button type="button" class="favorite-filter-pill" :class="{ 'is-active': selected === 'all' }" :style="{ backgroundColor: '#ffffff', color: '#111827' }" @click="selected = 'all'">Tutte <span>{{ folderFilterCount('all') }}</span></button>
                     <button v-for="folder in folderList" :key="folder.id" type="button" class="favorite-filter-pill" :class="{ 'is-active': selected === folder.id }" :style="folderStyle(folder)" @click="selected = folder.id">
-                        {{ folder.name }} <span>{{ items.filter(item => item.folder_id === folder.id).length }}</span>
+                        {{ folder.name }} <span>{{ folderFilterCount(folder.id) }}</span>
                     </button>
                 </div>
                 <div v-if="!folderList.length" class="surface px-6 py-12 text-center text-sm text-gray-500">Nessuna cartella disponibile. <Link :href="route('favorites.folders.create')" class="font-semibold text-[hsl(var(--primary-app))]">Crea una cartella</Link></div>
@@ -252,6 +262,7 @@ function remove(kind, id) {
 </template>
 
 <style scoped>
+.favorite-filter-control :deep(.form-control){height:38px;min-height:38px}
 .favorite-filter-pill{display:inline-flex;min-height:34px;align-items:center;gap:.45rem;border-radius:var(--radius-sm);border:1px solid rgb(229 231 235 / .9);padding:.45rem .72rem;font-size:.8rem;font-weight:700;box-shadow:inset 0 1px 0 rgb(255 255 255 / .74),0 8px 20px rgb(15 23 42 / .04);transition:transform .18s ease,border-color .18s ease,background-color .18s ease,color .18s ease,box-shadow .18s ease}
 .favorite-filter-pill:hover{transform:translateY(-1px)}
 .favorite-filter-pill.is-active{box-shadow:inset 0 1px 0 rgb(255 255 255 / .68),0 10px 24px hsl(var(--primary-app) / .14),0 0 0 2px hsl(var(--primary-app) / .18)}
