@@ -15,7 +15,7 @@ const loading = ref(false);
 const processing = ref(false);
 const progress = ref(0);
 const totalOutputs = ref(0);
-const mode = ref('ranges');
+const mode = ref('extract');
 const ranges = ref([{ id: crypto.randomUUID(), from: 1, to: 1 }]);
 const mergeRanges = ref(false);
 const groupSize = ref(2);
@@ -26,10 +26,14 @@ const results = ref([]);
 const error = ref('');
 const baseName = computed(() => file.value?.name.replace(/\.pdf$/i, '') || 'documento');
 const modes = [
+    { value: 'extract', label: 'Estrai pagine' },
     { value: 'ranges', label: 'Intervalli' },
     { value: 'fixed', label: 'Ogni N pagine' },
-    { value: 'extract', label: 'Estrai pagine' },
 ];
+const plannedCount = computed(() => {
+    if (!file.value) return 0;
+    try { return plannedGroups().length; } catch { return 0; }
+});
 
 watch([mode, ranges, mergeRanges, groupSize, extractAll, pageSelection, mergeExtracted], () => {
     results.value = [];
@@ -68,7 +72,8 @@ async function selectFile(selected) {
         if (!pdf.getPageCount()) throw new Error('empty');
         file.value = next;
         pageCount.value = pdf.getPageCount();
-        ranges.value = [{ id: crypto.randomUUID(), from: 1, to: pageCount.value }];
+        groupSize.value = Math.min(2, pageCount.value);
+        ranges.value = [{ id: crypto.randomUUID(), from: 1, to: 1 }];
     } catch {
         error.value = 'Impossibile aprire il PDF. Verifica che non sia protetto o danneggiato.';
     } finally {
@@ -222,7 +227,8 @@ function downloadAll() {
                         <fieldset v-if="mode === 'ranges'" class="mt-5 space-y-3" :disabled="processing || !file"><legend class="mb-2 text-sm font-semibold text-gray-800">Intervalli di pagine</legend><div v-for="(range, index) in ranges" :key="range.id" class="flex items-end gap-2"><label class="min-w-0 flex-1 text-xs text-gray-500">Da<input v-model.number="range.from" type="number" min="1" :max="pageCount || undefined" class="mt-1 block w-full rounded-[var(--radius-sm)] border-gray-200 text-sm" /></label><label class="min-w-0 flex-1 text-xs text-gray-500">A<input v-model.number="range.to" type="number" min="1" :max="pageCount || undefined" class="mt-1 block w-full rounded-[var(--radius-sm)] border-gray-200 text-sm" /></label><button type="button" class="icon-btn h-10 w-10 shrink-0" :disabled="ranges.length === 1" :title="`Rimuovi intervallo ${index + 1}`" @click="ranges.splice(index, 1)"><X class="h-4 w-4" /></button></div><button type="button" class="inline-flex items-center gap-1 text-sm font-semibold text-[hsl(var(--primary-app))]" @click="addRange"><Plus class="h-4 w-4" /> Aggiungi intervallo</button><label class="flex items-center gap-2 text-sm text-gray-700"><input v-model="mergeRanges" type="checkbox" class="rounded border-gray-300 text-[hsl(var(--primary-app))]" /> Unisci in un solo PDF</label></fieldset>
                         <fieldset v-else-if="mode === 'fixed'" class="mt-5" :disabled="processing || !file"><label class="block text-sm font-semibold text-gray-800">Pagine per file<input v-model.number="groupSize" type="number" min="1" :max="pageCount || undefined" class="mt-2 block w-full rounded-[var(--radius-sm)] border-gray-200 text-sm" /></label><p class="mt-2 text-xs text-gray-500">L’ultimo file può contenere meno pagine.</p></fieldset>
                         <fieldset v-else class="mt-5 space-y-3" :disabled="processing || !file"><legend class="mb-2 text-sm font-semibold text-gray-800">Pagine da estrarre</legend><label class="flex items-center gap-2 text-sm text-gray-700"><input v-model="extractAll" type="radio" :value="true" name="extract-scope" class="text-[hsl(var(--primary-app))]" /> Tutte le pagine</label><label class="flex items-center gap-2 text-sm text-gray-700"><input v-model="extractAll" type="radio" :value="false" name="extract-scope" class="text-[hsl(var(--primary-app))]" /> Pagine selezionate</label><label v-if="!extractAll" class="block text-xs text-gray-500">Numeri e intervalli<input v-model="pageSelection" type="text" placeholder="1, 3-5, 8" class="mt-1 block w-full rounded-[var(--radius-sm)] border-gray-200 text-sm" /></label><label class="flex items-center gap-2 text-sm text-gray-700"><input v-model="mergeExtracted" type="checkbox" class="rounded border-gray-300 text-[hsl(var(--primary-app))]" /> Unisci in un solo PDF</label></fieldset>
-                        <button type="button" class="btn btn-primary mt-5 w-full justify-center" :disabled="!file || loading || processing" @click="split"><Scissors class="h-4 w-4" /> {{ processing ? `Divisione ${progress}/${totalOutputs}` : 'Dividi PDF' }}</button>
+                        <p v-if="file && plannedCount" class="mt-5 text-sm text-gray-600">Verranno creati {{ plannedCount }} PDF.</p>
+                        <button type="button" class="btn btn-primary mt-3 w-full justify-center" :disabled="!file || loading || processing" @click="split"><Scissors class="h-4 w-4" /> {{ processing ? `Divisione ${progress}/${totalOutputs}` : 'Dividi PDF' }}</button>
                         <div v-if="processing" role="progressbar" :aria-valuenow="progress" :aria-valuemax="totalOutputs" aria-valuemin="0" class="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100"><div class="h-full bg-[hsl(var(--primary-app))] transition-all duration-300" :style="{ width: `${Math.max(5, progress / totalOutputs * 100)}%` }" /></div>
                         <p class="mt-4 flex items-start gap-2 text-xs text-gray-500"><CircleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" /> L’elaborazione avviene nel browser. Firme digitali e moduli interattivi potrebbero non restare validi.</p>
                     </section>
