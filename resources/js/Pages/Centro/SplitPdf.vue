@@ -17,11 +17,9 @@ const progress = ref(0);
 const totalOutputs = ref(0);
 const mode = ref('extract');
 const ranges = ref([{ id: crypto.randomUUID(), from: 1, to: 1 }]);
-const mergeRanges = ref(false);
 const groupSize = ref(2);
 const extractAll = ref(true);
 const pageSelection = ref('');
-const mergeExtracted = ref(false);
 const result = ref(null);
 const error = ref('');
 const baseName = computed(() => file.value?.name.replace(/\.pdf$/i, '') || 'documento');
@@ -35,7 +33,7 @@ const plannedCount = computed(() => {
     try { return plannedGroups().length; } catch { return 0; }
 });
 
-watch([mode, ranges, mergeRanges, groupSize, extractAll, pageSelection, mergeExtracted], () => {
+watch([mode, ranges, groupSize, extractAll, pageSelection], () => {
     result.value = null;
     error.value = '';
 }, { deep: true });
@@ -133,7 +131,7 @@ function plannedGroups() {
             }
             return { pages: Array.from({ length: to - from + 1 }, (_, index) => from + index - 1), label: `Pagine ${from}-${to}`, suffix: `${from}-${to}` };
         });
-        return mergeRanges.value ? [{ pages: groups.flatMap(group => group.pages), label: 'Intervalli uniti', suffix: 'intervalli' }] : groups;
+        return groups;
     }
     if (mode.value === 'fixed') {
         if (!numberInRange(groupSize.value, 1, pageCount.value)) throw new Error(`Scegli un numero di pagine tra 1 e ${pageCount.value}.`);
@@ -146,9 +144,7 @@ function plannedGroups() {
         return groups;
     }
     const pages = extractAll.value ? Array.from({ length: pageCount.value }, (_, index) => index) : parsePageSelection(pageSelection.value);
-    return mergeExtracted.value
-        ? [{ pages, label: `${pages.length} pagine estratte`, suffix: 'estratte' }]
-        : pages.map(page => ({ pages: [page], label: `Pagina ${page + 1}`, suffix: `pagina-${page + 1}` }));
+    return pages.map(page => ({ pages: [page], label: `Pagina ${page + 1}`, suffix: `pagina-${page + 1}` }));
 }
 
 async function split() {
@@ -223,9 +219,9 @@ function download(data, name, type = 'application/pdf') {
                     <section class="surface p-5 sm:p-6">
                         <h3 class="text-base font-semibold text-gray-900">Divisione</h3>
                         <div class="mt-4 grid grid-cols-3 rounded-[var(--radius-sm)] bg-gray-100 p-1" role="group" aria-label="Modalità di divisione"><button v-for="option in modes" :key="option.value" type="button" :disabled="processing" :aria-pressed="mode === option.value" :class="['min-h-10 rounded-[var(--radius-sm)] px-2 text-xs font-semibold transition', mode === option.value ? 'bg-white text-[hsl(var(--primary-app))] shadow-sm' : 'text-gray-600 hover:text-gray-900']" @click="mode = option.value">{{ option.label }}</button></div>
-                        <fieldset v-if="mode === 'ranges'" class="mt-5 space-y-3" :disabled="processing || !file"><legend class="mb-2 text-sm font-semibold text-gray-800">Intervalli di pagine</legend><div v-for="(range, index) in ranges" :key="range.id" class="flex items-end gap-2"><label class="min-w-0 flex-1 text-xs text-gray-500">Da<input v-model.number="range.from" type="number" min="1" :max="pageCount || undefined" class="mt-1 block w-full rounded-[var(--radius-sm)] border-gray-200 text-sm" /></label><label class="min-w-0 flex-1 text-xs text-gray-500">A<input v-model.number="range.to" type="number" min="1" :max="pageCount || undefined" class="mt-1 block w-full rounded-[var(--radius-sm)] border-gray-200 text-sm" /></label><button type="button" class="icon-btn h-10 w-10 shrink-0" :disabled="ranges.length === 1" :title="`Rimuovi intervallo ${index + 1}`" @click="ranges.splice(index, 1)"><X class="h-4 w-4" /></button></div><button type="button" class="inline-flex items-center gap-1 text-sm font-semibold text-[hsl(var(--primary-app))]" @click="addRange"><Plus class="h-4 w-4" /> Aggiungi intervallo</button><label class="flex items-center gap-2 text-sm text-gray-700"><input v-model="mergeRanges" type="checkbox" class="rounded border-gray-300 text-[hsl(var(--primary-app))]" /> Unisci in un solo PDF</label></fieldset>
+                        <fieldset v-if="mode === 'ranges'" class="mt-5 space-y-3" :disabled="processing || !file"><legend class="mb-2 text-sm font-semibold text-gray-800">Intervalli di pagine</legend><div v-for="(range, index) in ranges" :key="range.id" class="flex items-end gap-2"><label class="min-w-0 flex-1 text-xs text-gray-500">Da<input v-model.number="range.from" type="number" min="1" :max="pageCount || undefined" class="mt-1 block w-full rounded-[var(--radius-sm)] border-gray-200 text-sm" /></label><label class="min-w-0 flex-1 text-xs text-gray-500">A<input v-model.number="range.to" type="number" min="1" :max="pageCount || undefined" class="mt-1 block w-full rounded-[var(--radius-sm)] border-gray-200 text-sm" /></label><button type="button" class="icon-btn h-10 w-10 shrink-0" :disabled="ranges.length === 1" :title="`Rimuovi intervallo ${index + 1}`" @click="ranges.splice(index, 1)"><X class="h-4 w-4" /></button></div><button type="button" class="inline-flex items-center gap-1 text-sm font-semibold text-[hsl(var(--primary-app))]" @click="addRange"><Plus class="h-4 w-4" /> Aggiungi intervallo</button></fieldset>
                         <fieldset v-else-if="mode === 'fixed'" class="mt-5" :disabled="processing || !file"><label class="block text-sm font-semibold text-gray-800">Pagine per file<input v-model.number="groupSize" type="number" min="1" :max="pageCount || undefined" class="mt-2 block w-full rounded-[var(--radius-sm)] border-gray-200 text-sm" /></label><p class="mt-2 text-xs text-gray-500">L’ultimo file può contenere meno pagine.</p></fieldset>
-                        <fieldset v-else class="mt-5 space-y-3" :disabled="processing || !file"><legend class="mb-2 text-sm font-semibold text-gray-800">Pagine da estrarre</legend><label class="flex items-center gap-2 text-sm text-gray-700"><input v-model="extractAll" type="radio" :value="true" name="extract-scope" class="text-[hsl(var(--primary-app))]" /> Tutte le pagine</label><label class="flex items-center gap-2 text-sm text-gray-700"><input v-model="extractAll" type="radio" :value="false" name="extract-scope" class="text-[hsl(var(--primary-app))]" /> Pagine selezionate</label><label v-if="!extractAll" class="block text-xs text-gray-500">Numeri e intervalli<input v-model="pageSelection" type="text" placeholder="1, 3-5, 8" class="mt-1 block w-full rounded-[var(--radius-sm)] border-gray-200 text-sm" /></label><label class="flex items-center gap-2 text-sm text-gray-700"><input v-model="mergeExtracted" type="checkbox" class="rounded border-gray-300 text-[hsl(var(--primary-app))]" /> Unisci in un solo PDF</label></fieldset>
+                        <fieldset v-else class="mt-5 space-y-3" :disabled="processing || !file"><legend class="mb-2 text-sm font-semibold text-gray-800">Pagine da estrarre</legend><label class="flex items-center gap-2 text-sm text-gray-700"><input v-model="extractAll" type="radio" :value="true" name="extract-scope" class="text-[hsl(var(--primary-app))]" /> Tutte le pagine</label><label class="flex items-center gap-2 text-sm text-gray-700"><input v-model="extractAll" type="radio" :value="false" name="extract-scope" class="text-[hsl(var(--primary-app))]" /> Pagine selezionate</label><label v-if="!extractAll" class="block text-xs text-gray-500">Numeri e intervalli<input v-model="pageSelection" type="text" placeholder="1, 3-5, 8" class="mt-1 block w-full rounded-[var(--radius-sm)] border-gray-200 text-sm" /></label></fieldset>
                         <p v-if="file && plannedCount" class="mt-5 text-sm text-gray-600">Verranno creati {{ plannedCount }} PDF.</p>
                         <button type="button" class="btn btn-primary mt-3 w-full justify-center" :disabled="!file || loading || processing" @click="split"><Scissors class="h-4 w-4" /> {{ processing ? `Divisione ${progress}/${totalOutputs}` : 'Dividi PDF' }}</button>
                         <div v-if="processing" role="progressbar" :aria-valuenow="progress" :aria-valuemax="totalOutputs" aria-valuemin="0" class="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100"><div class="h-full bg-[hsl(var(--primary-app))] transition-all duration-300" :style="{ width: `${Math.max(5, progress / totalOutputs * 100)}%` }" /></div>
