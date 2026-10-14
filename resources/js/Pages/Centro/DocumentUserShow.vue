@@ -171,7 +171,7 @@ function yearScaleClass(year) {
             <div class="flex flex-col gap-2">
                 <Link :href="route('documents.list')" class="inline-flex items-center gap-1 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]">
                     <ChevronLeft class="h-4 w-4" :stroke-width="1.7" />
-                    Documenti
+                    Torna ai documenti
                 </Link>
                 <div class="flex items-center gap-3">
                     <UserAvatar :user="user" size="md" />

@@ -143,7 +143,7 @@ function remove(kind, id) {
     <AuthenticatedLayout>
         <template #header>
             <div class="flex flex-col gap-1">
-                <Link v-if="['folder-create', 'folder-detail', 'group-create', 'group-detail'].includes(currentView)" :href="route(currentView.startsWith('folder-') ? 'favorites.folders' : 'favorites.groups')" class="mb-1 inline-flex items-center gap-1 self-start text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]"><ArrowLeft class="h-4 w-4" :stroke-width="1.7" /> {{ currentView.startsWith('folder-') ? 'Cartelle' : 'Gruppi' }}</Link>
+                <Link v-if="['folder-create', 'folder-detail', 'group-create', 'group-detail'].includes(currentView)" :href="route(currentView.startsWith('folder-') ? 'favorites.folders' : 'favorites.groups')" class="mb-1 inline-flex items-center gap-1 self-start text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]"><ArrowLeft class="h-4 w-4" :stroke-width="1.7" /> {{ currentView.startsWith('folder-') ? 'Torna alle cartelle' : 'Torna ai gruppi' }}</Link>
                 <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ currentView === 'folder-create' ? 'Nuova cartella' : currentView === 'folder-detail' ? (selectedFolder?.name || 'Cartella') : currentView === 'group-create' ? 'Nuovo gruppo' : currentView === 'group-detail' ? (selectedGroup?.name || 'Gruppo') : 'Preferiti' }}</h2>
                 <p v-if="!['folder-create', 'folder-detail', 'group-create', 'group-detail'].includes(currentView)" class="text-sm text-gray-500">Link personali e condivisi, organizzati per cartella.</p>
             </div>

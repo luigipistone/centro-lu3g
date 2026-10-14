@@ -308,7 +308,7 @@ function confirmDelete() {
         <template #header>
             <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                 <div class="min-w-0">
-                    <button v-if="selectedFolder" type="button" class="mb-1 inline-flex items-center gap-1 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]" @click="closeFolder"><ChevronLeft class="h-4 w-4" :stroke-width="1.7" /> Cartelle</button>
+                    <button v-if="selectedFolder" type="button" class="mb-1 inline-flex items-center gap-1 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]" @click="closeFolder"><ChevronLeft class="h-4 w-4" :stroke-width="1.7" /> Torna alle cartelle</button>
                     <h2 class="text-xl font-semibold leading-tight text-gray-800">Moduli</h2>
                     <p class="mt-1 text-sm text-gray-500">Cartelle operative con regole, input richiesti, output e agenti abilitati.</p>
                 </div>

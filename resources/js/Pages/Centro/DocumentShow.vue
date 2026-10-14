@@ -91,7 +91,7 @@ function saveDocument() {
             <div class="flex flex-col gap-2">
                 <Link :href="returnUserId ? route('documents.users.show', returnUserId) : route('documents.list')" class="inline-flex items-center gap-1 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]">
                     <ChevronLeft class="h-4 w-4" :stroke-width="1.7" />
-                    Documenti
+                    Torna ai documenti
                 </Link>
                 <div class="flex flex-wrap items-start justify-between gap-3">
                   <div class="flex flex-col gap-1">

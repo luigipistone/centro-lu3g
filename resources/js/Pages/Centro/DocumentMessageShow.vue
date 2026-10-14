@@ -28,7 +28,7 @@ function markRead() {
             <div class="flex flex-col gap-2">
                 <Link :href="route('documents.messages')" class="inline-flex items-center gap-1 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]">
                     <ChevronLeft class="h-4 w-4" :stroke-width="1.7" />
-                    Messaggi
+                    Torna ai messaggi
                 </Link>
                 <div class="flex flex-col gap-1">
                     <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ message.title }}</h2>

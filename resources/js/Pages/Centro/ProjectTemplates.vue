@@ -60,7 +60,7 @@ function confirmDelete() {
             <div class="flex flex-col gap-3">
                 <Link :href="route('projects.index')" class="inline-flex items-center gap-1 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]">
                     <ChevronLeft class="h-4 w-4" :stroke-width="1.7" />
-                    Progetti
+                    Torna ai progetti
                 </Link>
                 <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                     <div>

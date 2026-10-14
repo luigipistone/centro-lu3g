@@ -86,7 +86,7 @@ function submit() {
         <template #header>
             <div class="flex flex-col gap-2">
                 <Link :href="returnUserId ? route('documents.show', { id: source.id, from_user: returnUserId }) : route('documents.show', source.id)" class="inline-flex items-center gap-1 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]">
-                    <ChevronLeft class="h-4 w-4" :stroke-width="1.7" /> Documento originale
+                    <ChevronLeft class="h-4 w-4" :stroke-width="1.7" /> Torna al documento originale
                 </Link>
                 <h2 class="text-xl font-semibold leading-tight text-gray-800">Clona documento</h2>
             </div>

@@ -109,7 +109,7 @@ function confirmDeleteAction() {
             <div class="flex flex-col gap-2">
                 <Link :href="route('documents.list')" class="inline-flex items-center gap-1 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]">
                     <ChevronLeft class="h-4 w-4" :stroke-width="1.7" />
-                    Documenti
+                    Torna ai documenti
                 </Link>
                 <div class="flex flex-col gap-1">
                     <h2 class="text-xl font-semibold leading-tight text-gray-800">Archivio documenti {{ year }}</h2>
