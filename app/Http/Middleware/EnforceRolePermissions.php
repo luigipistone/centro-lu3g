@@ -72,6 +72,9 @@ class EnforceRolePermissions
         if (Str::startsWith($name, 'passwords.')) {
             return 'passwords.view';
         }
+        if (Str::startsWith($name, 'favorites.')) {
+            return 'favorites.view';
+        }
         if (Str::startsWith($name, 'absences.')) {
             return 'absences.manage';
         }

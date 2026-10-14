@@ -686,6 +686,7 @@ const auditAreaLabels = {
     'document-messages': 'Messaggi',
     'document-groups': 'Gruppi documenti',
     passwords: 'Password',
+    favorites: 'Preferiti',
     modules: 'Moduli',
     'ai-agency': 'Agenzia AI',
     updates: 'Aggiornamenti',

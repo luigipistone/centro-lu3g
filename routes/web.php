@@ -3,6 +3,7 @@
 use App\Http\Controllers\AiAgencyController;
 use App\Http\Controllers\CentroPageController;
 use App\Http\Controllers\FigmaIntegrationController;
+use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WordPressProvisioningController;
 use Illuminate\Support\Facades\Route;
@@ -149,6 +150,13 @@ Route::middleware('auth')->group(function () {
     Route::post('/passwords/items/{id}/reveal', [CentroPageController::class, 'revealPasswordItem'])->name('passwords.items.reveal');
     Route::post('/passwords/items/{id}/compromise-check', [CentroPageController::class, 'checkPasswordItemCompromise'])->name('passwords.items.compromise-check');
     Route::delete('/passwords/items/{id}', [CentroPageController::class, 'destroyPasswordItem'])->name('passwords.items.destroy');
+    Route::get('/favorites', [FavoriteController::class, 'index'])->name('favorites.index');
+    Route::post('/favorites/folders', [FavoriteController::class, 'storeFolder'])->name('favorites.folders.store');
+    Route::put('/favorites/folders/{id}', [FavoriteController::class, 'updateFolder'])->name('favorites.folders.update');
+    Route::delete('/favorites/folders/{id}', [FavoriteController::class, 'destroyFolder'])->name('favorites.folders.destroy');
+    Route::post('/favorites/items', [FavoriteController::class, 'storeItem'])->name('favorites.items.store');
+    Route::put('/favorites/items/{id}', [FavoriteController::class, 'updateItem'])->name('favorites.items.update');
+    Route::delete('/favorites/items/{id}', [FavoriteController::class, 'destroyItem'])->name('favorites.items.destroy');
     Route::get('/notifications', [CentroPageController::class, 'notifications'])->name('notifications.index');
     Route::get('/push/enable', [CentroPageController::class, 'enablePush'])->name('push.enable');
     Route::post('/push/test', [CentroPageController::class, 'testPush'])->name('push.test');
