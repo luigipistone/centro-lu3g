@@ -1,7 +1,9 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import AppSelect from '@/Components/AppSelect.vue';
+import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
-import { Bookmark, ExternalLink, Folder, FolderPlus, Pencil, Plus, Search, Trash2, Users, X } from '@lucide/vue';
+import { Bookmark, ExternalLink, Folder, FolderPlus, Pencil, Plus, Trash2, Users, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 const props = defineProps({ folders: Array, items: Array, users: Array, groups: Array, canManage: Boolean });
@@ -59,69 +61,76 @@ function remove(kind, id) {
         preserveScroll: true, onSuccess: () => { if (kind === 'folder' && selected.value === id) selected.value = 'all'; },
     });
 }
-function toggleId(field, id) {
-    form[field] = form[field].includes(id) ? form[field].filter(value => value !== id) : [...form[field], id];
-}
 </script>
 
 <template>
     <Head title="Preferiti" />
     <AuthenticatedLayout>
-        <div class="favorites-page mx-auto w-full max-w-[1600px] px-5 pb-16 pt-7 sm:px-8">
-            <header class="mb-7 flex flex-wrap items-end justify-between gap-4">
-                <div><h1 class="text-3xl font-semibold text-gray-900">Preferiti</h1><p class="mt-1 text-gray-500">Link personali e condivisi, organizzati per cartella.</p></div>
-                <div class="flex gap-2">
-                    <button type="button" class="fav-secondary" @click="openFolder()"><FolderPlus :size="18" /> Cartella</button>
-                    <button type="button" class="fav-primary" :disabled="!writableFolders.length" @click="openItem()"><Plus :size="18" /> Preferito</button>
+        <template #header>
+            <div class="flex flex-col gap-1">
+                <h2 class="text-xl font-semibold leading-tight text-gray-800">Preferiti</h2>
+                <p class="text-sm text-gray-500">Link personali e condivisi, organizzati per cartella.</p>
+            </div>
+        </template>
+        <div class="py-8">
+            <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
+                <div v-if="page.props.flash?.success" class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{{ page.props.flash.success }}</div>
+                <div class="surface p-4">
+                    <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <ClearableSearchInput v-model="search" class="w-full max-w-sm" input-class="h-[38px]" placeholder="Cerca preferiti" />
+                        <div class="flex items-center gap-2">
+                            <button type="button" class="btn btn-outline h-[38px]" @click="openFolder()"><FolderPlus class="h-4 w-4" :stroke-width="1.7" /> Cartella</button>
+                            <button type="button" class="btn btn-primary h-[38px]" :disabled="!writableFolders.length" @click="openItem()"><Plus class="h-4 w-4" :stroke-width="1.7" /> Preferito</button>
+                        </div>
+                    </div>
                 </div>
-            </header>
-
-            <div v-if="page.props.flash?.success" class="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{{ page.props.flash.success }}</div>
-            <div class="mb-6 flex flex-wrap items-center gap-2">
-                <button type="button" class="fav-folder" :class="{ active: selected === 'all' }" @click="selected = 'all'"><Bookmark :size="17" /> Tutti <span>{{ items.length }}</span></button>
-                <button v-for="folder in folderList" :key="folder.id" type="button" class="fav-folder" :class="{ active: selected === folder.id }" @click="selected = folder.id">
-                    <Folder :size="17" /> {{ folder.name }} <Users v-if="folder.visibility === 'shared'" :size="14" class="opacity-60" /> <span>{{ items.filter(item => item.folder_id === folder.id).length }}</span>
-                </button>
-            </div>
-
-            <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
-                <div class="relative w-full max-w-sm"><Search :size="17" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" /><input v-model="search" class="fav-input pl-10" type="search" placeholder="Cerca preferiti" aria-label="Cerca preferiti" /></div>
-                <div v-if="activeFolder?.can_edit" class="flex gap-2"><button class="fav-icon" title="Modifica cartella" @click="openFolder(activeFolder)"><Pencil :size="17" /></button><button class="fav-icon text-red-500" title="Elimina cartella" @click="remove('folder', activeFolder.id)"><Trash2 :size="17" /></button></div>
-            </div>
-
-            <div v-if="!folderList.length" class="fav-empty"><Folder :size="34" class="text-blue-400" /><h2 class="mt-3 text-lg font-semibold">Crea la prima cartella</h2><p class="mt-1 text-gray-500">Poi potrai aggiungere i link da ritrovare rapidamente.</p><button class="fav-primary mt-5" @click="openFolder()"><Plus :size="18" /> Nuova cartella</button></div>
-            <div v-else-if="!visibleItems.length" class="fav-empty"><Bookmark :size="34" class="text-blue-400" /><h2 class="mt-3 text-lg font-semibold">Nessun preferito qui</h2><p class="mt-1 text-gray-500">{{ search ? 'Prova un’altra ricerca.' : 'Aggiungi un link a una cartella per iniziare.' }}</p></div>
-            <div v-else class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <article v-for="item in visibleItems" :key="item.id" class="fav-item">
-                    <div class="flex min-w-0 items-start justify-between gap-2"><div class="fav-item-icon"><Bookmark :size="19" /></div><div v-if="folderById(item.folder_id)?.can_edit" class="flex"><button class="fav-icon" title="Modifica preferito" @click="openItem(item)"><Pencil :size="16" /></button><button class="fav-icon text-red-500" title="Elimina preferito" @click="remove('item', item.id)"><Trash2 :size="16" /></button></div></div>
-                    <a :href="item.url" target="_blank" rel="noopener noreferrer" class="mt-4 flex items-center gap-2 text-base font-semibold text-gray-900 hover:text-blue-600"><span class="min-w-0 truncate">{{ item.title }}</span><ExternalLink :size="15" class="shrink-0" /></a>
-                    <p class="mt-1 truncate text-sm text-gray-500">{{ item.url }}</p>
-                    <p v-if="item.description" class="mt-3 line-clamp-2 min-h-10 text-sm text-gray-600">{{ item.description }}</p><div v-else class="min-h-10" />
-                    <div class="mt-4 border-t border-gray-100 pt-3 text-xs font-medium text-gray-500">{{ folderById(item.folder_id)?.name }}</div>
-                </article>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" class="favorite-filter-pill" :class="{ 'is-active': selected === 'all' }" @click="selected = 'all'">Tutti <span>{{ items.length }}</span></button>
+                    <button v-for="folder in folderList" :key="folder.id" type="button" class="favorite-filter-pill" :class="{ 'is-active': selected === folder.id }" @click="selected = folder.id">
+                        <Folder class="h-4 w-4" :stroke-width="1.7" /> {{ folder.name }} <Users v-if="folder.visibility === 'shared'" class="h-3.5 w-3.5 opacity-70" /> <span>{{ items.filter(item => item.folder_id === folder.id).length }}</span>
+                    </button>
+                </div>
+                <div v-if="activeFolder?.can_edit" class="flex justify-end gap-1">
+                    <button type="button" class="icon-btn h-8 w-8" title="Modifica cartella" @click="openFolder(activeFolder)"><Pencil class="h-4 w-4" :stroke-width="1.7" /></button>
+                    <button type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina cartella" @click="remove('folder', activeFolder.id)"><Trash2 class="h-4 w-4" :stroke-width="1.7" /></button>
+                </div>
+                <div v-if="!folderList.length" class="surface px-6 py-12 text-center text-sm text-gray-500">Nessuna cartella disponibile. <button type="button" class="font-semibold text-[hsl(var(--primary-app))]" @click="openFolder()">Crea una cartella</button></div>
+                <div v-else-if="!visibleItems.length" class="surface px-6 py-12 text-center text-sm text-gray-500">Nessun preferito disponibile.</div>
+                <div v-else class="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <article v-for="item in visibleItems" :key="item.id" class="surface flex h-full min-h-[138px] flex-col justify-between p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]">
+                        <div class="flex min-w-0 items-start justify-between gap-3">
+                            <div class="flex min-w-0 items-center gap-3">
+                                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]"><Bookmark class="h-5 w-5" :stroke-width="1.7" /></span>
+                                <div class="min-w-0"><a :href="item.url" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1.5 text-sm font-semibold text-gray-900 hover:text-[hsl(var(--primary-app))]"><span class="line-clamp-2">{{ item.title }}</span><ExternalLink class="h-3.5 w-3.5 shrink-0" :stroke-width="1.7" /></a><p class="truncate text-xs text-gray-500">{{ item.url }}</p></div>
+                            </div>
+                            <div v-if="folderById(item.folder_id)?.can_edit" class="flex shrink-0 gap-1"><button type="button" class="icon-btn h-8 w-8" title="Modifica" @click="openItem(item)"><Pencil class="h-4 w-4" :stroke-width="1.7" /></button><button type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina" @click="remove('item', item.id)"><Trash2 class="h-4 w-4" :stroke-width="1.7" /></button></div>
+                        </div>
+                        <p v-if="item.description" class="mt-3 line-clamp-2 text-xs text-gray-500">{{ item.description }}</p>
+                        <div class="mt-4"><span class="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600 ring-1 ring-inset ring-gray-200"><Folder class="h-3.5 w-3.5" :stroke-width="1.7" /> {{ folderById(item.folder_id)?.name }}</span></div>
+                    </article>
+                </div>
             </div>
         </div>
 
-        <div v-if="editor" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/45 p-4" @click.self="editor = null">
-            <form class="fav-modal w-full max-w-xl" @submit.prevent="save">
-                <div class="flex items-center justify-between border-b border-gray-100 px-6 py-5"><h2 class="text-xl font-semibold">{{ editing ? 'Modifica' : 'Nuovo' }} {{ editor === 'folder' ? 'cartella' : 'preferito' }}</h2><button type="button" class="fav-icon" title="Chiudi" @click="editor = null"><X :size="20" /></button></div>
+        <div v-if="editor" class="fixed inset-0 z-[5200] grid h-dvh w-dvw place-items-center bg-gray-950/20 px-4 backdrop-blur-[2px]" @click.self="editor = null">
+            <form class="surface w-full max-w-xl overflow-hidden" @submit.prevent="save">
+                <div class="flex items-center justify-between border-b border-gray-100 px-6 py-5"><h2 class="text-lg font-semibold text-gray-900">{{ editing ? 'Modifica' : 'Nuovo' }} {{ editor === 'folder' ? 'cartella' : 'preferito' }}</h2><button type="button" class="icon-btn h-8 w-8" title="Chiudi" @click="editor = null"><X class="h-4 w-4" :stroke-width="1.7" /></button></div>
                 <div class="max-h-[70vh] space-y-5 overflow-y-auto px-6 py-5">
                     <template v-if="editor === 'folder'">
-                        <label class="fav-label">Nome cartella<input v-model="form.name" class="fav-input mt-2" maxlength="120" required /></label><p v-if="form.errors.name" class="fav-error">{{ form.errors.name }}</p>
-                        <div><span class="fav-label">Visibilità</span><div class="mt-2 flex gap-2"><button type="button" class="fav-choice" :class="{ active: form.visibility === 'personal' }" @click="form.visibility = 'personal'">Personale</button><button v-if="canManage" type="button" class="fav-choice" :class="{ active: form.visibility === 'shared' }" @click="form.visibility = 'shared'">Condivisa / team</button></div><p v-if="form.errors.visibility" class="fav-error">{{ form.errors.visibility }}</p></div>
-                        <template v-if="form.visibility === 'shared'"><div><span class="fav-label">Utenti autorizzati</span><div class="fav-options"><label v-for="user in users" :key="user.id"><input type="checkbox" :checked="form.user_ids.includes(user.id)" @change="toggleId('user_ids', user.id)" /> {{ user.name }}</label></div></div><div><span class="fav-label">Gruppi autorizzati</span><div class="fav-options"><label v-for="group in groups" :key="group.id"><input type="checkbox" :checked="form.group_ids.includes(group.id)" @change="toggleId('group_ids', group.id)" /> {{ group.name }}</label><span v-if="!groups.length" class="text-sm text-gray-500">Nessun gruppo disponibile.</span></div></div><p v-if="form.errors.user_ids" class="fav-error">{{ form.errors.user_ids }}</p></template>
+                        <label class="block text-sm font-medium text-gray-700">Nome cartella<input v-model="form.name" class="form-control mt-2" maxlength="120" required /></label><p v-if="form.errors.name" class="text-xs text-red-600">{{ form.errors.name }}</p>
+                        <div><span class="block text-sm font-medium text-gray-700">Visibilità</span><div class="mt-2 inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1"><button type="button" class="rounded-md px-4 py-2 text-sm font-semibold" :class="form.visibility === 'personal' ? 'bg-white text-[hsl(var(--primary-app))] shadow-sm' : 'text-gray-500'" @click="form.visibility = 'personal'">Personale</button><button v-if="canManage" type="button" class="rounded-md px-4 py-2 text-sm font-semibold" :class="form.visibility === 'shared' ? 'bg-white text-[hsl(var(--primary-app))] shadow-sm' : 'text-gray-500'" @click="form.visibility = 'shared'">Condivisa / team</button></div><p v-if="form.errors.visibility" class="text-xs text-red-600">{{ form.errors.visibility }}</p></div>
+                        <template v-if="form.visibility === 'shared'"><div><label class="mb-2 block text-sm font-medium text-gray-700">Utenti autorizzati</label><AppSelect v-model="form.user_ids" :options="users.map(user => ({ value: user.id, label: user.name }))" placeholder="Seleziona utenti" multiple searchable /></div><div><label class="mb-2 block text-sm font-medium text-gray-700">Gruppi autorizzati</label><AppSelect v-model="form.group_ids" :options="groups.map(group => ({ value: group.id, label: group.name }))" placeholder="Seleziona gruppi" multiple searchable /></div><p v-if="form.errors.user_ids" class="text-xs text-red-600">{{ form.errors.user_ids }}</p></template>
                     </template>
-                    <template v-else><label class="fav-label">Titolo<input v-model="form.title" class="fav-input mt-2" maxlength="180" required /></label><p v-if="form.errors.title" class="fav-error">{{ form.errors.title }}</p><label class="fav-label">Indirizzo web<input v-model="form.url" class="fav-input mt-2" type="url" placeholder="https://" required /></label><p v-if="form.errors.url" class="fav-error">{{ form.errors.url }}</p><label class="fav-label">Cartella<select v-model="form.folder_id" class="fav-input mt-2" required><option value="" disabled>Seleziona una cartella</option><option v-for="folder in writableFolders" :key="folder.id" :value="folder.id">{{ folder.name }}</option></select></label><p v-if="form.errors.folder_id" class="fav-error">{{ form.errors.folder_id }}</p><label class="fav-label">Note<textarea v-model="form.description" class="fav-input mt-2 min-h-24" maxlength="2000" /></label></template>
-                </div><div class="flex justify-end gap-2 border-t border-gray-100 px-6 py-4"><button type="button" class="fav-secondary" @click="editor = null">Annulla</button><button type="submit" class="fav-primary" :disabled="form.processing">Salva</button></div>
+                    <template v-else><label class="block text-sm font-medium text-gray-700">Titolo<input v-model="form.title" class="form-control mt-2" maxlength="180" required /></label><p v-if="form.errors.title" class="text-xs text-red-600">{{ form.errors.title }}</p><label class="block text-sm font-medium text-gray-700">Indirizzo web<input v-model="form.url" class="form-control mt-2" type="url" placeholder="https://" required /></label><p v-if="form.errors.url" class="text-xs text-red-600">{{ form.errors.url }}</p><div><label class="mb-2 block text-sm font-medium text-gray-700">Cartella</label><AppSelect v-model="form.folder_id" :options="writableFolders.map(folder => ({ value: folder.id, label: folder.name }))" placeholder="Seleziona una cartella" /></div><p v-if="form.errors.folder_id" class="text-xs text-red-600">{{ form.errors.folder_id }}</p><label class="block text-sm font-medium text-gray-700">Note<textarea v-model="form.description" class="form-control mt-2 min-h-24" maxlength="2000" /></label></template>
+                </div><div class="flex justify-end gap-2 border-t border-gray-100 px-6 py-4"><button type="button" class="btn btn-outline" @click="editor = null">Annulla</button><button type="submit" class="btn btn-primary" :disabled="form.processing || (editor === 'item' && !form.folder_id)">Salva</button></div>
             </form>
         </div>
     </AuthenticatedLayout>
 </template>
 
 <style scoped>
-.fav-primary,.fav-secondary,.fav-choice,.fav-folder,.fav-icon{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;border-radius:8px;font-weight:600;transition:background .18s,box-shadow .18s,color .18s}
-.fav-primary{min-height:42px;padding:0 16px;background:#1874ed;color:white;box-shadow:0 8px 20px #1874ed26}.fav-primary:hover{background:#095fcf}.fav-primary:disabled{opacity:.5;cursor:not-allowed}
-.fav-secondary{min-height:42px;padding:0 16px;background:white;color:#344054;border:1px solid #d9e0e9}.fav-secondary:hover,.fav-icon:hover{background:#f2f6fb}
-.fav-folder{min-height:42px;padding:0 13px;background:white;color:#475467;border:1px solid #e3e8ef}.fav-folder.active{background:#eaf3ff;color:#0869db;border-color:#9fc7ff}.fav-folder span{font-size:12px;opacity:.65}
-.fav-icon{width:34px;height:34px}.fav-input{width:100%;min-height:44px;border:1px solid #d6dde8;border-radius:8px;background:white;padding:10px 12px;color:#172033;box-shadow:0 1px 2px #1e293b0a}.fav-input:focus{border-color:#3488ff;outline:2px solid #3488ff24}.fav-item{min-width:0;border:1px solid #e6ebf2;border-radius:8px;background:white;padding:18px;box-shadow:0 8px 22px #2636500a}.fav-item-icon{display:grid;width:38px;height:38px;place-items:center;border-radius:8px;background:#e9f2ff;color:#1474ed}.fav-empty{padding:60px 20px;text-align:center;color:#1f2937}.fav-empty>svg{margin:auto}.fav-modal{border-radius:10px;background:white;box-shadow:0 24px 80px #10182833}.fav-label{display:block;font-size:14px;font-weight:600;color:#344054}.fav-choice{padding:9px 14px;border:1px solid #d9e0e9;color:#475467}.fav-choice.active{border-color:#8cbcff;background:#eaf3ff;color:#0869db}.fav-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:9px;max-height:160px;overflow:auto}.fav-options label{display:flex;align-items:center;gap:8px;font-size:14px;color:#344054}.fav-error{margin-top:5px;color:#c73232;font-size:13px}
+.favorite-filter-pill{display:inline-flex;min-height:42px;align-items:center;justify-content:center;gap:.55rem;border:1px solid #dfe5ef;border-radius:12px;background:white;padding:0 14px;font-size:14px;font-weight:700;color:#344054;box-shadow:0 6px 20px #1c2a4910;transition:transform .18s,box-shadow .18s}
+.favorite-filter-pill:hover{transform:translateY(-2px);box-shadow:0 12px 26px #1c2a491c}
+.favorite-filter-pill.is-active{border-color:#8db8ff;background:linear-gradient(180deg,#348bff,#116eea);color:white;box-shadow:0 10px 24px #1874ed30}
+.favorite-filter-pill span{display:inline-flex;min-width:24px;justify-content:center;border-radius:999px;background:#ffffff40;padding:2px 6px;font-size:12px}
 </style>
