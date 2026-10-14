@@ -21,6 +21,7 @@ deploy() {
     GIT_WORK_TREE="$APP_DIR" git -C "$GIT_DIR" checkout -f "$BRANCH"
 
     cd "$APP_DIR"
+    log "PDF compression engine: $(command -v gs || echo unavailable)"
 
     if [ -f "$COMPOSER_PHAR" ]; then
         log "Installing PHP dependencies"
