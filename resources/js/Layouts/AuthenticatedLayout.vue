@@ -27,6 +27,7 @@ import {
     Settings,
     Moon,
     PackageOpen,
+    Wrench,
     WandSparkles,
     Sun,
     Target,
@@ -302,7 +303,7 @@ onUnmounted(() => {
 const groups = computed(() => {
     const sectionForRoute = (name) => ({
         'clients.index': 'clients', 'projects.index': 'projects', 'tasks.index': 'tasks',
-        'calendar.index': 'calendar', 'documents.index': 'documents', 'passwords.index': 'passwords', 'favorites.index': 'favorites',
+        'calendar.index': 'calendar', 'documents.index': 'documents', 'passwords.index': 'passwords', 'favorites.index': 'favorites', 'tools.index': 'tools',
         'absences.index': 'absences', 'billing.index': 'billing', 'users.index': 'users',
         'modules.index': 'modules', 'ai-agency.index': 'ai_agency',
         'updates.social': 'social', 'updates.newsletter': 'newsletter',
@@ -327,6 +328,7 @@ const groups = computed(() => {
                 permitted('documents.index', 'Documenti', FileText, 'documents.view'),
                 permitted('passwords.index', 'Password', KeyRound, 'passwords.view'),
                 permitted('favorites.index', 'Preferiti', Bookmark, 'favorites.view'),
+                permitted('tools.index', 'Strumenti', Wrench, 'tools.view'),
                 permitted('absences.index', 'Assenze', CalendarX, 'absences.manage'),
                 permitted('settings.index', 'Impostazioni', Settings, 'settings.manage'),
             ]),

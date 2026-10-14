@@ -7,6 +7,7 @@ use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WordPressProvisioningController;
 use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
 
 Route::get('/', function () {
     return auth()->check()
@@ -21,6 +22,7 @@ Route::middleware('auth')->group(function () {
     Route::patch('/dashboard/widgets/{type}/settings', [CentroPageController::class, 'updateDashboardWidgetSettings'])->name('dashboard.widgets.settings.update');
     Route::patch('/dashboard/note', [CentroPageController::class, 'updateDashboardNote'])->name('dashboard.note.update');
     Route::get('/clients', [CentroPageController::class, 'index'])->defaults('section', 'clients')->name('clients.index');
+    Route::get('/tools', fn () => Inertia::render('Centro/Tools'))->name('tools.index');
     Route::post('/clients', [CentroPageController::class, 'store'])->defaults('section', 'clients')->name('clients.store');
     Route::get('/clients/{id}', [CentroPageController::class, 'show'])->defaults('section', 'clients')->name('clients.show');
     Route::put('/clients/{id}', [CentroPageController::class, 'update'])->defaults('section', 'clients')->name('clients.update');

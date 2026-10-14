@@ -35,6 +35,7 @@ class RolePermissionService
             ['group' => 'Azienda', 'key' => 'passwords.manage', 'label' => 'Gestire password condivise'],
             ['group' => 'Azienda', 'key' => 'favorites.view', 'label' => 'Visualizzare e creare preferiti personali'],
             ['group' => 'Azienda', 'key' => 'favorites.manage', 'label' => 'Gestire cartelle e preferiti condivisi'],
+            ['group' => 'Azienda', 'key' => 'tools.view', 'label' => 'Utilizzare gli strumenti'],
             ['group' => 'Azienda', 'key' => 'absences.request', 'label' => 'Richiedere assenze'],
             ['group' => 'Azienda', 'key' => 'absences.manage', 'label' => 'Gestire assenze'],
             ['group' => 'Assenze Manager', 'key' => 'absences.presence.view', 'label' => 'Disponibilità e presenze del team', 'managerOnly' => true],
