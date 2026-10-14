@@ -44,6 +44,33 @@ class FavoritesTest extends TestCase
         $this->assertSame(24, DB::table('favorite_item_category')->count());
     }
 
+    public function test_general_bookmark_import_is_categorized_and_idempotent(): void
+    {
+        $admin = User::factory()->create();
+        $folderId = (string) Str::uuid();
+        DB::table('favorite_folders')->insert([
+            'id' => $folderId, 'name' => 'Generale', 'visibility' => 'personal',
+            'created_by' => $admin->id, 'color' => '#0B6EF3',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $migration = require database_path('migrations/2026_10_14_000600_import_general_favorites.php');
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(16, DB::table('favorite_items')->where('folder_id', $folderId)->count());
+        $this->assertSame(4, DB::table('favorite_categories')->count());
+        $this->assertDatabaseHas('favorite_items', [
+            'folder_id' => $folderId, 'title' => 'CartSan - Lavoratori Sapal',
+            'url' => 'https://lavoratori.cartsan.it/sapalsrl/',
+        ]);
+        $this->assertDatabaseHas('favorite_items', [
+            'folder_id' => $folderId, 'title' => 'Canva - Cartella',
+            'url' => 'https://www.canva.com/folder/FAEjnhEjs0s',
+        ]);
+        $this->assertSame(16, DB::table('favorite_item_category')->count());
+    }
+
     public function test_employee_can_create_personal_favorites_but_cannot_share_them(): void
     {
         $employee = User::factory()->create();
