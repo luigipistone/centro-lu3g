@@ -483,7 +483,7 @@ const groups = computed(() => {
                             v-for="[name, label, icon] in group.links"
                             :key="name"
                             :href="route(name)"
-                            :class="['nav-link', sidebarCollapsed ? 'justify-center px-0' : '', route().current(name) ? 'nav-link-active' : '']"
+                            :class="['nav-link', sidebarCollapsed ? 'justify-center px-0' : '', (route().current(name) || (name === 'tools.index' && route().current('tools.*'))) ? 'nav-link-active' : '']"
                             :title="sidebarCollapsed ? label : undefined"
                         >
                             <component :is="icon" class="h-[18px] w-[18px]" :stroke-width="1.6" />
@@ -634,7 +634,7 @@ const groups = computed(() => {
                                     v-for="[name, label] in group.links"
                                     :key="name"
                                     :href="route(name)"
-                                    :active="route().current(name)"
+                                    :active="route().current(name) || (name === 'tools.index' && route().current('tools.*'))"
                                 >
                                     {{ label }}
                                 </ResponsiveNavLink>

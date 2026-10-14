@@ -25,7 +25,9 @@ class ToolsTest extends TestCase
     {
         $this->get(route('tools.index'))->assertRedirect(route('login'));
         $this->actingAs($this->userWithRole('editor'))->get(route('tools.index'))->assertOk();
+        $this->actingAs($this->userWithRole('editor'))->get(route('tools.compress-pdf'))->assertOk();
         $this->actingAs($this->userWithRole('guest'))->get(route('tools.index'))->assertForbidden();
+        $this->actingAs($this->userWithRole('guest'))->get(route('tools.compress-pdf'))->assertForbidden();
     }
 
     public function test_disabled_tools_section_blocks_employee_but_not_manager(): void
@@ -36,6 +38,7 @@ class ToolsTest extends TestCase
             'section_key' => 'tools', 'enabled' => false, 'created_at' => now(), 'updated_at' => now(),
         ]);
         $this->actingAs($employee)->get(route('tools.index'))->assertStatus(503);
+        $this->actingAs($employee)->get(route('tools.compress-pdf'))->assertStatus(503);
         $this->actingAs($manager)->get(route('tools.index'))->assertOk();
     }
 }

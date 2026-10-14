@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head } from '@inertiajs/vue3';
-import { CircleAlert, Download, FileText, Plus, Trash2, Upload, X } from '@lucide/vue';
+import { Head, Link } from '@inertiajs/vue3';
+import { ArrowLeft, CircleAlert, Download, FileText, Plus, Trash2, Upload, X } from '@lucide/vue';
 import { zipSync } from 'fflate';
 import { computed, ref, watch } from 'vue';
 
@@ -166,8 +166,9 @@ function downloadAll() {
         </template>
         <div class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
-                <div class="flex items-center gap-2 border-b border-gray-200 pb-3 text-sm font-semibold text-[hsl(var(--primary-app))]">
-                    <FileText class="h-4 w-4" :stroke-width="1.7" /> Comprimi PDF
+                <div class="flex items-center gap-3 border-b border-gray-200 pb-3">
+                    <Link :href="route('tools.index')" class="icon-btn h-9 w-9 shrink-0" title="Torna agli strumenti" aria-label="Torna agli strumenti"><ArrowLeft class="h-4 w-4" :stroke-width="1.7" /></Link>
+                    <h3 class="flex items-center gap-2 text-base font-semibold text-gray-900"><FileText class="h-5 w-5 text-[hsl(var(--primary-app))]" :stroke-width="1.7" /> Comprimi PDF</h3>
                 </div>
                 <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
                     <section class="surface min-w-0 p-5 sm:p-6">
