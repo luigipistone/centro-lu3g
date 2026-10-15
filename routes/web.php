@@ -29,6 +29,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/tools/extract-images', fn () => Inertia::render('Centro/ExtractImages'))->name('tools.extract-images');
     Route::get('/tools/images-to-webp', fn () => Inertia::render('Centro/ImagesToWebp'))->name('tools.images-to-webp');
     Route::get('/tools/text-cleaner', fn () => Inertia::render('Centro/TextCleaner'))->name('tools.text-cleaner');
+    Route::get('/tools/styled-text', fn () => Inertia::render('Centro/StyledText'))->name('tools.styled-text');
     Route::post('/clients', [CentroPageController::class, 'store'])->defaults('section', 'clients')->name('clients.store');
     Route::get('/clients/{id}', [CentroPageController::class, 'show'])->defaults('section', 'clients')->name('clients.show');
     Route::put('/clients/{id}', [CentroPageController::class, 'update'])->defaults('section', 'clients')->name('clients.update');
