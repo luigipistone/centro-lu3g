@@ -1,7 +1,9 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import ToolAccordion from '@/Components/ToolAccordion.vue';
+import ToolDropzone from '@/Components/ToolDropzone.vue';
 import { Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft, CircleAlert, Download, FileText, Plus, Trash2, Upload, X } from '@lucide/vue';
+import { ArrowLeft, CircleAlert, Download, FileText, Plus, Trash2, X } from '@lucide/vue';
 import { zipSync } from 'fflate';
 import { computed, ref, watch } from 'vue';
 
@@ -17,7 +19,6 @@ const input = ref(null);
 const files = ref([]);
 const results = ref([]);
 const level = ref('recommended');
-const dragDepth = ref(0);
 const processing = ref(false);
 const processingIndex = ref(0);
 const error = ref('');
@@ -64,7 +65,6 @@ function onInput(event) {
 }
 
 function onDrop(event) {
-    dragDepth.value = 0;
     addFiles(event.dataTransfer?.files);
 }
 
@@ -172,11 +172,7 @@ function downloadAll() {
                             <h3 class="text-base font-semibold text-gray-900">File PDF</h3>
                             <button v-if="files.length" type="button" class="inline-flex items-center gap-1 text-sm font-semibold text-gray-500 hover:text-gray-800" :disabled="processing" @click="clearFiles"><Trash2 class="h-4 w-4" /> Rimuovi tutti</button>
                         </div>
-                        <div role="button" tabindex="0" :aria-label="files.length ? 'Aggiungi PDF' : 'Seleziona o trascina file PDF'" :class="['flex min-h-44 flex-1 cursor-pointer flex-col items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-dashed px-5 py-8 text-center transition focus-visible:outline-2 focus-visible:outline-[hsl(var(--primary-app))]', dragDepth ? 'border-[hsl(var(--primary-app))] bg-[hsl(var(--primary-app)/0.08)]' : 'border-gray-200 bg-gray-50/70 hover:border-[hsl(var(--primary-app)/0.6)] hover:bg-[hsl(var(--primary-app)/0.04)]', processing ? 'pointer-events-none opacity-60' : '']" @click="input?.click()" @keydown.enter.prevent="input?.click()" @keydown.space.prevent="input?.click()" @dragenter.prevent="dragDepth++" @dragover.prevent @dragleave.prevent="dragDepth = Math.max(0, dragDepth - 1)" @drop.prevent="onDrop">
-                            <span class="flex h-12 w-12 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]"><Upload class="h-6 w-6" :stroke-width="1.7" /></span>
-                            <span class="text-sm font-semibold text-gray-800">Trascina qui i PDF o selezionali</span>
-                            <span class="text-xs text-gray-500">Fino a 10 file, 40 MB ciascuno</span>
-                        </div>
+                        <ToolDropzone label="Trascina qui i PDF o selezionali" hint="Fino a 10 file, 40 MB ciascuno" :aria-label="files.length ? 'Aggiungi PDF' : 'Seleziona o trascina file PDF'" :disabled="processing" @select="input?.click()" @drop="onDrop" />
                         <input ref="input" type="file" accept="application/pdf,.pdf" multiple class="hidden" @change="onInput" />
                         <p v-if="error" role="alert" class="mt-3 text-sm text-red-600">{{ error }}</p>
 
@@ -195,13 +191,11 @@ function downloadAll() {
 
                     <section class="surface p-5 sm:p-6">
                         <h3 class="text-base font-semibold text-gray-900">Compressione</h3>
-                        <fieldset class="mt-4 space-y-2" :disabled="processing">
-                            <legend class="sr-only">Livello di compressione</legend>
-                            <label v-for="option in levels" :key="option.value" :class="['flex cursor-pointer items-start gap-3 rounded-[var(--radius-sm)] border px-3 py-3 transition', level === option.value ? 'border-[hsl(var(--primary-app)/0.6)] bg-[hsl(var(--primary-app)/0.06)]' : 'border-gray-200 hover:border-gray-300']">
-                                <input v-model="level" type="radio" name="compression-level" :value="option.value" class="mt-0.5 accent-[hsl(var(--primary-app))]" />
-                                <span class="min-w-0"><span class="block text-sm font-semibold text-gray-900">{{ option.label }}</span><span class="block text-xs text-gray-500">{{ option.detail }}</span></span>
-                            </label>
-                        </fieldset>
+                        <div class="mt-4 divide-y divide-gray-100 overflow-hidden rounded-[var(--radius-sm)] border border-gray-200">
+                            <ToolAccordion v-for="option in levels" :key="option.value" :title="option.label" :summary="level === option.value ? 'Selezionata' : option.detail" :open="level === option.value" :disabled="processing" :panel-id="`compression-${option.value}`" @toggle="level = option.value">
+                                <p class="text-xs text-gray-600">{{ option.detail }}</p>
+                            </ToolAccordion>
+                        </div>
                         <button type="button" class="btn btn-primary mt-5 w-full justify-center" :disabled="!files.length || processing" @click="compress">{{ processing ? `Compressione ${processingIndex}/${files.length}` : 'Comprimi PDF' }}</button>
                         <div v-if="processing" role="progressbar" :aria-valuenow="processingIndex" :aria-valuemax="files.length" aria-valuemin="0" class="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100"><div class="h-full bg-[hsl(var(--primary-app))] transition-all duration-300" :style="{ width: `${(processingIndex / files.length) * 100}%` }" /></div>
                         <p class="mt-4 flex items-start gap-2 text-xs text-gray-500"><CircleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" /> PDF firmati digitalmente o interattivi potrebbero perdere la validità della firma o alcune funzioni.</p>

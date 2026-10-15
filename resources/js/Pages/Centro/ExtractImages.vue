@@ -1,7 +1,9 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import ToolAccordion from '@/Components/ToolAccordion.vue';
+import ToolDropzone from '@/Components/ToolDropzone.vue';
 import { Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft, Download, FileImage, Images, Plus, Trash2, Upload, X } from '@lucide/vue';
+import { ArrowLeft, Download, FileImage, Images, Plus, Trash2, X } from '@lucide/vue';
 import { zip } from 'fflate';
 import * as pdfjs from 'pdfjs-dist/build/pdf.mjs';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -21,7 +23,7 @@ const pageMode = ref('all');
 const pageRange = ref('');
 const processing = ref(false);
 const progress = ref('');
-const dragDepth = ref(0);
+const openSetting = ref('format');
 const error = ref('');
 const extracted = ref([]);
 const archive = ref(null);
@@ -66,7 +68,6 @@ function onInput(event) {
 }
 
 function onDrop(event) {
-    dragDepth.value = 0;
     addFiles(event.dataTransfer?.files);
 }
 
@@ -280,25 +281,29 @@ function downloadZip() {
                 <div class="grid items-stretch gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
                     <section class="surface flex min-w-0 flex-col p-5 sm:p-6">
                         <div class="mb-5 flex items-center justify-between gap-3"><h3 class="text-base font-semibold text-gray-900">PDF</h3><button v-if="files.length" type="button" class="inline-flex items-center gap-1 text-sm font-semibold text-gray-500 hover:text-gray-800" :disabled="processing" @click="files = []"><Trash2 class="h-4 w-4" /> Rimuovi tutti</button></div>
-                        <div role="button" tabindex="0" aria-label="Seleziona o trascina PDF" :class="['flex min-h-44 flex-1 cursor-pointer flex-col items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-dashed px-5 py-8 text-center transition focus-visible:outline-2 focus-visible:outline-[hsl(var(--primary-app))]', dragDepth ? 'border-[hsl(var(--primary-app))] bg-[hsl(var(--primary-app)/0.08)]' : 'border-gray-200 bg-gray-50/70 hover:border-[hsl(var(--primary-app)/0.6)] hover:bg-[hsl(var(--primary-app)/0.04)]', processing ? 'pointer-events-none opacity-60' : '']" @click="input?.click()" @keydown.enter.prevent="input?.click()" @keydown.space.prevent="input?.click()" @dragenter.prevent="dragDepth++" @dragover.prevent @dragleave.prevent="dragDepth = Math.max(0, dragDepth - 1)" @drop.prevent="onDrop">
-                            <span class="flex h-12 w-12 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]"><Upload class="h-6 w-6" :stroke-width="1.7" /></span>
-                            <span class="text-sm font-semibold text-gray-800">Trascina qui i PDF o selezionali</span>
-                            <span class="text-xs text-gray-500">Fino a 20 PDF · 100 MB complessivi</span>
-                        </div>
+                        <ToolDropzone label="Trascina qui i PDF o selezionali" hint="Fino a 20 PDF · 100 MB complessivi" aria-label="Seleziona o trascina PDF" :disabled="processing" @select="input?.click()" @drop="onDrop" />
                         <input ref="input" type="file" accept="application/pdf,.pdf" multiple class="hidden" @change="onInput" />
                         <div v-if="files.length" class="mt-5 min-w-0">
                             <div class="mb-2 flex items-center justify-between text-xs font-semibold text-gray-500"><span>{{ files.length }} PDF</span><span>{{ formatBytes(files.reduce((sum, entry) => sum + entry.file.size, 0)) }}</span></div>
-                            <div class="max-h-[420px] divide-y divide-gray-100 overflow-y-auto border-y border-gray-100">
-                                <div v-for="entry in files" :key="entry.id" class="flex min-w-0 items-center gap-3 py-3"><span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.08)] text-[hsl(var(--primary-app))]"><FileImage class="h-5 w-5" /></span><div class="min-w-0 flex-1"><p class="truncate text-sm font-semibold text-gray-800">{{ entry.file.name }}</p><p class="text-xs text-gray-500">{{ formatBytes(entry.file.size) }}</p></div><button type="button" class="icon-btn h-8 w-8 shrink-0" :title="`Rimuovi ${entry.file.name}`" :disabled="processing" @click="removeFile(entry.id)"><X class="h-4 w-4" /></button></div>
+                            <div class="max-h-[420px] divide-y divide-gray-100 overflow-y-auto rounded-[var(--radius-sm)] border border-gray-100">
+                                <div v-for="entry in files" :key="entry.id" class="flex min-w-0 items-center gap-3 px-3 py-3"><span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.08)] text-[hsl(var(--primary-app))]"><FileImage class="h-5 w-5" /></span><div class="min-w-0 flex-1"><p class="truncate text-sm font-semibold text-gray-800">{{ entry.file.name }}</p><p class="text-xs text-gray-500">{{ formatBytes(entry.file.size) }}</p></div><button type="button" class="icon-btn h-8 w-8 shrink-0" :title="`Rimuovi ${entry.file.name}`" :disabled="processing" @click="removeFile(entry.id)"><X class="h-4 w-4" /></button></div>
                             </div>
                             <button type="button" class="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-[hsl(var(--primary-app))]" :disabled="processing" @click="input?.click()"><Plus class="h-4 w-4" /> Aggiungi PDF</button>
                         </div>
                     </section>
                     <section class="surface p-5 sm:p-6">
                         <h3 class="text-base font-semibold text-gray-900">Impostazioni</h3>
-                        <fieldset class="mt-5" :disabled="processing"><legend class="mb-2 text-sm font-semibold text-gray-800">Formato immagini</legend><div class="grid grid-cols-3 rounded-[var(--radius-sm)] bg-gray-100 p-1"><button v-for="option in [{ value: 'png', label: 'PNG' }, { value: 'jpg', label: 'JPEG' }, { value: 'webp', label: 'WebP' }]" :key="option.value" type="button" :aria-pressed="format === option.value" :class="['min-h-9 rounded-[var(--radius-sm)] px-2 text-sm font-semibold transition', format === option.value ? 'bg-white text-[hsl(var(--primary-app))] shadow-sm' : 'text-gray-600']" @click="format = option.value">{{ option.label }}</button></div></fieldset>
-                        <label class="mt-5 flex items-center gap-2 text-sm text-gray-700"><input v-model="removeDuplicates" type="checkbox" :disabled="processing" class="rounded border-gray-300 text-[hsl(var(--primary-app))]" /> Escludi immagini duplicate</label>
-                        <fieldset class="mt-5" :disabled="processing"><legend class="mb-2 text-sm font-semibold text-gray-800">Pagine</legend><div class="grid grid-cols-2 rounded-[var(--radius-sm)] bg-gray-100 p-1"><button v-for="option in [{ value: 'all', label: 'Tutte' }, { value: 'custom', label: 'Seleziona' }]" :key="option.value" type="button" :aria-pressed="pageMode === option.value" :class="['min-h-9 rounded-[var(--radius-sm)] px-2 text-sm font-semibold transition', pageMode === option.value ? 'bg-white text-[hsl(var(--primary-app))] shadow-sm' : 'text-gray-600']" @click="pageMode = option.value">{{ option.label }}</button></div><input v-if="pageMode === 'custom'" v-model="pageRange" type="text" placeholder="Es. 1-3,5" aria-label="Intervallo pagine" class="mt-3 block w-full rounded-[var(--radius-sm)] border-gray-200 text-sm" /></fieldset>
+                        <div class="mt-4 divide-y divide-gray-100 overflow-hidden rounded-[var(--radius-sm)] border border-gray-200">
+                            <ToolAccordion title="Formato immagini" :summary="format === 'jpg' ? 'JPEG' : format === 'webp' ? 'WebP' : 'PNG'" :open="openSetting === 'format'" :disabled="processing" panel-id="extract-image-format" @toggle="openSetting = openSetting === 'format' ? '' : 'format'">
+                                <div class="grid grid-cols-3 gap-2"><button v-for="option in [{ value: 'png', label: 'PNG' }, { value: 'jpg', label: 'JPEG' }, { value: 'webp', label: 'WebP' }]" :key="option.value" type="button" :aria-pressed="format === option.value" :class="['rounded-[var(--radius-sm)] border px-2 py-2 text-sm transition', format === option.value ? 'border-[hsl(var(--primary-app)/0.6)] bg-[hsl(var(--primary-app)/0.06)] font-semibold text-[hsl(var(--primary-app))]' : 'border-gray-200 text-gray-700 hover:border-gray-300']" @click="format = option.value">{{ option.label }}</button></div>
+                            </ToolAccordion>
+                            <ToolAccordion title="Pagine" :summary="pageMode === 'all' ? 'Tutte' : pageRange || 'Selezionate'" :open="openSetting === 'pages'" :disabled="processing" panel-id="extract-image-pages" @toggle="openSetting = openSetting === 'pages' ? '' : 'pages'">
+                                <div class="grid grid-cols-2 gap-2"><button v-for="option in [{ value: 'all', label: 'Tutte' }, { value: 'custom', label: 'Seleziona' }]" :key="option.value" type="button" :aria-pressed="pageMode === option.value" :class="['rounded-[var(--radius-sm)] border px-2 py-2 text-sm transition', pageMode === option.value ? 'border-[hsl(var(--primary-app)/0.6)] bg-[hsl(var(--primary-app)/0.06)] font-semibold text-[hsl(var(--primary-app))]' : 'border-gray-200 text-gray-700 hover:border-gray-300']" @click="pageMode = option.value">{{ option.label }}</button></div><input v-if="pageMode === 'custom'" v-model="pageRange" type="text" placeholder="Es. 1-3,5" aria-label="Intervallo pagine" class="mt-3 block w-full rounded-[var(--radius-sm)] border-gray-200 text-sm" />
+                            </ToolAccordion>
+                            <ToolAccordion title="Duplicati" :summary="removeDuplicates ? 'Escludi immagini duplicate' : 'Mantieni tutte le immagini'" :open="openSetting === 'duplicates'" :disabled="processing" panel-id="extract-image-duplicates" @toggle="openSetting = openSetting === 'duplicates' ? '' : 'duplicates'">
+                                <label class="flex items-center gap-2 text-sm text-gray-700"><input v-model="removeDuplicates" type="checkbox" class="rounded border-gray-300 text-[hsl(var(--primary-app))]" /> Escludi immagini duplicate</label>
+                            </ToolAccordion>
+                        </div>
                         <button type="button" class="btn btn-primary mt-6 w-full justify-center" :disabled="!files.length || processing" @click="convert"><Images class="h-4 w-4" /> {{ processing ? 'Estrazione in corso...' : 'Estrai immagini' }}</button>
                         <p v-if="processing" role="status" class="mt-3 text-center text-xs text-gray-500">{{ progress }}</p>
                     </section>

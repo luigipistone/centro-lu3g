@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import ToolDropzone from '@/Components/ToolDropzone.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { ArrowLeft, ChevronDown, Download, FileText, Plus, Scissors, Trash2, Upload, X } from '@lucide/vue';
 import { zipSync } from 'fflate';
@@ -10,7 +11,6 @@ const maxFileBytes = 40 * 1024 * 1024;
 const input = ref(null);
 const file = ref(null);
 const pageCount = ref(0);
-const dragDepth = ref(0);
 const loading = ref(false);
 const processing = ref(false);
 const progress = ref(0);
@@ -85,7 +85,6 @@ function onInput(event) {
 }
 
 function onDrop(event) {
-    dragDepth.value = 0;
     selectFile(event.dataTransfer?.files);
 }
 
@@ -208,11 +207,7 @@ function download(data, name, type = 'application/pdf') {
                 <div class="grid items-stretch gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
                     <section class="surface flex min-w-0 flex-col p-5 sm:p-6">
                         <div class="mb-5 flex items-center justify-between gap-3"><h3 class="text-base font-semibold text-gray-900">File PDF</h3><button v-if="file" type="button" class="inline-flex items-center gap-1 text-sm font-semibold text-gray-500 hover:text-gray-800" :disabled="processing" @click="clearFile"><Trash2 class="h-4 w-4" /> Rimuovi</button></div>
-                        <div role="button" tabindex="0" aria-label="Seleziona o trascina un PDF" :class="['flex min-h-44 flex-1 cursor-pointer flex-col items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-dashed px-5 py-8 text-center transition focus-visible:outline-2 focus-visible:outline-[hsl(var(--primary-app))]', dragDepth ? 'border-[hsl(var(--primary-app))] bg-[hsl(var(--primary-app)/0.08)]' : 'border-gray-200 bg-gray-50/70 hover:border-[hsl(var(--primary-app)/0.6)] hover:bg-[hsl(var(--primary-app)/0.04)]', processing || loading ? 'pointer-events-none opacity-60' : '']" @click="input?.click()" @keydown.enter.prevent="input?.click()" @keydown.space.prevent="input?.click()" @dragenter.prevent="dragDepth++" @dragover.prevent @dragleave.prevent="dragDepth = Math.max(0, dragDepth - 1)" @drop.prevent="onDrop">
-                            <span class="flex h-12 w-12 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]"><Upload class="h-6 w-6" :stroke-width="1.7" /></span>
-                            <span class="text-sm font-semibold text-gray-800">{{ loading ? 'Lettura del PDF...' : 'Trascina qui un PDF o selezionalo' }}</span>
-                            <span class="text-xs text-gray-500">Un file fino a 40 MB</span>
-                        </div>
+                        <ToolDropzone :label="loading ? 'Lettura del PDF...' : 'Trascina qui un PDF o selezionalo'" hint="Un file fino a 40 MB" aria-label="Seleziona o trascina un PDF" :disabled="processing || loading" @select="input?.click()" @drop="onDrop" />
                         <input ref="input" type="file" accept="application/pdf,.pdf" class="hidden" @change="onInput" />
                         <div v-if="file" class="mt-5 flex min-w-0 items-center gap-3 rounded-[var(--radius-sm)] border border-gray-100 px-3 py-3"><FileText class="h-5 w-5 shrink-0 text-[hsl(var(--primary-app))]" :stroke-width="1.7" /><div class="min-w-0 flex-1"><p class="truncate text-sm font-semibold text-gray-800">{{ file.name }}</p><p class="text-xs text-gray-500">{{ pageCount }} pagine · {{ formatBytes(file.size) }}</p></div><button type="button" class="icon-btn h-8 w-8 shrink-0" :disabled="processing" title="Sostituisci PDF" @click="input?.click()"><Upload class="h-4 w-4" /></button></div>
                     </section>

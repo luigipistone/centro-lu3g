@@ -1,7 +1,9 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import ToolAccordion from '@/Components/ToolAccordion.vue';
+import ToolDropzone from '@/Components/ToolDropzone.vue';
 import { Head, Link } from '@inertiajs/vue3';
-import { ArrowDown, ArrowLeft, ArrowUp, Download, FileImage, GripVertical, Plus, RotateCw, Trash2, Upload, X } from '@lucide/vue';
+import { ArrowDown, ArrowLeft, ArrowUp, Download, FileImage, GripVertical, Plus, RotateCw, Trash2, X } from '@lucide/vue';
 import { zipSync } from 'fflate';
 import { PDFDocument, rgb } from 'pdf-lib';
 import { onBeforeUnmount, ref, watch } from 'vue';
@@ -14,7 +16,7 @@ const images = ref([]);
 const loading = ref(false);
 const processing = ref(false);
 const progress = ref(0);
-const dragDepth = ref(0);
+const openSetting = ref('pageSize');
 const draggedId = ref(null);
 const orientation = ref('portrait');
 const pageSize = ref('fit');
@@ -84,7 +86,6 @@ function onInput(event) {
 }
 
 function onDrop(event) {
-    dragDepth.value = 0;
     addFiles(event.dataTransfer?.files);
 }
 
@@ -241,16 +242,12 @@ function download() {
                 <div class="grid items-stretch gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
                     <section class="surface flex min-w-0 flex-col p-5 sm:p-6">
                         <div class="mb-5 flex items-center justify-between gap-3"><h3 class="text-base font-semibold text-gray-900">Immagini</h3><button v-if="images.length" type="button" class="inline-flex items-center gap-1 text-sm font-semibold text-gray-500 hover:text-gray-800" :disabled="processing || loading" @click="clearImages"><Trash2 class="h-4 w-4" /> Rimuovi tutte</button></div>
-                        <div role="button" tabindex="0" aria-label="Seleziona o trascina immagini" :class="['flex min-h-44 flex-1 cursor-pointer flex-col items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-dashed px-5 py-8 text-center transition focus-visible:outline-2 focus-visible:outline-[hsl(var(--primary-app))]', dragDepth ? 'border-[hsl(var(--primary-app))] bg-[hsl(var(--primary-app)/0.08)]' : 'border-gray-200 bg-gray-50/70 hover:border-[hsl(var(--primary-app)/0.6)] hover:bg-[hsl(var(--primary-app)/0.04)]', processing || loading ? 'pointer-events-none opacity-60' : '']" @click="input?.click()" @keydown.enter.prevent="input?.click()" @keydown.space.prevent="input?.click()" @dragenter.prevent="dragDepth++" @dragover.prevent @dragleave.prevent="dragDepth = Math.max(0, dragDepth - 1)" @drop.prevent="onDrop">
-                            <span class="flex h-12 w-12 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]"><Upload class="h-6 w-6" :stroke-width="1.7" /></span>
-                            <span class="text-sm font-semibold text-gray-800">{{ loading ? 'Lettura delle immagini...' : 'Trascina qui le immagini o selezionale' }}</span>
-                            <span class="text-xs text-gray-500">JPG, JPEG, PNG o WebP · fino a 100 immagini</span>
-                        </div>
+                        <ToolDropzone :label="loading ? 'Lettura delle immagini...' : 'Trascina qui le immagini o selezionale'" hint="JPG, JPEG, PNG o WebP · fino a 100 immagini" aria-label="Seleziona o trascina immagini" :disabled="processing || loading" @select="input?.click()" @drop="onDrop" />
                         <input ref="input" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple class="hidden" @change="onInput" />
                         <div v-if="images.length" class="mt-5 min-w-0">
                             <div class="mb-2 flex items-center justify-between text-xs font-semibold text-gray-500"><span>{{ images.length }} {{ images.length === 1 ? 'immagine' : 'immagini' }}</span><span>{{ formatBytes(images.reduce((sum, image) => sum + image.file.size, 0)) }}</span></div>
-                            <div class="max-h-[420px] divide-y divide-gray-100 overflow-y-auto border-y border-gray-100">
-                                <div v-for="(image, index) in images" :key="image.id" draggable="true" :class="['flex min-w-0 flex-wrap items-center gap-2 py-2.5 transition sm:flex-nowrap', draggedId === image.id ? 'opacity-50' : '']" @dragstart="draggedId = image.id" @dragend="draggedId = null" @dragover.prevent @drop.prevent="onSortDrop(image.id)">
+                            <div class="max-h-[420px] divide-y divide-gray-100 overflow-y-auto rounded-[var(--radius-sm)] border border-gray-100">
+                                <div v-for="(image, index) in images" :key="image.id" draggable="true" :class="['flex min-w-0 flex-wrap items-center gap-2 px-3 py-2.5 transition sm:flex-nowrap', draggedId === image.id ? 'opacity-50' : '']" @dragstart="draggedId = image.id" @dragend="draggedId = null" @dragover.prevent @drop.prevent="onSortDrop(image.id)">
                                     <GripVertical class="hidden h-4 w-4 shrink-0 cursor-grab text-gray-300 sm:block" :stroke-width="1.7" />
                                     <div class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-sm)] bg-gray-50"><img :src="image.preview" :alt="image.file.name" class="max-h-full max-w-full object-contain" :style="{ transform: `rotate(${image.rotation}deg)` }" /></div>
                                     <div class="min-w-0 flex-1"><p class="truncate text-sm font-semibold text-gray-800">{{ image.file.name }}</p><p class="text-xs text-gray-500">{{ image.width }} × {{ image.height }} · {{ formatBytes(image.file.size) }}</p></div>
@@ -262,11 +259,23 @@ function download() {
                     </section>
                     <section class="surface p-5 sm:p-6">
                         <h3 class="text-base font-semibold text-gray-900">Impostazioni PDF</h3>
-                        <fieldset class="mt-5" :disabled="processing"><legend class="mb-2 text-sm font-semibold text-gray-800">Orientamento</legend><div class="grid grid-cols-2 rounded-[var(--radius-sm)] bg-gray-100 p-1"><button v-for="option in [{ value: 'portrait', label: 'Verticale' }, { value: 'landscape', label: 'Orizzontale' }]" :key="option.value" type="button" :aria-pressed="orientation === option.value" :class="['min-h-9 rounded-[var(--radius-sm)] px-2 text-sm font-semibold transition', orientation === option.value ? 'bg-white text-[hsl(var(--primary-app))] shadow-sm' : 'text-gray-600']" @click="orientation = option.value">{{ option.label }}</button></div></fieldset>
-                        <label class="mt-5 block text-sm font-semibold text-gray-800">Formato pagina<select v-model="pageSize" :disabled="processing" class="mt-2 block w-full rounded-[var(--radius-sm)] border-gray-200 text-sm"><option value="fit">Adatta all’immagine</option><option value="a4">A4</option><option value="letter">US Letter</option></select></label>
-                        <fieldset class="mt-5" :disabled="processing"><legend class="mb-2 text-sm font-semibold text-gray-800">Margini</legend><div class="grid grid-cols-3 gap-2"><label v-for="option in [{ value: 0, label: 'Nessuno' }, { value: 20, label: 'Piccoli' }, { value: 40, label: 'Grandi' }]" :key="option.value" :class="['flex min-h-10 cursor-pointer items-center justify-center rounded-[var(--radius-sm)] border px-2 text-center text-xs font-semibold transition', margin === option.value ? 'border-[hsl(var(--primary-app)/0.6)] bg-[hsl(var(--primary-app)/0.06)] text-[hsl(var(--primary-app))]' : 'border-gray-200 text-gray-600 hover:border-gray-300']"><input v-model.number="margin" type="radio" name="pdf-margin" :value="option.value" class="sr-only" />{{ option.label }}</label></div></fieldset>
-                        <fieldset class="mt-5" :disabled="processing"><legend class="mb-2 text-sm font-semibold text-gray-800">Posizionamento</legend><div class="grid grid-cols-2 rounded-[var(--radius-sm)] bg-gray-100 p-1"><button v-for="option in [{ value: 'cover', label: 'Riempi pagina' }, { value: 'contain', label: 'Immagine intera' }]" :key="option.value" type="button" :aria-pressed="placement === option.value" :class="['min-h-9 rounded-[var(--radius-sm)] px-2 text-sm font-semibold transition', placement === option.value ? 'bg-white text-[hsl(var(--primary-app))] shadow-sm' : 'text-gray-600']" @click="placement = option.value">{{ option.label }}</button></div><p class="mt-2 text-xs text-gray-500">{{ placement === 'cover' ? 'Riempie la pagina: i bordi dell’immagine possono essere ritagliati.' : 'Mostra tutta l’immagine: possono restare spazi bianchi.' }}</p></fieldset>
-                        <label class="mt-5 flex items-center gap-2 text-sm text-gray-700"><input v-model="merge" type="checkbox" :disabled="processing" class="rounded border-gray-300 text-[hsl(var(--primary-app))]" /> Un PDF unico</label>
+                        <div class="mt-4 divide-y divide-gray-100 overflow-hidden rounded-[var(--radius-sm)] border border-gray-200">
+                            <ToolAccordion title="Formato pagina" :summary="{ fit: 'Adatta all’immagine', a4: 'A4', letter: 'US Letter' }[pageSize]" :open="openSetting === 'pageSize'" :disabled="processing" panel-id="image-pdf-page-size" @toggle="openSetting = openSetting === 'pageSize' ? '' : 'pageSize'">
+                                <div class="grid gap-2"><button v-for="option in [{ value: 'fit', label: 'Adatta all’immagine' }, { value: 'a4', label: 'A4' }, { value: 'letter', label: 'US Letter' }]" :key="option.value" type="button" :aria-pressed="pageSize === option.value" :class="['rounded-[var(--radius-sm)] border px-3 py-2 text-left text-sm transition', pageSize === option.value ? 'border-[hsl(var(--primary-app)/0.6)] bg-[hsl(var(--primary-app)/0.06)] font-semibold text-[hsl(var(--primary-app))]' : 'border-gray-200 text-gray-700 hover:border-gray-300']" @click="pageSize = option.value">{{ option.label }}</button></div>
+                            </ToolAccordion>
+                            <ToolAccordion title="Orientamento" :summary="orientation === 'portrait' ? 'Verticale' : 'Orizzontale'" :open="openSetting === 'orientation'" :disabled="processing" panel-id="image-pdf-orientation" @toggle="openSetting = openSetting === 'orientation' ? '' : 'orientation'">
+                                <div class="grid grid-cols-2 gap-2"><button v-for="option in [{ value: 'portrait', label: 'Verticale' }, { value: 'landscape', label: 'Orizzontale' }]" :key="option.value" type="button" :aria-pressed="orientation === option.value" :class="['rounded-[var(--radius-sm)] border px-2 py-2 text-sm transition', orientation === option.value ? 'border-[hsl(var(--primary-app)/0.6)] bg-[hsl(var(--primary-app)/0.06)] font-semibold text-[hsl(var(--primary-app))]' : 'border-gray-200 text-gray-700 hover:border-gray-300']" @click="orientation = option.value">{{ option.label }}</button></div>
+                            </ToolAccordion>
+                            <ToolAccordion title="Margini" :summary="margin === 0 ? 'Nessuno' : margin === 20 ? 'Piccoli' : 'Grandi'" :open="openSetting === 'margin'" :disabled="processing" panel-id="image-pdf-margin" @toggle="openSetting = openSetting === 'margin' ? '' : 'margin'">
+                                <div class="grid grid-cols-3 gap-2"><button v-for="option in [{ value: 0, label: 'Nessuno' }, { value: 20, label: 'Piccoli' }, { value: 40, label: 'Grandi' }]" :key="option.value" type="button" :aria-pressed="margin === option.value" :class="['rounded-[var(--radius-sm)] border px-2 py-2 text-xs transition', margin === option.value ? 'border-[hsl(var(--primary-app)/0.6)] bg-[hsl(var(--primary-app)/0.06)] font-semibold text-[hsl(var(--primary-app))]' : 'border-gray-200 text-gray-700 hover:border-gray-300']" @click="margin = option.value">{{ option.label }}</button></div>
+                            </ToolAccordion>
+                            <ToolAccordion title="Posizionamento" :summary="placement === 'cover' ? 'Riempi pagina' : 'Immagine intera'" :open="openSetting === 'placement'" :disabled="processing" panel-id="image-pdf-placement" @toggle="openSetting = openSetting === 'placement' ? '' : 'placement'">
+                                <div class="grid grid-cols-2 gap-2"><button v-for="option in [{ value: 'cover', label: 'Riempi pagina' }, { value: 'contain', label: 'Immagine intera' }]" :key="option.value" type="button" :aria-pressed="placement === option.value" :class="['rounded-[var(--radius-sm)] border px-2 py-2 text-xs transition', placement === option.value ? 'border-[hsl(var(--primary-app)/0.6)] bg-[hsl(var(--primary-app)/0.06)] font-semibold text-[hsl(var(--primary-app))]' : 'border-gray-200 text-gray-700 hover:border-gray-300']" @click="placement = option.value">{{ option.label }}</button></div><p class="mt-2 text-xs text-gray-500">{{ placement === 'cover' ? 'I bordi dell’immagine possono essere ritagliati.' : 'Possono restare spazi bianchi.' }}</p>
+                            </ToolAccordion>
+                            <ToolAccordion title="Output" :summary="merge ? 'Un PDF unico' : 'Un PDF per immagine'" :open="openSetting === 'output'" :disabled="processing" panel-id="image-pdf-output" @toggle="openSetting = openSetting === 'output' ? '' : 'output'">
+                                <label class="flex items-center gap-2 text-sm text-gray-700"><input v-model="merge" type="checkbox" class="rounded border-gray-300 text-[hsl(var(--primary-app))]" /> Un PDF unico</label>
+                            </ToolAccordion>
+                        </div>
                         <button type="button" class="btn btn-primary mt-5 w-full justify-center" :disabled="!images.length || processing || loading" @click="convert"><FileImage class="h-4 w-4" /> {{ processing ? `Conversione ${progress}/${images.length}` : 'Converti in PDF' }}</button>
                         <div v-if="processing" role="progressbar" :aria-valuenow="progress" :aria-valuemax="images.length" aria-valuemin="0" class="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100"><div class="h-full bg-[hsl(var(--primary-app))] transition-all duration-300" :style="{ width: `${Math.max(5, progress / images.length * 100)}%` }" /></div>
                     </section>
