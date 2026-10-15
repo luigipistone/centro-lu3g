@@ -17,7 +17,7 @@ log() {
 
 cleanup() {
     if [ "$MAINTENANCE_ENABLED" -eq 1 ]; then
-        "$PHP_BIN" "$APP_DIR/artisan" up || true
+        log "ERROR: deployment stopped after the switch; production remains in maintenance mode"
     fi
     if [ -n "$STAGE_DIR" ]; then
         rm -rf -- "$STAGE_DIR"

@@ -69,8 +69,9 @@ Installa le dipendenze PHP e frontend e compila gli asset Vite in una cartella
 temporanea fuori dal sito attivo.
 Solo dopo una compilazione riuscita mette brevemente Laravel in manutenzione,
 aggiorna il codice e le dipendenze PHP, pubblica gli asset gia' pronti, lancia
-le migrazioni e rigenera le cache. Poi riapre il sito. In caso di errore prova
-comunque a disattivare la manutenzione e rimuove la cartella temporanea.
+le migrazioni e rigenera le cache. Poi riapre il sito. Se il passaggio finale
+fallisce, lascia il sito in manutenzione per evitare di esporre una versione
+incompleta; il deploy va corretto e ripetuto. La cartella temporanea viene rimossa.
 Il runtime Node usato in produzione e' `/opt/plesk/node/20/bin`.
 
 ## Stato migrazione
