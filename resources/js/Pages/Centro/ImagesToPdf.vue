@@ -3,7 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { ArrowDown, ArrowLeft, ArrowUp, Download, FileImage, GripVertical, Plus, RotateCw, Trash2, Upload, X } from '@lucide/vue';
 import { zipSync } from 'fflate';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, rgb } from 'pdf-lib';
 import { onBeforeUnmount, ref, watch } from 'vue';
 
 const maxFiles = 100;
@@ -19,11 +19,12 @@ const draggedId = ref(null);
 const orientation = ref('portrait');
 const pageSize = ref('fit');
 const margin = ref(0);
+const placement = ref('cover');
 const merge = ref(true);
 const result = ref(null);
 const error = ref('');
 
-watch([orientation, pageSize, margin, merge, images], () => { result.value = null; }, { deep: true });
+watch([orientation, pageSize, margin, placement, merge, images], () => { result.value = null; }, { deep: true });
 onBeforeUnmount(() => images.value.forEach(image => URL.revokeObjectURL(image.preview)));
 
 function formatBytes(bytes) {
@@ -157,11 +158,22 @@ async function addPage(pdf, entry) {
     const inset = Math.min(Number(margin.value), Math.min(width, height) / 3);
     const availableWidth = width - inset * 2;
     const availableHeight = height - inset * 2;
-    const imageScale = Math.min(availableWidth / embedded.width, availableHeight / embedded.height);
+    const scaleToWidth = availableWidth / embedded.width;
+    const scaleToHeight = availableHeight / embedded.height;
+    const imageScale = placement.value === 'cover'
+        ? Math.max(scaleToWidth, scaleToHeight)
+        : Math.min(scaleToWidth, scaleToHeight);
     const drawWidth = embedded.width * imageScale;
     const drawHeight = embedded.height * imageScale;
     const page = pdf.addPage([width, height]);
     page.drawImage(embedded, { x: (width - drawWidth) / 2, y: (height - drawHeight) / 2, width: drawWidth, height: drawHeight });
+    if (placement.value === 'cover' && inset > 0) {
+        const white = rgb(1, 1, 1);
+        page.drawRectangle({ x: 0, y: 0, width, height: inset, color: white });
+        page.drawRectangle({ x: 0, y: height - inset, width, height: inset, color: white });
+        page.drawRectangle({ x: 0, y: inset, width: inset, height: availableHeight, color: white });
+        page.drawRectangle({ x: width - inset, y: inset, width: inset, height: availableHeight, color: white });
+    }
 }
 
 function outputName(name) {
@@ -253,6 +265,7 @@ function download() {
                         <fieldset class="mt-5" :disabled="processing"><legend class="mb-2 text-sm font-semibold text-gray-800">Orientamento</legend><div class="grid grid-cols-2 rounded-[var(--radius-sm)] bg-gray-100 p-1"><button v-for="option in [{ value: 'portrait', label: 'Verticale' }, { value: 'landscape', label: 'Orizzontale' }]" :key="option.value" type="button" :aria-pressed="orientation === option.value" :class="['min-h-9 rounded-[var(--radius-sm)] px-2 text-sm font-semibold transition', orientation === option.value ? 'bg-white text-[hsl(var(--primary-app))] shadow-sm' : 'text-gray-600']" @click="orientation = option.value">{{ option.label }}</button></div></fieldset>
                         <label class="mt-5 block text-sm font-semibold text-gray-800">Formato pagina<select v-model="pageSize" :disabled="processing" class="mt-2 block w-full rounded-[var(--radius-sm)] border-gray-200 text-sm"><option value="fit">Adatta all’immagine</option><option value="a4">A4</option><option value="letter">US Letter</option></select></label>
                         <fieldset class="mt-5" :disabled="processing"><legend class="mb-2 text-sm font-semibold text-gray-800">Margini</legend><div class="grid grid-cols-3 gap-2"><label v-for="option in [{ value: 0, label: 'Nessuno' }, { value: 20, label: 'Piccoli' }, { value: 40, label: 'Grandi' }]" :key="option.value" :class="['flex min-h-10 cursor-pointer items-center justify-center rounded-[var(--radius-sm)] border px-2 text-center text-xs font-semibold transition', margin === option.value ? 'border-[hsl(var(--primary-app)/0.6)] bg-[hsl(var(--primary-app)/0.06)] text-[hsl(var(--primary-app))]' : 'border-gray-200 text-gray-600 hover:border-gray-300']"><input v-model.number="margin" type="radio" name="pdf-margin" :value="option.value" class="sr-only" />{{ option.label }}</label></div></fieldset>
+                        <fieldset class="mt-5" :disabled="processing"><legend class="mb-2 text-sm font-semibold text-gray-800">Posizionamento</legend><div class="grid grid-cols-2 rounded-[var(--radius-sm)] bg-gray-100 p-1"><button v-for="option in [{ value: 'cover', label: 'Riempi pagina' }, { value: 'contain', label: 'Immagine intera' }]" :key="option.value" type="button" :aria-pressed="placement === option.value" :class="['min-h-9 rounded-[var(--radius-sm)] px-2 text-sm font-semibold transition', placement === option.value ? 'bg-white text-[hsl(var(--primary-app))] shadow-sm' : 'text-gray-600']" @click="placement = option.value">{{ option.label }}</button></div><p class="mt-2 text-xs text-gray-500">{{ placement === 'cover' ? 'Riempie la pagina: i bordi dell’immagine possono essere ritagliati.' : 'Mostra tutta l’immagine: possono restare spazi bianchi.' }}</p></fieldset>
                         <label class="mt-5 flex items-center gap-2 text-sm text-gray-700"><input v-model="merge" type="checkbox" :disabled="processing" class="rounded border-gray-300 text-[hsl(var(--primary-app))]" /> Un PDF unico</label>
                         <button type="button" class="btn btn-primary mt-5 w-full justify-center" :disabled="!images.length || processing || loading" @click="convert"><FileImage class="h-4 w-4" /> {{ processing ? `Conversione ${progress}/${images.length}` : 'Converti in PDF' }}</button>
                         <div v-if="processing" role="progressbar" :aria-valuenow="progress" :aria-valuemax="images.length" aria-valuemin="0" class="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100"><div class="h-full bg-[hsl(var(--primary-app))] transition-all duration-300" :style="{ width: `${Math.max(5, progress / images.length * 100)}%` }" /></div>
