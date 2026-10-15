@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft, CircleAlert, Download, FileText, Plus, Scissors, Trash2, Upload, X } from '@lucide/vue';
+import { ArrowLeft, ChevronDown, Download, FileText, Plus, Scissors, Trash2, Upload, X } from '@lucide/vue';
 import { zipSync } from 'fflate';
 import { PDFDocument } from 'pdf-lib';
 import { computed, ref, watch } from 'vue';
@@ -24,9 +24,9 @@ const result = ref(null);
 const error = ref('');
 const baseName = computed(() => file.value?.name.replace(/\.pdf$/i, '') || 'documento');
 const modes = [
-    { value: 'extract', label: 'Estrai pagine' },
-    { value: 'ranges', label: 'Intervalli' },
-    { value: 'fixed', label: 'Ogni N pagine' },
+    { value: 'extract', label: 'Estrai pagine', description: 'Un PDF per ogni pagina scelta' },
+    { value: 'ranges', label: 'Intervalli', description: 'Un PDF per ogni intervallo indicato' },
+    { value: 'fixed', label: 'Ogni N pagine', description: 'Dividi il documento in parti uguali' },
 ];
 const plannedCount = computed(() => {
     if (!file.value) return 0;
@@ -218,14 +218,36 @@ function download(data, name, type = 'application/pdf') {
                     </section>
                     <section class="surface p-5 sm:p-6">
                         <h3 class="text-base font-semibold text-gray-900">Divisione</h3>
-                        <div class="mt-4 grid grid-cols-3 rounded-[var(--radius-sm)] bg-gray-100 p-1" role="group" aria-label="Modalità di divisione"><button v-for="option in modes" :key="option.value" type="button" :disabled="processing" :aria-pressed="mode === option.value" :class="['min-h-10 rounded-[var(--radius-sm)] px-2 text-xs font-semibold transition', mode === option.value ? 'bg-white text-[hsl(var(--primary-app))] shadow-sm' : 'text-gray-600 hover:text-gray-900']" @click="mode = option.value">{{ option.label }}</button></div>
-                        <fieldset v-if="mode === 'ranges'" class="mt-5 space-y-3" :disabled="processing || !file"><legend class="mb-2 text-sm font-semibold text-gray-800">Intervalli di pagine</legend><div v-for="(range, index) in ranges" :key="range.id" class="flex items-end gap-2"><label class="min-w-0 flex-1 text-xs text-gray-500">Da<input v-model.number="range.from" type="number" min="1" :max="pageCount || undefined" class="mt-1 block w-full rounded-[var(--radius-sm)] border-gray-200 text-sm" /></label><label class="min-w-0 flex-1 text-xs text-gray-500">A<input v-model.number="range.to" type="number" min="1" :max="pageCount || undefined" class="mt-1 block w-full rounded-[var(--radius-sm)] border-gray-200 text-sm" /></label><button type="button" class="icon-btn h-10 w-10 shrink-0" :disabled="ranges.length === 1" :title="`Rimuovi intervallo ${index + 1}`" @click="ranges.splice(index, 1)"><X class="h-4 w-4" /></button></div><button type="button" class="inline-flex items-center gap-1 text-sm font-semibold text-[hsl(var(--primary-app))]" @click="addRange"><Plus class="h-4 w-4" /> Aggiungi intervallo</button></fieldset>
-                        <fieldset v-else-if="mode === 'fixed'" class="mt-5" :disabled="processing || !file"><label class="block text-sm font-semibold text-gray-800">Pagine per file<input v-model.number="groupSize" type="number" min="1" :max="pageCount || undefined" class="mt-2 block w-full rounded-[var(--radius-sm)] border-gray-200 text-sm" /></label><p class="mt-2 text-xs text-gray-500">L’ultimo file può contenere meno pagine.</p></fieldset>
-                        <fieldset v-else class="mt-5 space-y-3" :disabled="processing || !file"><legend class="mb-2 text-sm font-semibold text-gray-800">Pagine da estrarre</legend><label class="flex items-center gap-2 text-sm text-gray-700"><input v-model="extractAll" type="radio" :value="true" name="extract-scope" class="text-[hsl(var(--primary-app))]" /> Tutte le pagine</label><label class="flex items-center gap-2 text-sm text-gray-700"><input v-model="extractAll" type="radio" :value="false" name="extract-scope" class="text-[hsl(var(--primary-app))]" /> Pagine selezionate</label><label v-if="!extractAll" class="block text-xs text-gray-500">Numeri e intervalli<input v-model="pageSelection" type="text" placeholder="1, 3-5, 8" class="mt-1 block w-full rounded-[var(--radius-sm)] border-gray-200 text-sm" /></label></fieldset>
+                        <div class="mt-4 divide-y divide-gray-100 overflow-hidden rounded-[var(--radius-sm)] border border-gray-200">
+                            <div v-for="option in modes" :key="option.value" :class="mode === option.value ? 'bg-[hsl(var(--primary-app)/0.04)]' : 'bg-white'">
+                                <button type="button" class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-[hsl(var(--primary-app)/0.04)] focus-visible:outline-2 focus-visible:outline-[hsl(var(--primary-app))]" :disabled="processing" :aria-expanded="mode === option.value" :aria-controls="`split-options-${option.value}`" @click="mode = option.value">
+                                    <span class="min-w-0"><span :class="['block text-sm font-semibold', mode === option.value ? 'text-[hsl(var(--primary-app))]' : 'text-gray-900']">{{ option.label }}</span><span class="block text-xs text-gray-500">{{ option.description }}</span></span>
+                                    <ChevronDown :class="['h-4 w-4 shrink-0 text-gray-500 transition-transform duration-200', mode === option.value ? 'rotate-180 text-[hsl(var(--primary-app))]' : '']" :stroke-width="1.7" />
+                                </button>
+                                <div v-if="mode === option.value" :id="`split-options-${option.value}`" class="border-t border-[hsl(var(--primary-app)/0.12)] px-4 pb-4 pt-3">
+                                    <fieldset v-if="option.value === 'ranges'" class="space-y-3" :disabled="processing || !file">
+                                        <div v-for="(range, index) in ranges" :key="range.id" class="flex items-end gap-2">
+                                            <label class="min-w-0 flex-1 text-xs text-gray-600">Da<input v-model.number="range.from" type="number" min="1" :max="pageCount || undefined" class="mt-1 block w-full rounded-[var(--radius-sm)] border-gray-200 text-sm" /></label>
+                                            <label class="min-w-0 flex-1 text-xs text-gray-600">A<input v-model.number="range.to" type="number" min="1" :max="pageCount || undefined" class="mt-1 block w-full rounded-[var(--radius-sm)] border-gray-200 text-sm" /></label>
+                                            <button type="button" class="icon-btn h-10 w-10 shrink-0" :disabled="ranges.length === 1" :title="`Rimuovi intervallo ${index + 1}`" @click="ranges.splice(index, 1)"><X class="h-4 w-4" /></button>
+                                        </div>
+                                        <button type="button" class="inline-flex items-center gap-1 text-sm font-semibold text-[hsl(var(--primary-app))]" @click="addRange"><Plus class="h-4 w-4" /> Aggiungi intervallo</button>
+                                    </fieldset>
+                                    <fieldset v-else-if="option.value === 'fixed'" :disabled="processing || !file">
+                                        <label class="block text-sm font-medium text-gray-700">Pagine per file<input v-model.number="groupSize" type="number" min="1" :max="pageCount || undefined" class="mt-2 block w-full rounded-[var(--radius-sm)] border-gray-200 text-sm" /></label>
+                                        <p class="mt-2 text-xs text-gray-500">L’ultimo file può contenere meno pagine.</p>
+                                    </fieldset>
+                                    <fieldset v-else class="space-y-3" :disabled="processing || !file">
+                                        <label class="flex items-center gap-2 text-sm text-gray-700"><input v-model="extractAll" type="radio" :value="true" name="extract-scope" class="text-[hsl(var(--primary-app))]" /> Tutte le pagine</label>
+                                        <label class="flex items-center gap-2 text-sm text-gray-700"><input v-model="extractAll" type="radio" :value="false" name="extract-scope" class="text-[hsl(var(--primary-app))]" /> Pagine selezionate</label>
+                                        <label v-if="!extractAll" class="block text-xs text-gray-600">Numeri e intervalli<input v-model="pageSelection" type="text" placeholder="1, 3-5, 8" class="mt-1 block w-full rounded-[var(--radius-sm)] border-gray-200 text-sm" /></label>
+                                    </fieldset>
+                                </div>
+                            </div>
+                        </div>
                         <p v-if="file && plannedCount" class="mt-5 text-sm text-gray-600">Verranno creati {{ plannedCount }} PDF.</p>
                         <button type="button" class="btn btn-primary mt-3 w-full justify-center" :disabled="!file || loading || processing" @click="split"><Scissors class="h-4 w-4" /> {{ processing ? `Divisione ${progress}/${totalOutputs}` : 'Dividi PDF' }}</button>
                         <div v-if="processing" role="progressbar" :aria-valuenow="progress" :aria-valuemax="totalOutputs" aria-valuemin="0" class="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100"><div class="h-full bg-[hsl(var(--primary-app))] transition-all duration-300" :style="{ width: `${Math.max(5, progress / totalOutputs * 100)}%` }" /></div>
-                        <p class="mt-4 flex items-start gap-2 text-xs text-gray-500"><CircleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" /> L’elaborazione avviene nel browser. Firme digitali e moduli interattivi potrebbero non restare validi.</p>
                     </section>
                 </div>
                 <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
