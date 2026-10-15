@@ -16,6 +16,8 @@ export function cleanText(input, options = {}, documentParser = null) {
     if (options.removeEmoji) text = text.replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '');
     if (options.removeDiacritics) text = text.normalize('NFD').replace(/\p{M}/gu, '').normalize('NFC');
     if (options.removePunctuation) text = text.replace(/\p{P}/gu, '');
+    if (options.tabsToSpaces) text = text.replace(/\t/g, ' ');
+    if (options.joinLines) text = text.replace(/[\t ]*\n[\t ]*/g, ' ');
     if (options.trimLines || options.collapseSpaces) {
         text = text.split('\n').map(line => {
             let result = options.collapseSpaces ? line.replace(/[\t ]{2,}/g, ' ') : line;
@@ -36,6 +38,8 @@ export function cleanText(input, options = {}, documentParser = null) {
     if (options.case === 'upper') text = text.toLocaleUpperCase('it');
     if (options.case === 'lower') text = text.toLocaleLowerCase('it');
     if (options.case === 'title') text = text.toLocaleLowerCase('it').replace(/(^|[\s\p{P}])\p{L}/gu, match => match.toLocaleUpperCase('it'));
+    if (options.case === 'sentence') text = text.toLocaleLowerCase('it').replace(/(^|[.!?]\s+|\n+)\p{L}/gu, match => match.replace(/\p{L}/u, letter => letter.toLocaleUpperCase('it')));
+    if (options.find) text = text.split(options.find).join(options.replace ?? '');
     if (options.trimText) text = text.trim();
     return text;
 }
