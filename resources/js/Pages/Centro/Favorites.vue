@@ -307,7 +307,8 @@ function remove(kind, id) {
 <style scoped>
 .featured-track{display:grid;grid-auto-flow:column;grid-auto-columns:calc((100% - 12px)/2);gap:12px;overflow-x:auto;overscroll-behavior-inline:contain;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .featured-track::-webkit-scrollbar{display:none}
-.featured-track>article{scroll-snap-align:start}
+.featured-track>article{scroll-snap-align:start;box-shadow:none!important;border-color:rgb(203 213 225 / .65)}
+.featured-track>article:hover{box-shadow:none!important;border-color:hsl(var(--primary-app) / .3)}
 @media(min-width:768px){.featured-track{grid-auto-columns:calc((100% - 24px)/3)}}
 @media(min-width:1024px){.featured-track{grid-auto-columns:calc((100% - 36px)/4)}}
 @media(min-width:1280px){.featured-track{grid-auto-columns:calc((100% - 60px)/6)}}
