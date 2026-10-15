@@ -2,8 +2,9 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
+import FavoriteFavicon from '@/Components/FavoriteFavicon.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, Bookmark, ExternalLink, Folder, Pencil, Plus, Star, Tag, Trash2, Users, X } from '@lucide/vue';
+import { ArrowLeft, ExternalLink, Folder, Pencil, Plus, Star, Tag, Trash2, Users, X } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 
 const props = defineProps({ folders: Array, items: Array, categories: Array, users: Array, groups: Array, canManage: Boolean, view: String, selectedFolderId: String, selectedGroupId: String });
@@ -189,7 +190,7 @@ function remove(kind, id) {
                     <article v-for="item in section.items" :key="item.id" class="surface flex h-full min-h-[138px] flex-col justify-between p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]">
                         <div class="flex min-w-0 items-start justify-between gap-3">
                             <div class="flex min-w-0 items-center gap-3">
-                                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]"><Bookmark class="h-5 w-5" :stroke-width="1.7" /></span>
+                                <FavoriteFavicon :url="item.url" />
                                 <div class="min-w-0"><a :href="item.url" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1.5 text-sm font-semibold text-gray-900 hover:text-[hsl(var(--primary-app))]"><span class="line-clamp-2">{{ item.title }}</span><ExternalLink class="h-3.5 w-3.5 shrink-0" :stroke-width="1.7" /></a><p class="truncate text-xs text-gray-500">{{ item.url }}</p></div>
                             </div>
                             <div v-if="folderById(item.folder_id)?.can_edit" class="flex shrink-0 gap-1"><button type="button" class="icon-btn h-8 w-8" title="Modifica" @click="openItem(item)"><Pencil class="h-4 w-4" :stroke-width="1.7" /></button><button type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina" @click="remove('item', item.id)"><Trash2 class="h-4 w-4" :stroke-width="1.7" /></button></div>
