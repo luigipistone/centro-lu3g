@@ -1,6 +1,5 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import ToolAccordion from '@/Components/ToolAccordion.vue';
 import ToolDropzone from '@/Components/ToolDropzone.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { ArrowLeft, CircleAlert, Download, FileText, Plus, Trash2, X } from '@lucide/vue';
@@ -191,11 +190,13 @@ function downloadAll() {
 
                     <section class="surface p-5 sm:p-6">
                         <h3 class="text-base font-semibold text-gray-900">Compressione</h3>
-                        <div class="mt-4 divide-y divide-gray-100 overflow-hidden rounded-[var(--radius-sm)] border border-gray-200">
-                            <ToolAccordion v-for="option in levels" :key="option.value" :title="option.label" :summary="level === option.value ? 'Selezionata' : option.detail" :open="level === option.value" :disabled="processing" :panel-id="`compression-${option.value}`" @toggle="level = option.value">
-                                <p class="text-xs text-gray-600">{{ option.detail }}</p>
-                            </ToolAccordion>
-                        </div>
+                        <fieldset class="mt-4 space-y-2" :disabled="processing">
+                            <legend class="sr-only">Livello di compressione</legend>
+                            <label v-for="option in levels" :key="option.value" :class="['flex cursor-pointer items-start gap-3 rounded-[var(--radius-sm)] border px-3 py-3 transition', level === option.value ? 'border-[hsl(var(--primary-app)/0.6)] bg-[hsl(var(--primary-app)/0.06)]' : 'border-gray-200 hover:border-gray-300']">
+                                <input v-model="level" type="radio" name="compression-level" :value="option.value" class="mt-0.5 accent-[hsl(var(--primary-app))]" />
+                                <span class="min-w-0"><span class="block text-sm font-semibold text-gray-900">{{ option.label }}</span><span class="block text-xs text-gray-500">{{ option.detail }}</span></span>
+                            </label>
+                        </fieldset>
                         <button type="button" class="btn btn-primary mt-5 w-full justify-center" :disabled="!files.length || processing" @click="compress">{{ processing ? `Compressione ${processingIndex}/${files.length}` : 'Comprimi PDF' }}</button>
                         <div v-if="processing" role="progressbar" :aria-valuenow="processingIndex" :aria-valuemax="files.length" aria-valuemin="0" class="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100"><div class="h-full bg-[hsl(var(--primary-app))] transition-all duration-300" :style="{ width: `${(processingIndex / files.length) * 100}%` }" /></div>
                         <p class="mt-4 flex items-start gap-2 text-xs text-gray-500"><CircleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" /> PDF firmati digitalmente o interattivi potrebbero perdere la validità della firma o alcune funzioni.</p>
