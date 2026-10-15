@@ -8,35 +8,67 @@ PHP_BIN="/opt/plesk/php/8.3/bin/php"
 COMPOSER_PHAR="/opt/psa/var/modules/composer/composer.phar"
 NODE_BIN_DIR="/opt/plesk/node/20/bin"
 LOCK_FILE="/tmp/centro-lu3g-deploy.lock"
+STAGE_DIR=""
+MAINTENANCE_ENABLED=0
 
 log() {
     printf '[centro-lu3g deploy] %s\n' "$*"
+}
+
+cleanup() {
+    if [ "$MAINTENANCE_ENABLED" -eq 1 ]; then
+        "$PHP_BIN" "$APP_DIR/artisan" up || true
+    fi
+    if [ -n "$STAGE_DIR" ]; then
+        rm -rf -- "$STAGE_DIR"
+    fi
 }
 
 deploy() {
     log "Fetching ${BRANCH}"
     git -C "$GIT_DIR" fetch origin "+refs/heads/${BRANCH}:refs/heads/${BRANCH}"
 
-    log "Checking out ${BRANCH} into production"
-    GIT_WORK_TREE="$APP_DIR" git -C "$GIT_DIR" checkout -f "$BRANCH"
+    if [ ! -x "$NODE_BIN_DIR/node" ] || [ ! -x "$NODE_BIN_DIR/npm" ]; then
+        log "Node.js runtime not found in $NODE_BIN_DIR"
+        return 1
+    fi
 
+    STAGE_DIR="$(mktemp -d "${APP_DIR%/*}/.centro-deploy.XXXXXX")"
+    trap cleanup EXIT
+
+    log "Preparing ${BRANCH} outside production"
+    git -C "$GIT_DIR" archive "$BRANCH" | tar -x -C "$STAGE_DIR"
+    mkdir -p "$STAGE_DIR/previous-assets"
+    if [ -d "$APP_DIR/public/build/assets" ]; then
+        cp -a "$APP_DIR/public/build/assets/." "$STAGE_DIR/previous-assets/"
+    fi
+
+    cd "$STAGE_DIR"
+    if [ -f "$COMPOSER_PHAR" ]; then
+        log "Installing PHP dependencies for the staged build"
+        "$PHP_BIN" "$COMPOSER_PHAR" install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+    fi
+
+    log "Installing frontend dependencies"
+    PATH="$NODE_BIN_DIR:$PATH" npm ci --no-audit --no-fund
+
+    log "Building frontend assets"
+    PATH="$NODE_BIN_DIR:$PATH" npm run build
+    test -s "$STAGE_DIR/public/build/manifest.json"
+    cp -an "$STAGE_DIR/previous-assets/." "$STAGE_DIR/public/build/assets/"
+
+    log "Switching production to ${BRANCH}"
     cd "$APP_DIR"
+    "$PHP_BIN" artisan down --retry=5 --refresh=5
+    MAINTENANCE_ENABLED=1
+    GIT_WORK_TREE="$APP_DIR" git -C "$GIT_DIR" checkout -f "$BRANCH"
 
     if [ -f "$COMPOSER_PHAR" ]; then
         log "Installing PHP dependencies"
         "$PHP_BIN" "$COMPOSER_PHAR" install --no-dev --no-interaction --prefer-dist --optimize-autoloader
     fi
 
-    if [ -x "$NODE_BIN_DIR/node" ] && [ -x "$NODE_BIN_DIR/npm" ]; then
-        log "Installing frontend dependencies"
-        PATH="$NODE_BIN_DIR:$PATH" npm ci --no-audit --no-fund
-
-        log "Building frontend assets"
-        PATH="$NODE_BIN_DIR:$PATH" npm run build
-    else
-        log "Node.js runtime not found in $NODE_BIN_DIR"
-        return 1
-    fi
+    cp -a "$STAGE_DIR/public/build/." "$APP_DIR/public/build/"
 
     log "Running database migrations"
     "$PHP_BIN" artisan migrate --force
@@ -46,6 +78,9 @@ deploy() {
     "$PHP_BIN" artisan config:cache
     "$PHP_BIN" artisan route:cache
     "$PHP_BIN" artisan view:cache
+
+    "$PHP_BIN" artisan up
+    MAINTENANCE_ENABLED=0
 
     local scheduler_entry="* * * * * cd $APP_DIR && $PHP_BIN artisan schedule:run >> /dev/null 2>&1 # centro-lu3g-scheduler"
     if command -v crontab >/dev/null 2>&1; then
