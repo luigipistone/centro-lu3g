@@ -4,7 +4,7 @@ import AppSelect from '@/Components/AppSelect.vue';
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import FavoriteFavicon from '@/Components/FavoriteFavicon.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, ExternalLink, Folder, Pencil, Plus, Star, Tag, Trash2, Users, X } from '@lucide/vue';
+import { ArrowLeft, Bookmark, BriefcaseBusiness, Building2, FileText, Folder, Landmark, Megaphone, Pencil, Plus, Star, Tag, Trash2, Users, Wrench, X } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 
 const props = defineProps({ folders: Array, items: Array, categories: Array, users: Array, groups: Array, canManage: Boolean, view: String, selectedFolderId: String, selectedGroupId: String });
@@ -51,6 +51,16 @@ const itemSections = computed(() => [
     ...(regularItems.value.length ? [{ key: 'regular', title: featuredItems.value.length ? 'Tutti i preferiti' : '', items: regularItems.value }] : []),
 ]);
 const categoryName = id => (props.categories || []).find(category => category.id === id)?.name || '';
+function categoryIcon(id) {
+    const name = categoryName(id).trim().toLocaleLowerCase('it');
+    if (name === 'azienda') return Building2;
+    if (name === 'servizi') return Wrench;
+    if (name === 'finanza') return Landmark;
+    if (name === 'lavoro') return BriefcaseBusiness;
+    if (name === 'marketing') return Megaphone;
+    if (name === 'documenti') return FileText;
+    return Tag;
+}
 const folderFilterCount = id => id === 'all' ? baseFilteredItems.value.length : baseFilteredItems.value.filter(item => item.folder_id === id).length;
 function removeCategoryFilter(id) {
     categoryFilters.value = categoryFilters.value.filter(value => value !== id);
@@ -186,17 +196,20 @@ function remove(kind, id) {
                 <div v-else-if="!visibleItems.length" class="surface px-6 py-12 text-center text-sm text-gray-500">Nessun preferito disponibile.</div>
                 <div v-for="section in itemSections" :key="section.key" :class="section.key === 'featured' ? 'rounded-[var(--radius)] border border-[hsl(var(--primary-app)/0.22)] bg-[hsl(var(--primary-app)/0.045)] p-4 sm:p-5' : ''">
                     <h3 v-if="section.title" class="mb-4 flex items-center gap-2 text-base font-semibold text-gray-900"><Star v-if="section.key === 'featured'" class="h-4 w-4 fill-[hsl(var(--primary-app))] text-[hsl(var(--primary-app))]" :stroke-width="1.7" /> {{ section.title }}</h3>
-                    <div class="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
-                    <article v-for="item in section.items" :key="item.id" class="surface flex h-full min-h-[138px] flex-col justify-between p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]">
-                        <div class="flex min-w-0 items-start justify-between gap-3">
-                            <div class="flex min-w-0 items-center gap-3">
+                    <div class="grid items-stretch grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+                    <article v-for="item in section.items" :key="item.id" class="surface flex h-full min-w-0 min-h-[116px] flex-col justify-between gap-2 p-3 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]">
+                        <div class="flex min-w-0 items-start gap-2">
                                 <FavoriteFavicon :url="item.url" />
-                                <div class="min-w-0"><a :href="item.url" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1.5 text-sm font-semibold text-gray-900 hover:text-[hsl(var(--primary-app))]"><span class="line-clamp-2">{{ item.title }}</span><ExternalLink class="h-3.5 w-3.5 shrink-0" :stroke-width="1.7" /></a><p class="truncate text-xs text-gray-500">{{ item.url }}</p></div>
-                            </div>
-                            <div v-if="folderById(item.folder_id)?.can_edit" class="flex shrink-0 gap-1"><button type="button" class="icon-btn h-8 w-8" title="Modifica" @click="openItem(item)"><Pencil class="h-4 w-4" :stroke-width="1.7" /></button><button type="button" class="icon-btn h-8 w-8 text-red-600 hover:bg-red-50" title="Elimina" @click="remove('item', item.id)"><Trash2 class="h-4 w-4" :stroke-width="1.7" /></button></div>
+                                <a :href="item.url" target="_blank" rel="noopener noreferrer" class="min-w-0 text-sm font-semibold leading-5 text-gray-900 hover:text-[hsl(var(--primary-app))]" :title="item.title"><span class="line-clamp-2 break-words">{{ item.title }}</span></a>
                         </div>
-                        <p v-if="item.description" class="mt-3 line-clamp-2 text-xs text-gray-500">{{ item.description }}</p>
-                        <div class="mt-4 flex flex-wrap gap-1.5"><span class="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs font-semibold" :style="folderStyle(folderById(item.folder_id))"><Folder class="h-3.5 w-3.5" :stroke-width="1.7" /> {{ folderById(item.folder_id)?.name }}</span><span v-for="id in item.category_ids" :key="id" class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600"><Tag class="h-3 w-3" :stroke-width="1.7" /> {{ categoryName(id) }}</span></div>
+                        <p v-if="item.description" class="line-clamp-1 text-xs text-gray-500" :title="item.description">{{ item.description }}</p>
+                        <div class="flex min-w-0 items-end justify-between gap-1">
+                            <div class="flex min-w-0 flex-wrap items-center gap-1.5">
+                                <span class="inline-flex h-6 w-6 shrink-0 items-center justify-center" :title="folderById(item.folder_id)?.name" :aria-label="`Cartella ${folderById(item.folder_id)?.name || ''}`" role="img"><span class="h-3 w-3 rounded-full ring-1 ring-black/10" :style="{ backgroundColor: folderById(item.folder_id)?.color || '#0B6EF3' }" /></span>
+                                <span v-for="id in item.category_ids" :key="id" class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-gray-100 text-gray-600" :title="categoryName(id)" :aria-label="`Categoria ${categoryName(id)}`" role="img"><component :is="categoryIcon(id)" class="h-3.5 w-3.5" :stroke-width="1.7" aria-hidden="true" /></span>
+                            </div>
+                            <div v-if="folderById(item.folder_id)?.can_edit" class="flex shrink-0 items-center gap-0.5"><button type="button" class="icon-btn h-7 w-7" :aria-label="`Modifica ${item.title}`" title="Modifica" @click="openItem(item)"><Pencil class="h-3.5 w-3.5" :stroke-width="1.7" /></button><button type="button" class="icon-btn h-7 w-7 text-red-600 hover:bg-red-50" :aria-label="`Elimina ${item.title}`" title="Elimina" @click="remove('item', item.id)"><Trash2 class="h-3.5 w-3.5" :stroke-width="1.7" /></button></div>
+                        </div>
                     </article>
                     </div>
                 </div>
