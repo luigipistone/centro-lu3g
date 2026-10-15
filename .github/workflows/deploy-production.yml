@@ -32,6 +32,5 @@ jobs:
           username: ${{ secrets.PLESK_USER }}
           key: ${{ secrets.PLESK_SSH_KEY }}
           port: 22
-          script_stop: true
           script: |
             bash /var/www/vhosts/lu3g.com/centro.lu3g.com/scripts/deploy-production.sh
