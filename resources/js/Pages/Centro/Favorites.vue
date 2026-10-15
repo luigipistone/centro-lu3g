@@ -4,8 +4,8 @@ import AppSelect from '@/Components/AppSelect.vue';
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import FavoriteFavicon from '@/Components/FavoriteFavicon.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, Bookmark, BriefcaseBusiness, Building2, FileText, Folder, Landmark, Megaphone, Pencil, Plus, Star, Tag, Trash2, Users, Wrench, X } from '@lucide/vue';
-import { computed, ref, watch } from 'vue';
+import { ArrowLeft, ArrowRight, Bookmark, BriefcaseBusiness, Building2, FileText, Folder, Landmark, Megaphone, Pencil, Plus, Star, Tag, Trash2, Users, Wrench, X } from '@lucide/vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps({ folders: Array, items: Array, categories: Array, users: Array, groups: Array, canManage: Boolean, view: String, selectedFolderId: String, selectedGroupId: String });
 const page = usePage();
@@ -46,6 +46,29 @@ const baseFilteredItems = computed(() => (props.items || []).filter(item =>
 const visibleItems = computed(() => baseFilteredItems.value.filter(item => selected.value === 'all' || item.folder_id === selected.value));
 const featuredItems = computed(() => visibleItems.value.filter(item => item.is_featured));
 const regularItems = computed(() => visibleItems.value.filter(item => !item.is_featured));
+const featuredTrack = ref(null);
+const featuredCanGoBack = ref(false);
+const featuredCanGoForward = ref(false);
+function setFeaturedTrack(element) {
+    if (featuredTrack.value === element) return;
+    featuredTrack.value = element;
+    nextTick(updateFeaturedControls);
+}
+function updateFeaturedControls() {
+    const track = featuredTrack.value;
+    featuredCanGoBack.value = Boolean(track && track.scrollLeft > 2);
+    featuredCanGoForward.value = Boolean(track && track.scrollLeft + track.clientWidth < track.scrollWidth - 2);
+}
+function scrollFeatured(direction) {
+    const track = featuredTrack.value;
+    const card = track?.querySelector('article');
+    if (!card) return;
+    const gap = parseFloat(getComputedStyle(track).columnGap) || 0;
+    track.scrollBy({ left: direction * (card.getBoundingClientRect().width + gap), behavior: 'smooth' });
+}
+watch(featuredItems, async () => { await nextTick(); updateFeaturedControls(); });
+onMounted(() => { window.addEventListener('resize', updateFeaturedControls); updateFeaturedControls(); });
+onUnmounted(() => window.removeEventListener('resize', updateFeaturedControls));
 const itemSections = computed(() => [
     ...(featuredItems.value.length ? [{ key: 'featured', title: 'In evidenza', items: featuredItems.value }] : []),
     ...(regularItems.value.length ? [{ key: 'regular', title: featuredItems.value.length ? 'Tutti i preferiti' : '', items: regularItems.value }] : []),
@@ -195,8 +218,14 @@ function remove(kind, id) {
                 <div v-if="!folderList.length" class="surface px-6 py-12 text-center text-sm text-gray-500">Nessuna cartella disponibile. <Link :href="route('favorites.folders.create')" class="font-semibold text-[hsl(var(--primary-app))]">Crea una cartella</Link></div>
                 <div v-else-if="!visibleItems.length" class="surface px-6 py-12 text-center text-sm text-gray-500">Nessun preferito disponibile.</div>
                 <div v-for="section in itemSections" :key="section.key" :class="section.key === 'featured' ? 'rounded-[var(--radius)] border border-[hsl(var(--primary-app)/0.22)] bg-[hsl(var(--primary-app)/0.045)] p-4 sm:p-5' : ''">
-                    <h3 v-if="section.title" class="mb-4 flex items-center gap-2 text-base font-semibold text-gray-900"><Star v-if="section.key === 'featured'" class="h-4 w-4 fill-[hsl(var(--primary-app))] text-[hsl(var(--primary-app))]" :stroke-width="1.7" /> {{ section.title }}</h3>
-                    <div class="grid items-stretch grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+                    <div v-if="section.title" class="mb-4 flex items-center justify-between gap-3">
+                        <h3 class="flex items-center gap-2 text-base font-semibold text-gray-900"><Star v-if="section.key === 'featured'" class="h-4 w-4 fill-[hsl(var(--primary-app))] text-[hsl(var(--primary-app))]" :stroke-width="1.7" /> {{ section.title }}</h3>
+                        <div v-if="section.key === 'featured'" class="flex shrink-0 items-center gap-1">
+                            <button type="button" class="icon-btn h-8 w-8 disabled:cursor-default disabled:opacity-35" title="Preferiti precedenti" aria-label="Preferiti precedenti" :disabled="!featuredCanGoBack" @click="scrollFeatured(-1)"><ArrowLeft class="h-4 w-4" :stroke-width="1.7" /></button>
+                            <button type="button" class="icon-btn h-8 w-8 disabled:cursor-default disabled:opacity-35" title="Preferiti successivi" aria-label="Preferiti successivi" :disabled="!featuredCanGoForward" @click="scrollFeatured(1)"><ArrowRight class="h-4 w-4" :stroke-width="1.7" /></button>
+                        </div>
+                    </div>
+                    <div :ref="section.key === 'featured' ? setFeaturedTrack : undefined" :class="section.key === 'featured' ? 'featured-track' : 'grid items-stretch grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6'" @scroll.passive="section.key === 'featured' && updateFeaturedControls()">
                     <article v-for="item in section.items" :key="item.id" class="surface flex h-full min-w-0 min-h-[116px] flex-col justify-between gap-2 p-3 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]">
                         <div class="flex min-w-0 items-start gap-2">
                                 <FavoriteFavicon :url="item.url" />
@@ -276,6 +305,12 @@ function remove(kind, id) {
 </template>
 
 <style scoped>
+.featured-track{display:grid;grid-auto-flow:column;grid-auto-columns:calc((100% - 12px)/2);gap:12px;overflow-x:auto;overscroll-behavior-inline:contain;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.featured-track::-webkit-scrollbar{display:none}
+.featured-track>article{scroll-snap-align:start}
+@media(min-width:768px){.featured-track{grid-auto-columns:calc((100% - 24px)/3)}}
+@media(min-width:1024px){.featured-track{grid-auto-columns:calc((100% - 36px)/4)}}
+@media(min-width:1280px){.featured-track{grid-auto-columns:calc((100% - 60px)/6)}}
 .favorite-filter-control :deep(.form-control){height:38px;min-height:38px}
 .favorite-filter-pill{display:inline-flex;min-height:34px;align-items:center;gap:.45rem;border-radius:var(--radius-sm);border:1px solid rgb(229 231 235 / .9);padding:.45rem .72rem;font-size:.8rem;font-weight:700;box-shadow:inset 0 1px 0 rgb(255 255 255 / .74),0 8px 20px rgb(15 23 42 / .04);transition:transform .18s ease,border-color .18s ease,background-color .18s ease,color .18s ease,box-shadow .18s ease}
 .favorite-filter-pill:hover{transform:translateY(-1px)}
