@@ -26,6 +26,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/tools/compress-pdf', fn () => Inertia::render('Centro/Tools'))->name('tools.compress-pdf');
     Route::get('/tools/split-pdf', fn () => Inertia::render('Centro/SplitPdf'))->name('tools.split-pdf');
     Route::get('/tools/images-to-pdf', fn () => Inertia::render('Centro/ImagesToPdf'))->name('tools.images-to-pdf');
+    Route::get('/tools/extract-images', fn () => Inertia::render('Centro/ExtractImages'))->name('tools.extract-images');
     Route::post('/clients', [CentroPageController::class, 'store'])->defaults('section', 'clients')->name('clients.store');
     Route::get('/clients/{id}', [CentroPageController::class, 'show'])->defaults('section', 'clients')->name('clients.show');
     Route::put('/clients/{id}', [CentroPageController::class, 'update'])->defaults('section', 'clients')->name('clients.update');

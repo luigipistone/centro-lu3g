@@ -28,10 +28,12 @@ class ToolsTest extends TestCase
         $this->actingAs($this->userWithRole('editor'))->get(route('tools.compress-pdf'))->assertOk();
         $this->actingAs($this->userWithRole('editor'))->get(route('tools.split-pdf'))->assertOk();
         $this->actingAs($this->userWithRole('editor'))->get(route('tools.images-to-pdf'))->assertOk();
+        $this->actingAs($this->userWithRole('editor'))->get(route('tools.extract-images'))->assertOk();
         $this->actingAs($this->userWithRole('guest'))->get(route('tools.index'))->assertForbidden();
         $this->actingAs($this->userWithRole('guest'))->get(route('tools.compress-pdf'))->assertForbidden();
         $this->actingAs($this->userWithRole('guest'))->get(route('tools.split-pdf'))->assertForbidden();
         $this->actingAs($this->userWithRole('guest'))->get(route('tools.images-to-pdf'))->assertForbidden();
+        $this->actingAs($this->userWithRole('guest'))->get(route('tools.extract-images'))->assertForbidden();
     }
 
     public function test_disabled_tools_section_blocks_employee_but_not_manager(): void
@@ -45,8 +47,10 @@ class ToolsTest extends TestCase
         $this->actingAs($employee)->get(route('tools.compress-pdf'))->assertStatus(503);
         $this->actingAs($employee)->get(route('tools.split-pdf'))->assertStatus(503);
         $this->actingAs($employee)->get(route('tools.images-to-pdf'))->assertStatus(503);
+        $this->actingAs($employee)->get(route('tools.extract-images'))->assertStatus(503);
         $this->actingAs($manager)->get(route('tools.index'))->assertOk();
         $this->actingAs($manager)->get(route('tools.split-pdf'))->assertOk();
         $this->actingAs($manager)->get(route('tools.images-to-pdf'))->assertOk();
+        $this->actingAs($manager)->get(route('tools.extract-images'))->assertOk();
     }
 }
