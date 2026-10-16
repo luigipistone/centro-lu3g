@@ -35,12 +35,14 @@ class ToolsTest extends TestCase
         $this->actingAs($this->userWithRole('editor'))->get(route('tools.images-to-pdf'))->assertOk();
         $this->actingAs($this->userWithRole('editor'))->get(route('tools.extract-images'))->assertOk();
         $this->actingAs($this->userWithRole('editor'))->get(route('tools.video-to-webm'))->assertOk();
+        $this->actingAs($this->userWithRole('editor'))->getJson(route('tools.video-to-webm.conversions'))->assertOk();
         $this->actingAs($this->userWithRole('guest'))->get(route('tools.index'))->assertForbidden();
         $this->actingAs($this->userWithRole('guest'))->get(route('tools.compress-pdf'))->assertForbidden();
         $this->actingAs($this->userWithRole('guest'))->get(route('tools.split-pdf'))->assertForbidden();
         $this->actingAs($this->userWithRole('guest'))->get(route('tools.images-to-pdf'))->assertForbidden();
         $this->actingAs($this->userWithRole('guest'))->get(route('tools.extract-images'))->assertForbidden();
         $this->actingAs($this->userWithRole('guest'))->get(route('tools.video-to-webm'))->assertForbidden();
+        $this->actingAs($this->userWithRole('guest'))->getJson(route('tools.video-to-webm.conversions'))->assertForbidden();
     }
 
     public function test_disabled_tools_section_blocks_employee_but_not_manager(): void
@@ -104,6 +106,41 @@ class ToolsTest extends TestCase
             'quality' => 'high',
         ])->assertStatus(503);
         $this->assertDatabaseCount('video_conversions', 0);
+    }
+
+    public function test_video_conversions_list_only_shows_owned_and_available_files(): void
+    {
+        Storage::fake('local');
+        $owner = $this->userWithRole('editor');
+        $other = $this->userWithRole('editor');
+        $available = (string) Str::uuid();
+        $pending = (string) Str::uuid();
+        $expired = (string) Str::uuid();
+        $foreign = (string) Str::uuid();
+        $missing = (string) Str::uuid();
+
+        foreach ([
+            [$available, $owner->id, 'done', now()->addHour()],
+            [$pending, $owner->id, 'processing', now()->addHour()],
+            [$expired, $owner->id, 'done', now()->subMinute()],
+            [$foreign, $other->id, 'done', now()->addHour()],
+            [$missing, $owner->id, 'done', now()->addHour()],
+        ] as [$id, $userId, $status, $expiry]) {
+            DB::table('video_conversions')->insert([
+                'id' => $id, 'user_id' => $userId, 'original_name' => 'clip.mov',
+                'quality' => 'balanced', 'status' => $status, 'expires_at' => $expiry,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+        Storage::disk('local')->put('video-conversions/'.$available.'/output.webm', 'ready');
+        Storage::disk('local')->put('video-conversions/'.$foreign.'/output.webm', 'private');
+
+        $response = $this->actingAs($owner)->getJson(route('tools.video-to-webm.conversions'))->assertOk();
+        $this->assertEqualsCanonicalizing([$available, $pending], collect($response->json('conversions'))->pluck('id')->all());
+        $this->actingAs($owner)->get(route('tools.video-to-webm'))
+            ->assertInertia(fn ($page) => $page->component('Centro/VideoToWebm')->has('conversions', 2));
+        $this->actingAs($owner)->get(route('tools.video-to-webm.download', $available))->assertOk();
+        $this->actingAs($owner)->get(route('tools.video-to-webm.download', $foreign))->assertNotFound();
     }
 
     public function test_video_expiry_uses_app_timezone_when_php_timezone_differs(): void

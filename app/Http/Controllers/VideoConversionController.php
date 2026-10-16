@@ -19,7 +19,13 @@ class VideoConversionController extends Controller
     {
         return Inertia::render('Centro/VideoToWebm', [
             'available' => is_executable(config('video.ffmpeg')) && is_executable(config('video.ffprobe')),
+            'conversions' => $this->availableConversions(request()),
         ]);
+    }
+
+    public function conversions(Request $request): JsonResponse
+    {
+        return response()->json(['conversions' => $this->availableConversions($request)]);
     }
 
     public function store(Request $request): JsonResponse
@@ -97,5 +103,26 @@ class VideoConversionController extends Controller
         $conversion->expires_at = \Illuminate\Support\Carbon::parse($conversion->expires_at, config('app.timezone'));
 
         return $conversion;
+    }
+
+    private function availableConversions(Request $request): array
+    {
+        return DB::table('video_conversions')
+            ->where('user_id', $request->user()->id)
+            ->where('expires_at', '>', now(config('app.timezone'))->toDateTimeString())
+            ->whereIn('status', ['queued', 'processing', 'done', 'failed'])
+            ->orderByDesc('created_at')
+            ->get(['id', 'original_name', 'status', 'error', 'expires_at'])
+            ->filter(fn ($conversion) => $conversion->status !== 'done'
+                || Storage::disk('local')->exists('video-conversions/'.$conversion->id.'/output.webm'))
+            ->map(fn ($conversion) => [
+                'id' => $conversion->id,
+                'name' => $conversion->original_name,
+                'status' => $conversion->status,
+                'error' => $conversion->error,
+                'expires_at' => \Illuminate\Support\Carbon::parse($conversion->expires_at, config('app.timezone'))->toIso8601String(),
+            ])
+            ->values()
+            ->all();
     }
 }
