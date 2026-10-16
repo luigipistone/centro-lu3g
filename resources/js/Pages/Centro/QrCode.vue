@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import QrColorField from '@/Components/QrColorField.vue';
 import ToolAccordion from '@/Components/ToolAccordion.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { ArrowLeft, CalendarDays, ContactRound, Download, ImagePlus, Link2, Mail, MessageCircle, MessageSquare, Phone, QrCode as QrCodeIcon, Type, Wifi, X } from '@lucide/vue';
@@ -283,13 +284,13 @@ onBeforeUnmount(() => { if (previewUrl.value) URL.revokeObjectURL(previewUrl.val
                         <ToolAccordion title="Colori" :summary="design.gradient ? 'Sfumatura' : 'Colori pieni'" panel-id="qr-colors" :open="openSetting === 'colors'" @toggle="openSetting = openSetting === 'colors' ? '' : 'colors'">
                             <div>
                                 <div class="mt-3 grid grid-cols-2 gap-4">
-                                    <label class="block text-sm font-medium text-gray-700">Codice<input v-model="design.foreground" type="color" class="qr-color mt-2 block h-11 w-full cursor-pointer rounded-[var(--radius-sm)] border border-gray-200" /></label>
-                                    <label class="block text-sm font-medium text-gray-700">Sfondo<input v-model="design.background" type="color" class="qr-color mt-2 block h-11 w-full cursor-pointer rounded-[var(--radius-sm)] border border-gray-200" /></label>
-                                    <label class="block text-sm font-medium text-gray-700">Angoli<input v-model="design.cornerColor" type="color" class="qr-color mt-2 block h-11 w-full cursor-pointer rounded-[var(--radius-sm)] border border-gray-200" /></label>
-                                    <label class="block text-sm font-medium text-gray-700">Centro angoli<input v-model="design.centerColor" type="color" class="qr-color mt-2 block h-11 w-full cursor-pointer rounded-[var(--radius-sm)] border border-gray-200" /></label>
+                                    <QrColorField v-model="design.foreground" label="Codice" />
+                                    <QrColorField v-model="design.background" label="Sfondo" />
+                                    <QrColorField v-model="design.cornerColor" label="Angoli" />
+                                    <QrColorField v-model="design.centerColor" label="Centro angoli" />
                                 </div>
                                 <label class="mt-4 flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700"><input v-model="design.gradient" type="checkbox" class="rounded border-gray-300 text-[hsl(var(--primary-app))] focus:ring-[hsl(var(--primary-app))]" />Sfumatura sul codice</label>
-                                <label v-if="design.gradient" class="mt-3 block text-sm font-medium text-gray-700">Secondo colore<input v-model="design.secondColor" type="color" class="qr-color mt-2 block h-11 w-full cursor-pointer rounded-[var(--radius-sm)] border border-gray-200" /></label>
+                                <QrColorField v-if="design.gradient" v-model="design.secondColor" label="Secondo colore" class="mt-3" />
                             </div>
                         </ToolAccordion>
 
@@ -299,7 +300,7 @@ onBeforeUnmount(() => { if (previewUrl.value) URL.revokeObjectURL(previewUrl.val
                             </div>
                             <div v-if="design.frame !== 'none'" class="mt-5 grid gap-4 sm:grid-cols-2">
                                 <label v-if="design.frame === 'label' || design.frame === 'label-top'" class="block text-sm font-medium text-gray-700">Testo cornice<input v-model="design.frameText" type="text" maxlength="24" :class="inputClass" /></label>
-                                <label class="block text-sm font-medium text-gray-700">Colore cornice<input v-model="design.frameColor" type="color" class="qr-color mt-2 block h-11 w-full cursor-pointer rounded-[var(--radius-sm)] border border-gray-200" /></label>
+                                <QrColorField v-model="design.frameColor" label="Colore cornice" />
                             </div>
                         </ToolAccordion>
 
@@ -321,10 +322,6 @@ onBeforeUnmount(() => { if (previewUrl.value) URL.revokeObjectURL(previewUrl.val
 </template>
 
 <style scoped>
-.qr-color { padding: 0; background: transparent; overflow: hidden; }
-.qr-color::-webkit-color-swatch-wrapper { padding: 0; }
-.qr-color::-webkit-color-swatch { border: 0; }
-.qr-color::-moz-color-swatch { border: 0; }
 .qr-option { display: flex; min-width: 0; flex-direction: column; align-items: center; gap: 0.4rem; border: 1px solid #e5e7eb; border-radius: var(--radius-sm); padding: 0.55rem; background: #fff; color: #4b5563; font-size: 0.75rem; font-weight: 600; text-align: center; transition: border-color 0.15s, background-color 0.15s; }
 .qr-option:hover { background: #f9fafb; }
 .qr-option-active { border-color: hsl(var(--primary-app)); background: hsl(var(--primary-app) / 0.07); color: hsl(var(--primary-app)); }
