@@ -1,17 +1,24 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft, Download, ImagePlus, QrCode as QrCodeIcon, X } from '@lucide/vue';
+import { ArrowLeft, CalendarDays, ContactRound, Download, ImagePlus, Link2, Mail, MessageCircle, MessageSquare, Phone, QrCode as QrCodeIcon, Type, Wifi, X } from '@lucide/vue';
 import QRCodeStyling from 'qr-code-styling';
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
 
 const kinds = [
-    ['url', 'Link'], ['text', 'Testo'], ['email', 'Email'], ['phone', 'Telefono'],
-    ['sms', 'SMS'], ['whatsapp', 'WhatsApp'], ['wifi', 'Wi-Fi'], ['vcard', 'Contatto'], ['event', 'Evento'],
+    ['url', 'Link', Link2], ['text', 'Testo', Type], ['email', 'Email', Mail], ['phone', 'Telefono', Phone],
+    ['sms', 'SMS', MessageSquare], ['whatsapp', 'WhatsApp', MessageCircle], ['wifi', 'Wi-Fi', Wifi],
+    ['vcard', 'Contatto', ContactRound], ['event', 'Evento', CalendarDays],
 ];
 const kind = ref('url');
 const fields = reactive({ value: '', subject: '', message: '', wifiPassword: '', wifiSecurity: 'WPA', firstName: '', lastName: '', organization: '', phone: '', email: '', website: '', eventEnd: '', eventLocation: '' });
-const design = reactive({ foreground: '#172033', background: '#ffffff', shape: 'square', frame: 'none', frameText: 'SCANSIONA QUI', frameColor: '#172033' });
+const design = reactive({ foreground: '#172033', background: '#ffffff', cornerColor: '#172033', centerColor: '#172033', shape: 'square', corner: 'square', center: 'square', frame: 'none', frameText: 'SCANSIONA QUI', frameColor: '#172033', gradient: false, secondColor: '#0877ed', logoSize: 0.18 });
+const appearanceTab = ref('shape');
+const shapeOptions = [['square', 'Quadrata'], ['rounded', 'Arrotondata'], ['dots', 'Puntini'], ['classy', 'Classica'], ['classy-rounded', 'Morbida'], ['extra-rounded', 'Molto tonda']];
+const cornerOptions = [['square', 'Quadrati'], ['extra-rounded', 'Arrotondati'], ['dot', 'Tondi']];
+const centerOptions = [['square', 'Quadrati'], ['dot', 'Tondi']];
+const frameOptions = [['none', 'Nessuna'], ['border', 'Bordo'], ['label', 'Testo sotto'], ['label-top', 'Testo sopra']];
+const optionPreviews = reactive({});
 const logo = ref('');
 const previewUrl = ref('');
 const generatedSvg = ref('');
@@ -67,17 +74,58 @@ function setPreview(svg) {
     previewUrl.value = svg ? URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })) : '';
 }
 
-function composeSvg(raw) {
+function composeSvg(raw, options = design) {
     const document = new DOMParser().parseFromString(raw, 'image/svg+xml');
     const qr = document.documentElement;
     qr.setAttribute('x', '32');
-    qr.setAttribute('y', '32');
+    qr.setAttribute('y', options.frame === 'label-top' ? '96' : '32');
     qr.setAttribute('width', '512');
     qr.setAttribute('height', '512');
-    const framed = design.frame !== 'none';
-    const label = design.frame === 'label' ? `<rect x="24" y="542" width="528" height="66" rx="8" fill="${design.frameColor}"/><text x="288" y="584" fill="#ffffff" font-family="Arial,sans-serif" font-size="25" font-weight="700" text-anchor="middle">${escapeXml(design.frameText.slice(0, 24))}</text>` : '';
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="576" height="${design.frame === 'label' ? 632 : 576}" viewBox="0 0 576 ${design.frame === 'label' ? 632 : 576}"><rect width="576" height="100%" fill="${design.background}"/>${framed ? `<rect x="12" y="12" width="552" height="${design.frame === 'label' ? 608 : 552}" rx="14" fill="none" stroke="${design.frameColor}" stroke-width="8"/>` : ''}${new XMLSerializer().serializeToString(qr)}${label}</svg>`;
+    const labeled = options.frame === 'label' || options.frame === 'label-top';
+    const height = labeled ? 632 : 576;
+    const labelY = options.frame === 'label-top' ? 24 : 542;
+    const label = labeled ? `<rect x="24" y="${labelY}" width="528" height="66" rx="8" fill="${options.frameColor}"/><text x="288" y="${labelY + 42}" fill="${contrastText(options.frameColor)}" font-family="Arial,sans-serif" font-size="25" font-weight="700" text-anchor="middle">${escapeXml(options.frameText.slice(0, 24))}</text>` : '';
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="576" height="${height}" viewBox="0 0 576 ${height}"><rect width="576" height="100%" fill="${options.background}"/>${options.frame !== 'none' ? `<rect x="12" y="12" width="552" height="${height - 24}" rx="14" fill="none" stroke="${options.frameColor}" stroke-width="8"/>` : ''}${new XMLSerializer().serializeToString(qr)}${label}</svg>`;
 }
+
+function contrastText(hex) {
+    const red = parseInt(hex.slice(1, 3), 16);
+    const green = parseInt(hex.slice(3, 5), 16);
+    const blue = parseInt(hex.slice(5, 7), 16);
+    return (red * 299 + green * 587 + blue * 114) / 1000 > 165 ? '#172033' : '#ffffff';
+}
+
+async function createQrSvg(data, options, image = '') {
+    const qr = new QRCodeStyling({
+        width: 512, height: 512, type: 'svg', margin: 24, data,
+        qrOptions: { errorCorrectionLevel: image ? 'H' : 'Q' },
+        dotsOptions: { color: options.foreground, type: options.shape, ...(options.gradient ? { gradient: { type: 'linear', rotation: 0.8, colorStops: [{ offset: 0, color: options.foreground }, { offset: 1, color: options.secondColor }] } } : {}) },
+        cornersSquareOptions: { color: options.cornerColor, type: options.corner },
+        cornersDotOptions: { color: options.centerColor, type: options.center },
+        backgroundOptions: { color: options.background },
+        ...(image ? { image, imageOptions: { crossOrigin: 'anonymous', margin: 7, imageSize: Number(options.logoSize), hideBackgroundDots: true, saveAsBlob: true } } : {}),
+    });
+    const blob = await qr.getRawData('svg');
+    return composeSvg(await blob.text(), options);
+}
+
+async function buildOptionPreviews() {
+    const samples = [
+        ...shapeOptions.map(([id]) => [`shape:${id}`, { shape: id }]),
+        ...cornerOptions.map(([id]) => [`corner:${id}`, { corner: id }]),
+        ...centerOptions.map(([id]) => [`center:${id}`, { center: id }]),
+        ...frameOptions.map(([id]) => [`frame:${id}`, { frame: id }]),
+    ];
+    for (const [key, override] of samples) {
+        try {
+            const options = { ...design, foreground: '#172033', background: '#ffffff', cornerColor: '#172033', centerColor: '#172033', gradient: false, ...override };
+            const svg = await createQrSvg('https://centro.lu3g.com', options);
+            optionPreviews[key] = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+        } catch { /* A label remains available if a miniature cannot render. */ }
+    }
+}
+
+buildOptionPreviews();
 
 let generation = 0;
 watch([payload, design, logo], async () => {
@@ -88,17 +136,8 @@ watch([payload, design, logo], async () => {
     if (payload.value.length > 2200) { error.value = 'Il contenuto è troppo lungo per un QR leggibile.'; return; }
     if (design.foreground.toLowerCase() === design.background.toLowerCase()) { error.value = 'Scegli colori diversi per codice e sfondo.'; return; }
     try {
-        const qr = new QRCodeStyling({
-            width: 512, height: 512, type: 'svg', margin: 24, data: payload.value,
-            qrOptions: { errorCorrectionLevel: logo.value ? 'H' : 'Q' },
-            dotsOptions: { color: design.foreground, type: design.shape },
-            cornersSquareOptions: { color: design.foreground, type: design.shape === 'square' ? 'square' : 'extra-rounded' },
-            cornersDotOptions: { color: design.foreground, type: design.shape === 'dots' ? 'dot' : 'square' },
-            backgroundOptions: { color: design.background },
-            ...(logo.value ? { image: logo.value, imageOptions: { crossOrigin: 'anonymous', margin: 7, imageSize: 0.18, hideBackgroundDots: true, saveAsBlob: true } } : {}),
-        });
-        const blob = await qr.getRawData('svg');
-        if (current === generation) setPreview(composeSvg(await blob.text()));
+        const svg = await createQrSvg(payload.value, { ...design }, logo.value);
+        if (current === generation) setPreview(svg);
     } catch {
         if (current === generation) error.value = 'Impossibile generare il QR. Controlla il contenuto.';
     }
@@ -135,7 +174,7 @@ async function save(format) {
         await image.decode();
         const canvas = document.createElement('canvas');
         canvas.width = 1152;
-        canvas.height = design.frame === 'label' ? 1264 : 1152;
+        canvas.height = ['label', 'label-top'].includes(design.frame) ? 1264 : 1152;
         canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
         canvas.toBlob(blob => { if (blob) download(blob, 'codice-qr.png'); }, 'image/png');
     } catch { error.value = 'Impossibile scaricare il PNG. Riprova con SVG.'; }
@@ -157,8 +196,8 @@ onBeforeUnmount(() => { if (previewUrl.value) URL.revokeObjectURL(previewUrl.val
             <div class="mx-auto grid max-w-[1200px] items-start gap-5 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
                 <section class="surface min-w-0 p-5 sm:p-6">
                     <h3 class="text-base font-semibold text-gray-900">Contenuto</h3>
-                    <div class="mt-5 flex flex-wrap gap-2" role="group" aria-label="Tipo di contenuto">
-                        <button v-for="[id, title] in kinds" :key="id" type="button" :aria-pressed="kind === id" :class="['rounded-[var(--radius-sm)] border px-3 py-2 text-sm font-medium transition', kind === id ? 'border-[hsl(var(--primary-app))] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50']" @click="setKind(id)">{{ title }}</button>
+                    <div class="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-5" role="group" aria-label="Tipo di contenuto">
+                        <button v-for="[id, title, icon] in kinds" :key="id" type="button" :aria-pressed="kind === id" :class="['flex min-h-[74px] min-w-0 flex-col items-center justify-center gap-1.5 rounded-[var(--radius-sm)] border px-1.5 py-2 text-center text-xs font-semibold transition', kind === id ? 'border-[hsl(var(--primary-app))] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50']" @click="setKind(id)"><component :is="icon" class="h-5 w-5 shrink-0" :stroke-width="1.8" /><span class="max-w-full break-words">{{ title }}</span></button>
                     </div>
                     <label v-if="kind !== 'vcard'" class="mt-6 block text-sm font-medium text-gray-700">{{ mainLabel }}
                         <textarea v-if="kind === 'text'" v-model="fields.value" rows="5" :placeholder="mainPlaceholder" :class="inputClass" />
@@ -184,19 +223,62 @@ onBeforeUnmount(() => { if (previewUrl.value) URL.revokeObjectURL(previewUrl.val
 
                     <div class="mt-8 border-t border-gray-100 pt-6">
                         <h3 class="text-base font-semibold text-gray-900">Aspetto</h3>
-                        <label class="mt-4 block text-sm font-medium text-gray-700">Forma<select v-model="design.shape" :class="inputClass"><option value="square">Quadrata</option><option value="rounded">Arrotondata</option><option value="dots">Puntini</option></select></label>
-                        <div class="mt-4 grid grid-cols-2 gap-4">
-                            <label class="block text-sm font-medium text-gray-700">Codice<input v-model="design.foreground" type="color" class="qr-color mt-2 block h-11 w-full cursor-pointer rounded-[var(--radius-sm)] border border-gray-200" /></label>
-                            <label class="block text-sm font-medium text-gray-700">Sfondo<input v-model="design.background" type="color" class="qr-color mt-2 block h-11 w-full cursor-pointer rounded-[var(--radius-sm)] border border-gray-200" /></label>
+                        <div class="mt-4 grid grid-cols-3 gap-1 rounded-[var(--radius-sm)] bg-gray-100 p-1" role="tablist" aria-label="Aspetto QR">
+                            <button v-for="[id, title] in [['shape', 'Forma'], ['frame', 'Cornice'], ['logo', 'Logo']]" :key="id" type="button" role="tab" :aria-selected="appearanceTab === id" :class="['min-h-10 rounded-[var(--radius-sm)] px-2 text-sm font-semibold transition', appearanceTab === id ? 'bg-white text-[hsl(var(--primary-app))] shadow-sm' : 'text-gray-600 hover:text-gray-900']" @click="appearanceTab = id">{{ title }}</button>
                         </div>
-                        <label class="mt-4 block text-sm font-medium text-gray-700">Cornice<select v-model="design.frame" :class="inputClass"><option value="none">Nessuna</option><option value="border">Bordo</option><option value="label">Bordo con testo</option></select></label>
-                        <div v-if="design.frame !== 'none'" class="mt-4 grid gap-4 sm:grid-cols-2">
-                            <label v-if="design.frame === 'label'" class="block text-sm font-medium text-gray-700">Testo cornice<input v-model="design.frameText" type="text" maxlength="24" :class="inputClass" /></label>
-                            <label class="block text-sm font-medium text-gray-700">Colore cornice<input v-model="design.frameColor" type="color" class="qr-color mt-2 block h-11 w-full cursor-pointer rounded-[var(--radius-sm)] border border-gray-200" /></label>
+
+                        <div v-if="appearanceTab === 'shape'" class="mt-5 space-y-6">
+                            <div>
+                                <h4 class="text-sm font-semibold text-gray-800">Moduli</h4>
+                                <div class="mt-3 grid grid-cols-3 gap-2">
+                                    <button v-for="[id, title] in shapeOptions" :key="id" type="button" :aria-pressed="design.shape === id" :class="['qr-option', design.shape === id ? 'qr-option-active' : '']" @click="design.shape = id"><img v-if="optionPreviews[`shape:${id}`]" :src="optionPreviews[`shape:${id}`]" alt="" class="qr-option-image" /><QrCodeIcon v-else class="qr-option-placeholder" /><span>{{ title }}</span></button>
+                                </div>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-semibold text-gray-800">Angoli</h4>
+                                <div class="mt-3 grid grid-cols-3 gap-2">
+                                    <button v-for="[id, title] in cornerOptions" :key="id" type="button" :aria-pressed="design.corner === id" :class="['qr-option', design.corner === id ? 'qr-option-active' : '']" @click="design.corner = id"><img v-if="optionPreviews[`corner:${id}`]" :src="optionPreviews[`corner:${id}`]" alt="" class="qr-option-image" /><QrCodeIcon v-else class="qr-option-placeholder" /><span>{{ title }}</span></button>
+                                </div>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-semibold text-gray-800">Centro degli angoli</h4>
+                                <div class="mt-3 grid grid-cols-2 gap-2">
+                                    <button v-for="[id, title] in centerOptions" :key="id" type="button" :aria-pressed="design.center === id" :class="['qr-option', design.center === id ? 'qr-option-active' : '']" @click="design.center = id"><img v-if="optionPreviews[`center:${id}`]" :src="optionPreviews[`center:${id}`]" alt="" class="qr-option-image" /><QrCodeIcon v-else class="qr-option-placeholder" /><span>{{ title }}</span></button>
+                                </div>
+                            </div>
+                            <div class="border-t border-gray-100 pt-5">
+                                <h4 class="text-sm font-semibold text-gray-800">Colori</h4>
+                                <div class="mt-3 grid grid-cols-2 gap-4">
+                                    <label class="block text-sm font-medium text-gray-700">Codice<input v-model="design.foreground" type="color" class="qr-color mt-2 block h-11 w-full cursor-pointer rounded-[var(--radius-sm)] border border-gray-200" /></label>
+                                    <label class="block text-sm font-medium text-gray-700">Sfondo<input v-model="design.background" type="color" class="qr-color mt-2 block h-11 w-full cursor-pointer rounded-[var(--radius-sm)] border border-gray-200" /></label>
+                                    <label class="block text-sm font-medium text-gray-700">Angoli<input v-model="design.cornerColor" type="color" class="qr-color mt-2 block h-11 w-full cursor-pointer rounded-[var(--radius-sm)] border border-gray-200" /></label>
+                                    <label class="block text-sm font-medium text-gray-700">Centro angoli<input v-model="design.centerColor" type="color" class="qr-color mt-2 block h-11 w-full cursor-pointer rounded-[var(--radius-sm)] border border-gray-200" /></label>
+                                </div>
+                                <label class="mt-4 flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700"><input v-model="design.gradient" type="checkbox" class="rounded border-gray-300 text-[hsl(var(--primary-app))] focus:ring-[hsl(var(--primary-app))]" />Sfumatura sul codice</label>
+                                <label v-if="design.gradient" class="mt-3 block text-sm font-medium text-gray-700">Secondo colore<input v-model="design.secondColor" type="color" class="qr-color mt-2 block h-11 w-full cursor-pointer rounded-[var(--radius-sm)] border border-gray-200" /></label>
+                            </div>
                         </div>
-                        <div class="mt-5 flex flex-wrap items-center gap-3">
-                            <label class="inline-flex cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"><ImagePlus class="h-4 w-4" />{{ logo ? 'Cambia logo' : 'Aggiungi logo' }}<input type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" @change="selectLogo" /></label>
-                            <button v-if="logo" type="button" class="inline-flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-red-600" @click="logo = ''"><X class="h-4 w-4" />Rimuovi</button>
+
+                        <div v-if="appearanceTab === 'frame'" class="mt-5">
+                            <h4 class="text-sm font-semibold text-gray-800">Scegli una cornice</h4>
+                            <div class="mt-3 grid grid-cols-2 gap-2">
+                                <button v-for="[id, title] in frameOptions" :key="id" type="button" :aria-pressed="design.frame === id" :class="['qr-option', design.frame === id ? 'qr-option-active' : '']" @click="design.frame = id"><img v-if="optionPreviews[`frame:${id}`]" :src="optionPreviews[`frame:${id}`]" alt="" class="qr-option-image" /><QrCodeIcon v-else class="qr-option-placeholder" /><span>{{ title }}</span></button>
+                            </div>
+                            <div v-if="design.frame !== 'none'" class="mt-5 grid gap-4 sm:grid-cols-2">
+                                <label v-if="design.frame === 'label' || design.frame === 'label-top'" class="block text-sm font-medium text-gray-700">Testo cornice<input v-model="design.frameText" type="text" maxlength="24" :class="inputClass" /></label>
+                                <label class="block text-sm font-medium text-gray-700">Colore cornice<input v-model="design.frameColor" type="color" class="qr-color mt-2 block h-11 w-full cursor-pointer rounded-[var(--radius-sm)] border border-gray-200" /></label>
+                            </div>
+                        </div>
+
+                        <div v-if="appearanceTab === 'logo'" class="mt-5">
+                            <div class="flex flex-wrap items-center gap-3">
+                                <label class="inline-flex cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"><ImagePlus class="h-4 w-4" />{{ logo ? 'Cambia logo' : 'Carica logo' }}<input type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" @change="selectLogo" /></label>
+                                <button v-if="logo" type="button" class="inline-flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-red-600" @click="logo = ''"><X class="h-4 w-4" />Rimuovi</button>
+                            </div>
+                            <div v-if="logo" class="mt-5 flex items-center gap-4 rounded-[var(--radius-sm)] border border-gray-200 p-3">
+                                <img :src="logo" alt="Logo selezionato" class="h-12 w-12 shrink-0 object-contain" />
+                                <label class="min-w-0 flex-1 text-sm font-medium text-gray-700">Dimensione<input v-model.number="design.logoSize" type="range" min="0.1" max="0.25" step="0.01" class="mt-2 w-full accent-[hsl(var(--primary-app))]" /></label>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -221,4 +303,9 @@ onBeforeUnmount(() => { if (previewUrl.value) URL.revokeObjectURL(previewUrl.val
 .qr-color::-webkit-color-swatch-wrapper { padding: 0; }
 .qr-color::-webkit-color-swatch { border: 0; }
 .qr-color::-moz-color-swatch { border: 0; }
+.qr-option { display: flex; min-width: 0; flex-direction: column; align-items: center; gap: 0.4rem; border: 1px solid #e5e7eb; border-radius: var(--radius-sm); padding: 0.55rem; background: #fff; color: #4b5563; font-size: 0.75rem; font-weight: 600; text-align: center; transition: border-color 0.15s, background-color 0.15s; }
+.qr-option:hover { background: #f9fafb; }
+.qr-option-active { border-color: hsl(var(--primary-app)); background: hsl(var(--primary-app) / 0.07); color: hsl(var(--primary-app)); }
+.qr-option-image { width: 100%; max-width: 72px; height: 72px; object-fit: contain; }
+.qr-option-placeholder { width: 48px; height: 72px; color: #9ca3af; }
 </style>
