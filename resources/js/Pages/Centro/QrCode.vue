@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import ToolAccordion from '@/Components/ToolAccordion.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { ArrowLeft, CalendarDays, ContactRound, Download, ImagePlus, Link2, Mail, MessageCircle, MessageSquare, Phone, QrCode as QrCodeIcon, Type, Wifi, X } from '@lucide/vue';
 import QRCodeStyling from 'qr-code-styling';
@@ -13,7 +14,7 @@ const kinds = [
 const kind = ref('url');
 const fields = reactive({ value: '', subject: '', message: '', wifiPassword: '', wifiSecurity: 'WPA', firstName: '', lastName: '', organization: '', phone: '', email: '', website: '', eventEnd: '', eventLocation: '' });
 const design = reactive({ foreground: '#172033', background: '#ffffff', cornerColor: '#172033', centerColor: '#172033', shape: 'square', corner: 'square', center: 'square', frame: 'none', frameText: 'SCANSIONA QUI', frameColor: '#172033', gradient: false, secondColor: '#0877ed', logoSize: 0.18 });
-const appearanceTab = ref('shape');
+const openSetting = ref('shape');
 const shapeOptions = [['square', 'Quadrata'], ['rounded', 'Arrotondata'], ['dots', 'Puntini'], ['classy', 'Classica'], ['classy-rounded', 'Morbida'], ['extra-rounded', 'Molto tonda']];
 const cornerOptions = [['square', 'Quadrati'], ['extra-rounded', 'Arrotondati'], ['dot', 'Tondi']];
 const centerOptions = [['square', 'Quadrati'], ['dot', 'Tondi']];
@@ -193,7 +194,8 @@ onBeforeUnmount(() => { if (previewUrl.value) URL.revokeObjectURL(previewUrl.val
             </div>
         </template>
         <div class="py-8">
-            <div class="mx-auto grid max-w-[1200px] items-start gap-5 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
+            <div class="mx-auto grid max-w-[1600px] items-stretch gap-6 px-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:px-8">
+                <div class="min-w-0 space-y-5">
                 <section class="surface min-w-0 p-5 sm:p-6">
                     <h3 class="text-base font-semibold text-gray-900">Contenuto</h3>
                     <div class="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-5" role="group" aria-label="Tipo di contenuto">
@@ -220,14 +222,24 @@ onBeforeUnmount(() => { if (previewUrl.value) URL.revokeObjectURL(previewUrl.val
                         <label class="block text-sm font-medium text-gray-700">Luogo<input v-model="fields.eventLocation" type="text" :class="inputClass" /></label>
                         <label class="block text-sm font-medium text-gray-700">Descrizione<input v-model="fields.message" type="text" :class="inputClass" /></label>
                     </div>
-
-                    <div class="mt-8 border-t border-gray-100 pt-6">
-                        <h3 class="text-base font-semibold text-gray-900">Aspetto</h3>
-                        <div class="mt-4 grid grid-cols-3 gap-1 rounded-[var(--radius-sm)] bg-gray-100 p-1" role="tablist" aria-label="Aspetto QR">
-                            <button v-for="[id, title] in [['shape', 'Forma'], ['frame', 'Cornice'], ['logo', 'Logo']]" :key="id" type="button" role="tab" :aria-selected="appearanceTab === id" :class="['min-h-10 rounded-[var(--radius-sm)] px-2 text-sm font-semibold transition', appearanceTab === id ? 'bg-white text-[hsl(var(--primary-app))] shadow-sm' : 'text-gray-600 hover:text-gray-900']" @click="appearanceTab = id">{{ title }}</button>
-                        </div>
-
-                        <div v-if="appearanceTab === 'shape'" class="mt-5 space-y-6">
+                </section>
+                <section class="surface min-w-0 p-5 sm:p-6">
+                    <h3 class="text-base font-semibold text-gray-900">Anteprima</h3>
+                    <div class="mt-5 flex min-h-[320px] items-center justify-center rounded-[var(--radius-sm)] border border-gray-200 bg-gray-50 p-4 sm:p-6">
+                        <img v-if="previewUrl" :src="previewUrl" alt="Anteprima del codice QR" class="block h-auto w-full max-w-[420px] object-contain" />
+                        <div v-else class="text-center text-gray-400"><QrCodeIcon class="mx-auto h-16 w-16" :stroke-width="1.4" /><p class="mt-3 text-sm">{{ error || 'Inserisci un contenuto per generare il QR' }}</p></div>
+                    </div>
+                    <p v-if="error && previewUrl" class="mt-3 text-sm text-red-600" role="alert">{{ error }}</p>
+                    <div class="mt-5 flex flex-wrap gap-2">
+                        <button v-for="format in ['PNG', 'SVG']" :key="format" type="button" :disabled="!generatedSvg" class="inline-flex items-center gap-2 rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app))] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40" @click="save(format.toLowerCase())"><Download class="h-4 w-4" />Scarica {{ format }}</button>
+                    </div>
+                </section>
+                </div>
+                <aside class="surface min-w-0 self-start overflow-hidden lg:sticky lg:top-5">
+                    <div class="divide-y divide-gray-100">
+                        <div class="px-4 py-4"><h3 class="text-base font-semibold text-gray-900">Aspetto</h3></div>
+                        <ToolAccordion title="Forma" :summary="shapeOptions.find(([id]) => id === design.shape)?.[1]" panel-id="qr-shape" :open="openSetting === 'shape'" @toggle="openSetting = openSetting === 'shape' ? '' : 'shape'">
+                        <div class="space-y-6">
                             <div>
                                 <h4 class="text-sm font-semibold text-gray-800">Moduli</h4>
                                 <div class="mt-3 grid grid-cols-3 gap-2">
@@ -246,8 +258,10 @@ onBeforeUnmount(() => { if (previewUrl.value) URL.revokeObjectURL(previewUrl.val
                                     <button v-for="[id, title] in centerOptions" :key="id" type="button" :aria-pressed="design.center === id" :class="['qr-option', design.center === id ? 'qr-option-active' : '']" @click="design.center = id"><img v-if="optionPreviews[`center:${id}`]" :src="optionPreviews[`center:${id}`]" alt="" class="qr-option-image" /><QrCodeIcon v-else class="qr-option-placeholder" /><span>{{ title }}</span></button>
                                 </div>
                             </div>
-                            <div class="border-t border-gray-100 pt-5">
-                                <h4 class="text-sm font-semibold text-gray-800">Colori</h4>
+                        </div>
+                        </ToolAccordion>
+                        <ToolAccordion title="Colori" :summary="design.gradient ? 'Sfumatura' : 'Colori pieni'" panel-id="qr-colors" :open="openSetting === 'colors'" @toggle="openSetting = openSetting === 'colors' ? '' : 'colors'">
+                            <div>
                                 <div class="mt-3 grid grid-cols-2 gap-4">
                                     <label class="block text-sm font-medium text-gray-700">Codice<input v-model="design.foreground" type="color" class="qr-color mt-2 block h-11 w-full cursor-pointer rounded-[var(--radius-sm)] border border-gray-200" /></label>
                                     <label class="block text-sm font-medium text-gray-700">Sfondo<input v-model="design.background" type="color" class="qr-color mt-2 block h-11 w-full cursor-pointer rounded-[var(--radius-sm)] border border-gray-200" /></label>
@@ -257,20 +271,19 @@ onBeforeUnmount(() => { if (previewUrl.value) URL.revokeObjectURL(previewUrl.val
                                 <label class="mt-4 flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700"><input v-model="design.gradient" type="checkbox" class="rounded border-gray-300 text-[hsl(var(--primary-app))] focus:ring-[hsl(var(--primary-app))]" />Sfumatura sul codice</label>
                                 <label v-if="design.gradient" class="mt-3 block text-sm font-medium text-gray-700">Secondo colore<input v-model="design.secondColor" type="color" class="qr-color mt-2 block h-11 w-full cursor-pointer rounded-[var(--radius-sm)] border border-gray-200" /></label>
                             </div>
-                        </div>
+                        </ToolAccordion>
 
-                        <div v-if="appearanceTab === 'frame'" class="mt-5">
-                            <h4 class="text-sm font-semibold text-gray-800">Scegli una cornice</h4>
-                            <div class="mt-3 grid grid-cols-2 gap-2">
+                        <ToolAccordion title="Cornice" :summary="frameOptions.find(([id]) => id === design.frame)?.[1]" panel-id="qr-frame" :open="openSetting === 'frame'" @toggle="openSetting = openSetting === 'frame' ? '' : 'frame'">
+                            <div class="grid grid-cols-2 gap-2">
                                 <button v-for="[id, title] in frameOptions" :key="id" type="button" :aria-pressed="design.frame === id" :class="['qr-option', design.frame === id ? 'qr-option-active' : '']" @click="design.frame = id"><img v-if="optionPreviews[`frame:${id}`]" :src="optionPreviews[`frame:${id}`]" alt="" class="qr-option-image" /><QrCodeIcon v-else class="qr-option-placeholder" /><span>{{ title }}</span></button>
                             </div>
                             <div v-if="design.frame !== 'none'" class="mt-5 grid gap-4 sm:grid-cols-2">
                                 <label v-if="design.frame === 'label' || design.frame === 'label-top'" class="block text-sm font-medium text-gray-700">Testo cornice<input v-model="design.frameText" type="text" maxlength="24" :class="inputClass" /></label>
                                 <label class="block text-sm font-medium text-gray-700">Colore cornice<input v-model="design.frameColor" type="color" class="qr-color mt-2 block h-11 w-full cursor-pointer rounded-[var(--radius-sm)] border border-gray-200" /></label>
                             </div>
-                        </div>
+                        </ToolAccordion>
 
-                        <div v-if="appearanceTab === 'logo'" class="mt-5">
+                        <ToolAccordion title="Logo" :summary="logo ? 'Caricato' : 'Nessuno'" panel-id="qr-logo" :open="openSetting === 'logo'" @toggle="openSetting = openSetting === 'logo' ? '' : 'logo'">
                             <div class="flex flex-wrap items-center gap-3">
                                 <label class="inline-flex cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"><ImagePlus class="h-4 w-4" />{{ logo ? 'Cambia logo' : 'Carica logo' }}<input type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" @change="selectLogo" /></label>
                                 <button v-if="logo" type="button" class="inline-flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-red-600" @click="logo = ''"><X class="h-4 w-4" />Rimuovi</button>
@@ -279,20 +292,9 @@ onBeforeUnmount(() => { if (previewUrl.value) URL.revokeObjectURL(previewUrl.val
                                 <img :src="logo" alt="Logo selezionato" class="h-12 w-12 shrink-0 object-contain" />
                                 <label class="min-w-0 flex-1 text-sm font-medium text-gray-700">Dimensione<input v-model.number="design.logoSize" type="range" min="0.1" max="0.25" step="0.01" class="mt-2 w-full accent-[hsl(var(--primary-app))]" /></label>
                             </div>
-                        </div>
+                        </ToolAccordion>
                     </div>
-                </section>
-                <section class="surface min-w-0 p-5 sm:sticky sm:top-5 sm:p-6">
-                    <h3 class="text-base font-semibold text-gray-900">Anteprima</h3>
-                    <div class="mt-5 flex min-h-[320px] items-center justify-center rounded-[var(--radius-sm)] border border-gray-200 bg-gray-50 p-4 sm:p-6">
-                        <img v-if="previewUrl" :src="previewUrl" alt="Anteprima del codice QR" class="block h-auto w-full max-w-[340px] object-contain" />
-                        <div v-else class="text-center text-gray-400"><QrCodeIcon class="mx-auto h-16 w-16" :stroke-width="1.4" /><p class="mt-3 text-sm">{{ error || 'Inserisci un contenuto per generare il QR' }}</p></div>
-                    </div>
-                    <p v-if="error && previewUrl" class="mt-3 text-sm text-red-600" role="alert">{{ error }}</p>
-                    <div class="mt-5 flex flex-wrap gap-2">
-                        <button v-for="format in ['PNG', 'SVG']" :key="format" type="button" :disabled="!generatedSvg" class="inline-flex items-center gap-2 rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app))] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40" @click="save(format.toLowerCase())"><Download class="h-4 w-4" />Scarica {{ format }}</button>
-                    </div>
-                </section>
+                </aside>
             </div>
         </div>
     </AuthenticatedLayout>
