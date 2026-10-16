@@ -14,7 +14,7 @@ return new class extends Migration {
             $table->string('status', 20)->default('queued');
             $table->string('quality', 20);
             $table->string('error')->nullable();
-            $table->timestamp('expires_at')->index();
+            $table->dateTime('expires_at')->index();
             $table->timestamps();
             $table->index(['user_id', 'created_at']);
         });

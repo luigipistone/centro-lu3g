@@ -7,6 +7,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Http\UploadedFile;
 use App\Jobs\ConvertVideoToWebm;
 use Illuminate\Support\Str;
@@ -64,6 +65,7 @@ class ToolsTest extends TestCase
 
     public function test_video_upload_is_private_and_queued(): void
     {
+        $this->assertSame('datetime', Schema::getColumnType('video_conversions', 'expires_at'));
         Storage::fake('local');
         Queue::fake();
         config()->set('video.ffmpeg', PHP_BINARY);
