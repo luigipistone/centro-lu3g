@@ -4374,7 +4374,6 @@ function calendarDayStyle(sectionMonth, cell) {
                                 :class="[
                                     'group flex min-h-[170px] flex-col bg-white p-2 transition',
                                     cell.empty ? 'bg-white/70' : '',
-                                    cell.today ? 'ring-2 ring-inset ring-indigo-500/70' : '',
                                     calendarHolidays[cell.date] ? 'calendar-holiday-cell' : '',
                                     calendarDropDate === cell.date && !calendarHolidays[cell.date] ? 'bg-indigo-50/80' : '',
                                     calendarDraggedTask && !cell.empty && !calendarHolidays[cell.date] ? 'outline outline-1 outline-transparent transition hover:outline-indigo-200' : '',
@@ -4388,7 +4387,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                     <div :class="compactWeekend && cell.weekend ? '' : 'min-h-[84px]'">
                                     <div class="mb-2 flex items-center justify-between">
                                         <span class="flex min-w-0 items-center gap-1.5" :title="calendarHolidays[cell.date] || undefined">
-                                            <span :class="['text-sm font-semibold', cell.today ? 'text-indigo-600' : 'text-gray-500']">{{ cell.day }}</span>
+                                            <span :class="['text-sm font-semibold', cell.today ? 'inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-indigo-600 px-1 text-white' : 'text-gray-500']">{{ cell.day }}</span>
                                             <span v-if="calendarHolidays[cell.date]" class="truncate text-[10px] font-medium text-gray-500">{{ calendarHolidays[cell.date] }}</span>
                                         </span>
                                         <div class="flex shrink-0 items-center gap-1">
