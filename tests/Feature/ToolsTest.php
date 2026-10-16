@@ -76,6 +76,8 @@ class ToolsTest extends TestCase
             'quality' => 'balanced',
         ])->assertAccepted()->assertJsonStructure(['id']);
         $id = $response->json('id');
+        $expiry = DB::table('video_conversions')->where('id', $id)->value('expires_at');
+        $this->assertGreaterThan(now(config('app.timezone'))->addMinutes(119)->toDateTimeString(), $expiry);
         Storage::disk('local')->assertExists('video-conversions/'.$id.'/source.mov');
         Queue::assertPushed(ConvertVideoToWebm::class, 1);
         $this->actingAs($owner)->getJson(route('tools.video-to-webm.status', $id))->assertOk()->assertJsonPath('status', 'queued');
@@ -100,6 +102,30 @@ class ToolsTest extends TestCase
             'quality' => 'high',
         ])->assertStatus(503);
         $this->assertDatabaseCount('video_conversions', 0);
+    }
+
+    public function test_video_expiry_uses_app_timezone_when_php_timezone_differs(): void
+    {
+        Storage::fake('local');
+        Queue::fake();
+        config()->set('video.ffmpeg', PHP_BINARY);
+        config()->set('video.ffprobe', PHP_BINARY);
+        $originalTimezone = date_default_timezone_get();
+        date_default_timezone_set('UTC');
+
+        try {
+            $response = $this->actingAs($this->userWithRole('editor'))->postJson(route('tools.video-to-webm.store'), [
+                'video' => UploadedFile::fake()->create('clip.mp4', 1024, 'video/mp4'),
+                'quality' => 'balanced',
+            ])->assertAccepted();
+            $id = $response->json('id');
+            $expiry = DB::table('video_conversions')->where('id', $id)->value('expires_at');
+            $this->assertGreaterThan(now(config('app.timezone'))->addMinutes(119)->toDateTimeString(), $expiry);
+            $this->actingAs(auth()->user())->getJson(route('tools.video-to-webm.status', $id))
+                ->assertOk()->assertJsonPath('status', 'queued');
+        } finally {
+            date_default_timezone_set($originalTimezone);
+        }
     }
 
     public function test_expired_video_files_are_removed(): void

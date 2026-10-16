@@ -14,6 +14,7 @@ const quality = ref('balanced');
 const status = ref('idle');
 const conversionId = ref(null);
 const error = ref('');
+const uploadProgress = ref(0);
 let timer = null;
 
 const choices = [
@@ -46,6 +47,7 @@ function choose(selected) {
     stopPolling();
     file.value = candidate;
     status.value = 'idle';
+    uploadProgress.value = 0;
     conversionId.value = null;
     sessionStorage.removeItem('centro-video-conversion-id');
 }
@@ -61,6 +63,7 @@ function reset() {
     conversionId.value = null;
     sessionStorage.removeItem('centro-video-conversion-id');
     status.value = 'idle';
+    uploadProgress.value = 0;
     error.value = '';
 }
 
@@ -69,6 +72,7 @@ async function poll() {
     try {
         const { data } = await axios.get(route('tools.video-to-webm.status', conversionId.value));
         status.value = data.status;
+        if (data.status === 'done') error.value = '';
         if (data.status === 'failed') error.value = data.error || 'Conversione non riuscita.';
         if (data.status === 'expired') error.value = 'Il file è scaduto. Caricalo di nuovo.';
         if (data.status === 'expired') sessionStorage.removeItem('centro-video-conversion-id');
@@ -90,11 +94,16 @@ async function convert() {
     if (!file.value || ['uploading', 'queued', 'processing'].includes(status.value)) return;
     error.value = '';
     status.value = 'uploading';
+    uploadProgress.value = 0;
     const body = new FormData();
     body.append('video', file.value);
     body.append('quality', quality.value);
     try {
-        const { data } = await axios.post(route('tools.video-to-webm.store'), body);
+        const { data } = await axios.post(route('tools.video-to-webm.store'), body, {
+            onUploadProgress: (event) => {
+                if (event.total) uploadProgress.value = Math.min(100, Math.round(event.loaded / event.total * 100));
+            },
+        });
         conversionId.value = data.id;
         sessionStorage.setItem('centro-video-conversion-id', data.id);
         status.value = 'queued';
@@ -132,8 +141,18 @@ async function convert() {
                             <label v-for="choice in choices" :key="choice.value" class="flex cursor-pointer items-center gap-3 rounded-[var(--radius-sm)] border px-3 py-3 transition" :class="quality === choice.value ? 'border-[hsl(var(--primary-app))] bg-[hsl(var(--primary-app)/0.04)]' : 'border-gray-200 hover:border-gray-300'"><input v-model="quality" type="radio" name="quality" :value="choice.value" class="text-[hsl(var(--primary-app))]" /><span class="min-w-0"><span class="block text-sm font-semibold text-gray-800">{{ choice.title }}</span><span class="block text-xs text-gray-500">{{ choice.detail }}</span></span></label>
                         </fieldset>
                         <button type="button" class="btn btn-primary mt-5 w-full justify-center" :disabled="!available || !file || ['uploading', 'queued', 'processing'].includes(status)" @click="convert">{{ status === 'uploading' ? 'Caricamento...' : status === 'queued' ? 'In attesa...' : status === 'processing' ? 'Conversione in corso...' : 'Converti in WebM' }}</button>
+                        <div v-if="['uploading', 'queued', 'processing'].includes(status)" class="mt-4" role="status" aria-live="polite">
+                            <div class="mb-2 flex items-center justify-between gap-3 text-sm text-gray-600">
+                                <span>{{ status === 'uploading' ? (uploadProgress === 100 ? 'Preparazione del video...' : 'Caricamento del video') : status === 'queued' ? 'Video caricato, conversione in attesa' : 'Conversione in WebM in corso' }}</span>
+                                <span v-if="status === 'uploading' && uploadProgress < 100" class="font-semibold tabular-nums text-gray-800">{{ uploadProgress }}%</span>
+                            </div>
+                            <div class="h-2 overflow-hidden rounded-full bg-gray-100" role="progressbar" :aria-label="status === 'uploading' ? 'Caricamento video' : 'Conversione video'" :aria-valuenow="status === 'uploading' ? uploadProgress : undefined" :aria-valuemin="status === 'uploading' ? 0 : undefined" :aria-valuemax="status === 'uploading' ? 100 : undefined">
+                                <div v-if="status === 'uploading'" class="h-full rounded-full bg-[hsl(var(--primary-app))] transition-[width] duration-200" :style="{ width: `${uploadProgress}%` }" />
+                                <div v-else class="video-progress-indeterminate h-full w-1/3 rounded-full bg-[hsl(var(--primary-app))]" />
+                            </div>
+                            <p v-if="status === 'processing'" class="mt-2 text-xs text-gray-500">La conversione può richiedere alcuni minuti. Puoi lasciare aperta questa pagina.</p>
+                        </div>
                         <p v-if="!available" role="alert" class="mt-3 text-sm text-amber-700">La conversione video non è ancora disponibile su questo server.</p>
-                        <p v-if="status === 'queued' || status === 'processing'" role="status" class="mt-3 text-sm text-gray-600">{{ status === 'queued' ? 'Video in attesa di conversione.' : 'Il video è in conversione. Puoi lasciare aperta questa pagina.' }}</p>
                         <a v-if="status === 'done' && conversionId" :href="route('tools.video-to-webm.download', conversionId)" class="btn btn-primary mt-3 w-full justify-center"><Download class="h-4 w-4" /> Scarica WebM</a>
                         <p v-if="status === 'done'" class="mt-2 text-xs text-gray-500">Il file resta disponibile per due ore dal caricamento.</p>
                         <p v-if="error" role="alert" class="mt-3 text-sm text-red-600">{{ error }}</p>
@@ -143,3 +162,14 @@ async function convert() {
         </div>
     </AuthenticatedLayout>
 </template>
+
+<style scoped>
+@keyframes video-progress-slide {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(300%); }
+}
+.video-progress-indeterminate { animation: video-progress-slide 1.8s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+    .video-progress-indeterminate { animation: none; width: 100%; }
+}
+</style>

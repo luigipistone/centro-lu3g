@@ -24,7 +24,7 @@ Artisan::command('centro:publish-messages', function (ScheduledCompanyMessageSer
 Schedule::command('centro:publish-messages')->everyMinute()->withoutOverlapping();
 
 Artisan::command('centro:clean-video-conversions', function () {
-    $expired = DB::table('video_conversions')->where('expires_at', '<=', now())->where('status', '!=', 'processing')->pluck('id');
+    $expired = DB::table('video_conversions')->where('expires_at', '<=', now(config('app.timezone'))->toDateTimeString())->where('status', '!=', 'processing')->pluck('id');
     foreach ($expired as $id) {
         Storage::disk('local')->deleteDirectory('video-conversions/'.$id);
     }

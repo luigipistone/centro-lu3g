@@ -22,7 +22,7 @@ class ConvertVideoToWebm implements ShouldQueue
     public function handle(): void
     {
         $conversion = DB::table('video_conversions')->where('id', $this->id)->first();
-        if (! $conversion || $conversion->expires_at <= now()) {
+        if (! $conversion || $conversion->expires_at <= now(config('app.timezone'))->toDateTimeString()) {
             Storage::disk('local')->deleteDirectory('video-conversions/'.$this->id);
             return;
         }
@@ -73,7 +73,7 @@ class ConvertVideoToWebm implements ShouldQueue
             }
 
             $disk->delete('video-conversions/'.$this->id.'/source.'.$this->extension);
-            if ($conversion->expires_at <= now()) {
+            if ($conversion->expires_at <= now(config('app.timezone'))->toDateTimeString()) {
                 $disk->deleteDirectory('video-conversions/'.$this->id);
                 DB::table('video_conversions')->where('id', $this->id)->update(['status' => 'expired', 'updated_at' => now()]);
             } else {

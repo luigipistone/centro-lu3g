@@ -51,7 +51,7 @@ class VideoConversionController extends Controller
                 'original_name' => Str::limit($file->getClientOriginalName(), 255, ''),
                 'status' => 'queued',
                 'quality' => $data['quality'],
-                'expires_at' => now()->addHours(2),
+                'expires_at' => now(config('app.timezone'))->addHours(2)->toDateTimeString(),
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
@@ -70,7 +70,7 @@ class VideoConversionController extends Controller
         $conversion = $this->ownedConversion($request, $id);
 
         return response()->json([
-            'status' => $conversion->expires_at <= now() ? 'expired' : $conversion->status,
+            'status' => $conversion->expires_at->isPast() ? 'expired' : $conversion->status,
             'error' => $conversion->error,
             'expires_at' => $conversion->expires_at->toIso8601String(),
         ]);
@@ -79,7 +79,7 @@ class VideoConversionController extends Controller
     public function download(Request $request, string $id): BinaryFileResponse
     {
         $conversion = $this->ownedConversion($request, $id);
-        abort_if($conversion->expires_at <= now() || $conversion->status !== 'done', 404);
+        abort_if($conversion->expires_at->isPast() || $conversion->status !== 'done', 404);
         $path = 'video-conversions/'.$id.'/output.webm';
         abort_unless(Storage::disk('local')->exists($path), 404);
 
@@ -94,7 +94,7 @@ class VideoConversionController extends Controller
         abort_unless(Str::isUuid($id), 404);
         $conversion = DB::table('video_conversions')->where('id', $id)->where('user_id', $request->user()->id)->first();
         abort_unless($conversion, 404);
-        $conversion->expires_at = \Illuminate\Support\Carbon::parse($conversion->expires_at);
+        $conversion->expires_at = \Illuminate\Support\Carbon::parse($conversion->expires_at, config('app.timezone'));
 
         return $conversion;
     }
