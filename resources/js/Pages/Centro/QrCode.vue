@@ -23,6 +23,7 @@ const optionPreviews = reactive({});
 const logo = ref('');
 const previewUrl = ref('');
 const generatedSvg = ref('');
+const generating = ref(false);
 const error = ref('');
 const inputClass = 'mt-2 block w-full min-w-0 rounded-[var(--radius-sm)] border-gray-200 text-sm focus:border-[hsl(var(--primary-app))] focus:ring-[hsl(var(--primary-app)/0.18)]';
 
@@ -69,10 +70,29 @@ function setKind(next) {
     Object.assign(fields, { value: '', subject: '', message: '', wifiPassword: '', firstName: '', lastName: '', organization: '', phone: '', email: '', website: '', eventEnd: '', eventLocation: '' });
 }
 
-function setPreview(svg) {
-    if (previewUrl.value) URL.revokeObjectURL(previewUrl.value);
-    generatedSvg.value = svg;
-    previewUrl.value = svg ? URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })) : '';
+function clearPreview() {
+    const previous = previewUrl.value;
+    generatedSvg.value = '';
+    previewUrl.value = '';
+    if (previous) window.setTimeout(() => URL.revokeObjectURL(previous), 1000);
+}
+
+async function showPreview(svg, current) {
+    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+    try {
+        const image = new Image();
+        image.src = url;
+        await image.decode();
+        if (current !== generation) { URL.revokeObjectURL(url); return; }
+        const previous = previewUrl.value;
+        generatedSvg.value = svg;
+        previewUrl.value = url;
+        generating.value = false;
+        if (previous) window.setTimeout(() => URL.revokeObjectURL(previous), 1000);
+    } catch {
+        URL.revokeObjectURL(url);
+        throw new Error('preview');
+    }
 }
 
 function composeSvg(raw, options = design) {
@@ -132,15 +152,15 @@ let generation = 0;
 watch([payload, design, logo], async () => {
     const current = ++generation;
     error.value = '';
-    setPreview('');
-    if (!payload.value) return;
-    if (payload.value.length > 2200) { error.value = 'Il contenuto è troppo lungo per un QR leggibile.'; return; }
-    if (design.foreground.toLowerCase() === design.background.toLowerCase()) { error.value = 'Scegli colori diversi per codice e sfondo.'; return; }
+    generating.value = Boolean(payload.value);
+    if (!payload.value) { clearPreview(); return; }
+    if (payload.value.length > 2200) { clearPreview(); generating.value = false; error.value = 'Il contenuto è troppo lungo per un QR leggibile.'; return; }
+    if (design.foreground.toLowerCase() === design.background.toLowerCase()) { clearPreview(); generating.value = false; error.value = 'Scegli colori diversi per codice e sfondo.'; return; }
     try {
         const svg = await createQrSvg(payload.value, { ...design }, logo.value);
-        if (current === generation) setPreview(svg);
+        if (current === generation) await showPreview(svg, current);
     } catch {
-        if (current === generation) error.value = 'Impossibile generare il QR. Controlla il contenuto.';
+        if (current === generation) { clearPreview(); generating.value = false; error.value = 'Impossibile generare il QR. Controlla il contenuto.'; }
     }
 }, { deep: true, immediate: true });
 
@@ -167,7 +187,7 @@ function download(blob, filename) {
 }
 
 async function save(format) {
-    if (!generatedSvg.value) return;
+    if (!generatedSvg.value || generating.value) return;
     if (format === 'svg') { download(new Blob([generatedSvg.value], { type: 'image/svg+xml' }), 'codice-qr.svg'); return; }
     try {
         const image = new Image();
@@ -231,7 +251,7 @@ onBeforeUnmount(() => { if (previewUrl.value) URL.revokeObjectURL(previewUrl.val
                     </div>
                     <p v-if="error && previewUrl" class="mt-3 text-sm text-red-600" role="alert">{{ error }}</p>
                     <div class="mt-5 flex flex-wrap gap-2">
-                        <button v-for="format in ['PNG', 'SVG']" :key="format" type="button" :disabled="!generatedSvg" class="inline-flex items-center gap-2 rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app))] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40" @click="save(format.toLowerCase())"><Download class="h-4 w-4" />Scarica {{ format }}</button>
+                        <button v-for="format in ['PNG', 'SVG']" :key="format" type="button" :disabled="!generatedSvg || generating" class="inline-flex items-center gap-2 rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app))] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40" @click="save(format.toLowerCase())"><Download class="h-4 w-4" />Scarica {{ format }}</button>
                     </div>
                 </section>
                 </div>
