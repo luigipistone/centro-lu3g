@@ -2,7 +2,7 @@
 import ToolDropzone from '@/Components/ToolDropzone.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft, Download, Film, LoaderCircle, X } from '@lucide/vue';
+import { ArrowLeft, Download, Film, LoaderCircle, Trash2, X } from '@lucide/vue';
 import axios from 'axios';
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 
@@ -18,6 +18,8 @@ const status = ref('idle');
 const conversions = ref(props.conversions);
 const error = ref('');
 const uploadProgress = ref(0);
+const deletingId = ref(null);
+const listError = ref('');
 let timer = null;
 
 const choices = [
@@ -55,6 +57,21 @@ async function refreshConversions() {
 
 function expiryLabel(value) {
     return new Intl.DateTimeFormat('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
+}
+
+async function removeConversion(conversion) {
+    if (deletingId.value || !window.confirm(`Eliminare "${conversion.name}"? Il file non sarà più scaricabile.`)) return;
+    deletingId.value = conversion.id;
+    listError.value = '';
+    try {
+        await axios.delete(route('tools.video-to-webm.destroy', conversion.id));
+        conversions.value = conversions.value.filter((item) => item.id !== conversion.id);
+        scheduleRefresh();
+    } catch {
+        listError.value = 'Impossibile eliminare il video. Riprova.';
+    } finally {
+        deletingId.value = null;
+    }
 }
 
 function choose(selected) {
@@ -147,6 +164,7 @@ async function convert() {
                 <section v-if="conversions.length" class="surface mt-5 min-w-0 p-5 sm:p-6">
                     <h3 class="mb-1 text-base font-semibold text-gray-900">Conversioni recenti</h3>
                     <p class="mb-4 text-xs text-gray-500">I file convertiti restano disponibili per due ore dal caricamento.</p>
+                    <p v-if="listError" role="alert" class="mb-3 text-sm text-red-600">{{ listError }}</p>
                     <div class="divide-y divide-gray-100">
                         <div v-for="conversion in conversions" :key="conversion.id" class="flex min-w-0 items-center gap-3 py-3 first:pt-0 last:pb-0">
                             <Film class="h-5 w-5 shrink-0 text-gray-500" :stroke-width="1.7" />
@@ -156,6 +174,7 @@ async function convert() {
                             </div>
                             <LoaderCircle v-if="['queued', 'processing'].includes(conversion.status)" class="h-4 w-4 shrink-0 animate-spin text-[hsl(var(--primary-app))]" aria-label="Conversione in corso" />
                             <a v-if="conversion.status === 'done'" :href="route('tools.video-to-webm.download', conversion.id)" class="icon-btn flex h-9 w-9 shrink-0 items-center justify-center" :aria-label="`Scarica ${conversion.name} in WebM`" title="Scarica WebM"><Download class="h-4 w-4" :stroke-width="1.7" /></a>
+                            <button type="button" class="icon-btn flex h-9 w-9 shrink-0 items-center justify-center text-red-600" :disabled="deletingId === conversion.id" :aria-label="`Elimina ${conversion.name}`" title="Elimina video" @click="removeConversion(conversion)"><LoaderCircle v-if="deletingId === conversion.id" class="h-4 w-4 animate-spin" /><Trash2 v-else class="h-4 w-4" :stroke-width="1.7" /></button>
                         </div>
                     </div>
                 </section>

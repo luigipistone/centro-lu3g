@@ -37,6 +37,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/tools/video-to-webm/conversions', [VideoConversionController::class, 'store'])->name('tools.video-to-webm.store');
     Route::get('/tools/video-to-webm/conversions/{id}', [VideoConversionController::class, 'show'])->name('tools.video-to-webm.status');
     Route::get('/tools/video-to-webm/conversions/{id}/download', [VideoConversionController::class, 'download'])->name('tools.video-to-webm.download');
+    Route::delete('/tools/video-to-webm/conversions/{id}', [VideoConversionController::class, 'destroy'])->name('tools.video-to-webm.destroy');
     Route::post('/clients', [CentroPageController::class, 'store'])->defaults('section', 'clients')->name('clients.store');
     Route::get('/clients/{id}', [CentroPageController::class, 'show'])->defaults('section', 'clients')->name('clients.show');
     Route::put('/clients/{id}', [CentroPageController::class, 'update'])->defaults('section', 'clients')->name('clients.update');

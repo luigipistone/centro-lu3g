@@ -143,6 +143,30 @@ class ToolsTest extends TestCase
         $this->actingAs($owner)->get(route('tools.video-to-webm.download', $foreign))->assertNotFound();
     }
 
+    public function test_video_conversion_can_only_be_deleted_by_its_owner(): void
+    {
+        Storage::fake('local');
+        $owner = $this->userWithRole('editor');
+        $other = $this->userWithRole('editor');
+        $id = (string) Str::uuid();
+        DB::table('video_conversions')->insert([
+            'id' => $id, 'user_id' => $owner->id, 'original_name' => 'clip.mp4',
+            'quality' => 'balanced', 'status' => 'processing',
+            'expires_at' => now()->addHour(), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        Storage::disk('local')->put('video-conversions/'.$id.'/source.mp4', 'video');
+
+        $this->actingAs($other)->deleteJson(route('tools.video-to-webm.destroy', $id))->assertNotFound();
+        Storage::disk('local')->assertExists('video-conversions/'.$id.'/source.mp4');
+        $this->actingAs($owner)->deleteJson(route('tools.video-to-webm.destroy', $id))->assertNoContent();
+        $this->assertDatabaseMissing('video_conversions', ['id' => $id]);
+        Storage::disk('local')->assertMissing('video-conversions/'.$id.'/source.mp4');
+        $this->actingAs($owner)->getJson(route('tools.video-to-webm.conversions'))
+            ->assertJsonCount(0, 'conversions');
+        (new ConvertVideoToWebm($id, 'mp4'))->handle();
+        $this->assertDatabaseMissing('video_conversions', ['id' => $id]);
+    }
+
     public function test_video_expiry_uses_app_timezone_when_php_timezone_differs(): void
     {
         Storage::fake('local');

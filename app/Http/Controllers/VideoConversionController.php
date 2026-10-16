@@ -95,6 +95,15 @@ class VideoConversionController extends Controller
         ]);
     }
 
+    public function destroy(Request $request, string $id): \Illuminate\Http\Response
+    {
+        $this->ownedConversion($request, $id);
+        DB::table('video_conversions')->where('id', $id)->where('user_id', $request->user()->id)->delete();
+        Storage::disk('local')->deleteDirectory('video-conversions/'.$id);
+
+        return response()->noContent();
+    }
+
     private function ownedConversion(Request $request, string $id): object
     {
         abort_unless(Str::isUuid($id), 404);

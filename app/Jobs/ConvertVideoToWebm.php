@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\Process\Process;
+use Symfony\Component\Process\Exception\ProcessFailedException;
 
 class ConvertVideoToWebm implements ShouldQueue
 {
@@ -27,7 +28,10 @@ class ConvertVideoToWebm implements ShouldQueue
             return;
         }
 
-        DB::table('video_conversions')->where('id', $this->id)->update(['status' => 'processing', 'updated_at' => now()]);
+        if (! DB::table('video_conversions')->where('id', $this->id)->where('status', 'queued')
+            ->update(['status' => 'processing', 'updated_at' => now()])) {
+            return;
+        }
         $disk = Storage::disk('local');
         $source = $disk->path('video-conversions/'.$this->id.'/source.'.$this->extension);
         $output = $disk->path('video-conversions/'.$this->id.'/output.webm');
@@ -58,7 +62,23 @@ class ConvertVideoToWebm implements ShouldQueue
             ];
             $process = new Process($command);
             $process->setTimeout(1700);
-            $process->mustRun();
+            $process->start();
+            while ($process->isRunning()) {
+                $process->checkTimeout();
+                if (! DB::table('video_conversions')->where('id', $this->id)->exists()) {
+                    $process->stop(1);
+                    $disk->deleteDirectory('video-conversions/'.$this->id);
+                    return;
+                }
+                usleep(1_000_000);
+            }
+            if (! $process->isSuccessful()) {
+                throw new ProcessFailedException($process);
+            }
+            if (! DB::table('video_conversions')->where('id', $this->id)->exists()) {
+                $disk->deleteDirectory('video-conversions/'.$this->id);
+                return;
+            }
             if (! is_file($output) || filesize($output) === 0) {
                 throw new \RuntimeException('Il file convertito risulta vuoto.');
             }
