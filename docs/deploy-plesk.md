@@ -29,6 +29,9 @@ DB_PASSWORD=***
 SESSION_DRIVER=database
 CACHE_STORE=database
 QUEUE_CONNECTION=database
+# Optional if binaries are in storage/tools/ffmpeg and storage/tools/ffprobe
+# FFMPEG_PATH=/usr/bin/ffmpeg
+# FFPROBE_PATH=/usr/bin/ffprobe
 ```
 
 ## Comandi deploy
@@ -73,6 +76,19 @@ le migrazioni e rigenera le cache. Poi riapre il sito. Se il passaggio finale
 fallisce, lascia il sito in manutenzione per evitare di esporre una versione
 incompleta; il deploy va corretto e ripetuto. La cartella temporanea viene rimossa.
 Il runtime Node usato in produzione e' `/opt/plesk/node/20/bin`.
+
+## Conversione video MOV/MP4 in WebM
+
+Richiede `ffmpeg` e `ffprobe` con encoder `libvpx-vp9` e `libopus` sul server.
+Per questo hosting i binari sono in `storage/tools/` fuori dalla document root;
+verificare i percorsi e l'output di `ffmpeg -encoders`.
+Lo script di deploy aggiunge al crontab un worker video separato, una conversione
+alla volta, tramite `flock`. Il normale scheduler Laravel elimina originali e
+risultati temporanei dopo due ore, anche in caso di errore o abbandono.
+Configurare su Plesk `upload_max_filesize` almeno `100M`, `post_max_size` almeno
+`110M` e il limite nginx di dimensione richiesta almeno `110M` (oppure ridurre il
+limite applicativo). Verificare spazio libero: un singolo lavoro puo' occupare
+temporaneamente circa 400 MB tra sorgente e output. Non usare `QUEUE_CONNECTION=sync`.
 
 ## Stato migrazione
 

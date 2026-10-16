@@ -23,6 +23,25 @@ Artisan::command('centro:publish-messages', function (ScheduledCompanyMessageSer
 
 Schedule::command('centro:publish-messages')->everyMinute()->withoutOverlapping();
 
+Artisan::command('centro:clean-video-conversions', function () {
+    $expired = DB::table('video_conversions')->where('expires_at', '<=', now())->where('status', '!=', 'processing')->pluck('id');
+    foreach ($expired as $id) {
+        Storage::disk('local')->deleteDirectory('video-conversions/'.$id);
+    }
+    DB::table('video_conversions')->whereIn('id', $expired)->delete();
+
+    foreach (Storage::disk('local')->directories('video-conversions') as $directory) {
+        $id = basename($directory);
+        if (! DB::table('video_conversions')->where('id', $id)->exists()
+            && Storage::disk('local')->lastModified($directory) < now()->subHours(2)->timestamp) {
+            Storage::disk('local')->deleteDirectory($directory);
+        }
+    }
+    $this->info($expired->count().' conversioni scadute rimosse.');
+})->purpose('Elimina i video temporanei dopo due ore');
+
+Schedule::command('centro:clean-video-conversions')->everyFiveMinutes()->withoutOverlapping();
+
 Schedule::call(function () {
     if (! Schema::hasTable('figma_settings') || ! Schema::hasColumn('figma_settings', 'token_expires_at')) {
         return;

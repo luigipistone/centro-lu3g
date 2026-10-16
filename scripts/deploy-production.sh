@@ -83,6 +83,7 @@ deploy() {
     MAINTENANCE_ENABLED=0
 
     local scheduler_entry="* * * * * cd $APP_DIR && $PHP_BIN artisan schedule:run >> /dev/null 2>&1 # centro-lu3g-scheduler"
+    local video_worker_entry="* * * * * cd $APP_DIR && flock -n /tmp/centro-lu3g-video.lock $PHP_BIN artisan queue:work video --queue=videos --once --timeout=1800 --tries=1 --no-interaction >> storage/logs/video-worker.log 2>&1 # centro-lu3g-video-worker"
     if command -v crontab >/dev/null 2>&1; then
         local existing_crontab
         existing_crontab="$(crontab -l 2>/dev/null || true)"
@@ -93,8 +94,21 @@ deploy() {
                 log 'WARNING: unable to configure the scheduler; add schedule:run in Plesk Scheduled Tasks'
             fi
         fi
+        existing_crontab="$(crontab -l 2>/dev/null || true)"
+        if ! grep -Fq 'centro-lu3g-video-worker' <<< "$existing_crontab"; then
+            if printf '%s\n%s\n' "$existing_crontab" "$video_worker_entry" | crontab -; then
+                log 'Video conversion worker configured in crontab'
+            else
+                log 'WARNING: unable to configure video worker; add it in Plesk Scheduled Tasks'
+            fi
+        fi
     else
         log 'WARNING: crontab unavailable; add schedule:run in Plesk Scheduled Tasks'
+        log 'WARNING: crontab unavailable; add the video worker in Plesk Scheduled Tasks'
+    fi
+
+    if [ ! -x "$APP_DIR/storage/tools/ffmpeg" ] || [ ! -x "$APP_DIR/storage/tools/ffprobe" ]; then
+        log 'WARNING: FFmpeg/FFprobe not found in storage/tools; configure FFMPEG_PATH and FFPROBE_PATH in .env'
     fi
 
     log "Current production commit: $(git -C "$GIT_DIR" rev-parse --short "$BRANCH")"
