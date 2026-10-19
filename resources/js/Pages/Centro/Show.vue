@@ -4602,7 +4602,7 @@ onUnmounted(() => {
                 </div>
             </div>
 
-            <div v-else :class="['mx-auto grid max-w-[1600px] grid-cols-1 gap-6 px-4 sm:px-6 lg:px-8', section === 'users' ? 'lg:grid-cols-1' : 'lg:grid-cols-[minmax(0,1fr)_360px]']">
+            <div v-else :class="['mx-auto grid max-w-[1600px] grid-cols-1 gap-6 px-4 sm:px-6 lg:px-8', section === 'users' ? 'lg:grid-cols-[minmax(0,1fr)]' : 'lg:grid-cols-[minmax(0,1fr)_360px]']">
                 <section v-if="section === 'clients'" class="space-y-6">
                     <div v-if="related.passwordCredentialsCount !== null && related.passwordCredentialsCount !== undefined" class="flex justify-end">
                         <Link :href="route('passwords.index', { client_id: record.id })" class="btn btn-outline">
@@ -6076,7 +6076,7 @@ onUnmounted(() => {
                     </section>
                 </section>
 
-                <section v-if="section === 'users' && isSuperadmin && userDetailTab === 'absences'" class="surface rounded-md p-5 lg:order-3 lg:col-span-2">
+                <section v-if="section === 'users' && isSuperadmin && userDetailTab === 'absences'" class="surface min-w-0 rounded-md p-5 lg:order-3">
                     <div class="flex flex-wrap items-center justify-between gap-3">
                         <div>
                             <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Richieste di assenza</h3>
@@ -6107,7 +6107,7 @@ onUnmounted(() => {
                     </div>
                 </section>
 
-                <section v-if="section === 'users' && userDetailTab === 'performance'" class="surface rounded-md p-5 lg:order-3 lg:col-span-2">
+                <section v-if="section === 'users' && userDetailTab === 'performance'" class="surface min-w-0 rounded-md p-5 lg:order-3">
                         <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
                             <div>
                                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Andamento persona</h3>
