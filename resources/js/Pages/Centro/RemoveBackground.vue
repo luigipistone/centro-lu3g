@@ -4,6 +4,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { ArrowLeft, Download, ImageMinus, LoaderCircle, X } from '@lucide/vue';
 import { onBeforeUnmount, ref } from 'vue';
+import { getRemoveBackgroundWorker, releaseRemoveBackgroundWorker, resetRemoveBackgroundWorker } from '@/utils/removeBackgroundWorker';
 
 const input = ref(null);
 const file = ref(null);
@@ -74,7 +75,7 @@ function process() {
     processing.value = true;
     progressText.value = 'Preparazione del modello…';
     try {
-        if (!worker) worker = new Worker(new URL('../../workers/remove-background.worker.js', import.meta.url), { type: 'module' });
+        if (!worker) worker = getRemoveBackgroundWorker();
         worker.onmessage = ({ data }) => {
             if (data.type === 'status') { progressText.value = data.message; return; }
             if (data.type === 'done') resultUrl.value = URL.createObjectURL(new Blob([data.bytes], { type: 'image/png' }));
@@ -83,7 +84,7 @@ function process() {
         };
         worker.onerror = () => {
             error.value = 'Impossibile avviare il modello nel browser.';
-            worker.terminate();
+            resetRemoveBackgroundWorker();
             worker = null;
             processing.value = false;
         };
@@ -103,7 +104,11 @@ function download() {
 }
 
 onBeforeUnmount(() => {
-    worker?.terminate();
+    if (worker) {
+        worker.onmessage = null;
+        worker.onerror = null;
+        releaseRemoveBackgroundWorker();
+    }
     clearUrls();
 });
 </script>
