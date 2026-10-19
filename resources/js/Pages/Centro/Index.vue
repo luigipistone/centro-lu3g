@@ -5790,8 +5790,8 @@ function calendarDayStyle(sectionMonth, cell) {
                         </button>
                     </div>
                 </div>
-                <div class="grid gap-3 sm:grid-cols-2 2xl:grid-cols-[minmax(0,1fr)_150px_150px_150px_auto_auto_auto]">
-                    <ClearableSearchInput v-model="taskSearch" class="sm:col-span-2 2xl:col-span-1" input-class="mt-0" placeholder="Cerca task, cliente, progetto o servizio..." />
+                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_120px_120px_120px_auto_auto_auto]">
+                    <ClearableSearchInput v-model="taskSearch" class="min-w-0 sm:col-span-2 xl:col-span-1" input-class="mt-0" placeholder="Cerca task, cliente, progetto o servizio..." />
                     <AppSelect v-model="taskStatus" :options="taskStatusOptions" />
                     <AppSelect v-model="taskPriority" :options="taskPriorityOptions" />
                     <AppSelect v-model="taskType" :options="taskTypeOptions" />
