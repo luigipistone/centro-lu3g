@@ -107,6 +107,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/absences/{id}', [CentroPageController::class, 'destroyAbsence'])->name('absences.destroy');
     Route::put('/attendance/settings', [CentroPageController::class, 'updateAttendanceSettings'])->name('attendance.settings.update');
     Route::post('/attendance/holidays', [CentroPageController::class, 'storeAttendanceHoliday'])->name('attendance.holidays.store');
+    Route::patch('/attendance/holidays/{id}', [CentroPageController::class, 'updateAttendanceHoliday'])->name('attendance.holidays.update');
     Route::delete('/attendance/holidays/{id}', [CentroPageController::class, 'destroyAttendanceHoliday'])->name('attendance.holidays.destroy');
     Route::post('/attendance/entries', [CentroPageController::class, 'storeAttendanceEntry'])->name('attendance.entries.store');
     Route::delete('/attendance/entries/{id}', [CentroPageController::class, 'destroyAttendanceEntry'])->name('attendance.entries.destroy');

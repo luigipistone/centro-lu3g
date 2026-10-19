@@ -228,7 +228,7 @@ const attendanceSettingsForm = useForm({
     working_days: props.attendanceSettings?.working_days || [1, 2, 3, 4, 5],
     approvers: Object.fromEntries(['vacation', 'permission', 'sickness', 'late', 'smart_working', 'other', 'travel', 'recovery'].map((type) => [type, props.attendanceSettings?.approvers?.[type] || 'superadmin'])),
 });
-const attendanceHolidayForm = useForm({ start_day: '', end_day: '', name: '' });
+const attendanceHolidayForm = useForm({ start_day: '', end_day: '', name: '', recurs_annually: true });
 const attendanceEntryForm = useForm({ user_id: '', day: new Date().toISOString().slice(0, 10), cause: 'adjustment', minutes: 480, note: '' });
 const attendanceEntryCauses = [
     { value: 'adjustment', label: 'Rettifica ore lavorate' }, { value: 'actual', label: 'Presenza registrata (storica)' }, { value: 'overtime', label: 'Straordinario' },
@@ -245,6 +245,9 @@ function toggleAttendanceDay(day) {
 function saveAttendanceSettings() { attendanceSettingsForm.put(route('attendance.settings.update'), { preserveScroll: true }); }
 function addAttendanceHoliday() {
     attendanceHolidayForm.post(route('attendance.holidays.store'), { preserveScroll: true, onSuccess: () => attendanceHolidayForm.reset() });
+}
+function toggleAttendanceHolidayRecurrence(holiday) {
+    router.patch(route('attendance.holidays.update', holiday.id), { recurs_annually: !holiday.recurs_annually }, { preserveScroll: true });
 }
 function saveAttendanceEntry() { attendanceEntryForm.post(route('attendance.entries.store'), { preserveScroll: true }); }
 function requestAttendanceDelete(item, routeName, key) {
@@ -5530,10 +5533,11 @@ function calendarDayStyle(sectionMonth, cell) {
                         <form class="mt-4 space-y-3" @submit.prevent="addAttendanceHoliday">
                             <div><label class="block text-sm font-medium text-gray-700">Giorno o intervallo</label><AppDateRangeInput v-model:start-day="attendanceHolidayForm.start_day" v-model:end-day="attendanceHolidayForm.end_day" /></div>
                             <div><label class="block text-sm font-medium text-gray-700">Nome festività</label><input v-model="attendanceHolidayForm.name" class="form-control" /></div>
+                            <label class="flex items-center gap-2 text-sm text-gray-700"><input v-model="attendanceHolidayForm.recurs_annually" type="checkbox" class="rounded border-gray-300 text-[hsl(var(--primary-app))]" />Ripeti ogni anno</label>
                             <p v-if="attendanceHolidayForm.hasErrors" class="text-sm text-red-600">{{ Object.values(attendanceHolidayForm.errors).join(' ') }}</p>
                             <div class="flex justify-end"><button type="submit" class="btn btn-primary" :disabled="attendanceHolidayForm.processing || !attendanceHolidayForm.start_day">Salva festività</button></div>
                         </form>
-                        <div class="mt-4 divide-y divide-gray-100"><div v-for="holiday in attendanceHolidays" :key="holiday.id" class="flex items-center justify-between py-2 text-sm"><span>{{ dateIt(holiday.day) }}<template v-if="holiday.end_day && holiday.end_day !== holiday.day"> – {{ dateIt(holiday.end_day) }}</template> · {{ holiday.name }}</span><button type="button" class="icon-btn h-8 w-8 text-red-600" title="Rimuovi festività" @click="requestAttendanceDelete(holiday, 'attendance.holidays.destroy', 'id')"><Trash2 class="h-4 w-4" /></button></div></div>
+                        <div class="mt-4 divide-y divide-gray-100"><div v-for="holiday in attendanceHolidays" :key="holiday.id" class="flex items-center justify-between gap-3 py-2 text-sm"><span>{{ dateIt(holiday.day) }}<template v-if="holiday.end_day && holiday.end_day !== holiday.day"> – {{ dateIt(holiday.end_day) }}</template> · {{ holiday.name }}</span><div class="flex shrink-0 items-center gap-2"><label class="flex items-center gap-1.5 text-xs text-gray-600"><input type="checkbox" :checked="Boolean(holiday.recurs_annually)" class="rounded border-gray-300 text-[hsl(var(--primary-app))]" @change="toggleAttendanceHolidayRecurrence(holiday)" />Ogni anno</label><button type="button" class="icon-btn h-8 w-8 text-red-600" title="Rimuovi festività" @click="requestAttendanceDelete(holiday, 'attendance.holidays.destroy', 'id')"><Trash2 class="h-4 w-4" /></button></div></div></div>
                     </section>
                     </div>
                 </template>

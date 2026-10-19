@@ -50,25 +50,46 @@ class AttendanceService
 
     public function calendarHolidays(string $from, string $to): array
     {
-        $holidays = DB::table('attendance_holidays')->whereDate('day', '<=', $to)
-            ->whereRaw('DATE(COALESCE(end_day, day)) >= ?', [$from])
-            ->get(['day', 'end_day', 'name']);
         $byDay = [];
-        foreach ($holidays as $holiday) {
-            foreach (CarbonPeriod::create(max($holiday->day, $from), min($holiday->end_day ?: $holiday->day, $to)) as $day) {
-                $byDay[$day->toDateString()] = $holiday->name;
+        foreach ($this->holidayRanges($from, $to) as $holiday) {
+            foreach (CarbonPeriod::create(max($holiday['day'], $from), min($holiday['end_day'], $to)) as $day) {
+                $byDay[$day->toDateString()] = $holiday['name'];
             }
         }
 
         return $byDay;
     }
 
+    public function holidayRanges(string $from, string $to): array
+    {
+        $ranges = [];
+        foreach (DB::table('attendance_holidays')->get(['day', 'end_day', 'name', 'recurs_annually']) as $holiday) {
+            $start = Carbon::parse($holiday->day);
+            $end = Carbon::parse($holiday->end_day ?: $holiday->day);
+            $years = $holiday->recurs_annually
+                ? range((int) substr($from, 0, 4) - 1, (int) substr($to, 0, 4) + 1)
+                : [(int) $start->year];
+            foreach ($years as $year) {
+                if ($holiday->recurs_annually && ($start->format('m-d') === '02-29' || $end->format('m-d') === '02-29') && ! Carbon::create($year)->isLeapYear()) {
+                    continue;
+                }
+                $offset = $year - $start->year;
+                $rangeStart = $start->copy()->addYearsNoOverflow($offset);
+                $rangeEnd = $end->copy()->addYearsNoOverflow($offset);
+                if ($rangeStart->toDateString() <= $to && $rangeEnd->toDateString() >= $from) {
+                    $ranges[] = ['day' => $rangeStart->toDateString(), 'end_day' => $rangeEnd->toDateString(), 'name' => $holiday->name];
+                }
+            }
+        }
+
+        return $ranges;
+    }
+
     public function workingMinutes(string $userId, Carbon $day, ?array $settings = null): int
     {
         $settings ??= $this->settings();
         $date = $day->toDateString();
-        $this->holidayCache[$date] ??= DB::table('attendance_holidays')->whereDate('day', '<=', $date)
-            ->whereRaw('DATE(COALESCE(end_day, day)) >= ?', [$date])->exists();
+        $this->holidayCache[$date] ??= isset($this->calendarHolidays($date, $date)[$date]);
         if (! in_array($day->dayOfWeekIso, $settings['working_days'], true) || $this->holidayCache[$date]) {
             return 0;
         }

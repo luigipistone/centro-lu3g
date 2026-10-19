@@ -785,7 +785,7 @@ class CentroPageController extends Controller
             'attendanceSettings' => $section === 'absences' ? app(AttendanceService::class)->settings() : null,
             'attendanceHolidays' => $section === 'absences' ? DB::table('attendance_holidays')->orderBy('day')->get() : [],
             'taskHolidayRanges' => in_array($section, ['tasks', 'calendar'], true)
-                ? DB::table('attendance_holidays')->get(['day', 'end_day', 'name']) : [],
+                ? app(AttendanceService::class)->holidayRanges(now()->subYear()->toDateString(), now()->addYears(5)->toDateString()) : [],
             'canViewAbsencePresence' => $section === 'absences' && ($this->currentUserRole($request) !== 'admin' || app(RolePermissionService::class)->allows('admin', 'absences.presence.view')),
             'canViewAbsenceReports' => $section === 'absences' && ($this->currentUserRole($request) !== 'admin' || app(RolePermissionService::class)->allows('admin', 'absences.reports.view')),
             'attendanceEntries' => $section === 'absences' && ($this->currentUserRole($request) !== 'admin' || app(RolePermissionService::class)->allows('admin', 'absences.presence.view')) ? $this->attendanceRegistryQuery($request)->limit(10)->get() : [],
@@ -1157,6 +1157,7 @@ class CentroPageController extends Controller
             'days' => ['nullable', 'array', 'max:60'],
             'days.*' => ['required', 'date_format:Y-m-d', 'distinct'],
             'name' => ['required', 'string', 'max:120'],
+            'recurs_annually' => ['sometimes', 'boolean'],
         ]);
         if (! empty($data['start_day'])) {
             $start = Carbon::parse($data['start_day'], 'Europe/Rome');
@@ -1164,13 +1165,13 @@ class CentroPageController extends Controller
             if ($start->diffInDays($end) > 59) {
                 throw ValidationException::withMessages(['end_day' => 'Seleziona un intervallo massimo di 60 giorni.']);
             }
-            if (DB::table('attendance_holidays')->whereDate('day', '<=', $end->toDateString())
-                ->whereRaw('DATE(COALESCE(end_day, day)) >= ?', [$start->toDateString()])->exists()) {
+            if (app(AttendanceService::class)->calendarHolidays($start->toDateString(), $end->toDateString())) {
                 throw ValidationException::withMessages(['start_day' => 'L’intervallo si sovrappone a una festività già presente.']);
             }
             DB::table('attendance_holidays')->insert([
                 'id' => (string) Str::uuid(), 'day' => $start->toDateString(), 'end_day' => $end->toDateString(),
                 'name' => $data['name'], 'created_at' => now(), 'updated_at' => now(),
+                'recurs_annually' => $data['recurs_annually'] ?? false,
             ]);
 
             return back()->with('status', 'Festività aggiunta.');
@@ -1179,12 +1180,12 @@ class CentroPageController extends Controller
         if ($days->isEmpty()) {
             throw ValidationException::withMessages(['day' => 'Seleziona almeno una data.']);
         }
-        if ($days->contains(fn ($day) => DB::table('attendance_holidays')->whereDate('day', '<=', $day)
-            ->whereRaw('DATE(COALESCE(end_day, day)) >= ?', [$day])->exists())) {
+        if ($days->contains(fn ($day) => app(AttendanceService::class)->calendarHolidays($day, $day))) {
             throw ValidationException::withMessages(['days' => 'Una delle date selezionate è già presente tra le festività.']);
         }
         DB::table('attendance_holidays')->insert($days->map(fn ($day) => [
             'id' => (string) Str::uuid(), 'day' => $day, 'name' => $data['name'],
+            'recurs_annually' => $data['recurs_annually'] ?? false,
             'created_at' => now(), 'updated_at' => now(),
         ])->all());
 
@@ -1197,6 +1198,17 @@ class CentroPageController extends Controller
         DB::table('attendance_holidays')->where('id', $id)->delete();
 
         return back()->with('status', 'Festività rimossa.');
+    }
+
+    public function updateAttendanceHoliday(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureSuperadmin($request);
+        $data = $request->validate(['recurs_annually' => ['required', 'boolean']]);
+        DB::table('attendance_holidays')->where('id', $id)->update([
+            'recurs_annually' => $data['recurs_annually'], 'updated_at' => now(),
+        ]);
+
+        return back()->with('status', 'Ricorrenza aggiornata.');
     }
 
     public function storeAttendanceEntry(Request $request): RedirectResponse
@@ -3001,7 +3013,7 @@ class CentroPageController extends Controller
                     : null,
             ],
             'projects' => [
-                'taskHolidayRanges' => DB::table('attendance_holidays')->get(['day', 'end_day', 'name']),
+                'taskHolidayRanges' => app(AttendanceService::class)->holidayRanges(now()->subYear()->toDateString(), now()->addYears(5)->toDateString()),
                 'sections' => $this->projectSections($id),
                 'tasks' => $this->projectTaskRows($id, $this->isGuest($request) ? $request->user()->id : null),
                 'messages' => $this->projectMessages($id),
@@ -3041,7 +3053,7 @@ class CentroPageController extends Controller
                     ]),
             ],
             'tasks' => [
-                'taskHolidayRanges' => DB::table('attendance_holidays')->get(['day', 'end_day', 'name']),
+                'taskHolidayRanges' => app(AttendanceService::class)->holidayRanges(now()->subYear()->toDateString(), now()->addYears(5)->toDateString()),
                 'comments' => DB::table('task_comments')
                     ->leftJoin('users', 'users.id', '=', 'task_comments.user_id')
                     ->where('task_id', $id)
@@ -4105,11 +4117,10 @@ class CentroPageController extends Controller
 
         $from = min($startDate ?: $dueDate, $dueDate ?: $startDate);
         $to = max($startDate ?: $dueDate, $dueDate ?: $startDate);
-        $holiday = DB::table('attendance_holidays')->whereDate('day', '<=', $to)
-            ->whereRaw('DATE(COALESCE(end_day, day)) >= ?', [$from])->first(['name']);
+        $holiday = app(AttendanceService::class)->holidayRanges($from, $to)[0] ?? null;
         if ($holiday) {
             throw ValidationException::withMessages([
-                $dueDate ? 'due_date' : 'start_date' => 'Non puoi programmare una task durante la festività "'.$holiday->name.'".',
+                $dueDate ? 'due_date' : 'start_date' => 'Non puoi programmare una task durante la festività "'.$holiday['name'].'".',
             ]);
         }
     }
@@ -6854,13 +6865,7 @@ class CentroPageController extends Controller
         $attendance = app(AttendanceService::class);
         $settings = $attendance->settings();
         $holidays = collect();
-        DB::table('attendance_holidays')->whereDate('day', '<=', $end->toDateString())
-            ->whereRaw('DATE(COALESCE(end_day, day)) >= ?', [$start->toDateString()])->get()
-            ->each(function ($holiday) use ($start, $end, $holidays) {
-                foreach (CarbonPeriod::create(max($holiday->day, $start->toDateString()), min($holiday->end_day ?: $holiday->day, $end->toDateString())) as $day) {
-                    $holidays->put($day->toDateString(), $holiday->name);
-                }
-            });
+        $holidays = collect($attendance->calendarHolidays($start->toDateString(), $end->toDateString()));
         $days = collect(CarbonPeriod::create($start, $end))->map(fn ($day) => [
             'iso' => $day->toDateString(),
             'day' => (int) $day->day,

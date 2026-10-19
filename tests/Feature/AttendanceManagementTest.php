@@ -336,6 +336,23 @@ class AttendanceManagementTest extends TestCase
         $this->assertDatabaseCount('attendance_holidays', 2);
     }
 
+    public function test_annual_holiday_recurs_in_calendar_work_hours_and_task_validation(): void
+    {
+        $admin = User::factory()->create();
+        $employee = User::factory()->create();
+        $this->role($admin, 'superadmin');
+
+        $this->actingAs($admin)->post(route('attendance.holidays.store'), [
+            'start_day' => '2026-12-24', 'end_day' => '2026-12-26',
+            'name' => 'Chiusura', 'recurs_annually' => true,
+        ])->assertSessionHasNoErrors();
+
+        $attendance = app(AttendanceService::class);
+        $this->assertSame(['2027-12-25' => 'Chiusura'], $attendance->calendarHolidays('2027-12-25', '2027-12-25'));
+        $this->assertSame(0, $attendance->workingMinutes($employee->id, Carbon::parse('2027-12-24')));
+        $this->assertSame([], $attendance->calendarHolidays('2027-12-27', '2027-12-27'));
+    }
+
     public function test_holiday_range_is_one_record_and_covers_every_day(): void
     {
         $this->withoutMiddleware(EnforceRolePermissions::class);
