@@ -78,7 +78,7 @@ function process() {
         worker.onmessage = ({ data }) => {
             if (data.type === 'status') { progressText.value = data.message; return; }
             if (data.type === 'done') resultUrl.value = URL.createObjectURL(new Blob([data.bytes], { type: 'image/png' }));
-            else error.value = 'Elaborazione non riuscita. Verifica la connessione e riprova.';
+            else error.value = data.message;
             processing.value = false;
         };
         worker.onerror = () => {
@@ -126,8 +126,8 @@ onBeforeUnmount(() => {
                     <div v-else class="flex flex-1 flex-col gap-4">
                         <div class="flex min-w-0 items-center justify-between gap-3 rounded-[var(--radius-sm)] border border-gray-200 bg-gray-50 px-4 py-3"><span class="min-w-0 truncate text-sm font-medium text-gray-800">{{ file.name }}</span><button type="button" :disabled="processing" aria-label="Rimuovi immagine" title="Rimuovi immagine" class="shrink-0 text-gray-500 hover:text-red-600 disabled:opacity-50" @click="clear"><X class="h-5 w-5" /></button></div>
                         <div class="relative flex min-h-[320px] flex-1 items-center justify-center overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white checkerboard">
-                            <img :src="originalUrl" alt="Immagine originale" class="absolute inset-0 h-full w-full object-contain" />
-                            <div v-if="resultUrl" class="absolute inset-0 overflow-hidden" :style="{ clipPath: `inset(0 ${100 - comparison}% 0 0)` }"><img :src="resultUrl" alt="Immagine senza sfondo" class="h-full w-full object-contain" /></div>
+                            <img :src="originalUrl" alt="Immagine originale" class="absolute inset-0 h-full w-full object-contain" :style="resultUrl ? { clipPath: `inset(0 ${100 - comparison}% 0 0)` } : {}" />
+                            <img v-if="resultUrl" :src="resultUrl" alt="Immagine senza sfondo" class="absolute inset-0 h-full w-full object-contain" :style="{ clipPath: `inset(0 0 0 ${comparison}%)` }" />
                             <div v-if="resultUrl" class="pointer-events-none absolute inset-y-0 w-px bg-white shadow-md" :style="{ left: `${comparison}%` }"></div>
                         </div>
                         <label v-if="resultUrl" class="flex items-center gap-3 text-sm text-gray-600"><span>Prima</span><input v-model.number="comparison" type="range" min="0" max="100" class="min-w-0 flex-1" aria-label="Confronta prima e dopo" /><span>Dopo</span></label>
@@ -136,7 +136,7 @@ onBeforeUnmount(() => {
                 <aside class="surface flex min-h-[480px] flex-col p-5 sm:p-6">
                     <h3 class="text-base font-semibold text-gray-900">Risultato</h3>
                     <div class="mt-5 flex-1 text-sm text-gray-600">
-                        <p v-if="resultUrl" class="text-green-700">Sfondo rimosso. Il PNG trasparente è pronto.</p>
+                        <p v-if="resultUrl" class="text-green-700">PNG trasparente pronto. Controlla il risultato nell'anteprima.</p>
                         <p v-else-if="processing" role="status" class="flex items-center gap-2"><LoaderCircle class="h-4 w-4 shrink-0 animate-spin" />{{ progressText }}</p>
                         <p v-else>Seleziona un'immagine e avvia la rimozione dello sfondo.</p>
                     </div>
