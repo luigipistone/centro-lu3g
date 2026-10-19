@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Controllers\AiAgencyController;
-use App\Http\Controllers\BackgroundRemovalController;
 use App\Http\Controllers\CentroPageController;
 use App\Http\Controllers\FigmaIntegrationController;
 use App\Http\Controllers\FavoriteController;
@@ -30,8 +29,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/tools/images-to-pdf', fn () => Inertia::render('Centro/ImagesToPdf'))->name('tools.images-to-pdf');
     Route::get('/tools/extract-images', fn () => Inertia::render('Centro/ExtractImages'))->name('tools.extract-images');
     Route::get('/tools/images-to-webp', fn () => Inertia::render('Centro/ImagesToWebp'))->name('tools.images-to-webp');
-    Route::get('/tools/remove-background', [BackgroundRemovalController::class, 'index'])->name('tools.remove-background');
-    Route::post('/tools/remove-background', [BackgroundRemovalController::class, 'process'])->middleware('throttle:5,1')->name('tools.remove-background.process');
+    Route::get('/tools/remove-background', fn () => Inertia::render('Centro/RemoveBackground'))->name('tools.remove-background');
     Route::get('/tools/text-cleaner', fn () => Inertia::render('Centro/TextCleaner'))->name('tools.text-cleaner');
     Route::get('/tools/styled-text', fn () => Inertia::render('Centro/StyledText'))->name('tools.styled-text');
     Route::get('/tools/qr-code', fn () => Inertia::render('Centro/QrCode'))->name('tools.qr-code');

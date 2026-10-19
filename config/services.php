@@ -41,8 +41,5 @@ return [
         'private_key' => env('VAPID_PRIVATE_KEY'),
     ],
 
-    'leonardo' => [
-        'api_key' => env('LEONARDO_API_KEY'),
-    ],
 
 ];

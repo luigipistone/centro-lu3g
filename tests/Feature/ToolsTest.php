@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Schema;
@@ -46,49 +45,6 @@ class ToolsTest extends TestCase
         $this->actingAs($this->userWithRole('guest'))->get(route('tools.remove-background'))->assertForbidden();
         $this->actingAs($this->userWithRole('guest'))->get(route('tools.video-to-webm'))->assertForbidden();
         $this->actingAs($this->userWithRole('guest'))->getJson(route('tools.video-to-webm.conversions'))->assertForbidden();
-    }
-
-    public function test_background_removal_requires_configuration_and_valid_image(): void
-    {
-        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
-        $user = $this->userWithRole('editor');
-        config()->set('services.leonardo.api_key', null);
-        $this->actingAs($user)->withHeaders(['Accept' => 'application/json'])->post(route('tools.remove-background.process'), [
-            'image' => UploadedFile::fake()->image('photo.png'),
-        ])->assertStatus(503);
-
-        config()->set('services.leonardo.api_key', 'test-key');
-        $invalid = $this->actingAs($user)->postJson(route('tools.remove-background.process'), [
-            'image' => UploadedFile::fake()->create('document.pdf', 1, 'application/pdf'),
-        ]);
-        $this->assertSame(422, $invalid->status(), $invalid->getContent());
-        $invalid->assertJsonStructure(['errors' => ['image']]);
-        $this->actingAs($this->userWithRole('guest'))->withHeaders(['Accept' => 'application/json'])->post(route('tools.remove-background.process'), [
-            'image' => UploadedFile::fake()->image('photo.png'),
-        ])->assertForbidden();
-    }
-
-    public function test_background_removal_returns_ephemeral_png_and_rejects_api_errors(): void
-    {
-        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
-        config()->set('services.leonardo.api_key', 'test-key');
-        $png = "\x89PNG\r\n\x1a\n".'test';
-        Http::fake([
-            'cloud.leonardo.ai/*' => Http::sequence()
-                ->push(['results' => [['dataB64' => base64_encode($png)]]])
-                ->push(['errors' => [['message' => 'failed']]]),
-        ]);
-        $this->actingAs($this->userWithRole('editor'))->withHeaders(['Accept' => 'application/json'])->post(route('tools.remove-background.process'), [
-            'image' => UploadedFile::fake()->image('photo.jpg'),
-        ])->assertOk()->assertJsonPath('image', base64_encode($png));
-        Http::assertSent(fn ($request) => $request['model'] === 'remove-bg'
-            && $request['ephemeral'] === true
-            && $request['parameters']['format'] === 'png'
-            && $request->hasHeader('Authorization', 'Bearer test-key'));
-
-        $this->actingAs($this->userWithRole('editor'))->withHeaders(['Accept' => 'application/json'])->post(route('tools.remove-background.process'), [
-            'image' => UploadedFile::fake()->image('photo.jpg'),
-        ])->assertStatus(502)->assertJsonMissing(['image' => base64_encode($png)]);
     }
 
     public function test_disabled_tools_section_blocks_employee_but_not_manager(): void
