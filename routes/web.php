@@ -248,6 +248,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/users', [CentroPageController::class, 'index'])->defaults('section', 'users')->name('users.index');
     Route::post('/users', [CentroPageController::class, 'store'])->defaults('section', 'users')->name('users.store');
     Route::get('/users/{id}', [CentroPageController::class, 'show'])->defaults('section', 'users')->name('users.show');
+    Route::post('/users/{id}/absences', [ProfileController::class, 'storeAbsenceForUser'])->name('users.absences.store');
     Route::get('/users/{id}/export/{format}', [CentroPageController::class, 'exportUserProfile'])->whereIn('format', ['xlsx', 'pdf'])->name('users.export');
     Route::put('/users/{id}', [CentroPageController::class, 'update'])->defaults('section', 'users')->name('users.update');
     Route::put('/users/{id}/sensitive', [CentroPageController::class, 'updateUserSensitive'])->name('users.sensitive.update');

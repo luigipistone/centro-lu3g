@@ -20,6 +20,7 @@ import {
     Bold,
     Briefcase,
     CalendarDays,
+    CalendarX2,
     Check,
     ChevronDown,
     ChevronLeft,
@@ -797,12 +798,44 @@ const projectTaskDropSectionId = ref(null);
 let projectTaskDrawerAutosaveTimer = null;
 const projectColors = ['#2563eb', '#7c3aed', '#db2777', '#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#475569'];
 const userDetailTab = ref('personal');
-const userDetailTabs = [
+const userDetailTabs = computed(() => [
     { value: 'personal', label: 'Dati personali', icon: UserRound }, { value: 'employment', label: 'Rapporto di lavoro', icon: Briefcase },
     { value: 'schedule', label: 'Orario e smart working', icon: CalendarDays }, { value: 'dossier', label: 'Fascicolo digitale', icon: FileText },
+    ...(isSuperadmin.value ? [{ value: 'absences', label: 'Assenze', icon: CalendarX2 }] : []),
     { value: 'performance', label: 'Andamento', icon: TrendingUp },
     { value: 'security', label: 'Sicurezza', icon: ShieldCheck },
-];
+]);
+const userAbsenceForm = useForm({
+    type: 'vacation', start_date: '', end_date: '', start_time: '', end_time: '',
+    inps_code: '', medical_document: null, notes: '',
+});
+const userAbsenceFileInput = ref(null);
+const userAbsenceNeedsEndDate = computed(() => ['vacation', 'sickness', 'other', 'smart_working', 'travel', 'recovery'].includes(userAbsenceForm.type));
+const userAbsenceNeedsTime = computed(() => ['permission', 'late', 'other'].includes(userAbsenceForm.type));
+const userAbsenceEndHours = computed(() => userAbsenceForm.type !== 'permission' ? absenceHourOptions : absenceHourOptions.filter((option) => {
+    const hours = Number(option.value.slice(0, 2)) - Number(userAbsenceForm.start_time?.slice(0, 2));
+    return userAbsenceForm.start_time && hours >= 1 && hours <= 4;
+}));
+watch(() => [userAbsenceForm.type, userAbsenceForm.start_time], () => {
+    if (userAbsenceForm.type === 'permission' && !userAbsenceEndHours.value.some((option) => option.value === userAbsenceForm.end_time)) userAbsenceForm.end_time = '';
+});
+function submitUserAbsence() {
+    userAbsenceForm.transform((data) => ({
+        ...data,
+        end_date: userAbsenceNeedsEndDate.value ? (data.end_date || data.start_date) : data.start_date,
+        start_time: userAbsenceNeedsTime.value ? data.start_time : null,
+        end_time: userAbsenceNeedsTime.value ? data.end_time : null,
+        inps_code: data.type === 'sickness' ? data.inps_code : null,
+        medical_document: data.type === 'sickness' ? data.medical_document : null,
+    })).post(route('users.absences.store', props.record.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            userAbsenceForm.reset();
+            if (userAbsenceFileInput.value) userAbsenceFileInput.value.value = '';
+        },
+        onFinish: () => userAbsenceForm.transform((data) => data),
+    });
+}
 const userFieldAccess = computed(() => props.related?.fieldAccess || {});
 const parsedSmartworkingDays = (() => { try { return JSON.parse(props.record.smartworking_days || '[]'); } catch { return []; } })();
 const userForm = useForm({
@@ -6038,6 +6071,37 @@ onUnmounted(() => {
                     <section v-if="userDetailTab === 'dossier'" class="surface rounded-md p-5">
                         <DossierAssignedDocuments :documents="related.dossierDocuments || []" />
                     </section>
+                </section>
+
+                <section v-if="section === 'users' && isSuperadmin && userDetailTab === 'absences'" class="surface rounded-md p-5 lg:order-3 lg:col-span-2">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Richieste di assenza</h3>
+                            <p class="mt-1 text-sm text-gray-600">Inserisci una richiesta per {{ record.name }}.</p>
+                        </div>
+                    </div>
+                    <form class="mt-5 grid gap-4 md:grid-cols-3" @submit.prevent="submitUserAbsence">
+                        <div><label class="block text-sm font-medium text-gray-700">Tipo richiesta</label><AppSelect v-model="userAbsenceForm.type" :options="absenceTypeOptions" /><div v-if="userAbsenceForm.errors.type" class="mt-1 text-sm text-red-600">{{ userAbsenceForm.errors.type }}</div></div>
+                        <div><label class="block text-sm font-medium text-gray-700">{{ userAbsenceNeedsEndDate ? 'Dal' : 'Giorno' }}</label><AppDateInput v-model="userAbsenceForm.start_date" /><div v-if="userAbsenceForm.errors.start_date" class="mt-1 text-sm text-red-600">{{ userAbsenceForm.errors.start_date }}</div></div>
+                        <div v-if="userAbsenceNeedsEndDate"><label class="block text-sm font-medium text-gray-700">Al</label><AppDateInput v-model="userAbsenceForm.end_date" /><div v-if="userAbsenceForm.errors.end_date" class="mt-1 text-sm text-red-600">{{ userAbsenceForm.errors.end_date }}</div></div>
+                        <div v-if="userAbsenceNeedsTime"><label class="block text-sm font-medium text-gray-700">Ora inizio</label><AppSelect v-model="userAbsenceForm.start_time" :options="userAbsenceForm.type === 'permission' ? absenceHourOptions.slice(0, -1) : absenceHourOptions" placeholder="Seleziona ora" /><div v-if="userAbsenceForm.errors.start_time" class="mt-1 text-sm text-red-600">{{ userAbsenceForm.errors.start_time }}</div></div>
+                        <div v-if="userAbsenceNeedsTime"><label class="block text-sm font-medium text-gray-700">Ora fine</label><AppSelect v-model="userAbsenceForm.end_time" :options="userAbsenceEndHours" placeholder="Seleziona ora" /><div v-if="userAbsenceForm.errors.end_time" class="mt-1 text-sm text-red-600">{{ userAbsenceForm.errors.end_time }}</div></div>
+                        <div v-if="userAbsenceForm.type === 'sickness'"><label class="block text-sm font-medium text-gray-700">Codice INPS</label><input v-model="userAbsenceForm.inps_code" class="form-control" /><div v-if="userAbsenceForm.errors.inps_code" class="mt-1 text-sm text-red-600">{{ userAbsenceForm.errors.inps_code }}</div></div>
+                        <div v-if="userAbsenceForm.type === 'sickness'" class="md:col-span-2"><label class="block text-sm font-medium text-gray-700">Documento medico</label><input ref="userAbsenceFileInput" type="file" accept=".pdf,image/jpeg,image/png,image/webp" class="hidden" @change="userAbsenceForm.medical_document = $event.target.files?.[0] || null" /><button type="button" class="form-control flex items-center gap-2 text-left" @click="userAbsenceFileInput?.click()"><Paperclip class="h-4 w-4" />{{ userAbsenceForm.medical_document?.name || 'Allega documento del medico' }}</button><div v-if="userAbsenceForm.errors.medical_document" class="mt-1 text-sm text-red-600">{{ userAbsenceForm.errors.medical_document }}</div></div>
+                        <div class="md:col-span-3"><label class="block text-sm font-medium text-gray-700">Note</label><textarea v-model="userAbsenceForm.notes" rows="3" class="form-control" /><div v-if="userAbsenceForm.errors.notes" class="mt-1 text-sm text-red-600">{{ userAbsenceForm.errors.notes }}</div></div>
+                        <div class="flex justify-end md:col-span-3"><button type="submit" class="btn btn-primary" :disabled="userAbsenceForm.processing"><Plus class="h-4 w-4" />{{ userAbsenceForm.processing ? 'Inserimento...' : 'Inserisci richiesta' }}</button></div>
+                    </form>
+                    <div class="mt-7 border-t border-gray-100 pt-5">
+                        <h4 class="text-sm font-semibold text-gray-900">Richieste recenti</h4>
+                        <div v-if="related.absenceRequests?.length" class="mt-3 divide-y divide-gray-100 border-y border-gray-100">
+                            <Link v-for="item in related.absenceRequests" :key="item.id" :href="route('absences.show', item.id)" class="flex flex-wrap items-center justify-between gap-2 py-3 text-sm hover:bg-gray-50">
+                                <span class="font-semibold text-gray-900">{{ absenceTypeOptions.find(option => option.value === item.type)?.label || 'Assenza' }}</span>
+                                <span class="text-gray-600">{{ dateIt(item.start_date) }}<template v-if="item.end_date && item.end_date !== item.start_date"> - {{ dateIt(item.end_date) }}</template></span>
+                                <span class="text-gray-500">{{ absenceStatusOptions.find(option => option.value === item.status)?.label || item.status }}</span>
+                            </Link>
+                        </div>
+                        <p v-else class="mt-3 text-sm text-gray-500">Nessuna richiesta presente.</p>
+                    </div>
                 </section>
 
                 <section v-if="section === 'users' && userDetailTab === 'performance'" class="surface rounded-md p-5 lg:order-3 lg:col-span-2">

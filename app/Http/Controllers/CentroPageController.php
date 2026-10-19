@@ -3079,6 +3079,9 @@ class CentroPageController extends Controller
             ],
             'users' => [
                 'roleOptions' => ['superadmin', 'admin', 'editor', 'guest'],
+                'absenceRequests' => $this->currentUserRole($request) === 'superadmin'
+                    ? DB::table('absence_requests')->where('user_id', $id)->latest('start_date')->limit(30)->get()
+                    : collect(),
                 'organizationOptions' => DB::table('employee_organization_options')->orderBy('name')->get(),
                 'fieldAccess' => $this->userProfileFieldAccess($request),
                 'managerOptions' => $this->userOptions()->where('id', '!=', $id)->values(),

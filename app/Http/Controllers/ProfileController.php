@@ -148,6 +148,19 @@ class ProfileController extends Controller
 
     public function storeAbsence(Request $request): RedirectResponse
     {
+        return $this->createAbsence($request, $request->user()->id);
+    }
+
+    public function storeAbsenceForUser(Request $request, string $id): RedirectResponse
+    {
+        abort_unless(DB::table('user_roles')->where('user_id', $request->user()->id)->where('role', 'superadmin')->exists(), 403);
+        abort_unless(DB::table('users')->where('id', $id)->exists(), 404);
+
+        return $this->createAbsence($request, $id);
+    }
+
+    private function createAbsence(Request $request, string $userId): RedirectResponse
+    {
         $payload = $request->validate([
             'type' => ['required', Rule::in(AttendanceService::TYPES)],
             'start_date' => ['required', 'date'],
@@ -185,7 +198,7 @@ class ProfileController extends Controller
         $request->attributes->set('audit_subject_id', $absenceId);
         DB::table('absence_requests')->insert([
             'id' => $absenceId,
-            'user_id' => $request->user()->id,
+            'user_id' => $userId,
             'type' => $payload['type'],
             'cause_code' => null,
             'start_date' => $payload['start_date'],
@@ -202,14 +215,19 @@ class ProfileController extends Controller
             'updated_at' => now(),
         ]);
 
+        $subjectName = DB::table('users')->where('id', $userId)->value('name');
         $this->notifyAbsencePeople(
-            $request->user()->id,
+            $userId,
             $request->user()->id,
             'absence_created',
-            $request->user()->name.' ha inviato una richiesta assenza.',
+            $userId === $request->user()->id
+                ? $request->user()->name.' ha inviato una richiesta assenza.'
+                : $request->user()->name.' ha inserito una richiesta assenza per '.$subjectName.'.',
         );
 
-        return Redirect::route('profile.edit')->with('status', 'Richiesta inviata.');
+        return $request->routeIs('profile.absences.store')
+            ? Redirect::route('profile.edit')->with('status', 'Richiesta inviata.')
+            : back()->with('status', 'Richiesta inserita.');
     }
 
     public function destroyAbsence(Request $request, string $id): RedirectResponse

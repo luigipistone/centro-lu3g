@@ -17,6 +17,38 @@ class AttendanceManagementTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_superadmin_can_create_absence_from_employee_profile(): void
+    {
+        $superadmin = User::factory()->create();
+        $employee = User::factory()->create();
+        $this->role($superadmin, 'superadmin');
+        $this->role($employee, 'editor');
+
+        $this->actingAs($superadmin)->post(route('users.absences.store', $employee->id), [
+            'type' => 'vacation', 'start_date' => '2026-10-20', 'end_date' => '2026-10-21',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('absence_requests', [
+            'user_id' => $employee->id, 'type' => 'vacation', 'status' => 'pending',
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $employee->id, 'type' => 'absence_created',
+        ]);
+    }
+
+    public function test_manager_cannot_create_absence_from_employee_profile(): void
+    {
+        $manager = User::factory()->create();
+        $employee = User::factory()->create();
+        $this->role($manager, 'admin');
+        $this->role($employee, 'editor');
+
+        $this->actingAs($manager)->post(route('users.absences.store', $employee->id), [
+            'type' => 'vacation', 'start_date' => '2026-10-20',
+        ])->assertForbidden();
+        $this->assertDatabaseCount('absence_requests', 0);
+    }
+
     public function test_permission_request_cannot_exceed_four_hours(): void
     {
         $employee = User::factory()->create();
