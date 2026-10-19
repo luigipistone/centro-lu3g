@@ -89,14 +89,16 @@ const smartworkingLabel = computed(() => smartworkingLabels[props.profile?.smart
 const absenceRows = computed(() => props.absences || []);
 const absenceNeedsEndDate = computed(() => ['vacation', 'sickness', 'other', 'smart_working', 'travel', 'recovery'].includes(absenceForm.type));
 const absenceNeedsTime = computed(() => ['permission', 'late', 'other'].includes(absenceForm.type));
-const hourOptions = computed(() => Array.from({ length: 14 }, (_, index) => {
-    const hour = String(index + 7).padStart(2, '0');
-    return { value: `${hour}:00`, label: `${hour}:00` };
+const hourOptions = computed(() => Array.from({ length: 27 }, (_, index) => {
+    const minutes = 7 * 60 + index * 30;
+    const time = `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+    return { value: time, label: time };
 }));
 const startHourOptions = computed(() => absenceForm.type === 'permission' ? hourOptions.value.slice(0, -1) : hourOptions.value);
 const endHourOptions = computed(() => absenceForm.type !== 'permission' ? hourOptions.value : hourOptions.value.filter((option) => {
-    const hours = Number(option.value.slice(0, 2)) - Number(absenceForm.start_time?.slice(0, 2));
-    return absenceForm.start_time && hours >= 1 && hours <= 4;
+    const minutes = (Number(option.value.slice(0, 2)) * 60 + Number(option.value.slice(3, 5)))
+        - (Number(absenceForm.start_time?.slice(0, 2)) * 60 + Number(absenceForm.start_time?.slice(3, 5)));
+    return absenceForm.start_time && minutes >= 30 && minutes <= 240;
 }));
 watch(() => [absenceForm.type, absenceForm.start_time], () => {
     if (absenceForm.type === 'permission' && !endHourOptions.value.some((option) => option.value === absenceForm.end_time)) {

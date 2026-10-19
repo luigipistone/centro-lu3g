@@ -26,9 +26,10 @@ class AttendanceService
             throw ValidationException::withMessages(['end_time' => 'Seleziona l\'ora di fine del permesso.']);
         }
 
-        $hours = (int) substr($end, 0, 2) - (int) substr($start, 0, 2);
-        if ($hours < 1 || $hours > 4) {
-            throw ValidationException::withMessages(['end_time' => 'Il permesso deve durare da 1 a 4 ore.']);
+        $minutes = ((int) substr($end, 0, 2) * 60 + (int) substr($end, 3, 2))
+            - ((int) substr($start, 0, 2) * 60 + (int) substr($start, 3, 2));
+        if ($minutes < 30 || $minutes > 240) {
+            throw ValidationException::withMessages(['end_time' => 'Il permesso deve durare da 30 minuti a 4 ore.']);
         }
     }
 

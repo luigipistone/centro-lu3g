@@ -213,9 +213,10 @@ const absenceStatusOptions = [
     { value: 'rejected', label: 'Rifiutata' },
     { value: 'needs_info', label: 'Integrazione richiesta' },
 ];
-const absenceHourOptions = Array.from({ length: 14 }, (_, index) => {
-    const hour = String(index + 7).padStart(2, '0');
-    return { value: `${hour}:00`, label: `${hour}:00` };
+const absenceHourOptions = Array.from({ length: 27 }, (_, index) => {
+    const minutes = 7 * 60 + index * 30;
+    const time = `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+    return { value: time, label: time };
 });
 const subscriptionFrequencyOptions = [
     { value: 'month', label: 'Mese/i' },
@@ -813,8 +814,9 @@ const userAbsenceFileInput = ref(null);
 const userAbsenceNeedsEndDate = computed(() => ['vacation', 'sickness', 'other', 'smart_working', 'travel', 'recovery'].includes(userAbsenceForm.type));
 const userAbsenceNeedsTime = computed(() => ['permission', 'late', 'other'].includes(userAbsenceForm.type));
 const userAbsenceEndHours = computed(() => userAbsenceForm.type !== 'permission' ? absenceHourOptions : absenceHourOptions.filter((option) => {
-    const hours = Number(option.value.slice(0, 2)) - Number(userAbsenceForm.start_time?.slice(0, 2));
-    return userAbsenceForm.start_time && hours >= 1 && hours <= 4;
+    const minutes = (Number(option.value.slice(0, 2)) * 60 + Number(option.value.slice(3, 5)))
+        - (Number(userAbsenceForm.start_time?.slice(0, 2)) * 60 + Number(userAbsenceForm.start_time?.slice(3, 5)));
+    return userAbsenceForm.start_time && minutes >= 30 && minutes <= 240;
 }));
 watch(() => [userAbsenceForm.type, userAbsenceForm.start_time], () => {
     if (userAbsenceForm.type === 'permission' && !userAbsenceEndHours.value.some((option) => option.value === userAbsenceForm.end_time)) userAbsenceForm.end_time = '';
@@ -965,8 +967,9 @@ const absenceForm = useForm({
 });
 const absenceStartHourOptions = computed(() => absenceForm.type === 'permission' ? absenceHourOptions.slice(0, -1) : absenceHourOptions);
 const absenceEndHourOptions = computed(() => absenceForm.type !== 'permission' ? absenceHourOptions : absenceHourOptions.filter((option) => {
-    const hours = Number(option.value.slice(0, 2)) - Number(absenceForm.start_time?.slice(0, 2));
-    return absenceForm.start_time && hours >= 1 && hours <= 4;
+    const minutes = (Number(option.value.slice(0, 2)) * 60 + Number(option.value.slice(3, 5)))
+        - (Number(absenceForm.start_time?.slice(0, 2)) * 60 + Number(absenceForm.start_time?.slice(3, 5)));
+    return absenceForm.start_time && minutes >= 30 && minutes <= 240;
 }));
 watch(() => [absenceForm.type, absenceForm.start_time], () => {
     if (absenceForm.type === 'permission' && !absenceEndHourOptions.value.some((option) => option.value === absenceForm.end_time)) {

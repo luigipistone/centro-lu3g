@@ -34,6 +34,15 @@ class AttendanceManagementTest extends TestCase
         $this->assertDatabaseHas('notifications', [
             'user_id' => $employee->id, 'type' => 'absence_created',
         ]);
+
+        $this->actingAs($superadmin)->post(route('users.absences.store', $employee->id), [
+            'type' => 'permission', 'start_date' => '2026-10-22',
+            'start_time' => '09:30', 'end_time' => '10:00',
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('absence_requests', [
+            'user_id' => $employee->id, 'type' => 'permission',
+            'start_time' => '09:30', 'end_time' => '10:00',
+        ]);
     }
 
     public function test_manager_cannot_create_absence_from_employee_profile(): void
@@ -69,6 +78,26 @@ class AttendanceManagementTest extends TestCase
         ]);
     }
 
+    public function test_permission_requests_accept_half_hour_and_reject_shorter_or_longer_durations(): void
+    {
+        $employee = User::factory()->create();
+        $this->role($employee, 'editor');
+        $request = ['type' => 'permission', 'start_date' => '2026-10-05', 'start_time' => '09:30'];
+
+        $this->actingAs($employee)->post(route('profile.absences.store'), [...$request, 'end_time' => '09:00'])
+            ->assertSessionHasErrors('end_time');
+        $this->actingAs($employee)->post(route('profile.absences.store'), [...$request, 'end_time' => '14:00'])
+            ->assertSessionHasErrors('end_time');
+        $this->actingAs($employee)->post(route('profile.absences.store'), [...$request, 'end_time' => '10:15'])
+            ->assertSessionHasErrors('end_time');
+        $this->actingAs($employee)->post(route('profile.absences.store'), [...$request, 'end_time' => '10:00'])
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('absence_requests', [
+            'user_id' => $employee->id, 'start_time' => '09:30', 'end_time' => '10:00',
+        ]);
+    }
+
     public function test_permission_edit_cannot_exceed_four_hours(): void
     {
         $admin = User::factory()->create();
@@ -85,6 +114,11 @@ class AttendanceManagementTest extends TestCase
         $this->actingAs($admin)->put(route('absences.update', $id), [...$request, 'end_time' => '13:00'])
             ->assertSessionHasNoErrors();
         $this->assertDatabaseHas('absence_requests', ['id' => $id, 'start_time' => '09:00', 'end_time' => '13:00']);
+
+        $this->actingAs($admin)->put(route('absences.update', $id), [
+            ...$request, 'start_time' => '09:30', 'end_time' => '10:00',
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('absence_requests', ['id' => $id, 'start_time' => '09:30', 'end_time' => '10:00']);
     }
 
     public function test_employee_can_request_smart_working(): void
