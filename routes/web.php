@@ -33,6 +33,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/clients/import', [CentroPageController::class, 'importClientCsv'])->name('clients.import.store');
     Route::get('/tools', fn () => Inertia::render('Centro/ToolsIndex'))->name('tools.index');
     Route::get('/tools/short-links', [ShortLinkController::class, 'index'])->name('tools.short-links');
+    Route::get('/tools/campaign-url-builder', fn () => Inertia::render('Centro/CampaignUrlBuilder'))->name('tools.campaign-url-builder');
     Route::get('/tools/short-links/counts', [ShortLinkController::class, 'counts'])->name('tools.short-links.counts');
     Route::post('/tools/short-links', [ShortLinkController::class, 'store'])->middleware('throttle:10,1')->name('tools.short-links.store');
     Route::delete('/tools/short-links/{id}', [ShortLinkController::class, 'destroy'])->name('tools.short-links.destroy');

@@ -17,6 +17,9 @@ class ShortLinkController extends Controller
     {
         return Inertia::render('Centro/ShortLinks', [
             'links' => $this->visibleLinks($request),
+            'initialUrl' => is_string($request->query('url')) && strlen($request->query('url')) <= 2048
+                ? $request->query('url')
+                : '',
         ]);
     }
 

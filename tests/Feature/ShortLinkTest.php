@@ -27,6 +27,20 @@ class ShortLinkTest extends TestCase
         $this->assertDatabaseHas('short_links', ['id' => $link->id, 'clicks' => 1]);
     }
 
+    public function test_campaign_url_can_prefill_short_link_without_creating_it(): void
+    {
+        $user = User::factory()->create();
+        $this->allowTools($user);
+        $url = 'https://example.com/pagina?ref=base&utm_source=newsletter&utm_medium=email&utm_campaign=autunno#dettagli';
+
+        $this->actingAs($user)->get(route('tools.short-links', ['url' => $url]))
+            ->assertInertia(fn ($page) => $page->where('initialUrl', $url)->has('links', 0));
+        $this->assertDatabaseCount('short_links', 0);
+
+        $this->actingAs($user)->postJson(route('tools.short-links.store'), ['url' => $url])->assertCreated();
+        $this->assertDatabaseHas('short_links', ['destination_url' => $url]);
+    }
+
     public function test_displayed_url_uses_public_host_without_public_directory(): void
     {
         config(['app.url' => 'https://centro.lu3g.com/public']);

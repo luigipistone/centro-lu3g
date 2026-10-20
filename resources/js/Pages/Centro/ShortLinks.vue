@@ -5,9 +5,9 @@ import { ArrowLeft, Check, Copy, Link2, LoaderCircle, Plus, Trash2 } from '@luci
 import axios from 'axios';
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 
-const props = defineProps({ links: { type: Array, default: () => [] } });
+const props = defineProps({ links: { type: Array, default: () => [] }, initialUrl: { type: String, default: '' } });
 const links = ref([...props.links]);
-const url = ref('');
+const url = ref(props.initialUrl);
 const busy = ref(false);
 const deleting = ref(null);
 const error = ref('');
