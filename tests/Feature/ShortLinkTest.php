@@ -30,13 +30,14 @@ class ShortLinkTest extends TestCase
     public function test_displayed_url_uses_public_host_without_public_directory(): void
     {
         config(['app.url' => 'https://centro.lu3g.com/public']);
+        config(['short-links.base_url' => 'https://lu3g.com']);
         $user = User::factory()->create();
         $this->allowTools($user);
         $response = $this->actingAs($user)
             ->postJson('https://centro.lu3g.com/tools/short-links', ['url' => 'https://example.com/long/path']);
 
         $response->assertCreated();
-        $this->assertMatchesRegularExpression('~^https://centro\.lu3g\.com/s/[A-Za-z0-9]{6}$~', $response->json('link.short_url'));
+        $this->assertMatchesRegularExpression('~^https://lu3g\.com/s/[A-Za-z0-9]{6}$~', $response->json('link.short_url'));
     }
 
     public function test_existing_eight_character_link_keeps_working(): void

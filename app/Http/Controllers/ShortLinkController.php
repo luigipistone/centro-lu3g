@@ -94,7 +94,7 @@ class ShortLinkController extends Controller
 
     private function formatLink(object $link, Request $request): array
     {
-        $configuredUrl = parse_url(config('app.url'));
+        $configuredUrl = parse_url(config('short-links.base_url'));
         $origin = isset($configuredUrl['scheme'], $configuredUrl['host'])
             ? $configuredUrl['scheme'].'://'.$configuredUrl['host'].(isset($configuredUrl['port']) ? ':'.$configuredUrl['port'] : '')
             : $request->getSchemeAndHttpHost();
