@@ -17,7 +17,9 @@ Route::get('/', function () {
         : redirect()->route('login');
 });
 
-Route::get('/go/{code}', [ShortLinkController::class, 'redirect'])->where('code', '[A-Za-z0-9]{8}')->middleware('throttle:120,1')->name('short-links.redirect');
+Route::get('/s/{code}', [ShortLinkController::class, 'redirect'])->where('code', '[A-Za-z0-9]{6,8}')->middleware('throttle:120,1')->name('short-links.redirect');
+Route::get('/go/{code}', [ShortLinkController::class, 'redirect'])->where('code', '[A-Za-z0-9]{8}')->middleware('throttle:120,1')->name('short-links.legacy');
+Route::get('/public/go/{code}', [ShortLinkController::class, 'redirect'])->where('code', '[A-Za-z0-9]{8}')->middleware('throttle:120,1')->name('short-links.legacy-public');
 
 Route::get('/dashboard', [CentroPageController::class, 'dashboard'])->middleware(['auth', 'verified'])->name('dashboard');
 

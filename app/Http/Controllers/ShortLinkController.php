@@ -43,7 +43,7 @@ class ShortLinkController extends Controller
 
         $id = (string) Str::uuid();
         do {
-            $code = Str::random(8);
+            $code = Str::random(6);
         } while (DB::table('short_links')->where('code', $code)->exists());
 
         DB::table('short_links')->insert([
@@ -56,7 +56,7 @@ class ShortLinkController extends Controller
             'updated_at' => now(),
         ]);
 
-        return response()->json(['link' => $this->formatLink(DB::table('short_links')->where('id', $id)->first())], 201);
+        return response()->json(['link' => $this->formatLink(DB::table('short_links')->where('id', $id)->first(), $request)], 201);
     }
 
     public function destroy(Request $request, string $id): \Illuminate\Http\Response
@@ -88,17 +88,22 @@ class ShortLinkController extends Controller
             ->orderByDesc('created_at')
             ->limit(200)
             ->get()
-            ->map(fn ($link) => $this->formatLink($link))
+            ->map(fn ($link) => $this->formatLink($link, $request))
             ->all();
     }
 
-    private function formatLink(object $link): array
+    private function formatLink(object $link, Request $request): array
     {
+        $configuredUrl = parse_url(config('app.url'));
+        $origin = isset($configuredUrl['scheme'], $configuredUrl['host'])
+            ? $configuredUrl['scheme'].'://'.$configuredUrl['host'].(isset($configuredUrl['port']) ? ':'.$configuredUrl['port'] : '')
+            : $request->getSchemeAndHttpHost();
+
         return [
             'id' => $link->id,
             'user_id' => $link->user_id,
             'url' => $link->destination_url,
-            'short_url' => route('short-links.redirect', $link->code),
+            'short_url' => $origin.'/s/'.$link->code,
             'clicks' => $link->clicks,
             'created_at' => $link->created_at,
         ];

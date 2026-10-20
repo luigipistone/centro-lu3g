@@ -21,9 +21,36 @@ class ShortLinkTest extends TestCase
         ])->assertCreated();
 
         $link = DB::table('short_links')->first();
+        $this->assertSame(6, strlen($link->code));
         $this->get(route('short-links.redirect', $link->code))
             ->assertRedirect('https://example.com/some/long/path?foo=bar');
         $this->assertDatabaseHas('short_links', ['id' => $link->id, 'clicks' => 1]);
+    }
+
+    public function test_displayed_url_uses_public_host_without_public_directory(): void
+    {
+        config(['app.url' => 'https://centro.lu3g.com/public']);
+        $user = User::factory()->create();
+        $this->allowTools($user);
+        $response = $this->actingAs($user)
+            ->postJson('https://centro.lu3g.com/tools/short-links', ['url' => 'https://example.com/long/path']);
+
+        $response->assertCreated();
+        $this->assertMatchesRegularExpression('~^https://centro\.lu3g\.com/s/[A-Za-z0-9]{6}$~', $response->json('link.short_url'));
+    }
+
+    public function test_existing_eight_character_link_keeps_working(): void
+    {
+        $owner = User::factory()->create();
+        DB::table('short_links')->insert([
+            'id' => (string) Str::uuid(), 'user_id' => $owner->id, 'code' => 'Abcd1234',
+            'destination_url' => 'https://example.com', 'clicks' => 0,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->get('/s/Abcd1234')->assertRedirect('https://example.com');
+        $this->get('/go/Abcd1234')->assertRedirect('https://example.com');
+        $this->get('/public/go/Abcd1234')->assertRedirect('https://example.com');
     }
 
     public function test_private_or_non_web_destinations_are_rejected(): void
