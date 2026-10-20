@@ -2,6 +2,7 @@
 
 use App\Services\CentroBackupService;
 use App\Services\CentroNotificationService;
+use App\Services\EmployeeDossierExpiryService;
 use App\Services\ScheduledCompanyMessageService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -22,6 +23,12 @@ Artisan::command('centro:publish-messages', function (ScheduledCompanyMessageSer
 })->purpose('Publish scheduled company messages');
 
 Schedule::command('centro:publish-messages')->everyMinute()->withoutOverlapping();
+
+Artisan::command('centro:notify-dossier-expiries', function (EmployeeDossierExpiryService $service) {
+    $this->info($service->sendDueReminders().' promemoria del fascicolo inviati.');
+})->purpose('Notify employees and superadmins of dossier document expiries');
+
+Schedule::command('centro:notify-dossier-expiries')->dailyAt('09:00')->timezone('Europe/Rome')->withoutOverlapping();
 
 Artisan::command('centro:clean-video-conversions', function () {
     $expired = DB::table('video_conversions')->where('expires_at', '<=', now(config('app.timezone'))->toDateTimeString())->where('status', '!=', 'processing')->pluck('id');

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Services\EmployeeDossierExpiryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -63,6 +64,52 @@ class EmployeeDossierTest extends TestCase
         ]);
 
         $this->actingAs($employee)->get(route('users.dossier-items.file', [$employee->id, $id]))->assertOk();
+    }
+
+    public function test_expiry_reminders_reach_employee_and_superadmin_once(): void
+    {
+        $this->travelTo(now('Europe/Rome')->setDate(2026, 10, 20)->setTime(9, 0));
+        $admin = User::factory()->create();
+        $employee = User::factory()->create();
+        $this->role($admin, 'superadmin');
+        $this->role($employee, 'editor');
+        $this->dossierItem($employee, '2026-10-25');
+
+        $service = app(EmployeeDossierExpiryService::class);
+        $this->assertSame(2, $service->sendDueReminders());
+        $this->assertSame(0, $service->sendDueReminders());
+        $this->assertSame(2, DB::table('notifications')->where('type', 'document_dossier_expiring')->count());
+
+        $this->travelTo(now()->setDate(2026, 10, 25));
+        $this->assertSame(2, $service->sendDueReminders());
+        $this->assertSame(2, DB::table('notifications')->where('type', 'document_dossier_expired')->count());
+    }
+
+    public function test_replaced_and_admin_only_items_do_not_notify_employee(): void
+    {
+        $this->travelTo(now('Europe/Rome')->setDate(2026, 10, 20)->setTime(9, 0));
+        $admin = User::factory()->create();
+        $employee = User::factory()->create();
+        $this->role($admin, 'superadmin');
+        $this->role($employee, 'editor');
+        $this->dossierItem($employee, '2026-10-25', 'admin');
+        $this->dossierItem($employee, '2026-10-25', 'standard', now());
+
+        $this->assertSame(1, app(EmployeeDossierExpiryService::class)->sendDueReminders());
+        $this->assertSame(0, DB::table('notifications')->where('user_id', $employee->id)->where('type', 'document_dossier_expiring')->count());
+        $this->assertSame(1, DB::table('notifications')->where('user_id', $admin->id)->where('type', 'document_dossier_expiring')->count());
+    }
+
+    private function dossierItem(User $employee, string $expiresAt, string $classification = 'standard', mixed $replacedAt = null): void
+    {
+        DB::table('employee_dossier_items')->insert([
+            'id' => (string) Str::uuid(), 'user_id' => $employee->id,
+            'type' => 'identity_document', 'title' => 'Carta di identità',
+            'classification' => $classification, 'expires_at' => $expiresAt,
+            'replaced_at' => $replacedAt, 'file_path' => 'test.pdf',
+            'file_name' => 'test.pdf', 'version' => 1,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
     }
 
     private function role(User $user, string $role): void
