@@ -7,6 +7,7 @@ use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WordPressProvisioningController;
 use App\Http\Controllers\VideoConversionController;
+use App\Http\Controllers\ShortLinkController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -15,6 +16,8 @@ Route::get('/', function () {
         ? redirect()->route('dashboard')
         : redirect()->route('login');
 });
+
+Route::get('/go/{code}', [ShortLinkController::class, 'redirect'])->where('code', '[A-Za-z0-9]{8}')->middleware('throttle:120,1')->name('short-links.redirect');
 
 Route::get('/dashboard', [CentroPageController::class, 'dashboard'])->middleware(['auth', 'verified'])->name('dashboard');
 
@@ -27,6 +30,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/clients/import/preview', [CentroPageController::class, 'previewClientCsv'])->name('clients.import.preview');
     Route::post('/clients/import', [CentroPageController::class, 'importClientCsv'])->name('clients.import.store');
     Route::get('/tools', fn () => Inertia::render('Centro/ToolsIndex'))->name('tools.index');
+    Route::get('/tools/short-links', [ShortLinkController::class, 'index'])->name('tools.short-links');
+    Route::post('/tools/short-links', [ShortLinkController::class, 'store'])->middleware('throttle:10,1')->name('tools.short-links.store');
+    Route::delete('/tools/short-links/{id}', [ShortLinkController::class, 'destroy'])->name('tools.short-links.destroy');
     Route::get('/tools/compress-pdf', fn () => Inertia::render('Centro/Tools'))->name('tools.compress-pdf');
     Route::get('/tools/split-pdf', fn () => Inertia::render('Centro/SplitPdf'))->name('tools.split-pdf');
     Route::get('/tools/images-to-pdf', fn () => Inertia::render('Centro/ImagesToPdf'))->name('tools.images-to-pdf');
