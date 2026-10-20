@@ -38,6 +38,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/tools/short-links/{id}', [ShortLinkController::class, 'destroy'])->name('tools.short-links.destroy');
     Route::get('/tools/compress-pdf', fn () => Inertia::render('Centro/Tools'))->name('tools.compress-pdf');
     Route::get('/tools/split-pdf', fn () => Inertia::render('Centro/SplitPdf'))->name('tools.split-pdf');
+    Route::get('/tools/merge-pdf', fn () => Inertia::render('Centro/MergePdf'))->name('tools.merge-pdf');
     Route::get('/tools/images-to-pdf', fn () => Inertia::render('Centro/ImagesToPdf'))->name('tools.images-to-pdf');
     Route::get('/tools/extract-images', fn () => Inertia::render('Centro/ExtractImages'))->name('tools.extract-images');
     Route::get('/tools/images-to-webp', fn () => Inertia::render('Centro/ImagesToWebp'))->name('tools.images-to-webp');
