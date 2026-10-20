@@ -311,9 +311,21 @@ const taskPriority = ref('all');
 const taskType = ref('all');
 const clientSearch = ref('');
 const clientService = ref('all');
+const clientSort = ref(['name_asc', 'name_desc'].includes(new URLSearchParams(window.location.search).get('sort')) ? new URLSearchParams(window.location.search).get('sort') : 'created_desc');
 const projectSearch = ref('');
 const projectStatus = ref('all');
+const projectSort = ref(['name_asc', 'name_desc', 'created_asc', 'created_desc'].includes(new URLSearchParams(window.location.search).get('sort')) ? new URLSearchParams(window.location.search).get('sort') : 'created_desc');
 const projectUserIds = ref([]);
+
+watch(clientSort, (sort) => {
+    if (props.section !== 'clients') return;
+    router.get(route(props.clientArchive ? 'clients.archive' : 'clients.index'), { sort }, { only: ['rows'], preserveState: true, preserveScroll: true, replace: true });
+});
+
+watch(projectSort, (sort) => {
+    if (props.section !== 'projects') return;
+    router.get(route('projects.index'), { sort }, { only: ['rows'], preserveState: true, preserveScroll: true, replace: true });
+});
 const projectPeopleMenu = ref(null);
 const projectPeopleMenuOpen = ref(false);
 const taskPeopleMenu = ref(null);
@@ -5173,9 +5185,10 @@ function calendarDayStyle(sectionMonth, cell) {
 
         <div v-else-if="section === 'projects'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
-                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(220px,0.82fr)_165px_215px_auto_auto]">
+                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(220px,0.82fr)_165px_195px_215px_auto_auto]">
                     <ClearableSearchInput v-model="projectSearch" class="sm:col-span-2 xl:col-span-1" input-class="mt-0" placeholder="Cerca per progetto, cliente o descrizione..." />
                     <AppSelect v-model="projectStatus" :options="projectStatusOptions" />
+                    <AppSelect v-model="projectSort" :options="[{ value: 'created_desc', label: 'Più recenti' }, { value: 'created_asc', label: 'Meno recenti' }, { value: 'name_asc', label: 'Nome A-Z' }, { value: 'name_desc', label: 'Nome Z-A' }]" aria-label="Ordina progetti" />
                     <div ref="projectPeopleMenu" class="relative z-30">
                         <button
                             type="button"
@@ -5650,13 +5663,14 @@ function calendarDayStyle(sectionMonth, cell) {
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <div v-if="page.props.flash?.status" role="status" class="rounded-[var(--radius-sm)] border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-700">{{ page.props.flash.status }}</div>
                 <h3 v-if="!clientArchive" class="text-base font-semibold text-gray-900">Clienti attivi</h3>
-                <div class="grid gap-3 md:grid-cols-[1fr_220px_auto]">
+                <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_185px_auto]">
                     <ClearableSearchInput v-model="clientSearch" input-class="mt-0" placeholder="Cerca per nome, ragione sociale, email, P.IVA o citta..." />
                     <AppSelect
                         v-model="clientService"
                         :options="namedOptions(services, { value: 'all', label: 'Tutti i servizi' })"
                         searchable
                     />
+                    <AppSelect v-model="clientSort" :options="[{ value: 'created_desc', label: 'Più recenti' }, { value: 'name_asc', label: 'Nome A-Z' }, { value: 'name_desc', label: 'Nome Z-A' }]" aria-label="Ordina clienti" />
                     <div class="flex items-center gap-2">
                         <Link v-if="canCreate" :href="route('clients.import')" class="btn btn-outline inline-flex h-full items-center justify-center px-3" title="Importa clienti da CSV" aria-label="Importa clienti da CSV"><FileUp class="h-4 w-4" :stroke-width="1.7" /></Link>
                         <Link v-if="!clientArchive" :href="route('clients.archive')" class="btn btn-outline inline-flex h-full items-center justify-center px-3" title="Archivio clienti" aria-label="Archivio clienti"><Archive class="h-4 w-4" :stroke-width="1.7" /></Link>

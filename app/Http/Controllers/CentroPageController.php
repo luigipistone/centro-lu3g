@@ -683,7 +683,16 @@ class CentroPageController extends Controller
                     ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
                     ->select('users.*', 'user_roles.role', 'profiles.avatar_url')
                 )
-                ->latest($config['table'].'.created_at')
+                ->when(in_array($section, ['clients', 'projects'], true), function ($query) use ($request, $config) {
+                    $sort = $request->query('sort', 'created_desc');
+                    if (! in_array($sort, ['name_asc', 'name_desc', 'created_asc', 'created_desc'], true)) {
+                        $sort = 'created_desc';
+                    }
+                    [$field, $direction] = explode('_', $sort);
+                    $query->orderBy($config['table'].'.'.($field === 'name' ? 'name' : 'created_at'), $direction)
+                        ->orderBy($config['table'].'.id');
+                })
+                ->when(! in_array($section, ['clients', 'projects'], true), fn ($query) => $query->latest($config['table'].'.created_at'))
                 ->limit($limit)
                 ->get();
         }
