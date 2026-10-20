@@ -151,6 +151,7 @@ function hasPermission(permission) {
 }
 
 function sectionPermission(action) {
+    if (props.section === 'settings') return 'settings.manage';
     if (props.section.startsWith('updates-')) {
         return `updates.${action === 'view' ? 'view' : 'manage'}`;
     }
@@ -653,7 +654,7 @@ const settingsTabs = [
     ['ruoli', 'Ruoli', ShieldCheck],
     ['sezioni', 'Sezioni', PanelsTopLeft],
     ['log', 'Log', FileText],
-    ['gestione', 'Gestione', Settings],
+    ['gestione', 'Servizi', Settings],
 ];
 
 function updateSectionVisibility(section) {
@@ -834,6 +835,7 @@ const createButtonLabel = computed(() => ({
 }[props.section] || 'Nuovo'));
 
 const formTitle = computed(() => {
+    if (props.section === 'settings') return editing.value ? 'Modifica servizio' : 'Aggiungi servizio';
     if (props.section === 'tasks' && !editing.value) {
         return `Nuovo ${taskCreateTypeLabels[form.task_type] || 'Task'}`;
     }
@@ -6519,28 +6521,6 @@ function calendarDayStyle(sectionMonth, cell) {
                             Aggiungi servizio
                         </button>
                     </div>
-
-                    <section v-if="false" class="rounded-md bg-white p-5 shadow-sm">
-                        <div class="mb-4 flex items-center justify-between">
-                            <h3 class="font-semibold text-gray-900">{{ editing ? 'Modifica servizio' : 'Nuovo servizio' }}</h3>
-                            <button v-if="editing" type="button" class="text-sm text-gray-500 hover:text-gray-800" @click="resetForm">Annulla</button>
-                        </div>
-                        <form class="space-y-4" @submit.prevent="submit">
-                            <div v-for="field in fields" :key="field.name">
-                                <label class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
-                                <textarea v-if="field.type === 'textarea'" v-model="form[field.name]" rows="4" class="form-control" />
-                                <label v-else-if="field.type === 'checkbox'" class="mt-2 flex items-center gap-2 text-sm text-gray-700">
-                                    <input v-model="form[field.name]" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
-                                    Attivo
-                                </label>
-                                <input v-else v-model="form[field.name]" :type="field.type" class="form-control" :required="field.required" />
-                                <div v-if="form.errors[field.name]" class="mt-1 text-sm text-red-600">{{ form.errors[field.name] }}</div>
-                            </div>
-                            <button type="submit" class="inline-flex w-full justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50" :disabled="form.processing">
-                                {{ editing ? 'Salva modifiche' : 'Crea servizio' }}
-                            </button>
-                        </form>
-                    </section>
 
                     <section class="surface overflow-hidden">
                         <table class="min-w-full divide-y divide-gray-200 text-sm">
