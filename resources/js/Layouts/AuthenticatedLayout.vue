@@ -330,7 +330,6 @@ const groups = computed(() => {
                 permitted('favorites.index', 'Preferiti', Bookmark, 'favorites.view'),
                 permitted('tools.index', 'Strumenti', Wrench, 'tools.view'),
                 permitted('absences.index', 'Assenze', CalendarX, 'absences.manage'),
-                permitted('settings.index', 'Impostazioni', Settings, 'settings.manage'),
             ]),
         },
         {
@@ -352,6 +351,7 @@ const groups = computed(() => {
                 permitted('users.index', 'Utenti', UserCog, 'users.view'),
                 permitted('modules.index', 'Moduli', PackageOpen, 'modules.view'),
                 permitted('ai-agency.index', 'Agenzia AI', WandSparkles, 'ai_agency.view'),
+                permitted('settings.index', 'Impostazioni', Settings, 'settings.manage'),
             ]),
         },
     ].filter((group) => group.links.length);
