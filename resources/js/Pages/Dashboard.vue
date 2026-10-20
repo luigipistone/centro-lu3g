@@ -1015,10 +1015,10 @@ watch(
                                     :href="link.url"
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    class="inline-flex shrink-0 items-center gap-1.5 rounded-[var(--radius-sm)] border border-gray-100 bg-white/80 px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-[hsl(var(--primary-app)/0.25)] hover:text-[hsl(var(--primary-app))]"
+                                    class="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-[var(--radius-sm)] border border-gray-100 bg-white/80 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:border-[hsl(var(--primary-app)/0.25)] hover:text-[hsl(var(--primary-app))]"
                                 >
                                     {{ link.label }}
-                                    <ExternalLink class="h-3 w-3" :stroke-width="1.8" />
+                                    <ExternalLink class="h-3.5 w-3.5" :stroke-width="1.8" />
                                 </a>
                             </div>
                             <button v-else type="button" class="text-left text-xs font-medium text-gray-500 hover:text-[hsl(var(--primary-app))]" @click="openQuickLinksSettings">Aggiungi i tuoi collegamenti</button>
