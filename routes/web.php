@@ -28,6 +28,7 @@ Route::middleware('auth')->group(function () {
     Route::patch('/dashboard/widgets/{type}/settings', [CentroPageController::class, 'updateDashboardWidgetSettings'])->name('dashboard.widgets.settings.update');
     Route::patch('/dashboard/note', [CentroPageController::class, 'updateDashboardNote'])->name('dashboard.note.update');
     Route::get('/clients', [CentroPageController::class, 'index'])->defaults('section', 'clients')->name('clients.index');
+    Route::get('/clients/archive', [CentroPageController::class, 'index'])->defaults('section', 'clients')->defaults('archive', true)->name('clients.archive');
     Route::get('/clients/import', [CentroPageController::class, 'clientCsvImportPage'])->name('clients.import');
     Route::post('/clients/import/preview', [CentroPageController::class, 'previewClientCsv'])->name('clients.import.preview');
     Route::post('/clients/import', [CentroPageController::class, 'importClientCsv'])->name('clients.import.store');
@@ -56,6 +57,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/clients', [CentroPageController::class, 'store'])->defaults('section', 'clients')->name('clients.store');
     Route::get('/clients/{id}', [CentroPageController::class, 'show'])->defaults('section', 'clients')->name('clients.show');
     Route::put('/clients/{id}', [CentroPageController::class, 'update'])->defaults('section', 'clients')->name('clients.update');
+    Route::patch('/clients/{id}/active', [CentroPageController::class, 'setClientActive'])->name('clients.active');
     Route::post('/clients/{id}/contacts', [CentroPageController::class, 'storeClientContact'])->name('clients.contacts.store');
     Route::put('/clients/{clientId}/contacts/{contactId}', [CentroPageController::class, 'updateClientContact'])->name('clients.contacts.update');
     Route::delete('/clients/{clientId}/contacts/{contactId}', [CentroPageController::class, 'destroyClientContact'])->name('clients.contacts.destroy');

@@ -654,6 +654,7 @@ class CentroPageController extends Controller
             $rows = $this->serviceUpdateRows($config['serviceName']);
         } else {
             $rows = DB::table($config['table'])
+                ->when($section === 'clients', fn ($query) => $query->where('clients.active', ! (bool) $request->route('archive')))
                 ->when($config['table'] === 'projects', fn ($query) => $query->leftJoin('clients', 'clients.id', '=', 'projects.client_id')->select('projects.*', 'clients.name as client_name'))
                 ->when($config['table'] === 'projects' && $this->isGuest($request), fn ($query) => $query
                     ->join('project_followers', 'project_followers.project_id', '=', 'projects.id')
@@ -862,6 +863,7 @@ class CentroPageController extends Controller
                 ? DB::table('profiles as p')->join('users as u', 'u.id', '=', 'p.manager_user_id')->distinct()->orderBy('u.name')->get(['u.id', 'u.name']) : [],
             'billingStats' => $section === 'billing' ? $this->billingStats() : null,
             'clientStats' => $section === 'clients' ? $this->clientStats() : null,
+            'clientArchive' => $section === 'clients' && (bool) $request->route('archive'),
             'documentSettings' => $section === 'settings' ? DB::table('document_settings')->first() : null,
             'organizationOptions' => $section === 'settings' ? DB::table('employee_organization_options')->orderBy('name')->get() : [],
             'emailSettings' => $section === 'settings' ? $this->emailSettingsForView() : null,
@@ -3286,6 +3288,19 @@ class CentroPageController extends Controller
         return back()
             ->with('status', 'Creato.')
             ->with('created_id', $payload['id']);
+    }
+
+    public function setClientActive(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureRoleCanUpdateRecord($request, 'clients', $id);
+        $data = $request->validate(['active' => ['required', 'boolean']]);
+        $updated = DB::table('clients')->where('id', $id)->update([
+            'active' => $data['active'],
+            'updated_at' => now(),
+        ]);
+        abort_unless($updated, 404);
+
+        return back()->with('status', $data['active'] ? 'Cliente riattivato.' : 'Cliente archiviato.');
     }
 
     public function update(Request $request, string $id): RedirectResponse

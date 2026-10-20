@@ -73,6 +73,18 @@ const canApproveCurrentAbsence = computed(() => isSuperadmin.value || props.rela
 const permissions = computed(() => page.props.auth?.user?.permissions || []);
 const hasPermission = (permission) => isSuperadmin.value || permissions.value.includes(permission);
 const canEditClient = computed(() => hasPermission('clients.update'));
+const clientActive = ref(Boolean(props.record?.active ?? true));
+const clientActiveSaving = ref(false);
+
+function setClientActive() {
+    if (!canEditClient.value || clientActiveSaving.value) return;
+    clientActiveSaving.value = true;
+    router.patch(route('clients.active', props.record.id), { active: !clientActive.value }, {
+        preserveScroll: true,
+        onSuccess: () => { clientActive.value = !clientActive.value; },
+        onFinish: () => { clientActiveSaving.value = false; },
+    });
+}
 const canEditProject = computed(() => hasPermission('projects.update'));
 const canDeleteProject = computed(() => hasPermission('projects.delete'));
 const canDeleteCurrentTask = computed(() => {
@@ -997,6 +1009,7 @@ function normalizeHexColor(value, fallback = '#2563eb') {
 }
 
 function backHref() {
+    if (props.section === 'clients' && !clientActive.value) return route('clients.archive');
     if (props.section === 'tasks' && props.related?.parentTask) {
         return route('tasks.show', props.related.parentTask.id);
     }
@@ -1005,6 +1018,7 @@ function backHref() {
 }
 
 function backLabel() {
+    if (props.section === 'clients' && !clientActive.value) return 'Torna all’archivio clienti';
     if (props.section === 'tasks' && props.related?.parentTask) {
         return `Torna a ${props.related.parentTask.title || 'task genitore'}`;
     }
@@ -4604,6 +4618,14 @@ onUnmounted(() => {
 
             <div v-else :class="['mx-auto grid max-w-[1600px] grid-cols-1 gap-6 px-4 sm:px-6 lg:px-8', section === 'users' ? 'lg:grid-cols-[minmax(0,1fr)]' : 'lg:grid-cols-[minmax(0,1fr)_360px]']">
                 <section v-if="section === 'clients'" class="space-y-6">
+                    <div class="flex justify-end">
+                        <button type="button" role="switch" :aria-checked="clientActive" :disabled="!canEditClient || clientActiveSaving" class="inline-flex items-center gap-3 text-sm font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-60" @click="setClientActive">
+                            <span :class="['relative h-6 w-11 rounded-full transition-colors', clientActive ? 'bg-[hsl(var(--primary-app))]' : 'bg-gray-300']">
+                                <span :class="['absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform', clientActive ? 'translate-x-5' : '']"></span>
+                            </span>
+                            {{ clientActive ? 'Attivo' : 'Non attivo' }}
+                        </button>
+                    </div>
                     <div v-if="related.passwordCredentialsCount !== null && related.passwordCredentialsCount !== undefined" class="flex justify-end">
                         <Link :href="route('passwords.index', { client_id: record.id })" class="btn btn-outline">
                             <KeyRound class="h-4 w-4" :stroke-width="1.7" />
