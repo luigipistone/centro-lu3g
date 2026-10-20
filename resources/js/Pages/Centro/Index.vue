@@ -3872,13 +3872,17 @@ function calendarDayStyle(sectionMonth, cell) {
 </script>
 
 <template>
-    <Head :title="title" />
+    <Head :title="clientArchive ? 'Archivio clienti' : title" />
 
     <AuthenticatedLayout>
         <template #header>
             <div class="flex flex-col gap-1">
-                <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ title }}</h2>
-                <p class="text-sm text-gray-500">{{ description }}</p>
+                <Link v-if="section === 'clients' && clientArchive" :href="route('clients.index')" class="inline-flex w-fit items-center gap-1 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]">
+                    <ChevronLeft class="h-4 w-4" :stroke-width="1.7" />
+                    Torna ai clienti
+                </Link>
+                <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ clientArchive ? 'Archivio clienti' : title }}</h2>
+                <p v-if="!clientArchive" class="text-sm text-gray-500">{{ description }}</p>
             </div>
         </template>
 
@@ -5645,10 +5649,7 @@ function calendarDayStyle(sectionMonth, cell) {
         <div v-else-if="section === 'clients'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <div v-if="page.props.flash?.status" role="status" class="rounded-[var(--radius-sm)] border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-700">{{ page.props.flash.status }}</div>
-                <div class="flex items-center justify-between gap-3">
-                    <h3 class="text-base font-semibold text-gray-900">{{ clientArchive ? 'Archivio clienti' : 'Clienti attivi' }}</h3>
-                    <Link v-if="clientArchive" :href="route('clients.index')" class="btn btn-outline">Torna ai clienti</Link>
-                </div>
+                <h3 v-if="!clientArchive" class="text-base font-semibold text-gray-900">Clienti attivi</h3>
                 <div class="grid gap-3 md:grid-cols-[1fr_220px_auto]">
                     <ClearableSearchInput v-model="clientSearch" input-class="mt-0" placeholder="Cerca per nome, ragione sociale, email, P.IVA o citta..." />
                     <AppSelect
