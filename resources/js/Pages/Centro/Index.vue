@@ -38,6 +38,7 @@ import {
     DatabaseBackup,
     ExternalLink,
     FileText,
+    FileUp,
     Filter,
     GitBranch,
     GripVertical,
@@ -5639,6 +5640,7 @@ function calendarDayStyle(sectionMonth, cell) {
 
         <div v-else-if="section === 'clients'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
+                <div v-if="page.props.flash?.status" role="status" class="rounded-[var(--radius-sm)] border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-700">{{ page.props.flash.status }}</div>
                 <div class="grid gap-3 md:grid-cols-[1fr_220px_auto]">
                     <ClearableSearchInput v-model="clientSearch" input-class="mt-0" placeholder="Cerca per nome, ragione sociale, email, P.IVA o citta..." />
                     <AppSelect
@@ -5646,7 +5648,10 @@ function calendarDayStyle(sectionMonth, cell) {
                         :options="namedOptions(services, { value: 'all', label: 'Tutti i servizi' })"
                         searchable
                     />
-                    <button v-if="canCreate" type="button" class="btn btn-primary" @click="openCreate()"><Plus class="h-4 w-4" :stroke-width="1.7" />Nuovo Cliente</button>
+                    <div v-if="canCreate" class="flex items-center gap-2">
+                        <Link :href="route('clients.import')" class="btn btn-outline inline-flex h-full items-center justify-center px-3" title="Importa clienti da CSV" aria-label="Importa clienti da CSV"><FileUp class="h-4 w-4" :stroke-width="1.7" /></Link>
+                        <button type="button" class="btn btn-primary" @click="openCreate()"><Plus class="h-4 w-4" :stroke-width="1.7" />Nuovo Cliente</button>
+                    </div>
                 </div>
 
                 <div class="grid gap-6">

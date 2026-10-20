@@ -7,6 +7,7 @@ use App\Services\AccountArchiveService;
 use App\Services\AttendanceService;
 use App\Services\CentroBackupService;
 use App\Services\CentroNotificationService;
+use App\Services\ClientCsvImportService;
 use App\Services\RolePermissionService;
 use App\Services\PayslipRecognitionService;
 use App\Services\PasswordCsvImportService;
@@ -40,6 +41,61 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class CentroPageController extends Controller
 {
+    public function clientCsvImportPage(Request $request): Response
+    {
+        $this->ensureRoleCanStore($request, 'clients');
+
+        return Inertia::render('Centro/ClientCsvImport');
+    }
+
+    public function previewClientCsv(Request $request, ClientCsvImportService $csv): JsonResponse
+    {
+        $this->ensureRoleCanStore($request, 'clients');
+        try {
+            $data = $request->validate(['file' => ['required', 'file', 'extensions:csv,txt', 'max:10240']]);
+            $preview = $csv->preview($data['file']);
+        } catch (ValidationException $error) {
+            return response()->json(['errors' => $error->errors()], 422);
+        }
+
+        return response()->json([
+            'count' => count($preview['records']),
+            'issues' => $preview['issues'],
+            'records' => collect($preview['records'])->take(20)->map(fn ($item) => [
+                'line' => $item['line'], 'name' => $item['data']['name'],
+                'legal_name' => $item['data']['legal_name'] ?? null,
+                'email' => $item['data']['email'] ?? null,
+                'vat_number' => $item['data']['vat_number'] ?? null,
+            ])->values(),
+        ]);
+    }
+
+    public function importClientCsv(Request $request, ClientCsvImportService $csv): RedirectResponse
+    {
+        $this->ensureRoleCanStore($request, 'clients');
+        $data = $request->validate(['file' => ['required', 'file', 'extensions:csv,txt', 'max:10240']]);
+        $preview = $csv->preview($data['file']);
+        if ($preview['records'] === []) {
+            throw ValidationException::withMessages(['file' => 'Nessun cliente nuovo e valido da importare.']);
+        }
+
+        DB::transaction(function () use ($preview, $request) {
+            foreach ($preview['records'] as $item) {
+                DB::table('clients')->insert([
+                    ...$item['data'],
+                    'id' => (string) Str::uuid(),
+                    'created_by' => $request->user()->id,
+                    'created_at' => now(), 'updated_at' => now(),
+                ]);
+            }
+        });
+        $request->attributes->set('audit_state_after', [
+            'created_count' => count($preview['records']), 'skipped_count' => count($preview['issues']),
+        ]);
+
+        return redirect()->route('clients.index')->with('status', count($preview['records']).' clienti importati. '.count($preview['issues']).' righe saltate.');
+    }
+
     public function storeOrganizationOption(Request $request): RedirectResponse
     {
         $this->ensureSuperadmin($request);

@@ -23,6 +23,9 @@ Route::middleware('auth')->group(function () {
     Route::patch('/dashboard/widgets/{type}/settings', [CentroPageController::class, 'updateDashboardWidgetSettings'])->name('dashboard.widgets.settings.update');
     Route::patch('/dashboard/note', [CentroPageController::class, 'updateDashboardNote'])->name('dashboard.note.update');
     Route::get('/clients', [CentroPageController::class, 'index'])->defaults('section', 'clients')->name('clients.index');
+    Route::get('/clients/import', [CentroPageController::class, 'clientCsvImportPage'])->name('clients.import');
+    Route::post('/clients/import/preview', [CentroPageController::class, 'previewClientCsv'])->name('clients.import.preview');
+    Route::post('/clients/import', [CentroPageController::class, 'importClientCsv'])->name('clients.import.store');
     Route::get('/tools', fn () => Inertia::render('Centro/ToolsIndex'))->name('tools.index');
     Route::get('/tools/compress-pdf', fn () => Inertia::render('Centro/Tools'))->name('tools.compress-pdf');
     Route::get('/tools/split-pdf', fn () => Inertia::render('Centro/SplitPdf'))->name('tools.split-pdf');
