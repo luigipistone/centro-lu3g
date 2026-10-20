@@ -2,6 +2,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import ToolAccordion from '@/Components/ToolAccordion.vue';
 import ToolDropzone from '@/Components/ToolDropzone.vue';
+import PdfToolNavigation from '@/Components/PdfToolNavigation.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { ArrowDown, ArrowLeft, ArrowUp, Download, FileImage, GripVertical, Plus, RotateCw, Trash2, X } from '@lucide/vue';
 import { zipSync } from 'fflate';
@@ -239,6 +240,7 @@ function download() {
         </template>
         <div class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
+                <PdfToolNavigation />
                 <div class="grid items-stretch gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
                     <section class="surface flex min-w-0 flex-col p-5 sm:p-6">
                         <div class="mb-5 flex items-center justify-between gap-3"><h3 class="text-base font-semibold text-gray-900">Immagini</h3><button v-if="images.length" type="button" class="inline-flex items-center gap-1 text-sm font-semibold text-gray-500 hover:text-gray-800" :disabled="processing || loading" @click="clearImages"><Trash2 class="h-4 w-4" /> Rimuovi tutte</button></div>

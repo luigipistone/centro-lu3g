@@ -1,6 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import ToolDropzone from '@/Components/ToolDropzone.vue';
+import PdfToolNavigation from '@/Components/PdfToolNavigation.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { ArrowDown, ArrowLeft, ArrowUp, Download, FileText, Files, GripVertical, LoaderCircle, Trash2, X } from '@lucide/vue';
 import { PDFDocument } from 'pdf-lib';
@@ -140,6 +141,7 @@ function download() {
         </template>
         <div class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
+                <PdfToolNavigation />
                 <div class="grid items-stretch gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
                     <section class="surface flex min-w-0 flex-col p-5 sm:p-6">
                         <div class="mb-5 flex items-center justify-between gap-3">
