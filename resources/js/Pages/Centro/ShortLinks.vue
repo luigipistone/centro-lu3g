@@ -3,7 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { ArrowLeft, Check, Copy, Link2, LoaderCircle, Plus, Trash2 } from '@lucide/vue';
 import axios from 'axios';
-import { ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref } from 'vue';
 
 const props = defineProps({ links: { type: Array, default: () => [] } });
 const links = ref([...props.links]);
@@ -12,6 +12,38 @@ const busy = ref(false);
 const deleting = ref(null);
 const error = ref('');
 const copied = ref(null);
+let countsTimer;
+let loadingCounts = false;
+
+async function refreshCounts() {
+    if (loadingCounts || document.visibilityState !== 'visible' || !links.value.length) return;
+    loadingCounts = true;
+    try {
+        const { data } = await axios.get(route('tools.short-links.counts'));
+        const counts = new Map(data.counts.map((item) => [item.id, item.clicks]));
+        links.value = links.value.map((link) => counts.has(link.id) ? { ...link, clicks: counts.get(link.id) } : link);
+    } catch {
+        // Keep the last known counts and retry at the next interval.
+    } finally {
+        loadingCounts = false;
+    }
+}
+
+function refreshWhenVisible() {
+    if (document.visibilityState === 'visible') refreshCounts();
+}
+
+onMounted(() => {
+    countsTimer = window.setInterval(refreshCounts, 2000);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    window.addEventListener('focus', refreshCounts);
+});
+
+onBeforeUnmount(() => {
+    window.clearInterval(countsTimer);
+    document.removeEventListener('visibilitychange', refreshWhenVisible);
+    window.removeEventListener('focus', refreshCounts);
+});
 
 async function createLink() {
     if (busy.value || !url.value.trim()) return;

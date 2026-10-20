@@ -82,6 +82,23 @@ class ShortLinkTest extends TestCase
         $this->actingAs($owner)->delete(route('tools.short-links.destroy', $id))->assertNoContent();
     }
 
+    public function test_click_counts_update_without_exposing_other_users_links(): void
+    {
+        $owner = User::factory()->create();
+        $other = User::factory()->create();
+        $this->allowTools($owner);
+        $this->allowTools($other);
+        $this->actingAs($owner)->postJson(route('tools.short-links.store'), ['url' => 'https://example.com'])->assertCreated();
+        $link = DB::table('short_links')->first();
+
+        $this->actingAs($other)->getJson(route('tools.short-links.counts'))->assertOk()->assertJsonCount(0, 'counts');
+        $this->actingAs($owner)->get(route('short-links.redirect', $link->code))->assertRedirect('https://example.com');
+        $this->actingAs($owner)->getJson(route('tools.short-links.counts'))
+            ->assertOk()
+            ->assertJsonPath('counts.0.id', $link->id)
+            ->assertJsonPath('counts.0.clicks', 1);
+    }
+
     public function test_superadmin_can_manage_links_created_by_others(): void
     {
         $owner = User::factory()->create();

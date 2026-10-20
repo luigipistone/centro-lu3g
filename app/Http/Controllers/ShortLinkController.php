@@ -20,6 +20,17 @@ class ShortLinkController extends Controller
         ]);
     }
 
+    public function counts(Request $request): JsonResponse
+    {
+        $counts = DB::table('short_links')
+            ->when(! $this->isSuperadmin($request), fn ($query) => $query->where('user_id', $request->user()->id))
+            ->orderByDesc('created_at')
+            ->limit(200)
+            ->get(['id', 'clicks']);
+
+        return response()->json(['counts' => $counts]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
