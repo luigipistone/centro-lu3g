@@ -8,11 +8,13 @@ import { createDeviceModels } from './inventory/deviceModels';
 const props = defineProps({ items: { type: Array, default: () => [] }, type: { type: String, default: 'physical' }, selectedId: String });
 const emit = defineEmits(['select']);
 const canvas = ref(null);
+const foregroundCanvas = ref(null);
 const ready = ref(false);
 const unavailable = ref(false);
+const isPulled = ref(false);
 const rackIndex = ref(0);
 const rackCount = ref(1);
-let renderer, scene, camera, controls, inventory, resizeObserver, visibilityObserver, frameId;
+let renderer, foregroundRenderer, scene, camera, controls, inventory, resizeObserver, visibilityObserver, frameId;
 let active = true;
 let hoveredGroups = [];
 let pulledGroup = null;
@@ -28,6 +30,7 @@ const clickTargets = [];
 const byId = new Map();
 const materials = new Map();
 const models = createDeviceModels();
+models.setOnReady(build);
 const shelfMaterial = material('#627d99', .35, .48);
 const backMaterial = material('#d5e2ef', 0, .9);
 
@@ -55,6 +58,7 @@ function clearInventory() {
     byId.clear();
     hoveredGroups = [];
     pulledGroup = null;
+    isPulled.value = false;
 }
 
 function build() {
@@ -108,6 +112,7 @@ function moveRack(index) {
     rackIndex.value = THREE.MathUtils.clamp(index, 0, rackCount.value - 1);
     targetRackX = rackIndex.value * rackSpacing;
     pulledGroup = null;
+    isPulled.value = false;
 }
 
 function finishPointer(event) {
@@ -130,8 +135,10 @@ function selectAt(event) {
         pulledGroup = pulledGroup === group ? null : group;
         moveRack(group.userData.rack);
         pulledGroup = group;
+        isPulled.value = true;
     } else {
         pulledGroup = null;
+        isPulled.value = false;
     }
 }
 
@@ -155,6 +162,7 @@ function resize() {
     const { width, height } = canvas.value.getBoundingClientRect();
     if (!width || !height) return;
     renderer.setSize(width, height, false);
+    foregroundRenderer?.setSize(width, height, false);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     const frameDistance = ((rackWidth / 2) + .5) / (Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect);
@@ -177,8 +185,20 @@ function animate() {
         const home = group.userData.home;
         const destination = pulled ? new THREE.Vector3(group.userData.rack * rackSpacing, 1.15, 2.1) : home;
         group.position.lerp(destination, reducedMotion ? 1 : .12);
+        group.traverse((object) => object.layers.set(pulled ? 1 : 0));
     }
+    camera.layers.set(0);
     renderer.render(scene, camera);
+    if (pulledGroup) {
+        const background = scene.background;
+        scene.background = null;
+        camera.layers.set(1);
+        foregroundRenderer.render(scene, camera);
+        camera.layers.set(0);
+        scene.background = background;
+    } else {
+        foregroundRenderer.clear();
+    }
 }
 
 onMounted(() => {
@@ -187,6 +207,10 @@ onMounted(() => {
         renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         renderer.shadowMap.enabled = false;
+        foregroundRenderer = new THREE.WebGLRenderer({ canvas: foregroundCanvas.value, antialias: true, alpha: true, powerPreference: 'high-performance' });
+        foregroundRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        foregroundRenderer.outputColorSpace = THREE.SRGBColorSpace;
+        foregroundRenderer.setClearColor(0x000000, 0);
         scene = new THREE.Scene();
         scene.background = new THREE.Color('#eaf1f8');
         scene.fog = new THREE.Fog('#eaf1f8', 18, 31);
@@ -236,6 +260,7 @@ onBeforeUnmount(() => {
     controls?.dispose();
     clearInventory();
     renderer?.dispose();
+    foregroundRenderer?.dispose();
     models.dispose();
     materials.forEach((material) => material.dispose());
 });
@@ -243,7 +268,8 @@ onBeforeUnmount(() => {
 
 <template>
     <div class="inventory-stage relative h-[440px] min-w-0 overflow-hidden bg-[#eaf1f8] sm:h-[520px]" aria-label="Vista 3D dell'inventario">
-        <canvas ref="canvas" class="block h-full w-full touch-none" @pointerdown="pointerDown = { x: $event.clientX, y: $event.clientY }" @pointerup="finishPointer" @pointermove="hoverAt" @pointerleave="clearHover" @click="selectAt" />
+        <canvas ref="canvas" class="block h-full w-full touch-none transition-[filter] duration-300" :class="isPulled ? 'blur-[5px]' : ''" @pointerdown="pointerDown = { x: $event.clientX, y: $event.clientY }" @pointerup="finishPointer" @pointermove="hoverAt" @pointerleave="clearHover" @click="selectAt" />
+        <canvas ref="foregroundCanvas" class="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true" />
         <div v-if="ready && rackCount > 1" class="absolute inset-x-4 bottom-4 z-10 flex items-center justify-between pointer-events-none">
             <button type="button" class="icon-btn pointer-events-auto h-9 w-9 bg-white/95 shadow-sm" :disabled="rackIndex === 0" title="Scaffale precedente" aria-label="Scaffale precedente" @click="moveRack(rackIndex - 1)"><ChevronLeft class="h-4 w-4" /></button>
             <span class="rounded-md bg-white/95 px-2 py-1 text-xs font-medium text-gray-700">{{ rackIndex + 1 }} / {{ rackCount }}</span>
