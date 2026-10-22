@@ -65,16 +65,6 @@ export function createDeviceModels() {
             if (object.isMesh) object.geometry = object.geometry.clone();
         });
         parent.add(model);
-        if (key === 'monitor') {
-            const bounds = new THREE.Box3().setFromObject(model);
-            const size = bounds.getSize(new THREE.Vector3());
-            const display = addBox(parent, size.x * .94, size.y * .51, .002,
-                (bounds.min.x + bounds.max.x) / 2,
-                bounds.max.y - size.y * .34,
-                bounds.max.z + .003,
-                screen('hp'), .002);
-            display.receiveShadow = false;
-        }
         return true;
     }
 

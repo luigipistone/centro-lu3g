@@ -19,6 +19,7 @@ let active = true;
 let hoveredGroups = [];
 let pulledGroup = null;
 let targetRackX = 0;
+let shelfFocusY = 2.15;
 let pointerDown = null;
 const rackSpacing = 4.45;
 const rackWidth = 3.75;
@@ -81,6 +82,7 @@ function build() {
     const shelfStep = physical ? 1.38 : 1.05;
     const base = .17;
     const height = base + rows * shelfStep;
+    shelfFocusY = height / 2;
     const placements = physical
         ? items.flatMap((item) => Array.from({ length: Math.min(Number(item.quantity || 0), 100) }, () => item))
         : items;
@@ -177,17 +179,13 @@ function resize() {
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     const frameDistance = ((rackWidth / 2) + .5) / (Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect);
-    camera.position.z = Math.max(props.type === 'physical' ? 7.6 : 6.8, frameDistance);
+    if (!pulledGroup) camera.position.z = Math.max(props.type === 'physical' ? 7.6 : 6.8, frameDistance);
 }
 
 function animate() {
     frameId = requestAnimationFrame(animate);
     if (!active || !renderer) return;
     const slide = reducedMotion ? 1 : .09;
-    const delta = targetRackX - controls.target.x;
-    controls.target.x += delta * slide;
-    camera.position.x += delta * slide;
-    controls.update();
     for (const group of clickTargets) {
         const hovered = hoveredGroups.includes(group);
         const pulled = group === pulledGroup;
@@ -198,6 +196,13 @@ function animate() {
         group.position.lerp(destination, reducedMotion ? 1 : .12);
         group.traverse((object) => object.layers.set(pulled ? 1 : 0));
     }
+    const focus = pulledGroup
+        ? new THREE.Box3().setFromObject(pulledGroup).getCenter(new THREE.Vector3())
+        : new THREE.Vector3(targetRackX, shelfFocusY, 0);
+    const shift = focus.sub(controls.target).multiplyScalar(pulledGroup ? 1 : slide);
+    controls.target.add(shift);
+    camera.position.add(shift);
+    controls.update();
     camera.layers.set(0);
     renderer.render(scene, camera);
     const viewX = camera.position.x - controls.target.x;
