@@ -50,6 +50,12 @@ function box(parent, width, height, depth, x, y, z, surface, castShadow = true) 
     return mesh;
 }
 
+function depthMaskBox(parent, width, height, depth, x, y, z) {
+    const mask = box(parent, width, height, depth, x, y, z, occluderMaterial, false);
+    mask.layers.set(1);
+    mask.renderOrder = -1;
+}
+
 function clearInventory() {
     if (!inventory) return;
     scene.remove(inventory);
@@ -82,11 +88,12 @@ function build() {
     for (let rack = 0; rack < rackCount.value; rack++) {
         const x = rack * rackSpacing;
         for (let row = 0; row < rows; row++) box(inventory, rackWidth, .075, shelfDepth, x, base + row * shelfStep, 0, shelfMaterial, false);
-        for (const edge of [-rackWidth / 2, rackWidth / 2]) box(inventory, .09, height, shelfDepth, x + edge, height / 2, 0, shelfMaterial, false);
+        for (const edge of [-rackWidth / 2, rackWidth / 2]) {
+            box(inventory, .09, height, shelfDepth, x + edge, height / 2, 0, shelfMaterial, false);
+            depthMaskBox(inventory, .09, height, shelfDepth, x + edge, height / 2, 0);
+        }
         box(inventory, rackWidth, height, .045, x, height / 2, -shelfDepth / 2, backMaterial, false);
-        const occluder = box(inventory, rackWidth, height, .045, x, height / 2, -shelfDepth / 2, occluderMaterial, false);
-        occluder.layers.set(1);
-        occluder.renderOrder = -1;
+        depthMaskBox(inventory, rackWidth, height, .045, x, height / 2, -shelfDepth / 2);
         box(inventory, rackWidth, .08, shelfDepth, x, height, 0, shelfMaterial, false);
     }
     for (const [i, item] of placements.entries()) {
@@ -193,7 +200,9 @@ function animate() {
     }
     camera.layers.set(0);
     renderer.render(scene, camera);
-    if (pulledGroup) {
+    const viewX = camera.position.x - controls.target.x;
+    const viewZ = camera.position.z - controls.target.z;
+    if (pulledGroup && viewZ > 0 && Math.abs(viewX) < viewZ * 1.2) {
         const background = scene.background;
         scene.background = null;
         camera.layers.set(1);
