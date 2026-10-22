@@ -6,18 +6,30 @@ export function createDeviceModels() {
     const materials = new Map();
     const textures = new Map();
     let intelImac = null;
+    let iphoneXs = null;
     let onReady = null;
-    new GLTFLoader().load('/models/inventory/imac-intel.glb', ({ scene: model }) => {
+    const loader = new GLTFLoader();
+
+    function normalizeModel(model, width, rotation = 0) {
         const bounds = new THREE.Box3().setFromObject(model);
         const size = bounds.getSize(new THREE.Vector3());
-        if (!size.x || !Number.isFinite(size.x)) return;
-        const center = bounds.getCenter(new THREE.Vector3());
+        if (!size.x || !Number.isFinite(size.x)) return null;
         const normalized = new THREE.Group();
-        model.scale.setScalar(.85 / size.x);
-        model.position.set(-center.x * model.scale.x, -bounds.min.y * model.scale.y, -center.z * model.scale.z);
-        model.rotation.y = Math.PI;
+        model.scale.setScalar(width / size.x);
+        model.rotation.y = rotation;
         normalized.add(model);
-        intelImac = normalized;
+        const orientedBounds = new THREE.Box3().setFromObject(model);
+        const center = orientedBounds.getCenter(new THREE.Vector3());
+        model.position.set(-center.x, -orientedBounds.min.y, -center.z);
+        return normalized;
+    }
+
+    loader.load('/models/inventory/imac-intel.glb', ({ scene }) => {
+        intelImac = normalizeModel(scene, .85, Math.PI);
+        onReady?.();
+    }, undefined, () => {});
+    loader.load('/models/inventory/iphone-xs.glb', ({ scene }) => {
+        iphoneXs = normalizeModel(scene, .32);
         onReady?.();
     }, undefined, () => {});
 
@@ -218,6 +230,14 @@ export function createDeviceModels() {
             model.scale.setScalar(/27/.test(item.name) ? 1.22 : 1);
             group.add(model);
         }
+        else if (/iphone/i.test(item.name) && iphoneXs) {
+            const model = iphoneXs.clone(true);
+            model.traverse((object) => { if (object.isMesh) object.geometry = object.geometry.clone(); });
+            group.add(model);
+            addBox(group, .16, .018, .2, 0, .017, -.045, silver, .008);
+            const support = addBox(group, .018, .29, .025, 0, .16, -.105, silver);
+            support.rotation.x = -.18;
+        }
         else if (/iphone/i.test(item.name)) addPhone(group);
         else if (/ipad/i.test(item.name)) addTablet(group, /pro/i.test(item.name));
         else if (/monitor hp/i.test(item.name)) addMonitor(group, .87, 'hp');
@@ -226,10 +246,10 @@ export function createDeviceModels() {
     }
 
     function dispose() {
-        intelImac?.traverse((object) => {
+        [intelImac, iphoneXs].forEach((model) => model?.traverse((object) => {
             object.geometry?.dispose();
             if (object.material) (Array.isArray(object.material) ? object.material : [object.material]).forEach((material) => material.dispose());
-        });
+        }));
         textures.forEach((texture) => texture.dispose());
         materials.forEach((material) => material.dispose());
     }

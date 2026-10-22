@@ -5,3 +5,9 @@ Original: https://sketchfab.com/3d-models/imac-3d-model-free-agustin-honnun-e632
 License: Creative Commons Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/).
 
 The source USDZ was converted to glTF for browser compatibility. The keyboard and mouse were removed during conversion; the iMac is resized for the 21-inch and 27-inch entries.
+
+`iphone-xs.glb` is adapted from **Apple iPhone XS | Free** by Nofil.Khan.
+Original: https://sketchfab.com/3d-models/apple-iphone-xs-free-956617b095fc4ae592267107f4d2c515
+License: Creative Commons Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/).
+
+The supplied Blender model was converted to glTF and scaled for the inventory scene.
