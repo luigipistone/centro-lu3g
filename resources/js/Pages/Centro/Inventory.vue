@@ -5,11 +5,10 @@ import AppSelect from '@/Components/AppSelect.vue';
 import InventoryScene from '@/Components/InventoryScene.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
-import { Boxes, Check, Laptop, List, Monitor, Pencil, Plus, Search, Trash2, X } from '@lucide/vue';
+import { Boxes, Check, Laptop, Monitor, Pencil, Plus, Search, Trash2, X } from '@lucide/vue';
 
 const props = defineProps({ items: { type: Array, default: () => [] }, users: { type: Array, default: () => [] }, canManage: Boolean });
 const type = ref('physical');
-const view = ref('scene');
 const search = ref('');
 const selectedId = ref(null);
 const itemDialog = ref(false);
@@ -129,16 +128,13 @@ function safeUrl(value) {
             <div v-if="notice" class="mb-4 flex items-center justify-between gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-800" role="status"><span class="flex items-center gap-2"><Check class="h-4 w-4" />{{ notice }}</span><button type="button" aria-label="Chiudi conferma" @click="notice = ''"><X class="h-4 w-4" /></button></div>
 
             <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div class="inline-flex rounded-lg border border-gray-200 bg-white p-1 shadow-sm" role="tablist" aria-label="Tipo di inventario">
-                    <button v-for="option in [{ key: 'physical', label: 'Fisico', count: physicalCount, icon: Laptop }, { key: 'digital', label: 'Digitale', count: digitalCount, icon: Boxes }]" :key="option.key" type="button" role="tab" :aria-selected="type === option.key" class="flex min-h-9 items-center gap-2 rounded-md px-3 text-sm font-medium transition" :class="type === option.key ? 'bg-[hsl(var(--primary-app))] text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'" @click="changeType(option.key)"><component :is="option.icon" class="h-4 w-4" />{{ option.label }} <span class="text-xs opacity-75">{{ option.count }}</span></button>
+                <div class="inline-flex rounded-[var(--radius-sm)] border border-gray-200 bg-white p-1 shadow-sm" role="tablist" aria-label="Tipo di inventario">
+                    <button v-for="option in [{ key: 'physical', label: 'Fisico', count: physicalCount, icon: Laptop }, { key: 'digital', label: 'Digitale', count: digitalCount, icon: Boxes }]" :key="option.key" type="button" role="tab" :aria-selected="type === option.key" class="flex min-h-9 items-center gap-2 rounded-[calc(var(--radius-sm)-4px)] px-3 text-sm font-medium transition" :class="type === option.key ? 'bg-[hsl(var(--primary-app))] text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'" @click="changeType(option.key)"><component :is="option.icon" class="h-4 w-4" />{{ option.label }} <span class="text-xs opacity-75">{{ option.count }}</span></button>
                 </div>
-                <div class="flex min-w-0 flex-wrap items-center gap-2">
-                    <label class="relative block min-w-0"><Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" /><span class="sr-only">Cerca nell'inventario</span><input v-model="search" type="search" class="form-control !mt-0 min-w-0 pl-9 sm:w-64" placeholder="Cerca nell'inventario" /></label>
-                    <div class="inline-flex rounded-lg border border-gray-200 bg-white p-1" aria-label="Visualizzazione"><button type="button" class="icon-btn h-8 w-8" :class="view === 'scene' ? 'bg-blue-50 text-blue-600' : ''" title="Vista 3D" aria-label="Vista 3D" @click="view = 'scene'"><Boxes class="h-4 w-4" /></button><button type="button" class="icon-btn h-8 w-8" :class="view === 'list' ? 'bg-blue-50 text-blue-600' : ''" title="Vista elenco" aria-label="Vista elenco" @click="view = 'list'"><List class="h-4 w-4" /></button></div>
-                </div>
+                <label class="relative block w-full min-w-0 sm:w-64"><Search class="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-400" /><span class="sr-only">Cerca nell'inventario</span><input v-model="search" type="search" class="form-control !mt-0 !pl-10 w-full" placeholder="Cerca nell'inventario" /></label>
             </div>
 
-            <div v-if="view === 'scene'" class="inventory-workspace grid min-w-0 overflow-hidden border-y border-gray-200 bg-white lg:grid-cols-[minmax(0,1fr)_340px]">
+            <div class="inventory-workspace grid min-w-0 overflow-hidden border-y border-gray-200 bg-white lg:grid-cols-[minmax(0,1fr)_340px]">
                 <InventoryScene :items="filteredItems" :type="type" :selected-id="selected?.id" @select="selectedId = $event" />
                 <aside class="min-w-0 border-t border-gray-100 bg-white p-5 lg:border-l lg:border-t-0" aria-live="polite">
                     <template v-if="selected">
@@ -168,7 +164,7 @@ function safeUrl(value) {
                 <div class="mb-3 flex items-center justify-between"><h3 class="text-base font-semibold text-gray-900">{{ type === 'physical' ? 'Materiali fisici' : 'Licenze e strumenti digitali' }}</h3><span class="text-sm text-gray-500">{{ filteredItems.length }} voci</span></div>
                 <div class="overflow-x-auto rounded-[var(--radius-sm)] border border-gray-200 bg-white">
                     <table class="min-w-full divide-y divide-gray-100 text-sm"><thead class="bg-gray-50 text-left text-xs font-semibold uppercase text-gray-500"><tr><th class="px-4 py-3">Nome</th><th class="px-4 py-3">Categoria</th><th class="px-4 py-3">{{ type === 'physical' ? 'Unità' : 'Licenza' }}</th><th class="px-4 py-3">{{ type === 'physical' ? 'Assegnate' : 'Rinnovo' }}</th><th class="px-4 py-3 text-right">Dettaglio</th></tr></thead>
-                        <tbody class="divide-y divide-gray-100"><tr v-for="item in filteredItems" :key="item.id" :class="selected?.id === item.id ? 'bg-blue-50/60' : ''"><td class="px-4 py-3 font-medium text-gray-900">{{ item.name }}</td><td class="px-4 py-3 text-gray-500">{{ item.category || '–' }}</td><td class="px-4 py-3 text-gray-700">{{ type === 'physical' ? item.quantity : item.license_type || '–' }}</td><td class="px-4 py-3 text-gray-700">{{ type === 'physical' ? item.units.filter(unit => unit.assigned_user_id).length : item.renewal_date || '–' }}</td><td class="px-4 py-3 text-right"><button type="button" class="text-sm font-semibold text-blue-600 hover:underline" @click="selectedId = item.id; view = 'scene'">Apri</button></td></tr><tr v-if="!filteredItems.length"><td colspan="5" class="px-4 py-8 text-center text-gray-500">Nessuna voce trovata.</td></tr></tbody>
+                        <tbody class="divide-y divide-gray-100"><tr v-for="item in filteredItems" :key="item.id" :class="selected?.id === item.id ? 'bg-blue-50/60' : ''"><td class="px-4 py-3 font-medium text-gray-900">{{ item.name }}</td><td class="px-4 py-3 text-gray-500">{{ item.category || '–' }}</td><td class="px-4 py-3 text-gray-700">{{ type === 'physical' ? item.quantity : item.license_type || '–' }}</td><td class="px-4 py-3 text-gray-700">{{ type === 'physical' ? item.units.filter(unit => unit.assigned_user_id).length : item.renewal_date || '–' }}</td><td class="px-4 py-3 text-right"><button type="button" class="text-sm font-semibold text-blue-600 hover:underline" @click="selectedId = item.id">Apri</button></td></tr><tr v-if="!filteredItems.length"><td colspan="5" class="px-4 py-8 text-center text-gray-500">Nessuna voce trovata.</td></tr></tbody>
                     </table>
                 </div>
             </div>
