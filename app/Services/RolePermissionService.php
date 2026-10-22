@@ -61,6 +61,8 @@ class RolePermissionService
             ['group' => 'Fascicolo dipendente', 'key' => 'users.dossier.admin.manage', 'label' => 'Gestire note amministrative riservate'],
             ['group' => 'Amministrazione', 'key' => 'modules.view', 'label' => 'Visualizzare moduli'],
             ['group' => 'Amministrazione', 'key' => 'modules.manage', 'label' => 'Gestire moduli'],
+            ['group' => 'Amministrazione', 'key' => 'inventory.view', 'label' => 'Visualizzare inventario'],
+            ['group' => 'Amministrazione', 'key' => 'inventory.manage', 'label' => 'Gestire inventario e assegnazioni'],
             ['group' => 'Amministrazione', 'key' => 'ai_agency.view', 'label' => 'Visualizzare Agenzia AI'],
             ['group' => 'Amministrazione', 'key' => 'ai_agency.manage', 'label' => 'Gestire Agenzia AI'],
             ['group' => 'Sistema', 'key' => 'settings.manage', 'label' => 'Gestire impostazioni'],

@@ -3,6 +3,7 @@
 use App\Http\Controllers\AiAgencyController;
 use App\Http\Controllers\CentroPageController;
 use App\Http\Controllers\FigmaIntegrationController;
+use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WordPressProvisioningController;
@@ -212,6 +213,13 @@ Route::middleware('auth')->group(function () {
     Route::delete('/notifications', [CentroPageController::class, 'archiveAllNotifications'])->name('notifications.destroy-all');
     Route::delete('/notifications/{id}', [CentroPageController::class, 'archiveNotification'])->name('notifications.destroy');
     Route::get('/modules', [CentroPageController::class, 'modules'])->name('modules.index');
+    Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
+    Route::post('/inventory', [InventoryController::class, 'store'])->name('inventory.store');
+    Route::put('/inventory/{id}', [InventoryController::class, 'update'])->name('inventory.update');
+    Route::delete('/inventory/{id}', [InventoryController::class, 'destroy'])->name('inventory.destroy');
+    Route::post('/inventory/{id}/units', [InventoryController::class, 'storeUnit'])->name('inventory.units.store');
+    Route::put('/inventory/{id}/units/{unitId}', [InventoryController::class, 'updateUnit'])->name('inventory.units.update');
+    Route::delete('/inventory/{id}/units/{unitId}', [InventoryController::class, 'destroyUnit'])->name('inventory.units.destroy');
     Route::post('/modules/folders', [CentroPageController::class, 'storeModuleFolder'])->name('modules.folders.store');
     Route::put('/modules/folders/{id}', [CentroPageController::class, 'updateModuleFolder'])->name('modules.folders.update');
     Route::delete('/modules/folders/{id}', [CentroPageController::class, 'destroyModuleFolder'])->name('modules.folders.destroy');

@@ -24,6 +24,7 @@ class SectionAvailabilityService
         'billing' => ['label' => 'Fatturazione', 'group' => 'Amministrazione'],
         'users' => ['label' => 'Utenti', 'group' => 'Amministrazione'],
         'modules' => ['label' => 'Moduli', 'group' => 'Amministrazione'],
+        'inventory' => ['label' => 'Inventario', 'group' => 'Amministrazione'],
         'ai_agency' => ['label' => 'Agenzia AI', 'group' => 'Amministrazione'],
     ];
 
@@ -71,7 +72,7 @@ class SectionAvailabilityService
                 return $area;
             }
         }
-        foreach (['clients', 'tasks', 'calendar', 'documents', 'passwords', 'favorites', 'tools', 'billing', 'users', 'modules'] as $area) {
+        foreach (['clients', 'tasks', 'calendar', 'documents', 'passwords', 'favorites', 'tools', 'billing', 'users', 'modules', 'inventory'] as $area) {
             if (str_starts_with($name, "{$area}.")) {
                 return $area;
             }
