@@ -1,9 +1,74 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export function createDeviceModels() {
     const materials = new Map();
     const textures = new Map();
+    const imported = new Map();
+    let onReady = null;
+    const loader = new GLTFLoader();
+    const assets = {
+        'imac-intel': { file: 'imac-intel.glb', width: .79, rotation: Math.PI },
+        'imac-24': { file: 'imac-24.glb', width: .89, rotation: 0 },
+        iphone: { file: 'iphone-xs.glb', width: .3, rotation: 0 },
+        'ipad-pro': { file: 'ipad-pro.glb', width: .51, rotation: 0 },
+        'ipad-air': { file: 'ipad-air.glb', width: .49, rotation: 0 },
+        monitor: { file: 'monitor.glb', width: .87, rotation: -Math.PI / 2 },
+    };
+
+    for (const [key, asset] of Object.entries(assets)) {
+        loader.load(`/models/inventory/${asset.file}`, ({ scene }) => {
+            const oriented = new THREE.Group();
+            scene.rotation.y = asset.rotation;
+            oriented.add(scene);
+            oriented.updateMatrixWorld(true);
+            const bounds = new THREE.Box3().setFromObject(oriented);
+            const size = bounds.getSize(new THREE.Vector3());
+            if (!size.x || !Number.isFinite(size.x)) return;
+            oriented.scale.setScalar(asset.width / size.x);
+            oriented.updateMatrixWorld(true);
+            const scaled = new THREE.Box3().setFromObject(oriented);
+            const center = scaled.getCenter(new THREE.Vector3());
+            scene.position.set(-center.x / oriented.scale.x, -scaled.min.y / oriented.scale.y, -center.z / oriented.scale.z);
+            scene.traverse((object) => {
+                if (!object.isMesh) return;
+                const surface = object.material;
+                if (surface?.map && /screen|retina/i.test(object.name)) {
+                    object.material = new THREE.MeshBasicMaterial({ map: surface.map, side: THREE.DoubleSide, toneMapped: false });
+                } else if (surface?.map && key.startsWith('ipad')) {
+                    object.material = surface.clone();
+                    object.material.emissive = new THREE.Color('#ffffff');
+                    object.material.emissiveMap = surface.map;
+                    object.material.emissiveIntensity = .2;
+                }
+            });
+            imported.set(key, oriented);
+            onReady?.();
+        }, undefined, () => {});
+    }
+
+    function addImported(parent, key, scale = 1) {
+        const source = imported.get(key);
+        if (!source) return false;
+        const model = source.clone(true);
+        model.scale.multiplyScalar(scale);
+        model.traverse((object) => {
+            if (object.isMesh) object.geometry = object.geometry.clone();
+        });
+        parent.add(model);
+        if (key === 'monitor') {
+            const bounds = new THREE.Box3().setFromObject(model);
+            const size = bounds.getSize(new THREE.Vector3());
+            const display = addBox(parent, size.x * .94, size.y * .51, .002,
+                (bounds.min.x + bounds.max.x) / 2,
+                bounds.max.y - size.y * .34,
+                bounds.max.z + .003,
+                screen('hp'), .002);
+            display.receiveShadow = false;
+        }
+        return true;
+    }
 
     function surface(color, metalness = 0, roughness = .55) {
         const key = `${color}:${metalness}:${roughness}`;
@@ -198,17 +263,26 @@ export function createDeviceModels() {
     function create(item, index, type) {
         const group = new THREE.Group();
         if (type === 'digital') addLicense(group, item.name, index);
-        else if (/iphone/i.test(item.name)) addPhone(group);
-        else if (/ipad/i.test(item.name)) addTablet(group, /pro/i.test(item.name));
-        else if (/monitor hp/i.test(item.name)) addMonitor(group, .87, 'hp');
-        else if (/imac/i.test(item.name)) addMonitor(group, /27/.test(item.name) ? 1.03 : /21/.test(item.name) ? .79 : .88, /m3/i.test(item.name) ? 'modern' : 'intel');
+        else if (/iphone/i.test(item.name) && !addImported(group, 'iphone')) addPhone(group);
+        else if (/ipad pro/i.test(item.name) && !addImported(group, 'ipad-pro')) addTablet(group, true);
+        else if (/ipad air/i.test(item.name) && !addImported(group, 'ipad-air')) addTablet(group, false);
+        else if (/monitor hp/i.test(item.name) && !addImported(group, 'monitor')) addMonitor(group, .87, 'hp');
+        else if (/imac/i.test(item.name)) {
+            const modern = /m3|24/i.test(item.name);
+            const key = modern ? 'imac-24' : 'imac-intel';
+            if (!addImported(group, key, /27/.test(item.name) ? 1.22 : 1)) addMonitor(group, /27/.test(item.name) ? 1.03 : /21/.test(item.name) ? .79 : .88, modern ? 'modern' : 'intel');
+        }
         return group;
     }
 
     function dispose() {
+        imported.forEach((model) => model.traverse((object) => {
+            object.geometry?.dispose();
+            if (object.material) (Array.isArray(object.material) ? object.material : [object.material]).forEach((material) => material.dispose());
+        }));
         textures.forEach((texture) => texture.dispose());
         materials.forEach((material) => material.dispose());
     }
 
-    return { create, dispose, setOnReady() {} };
+    return { create, dispose, setOnReady(callback) { onReady = callback; } };
 }
