@@ -79,6 +79,7 @@ class ProfileController extends Controller
                 'first_name' => $payload['first_name'] ?? ($nameParts[0] ?? null),
                 'last_name' => $payload['last_name'] ?? ($nameParts[1] ?? null),
                 'phone' => ($payload['phone'] ?? null) ?: null,
+                'company_phone' => ($payload['company_phone'] ?? null) ?: null,
                 'fiscal_code' => isset($payload['fiscal_code']) ? strtoupper(trim($payload['fiscal_code'])) : null,
                 'birth_date' => $payload['birth_date'] ?? null,
                 'birth_place' => $payload['birth_place'] ?? null,

@@ -124,7 +124,8 @@ const labels = {
     name: 'Nome',
     legal_name: 'Ragione sociale',
     email: 'Email',
-    phone: 'Telefono',
+    phone: 'Telefono personale',
+    company_phone: 'Telefono aziendale',
     city: 'Citta',
     province: 'Provincia',
     vat_number: 'Partita IVA',
@@ -860,6 +861,7 @@ const userForm = useForm({
     job_title: props.record.job_title || '',
     contract_level: props.record.contract_level || '',
     phone: props.record.phone || '',
+    company_phone: props.record.company_phone || '',
     bio: props.record.bio || '',
     completion_effect: completionEffectValues.includes(props.record.completion_effect) ? props.record.completion_effect : 'balloons',
     smartworking_day: props.record.smartworking_day || 'none',
@@ -2401,6 +2403,7 @@ function userPayload() {
         name: composedName || userForm.name,
         email: userForm.email,
         phone: userForm.phone,
+        company_phone: userForm.company_phone,
         bio: userForm.bio,
         completion_effect: userForm.completion_effect,
         first_name: userForm.first_name, last_name: userForm.last_name,
@@ -5999,9 +6002,14 @@ onUnmounted(() => {
                                 <div v-if="userForm.errors.email" class="mt-1 text-sm text-red-600">{{ userForm.errors.email }}</div>
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700">Telefono</label>
-                                <input v-model="userForm.phone" class="form-control" :disabled="!userFieldAccess.personal_update" />
+                                <label class="block text-sm font-medium text-gray-700">Telefono personale</label>
+                                <input v-model="userForm.phone" type="tel" class="form-control" :disabled="!userFieldAccess.personal_update" />
                                 <div v-if="userForm.errors.phone" class="mt-1 text-sm text-red-600">{{ userForm.errors.phone }}</div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Telefono aziendale</label>
+                                <input v-model="userForm.company_phone" type="tel" class="form-control" :disabled="!userFieldAccess.personal_update" />
+                                <div v-if="userForm.errors.company_phone" class="mt-1 text-sm text-red-600">{{ userForm.errors.company_phone }}</div>
                             </div>
                             <div><label class="block text-sm font-medium text-gray-700">Codice fiscale</label><input v-model="userForm.fiscal_code" maxlength="16" class="form-control uppercase" :disabled="!userFieldAccess.personal_update" /><div v-if="userForm.errors.fiscal_code" class="mt-1 text-sm text-red-600">{{ userForm.errors.fiscal_code }}</div></div>
                             <div><label class="block text-sm font-medium text-gray-700">Data di nascita</label><AppDateInput v-model="userForm.birth_date" :disabled="!userFieldAccess.personal_update" /><div v-if="userForm.errors.birth_date" class="mt-1 text-sm text-red-600">{{ userForm.errors.birth_date }}</div></div>

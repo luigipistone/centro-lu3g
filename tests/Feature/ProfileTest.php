@@ -58,6 +58,7 @@ class ProfileTest extends TestCase
             'birth_place' => 'Milano',
             'gender' => 'female',
             'personal_email' => 'personale@example.test',
+            'company_phone' => '+39 02 7654321',
             'residence_place' => 'Monza',
         ])->assertSessionHasNoErrors();
 
@@ -66,6 +67,7 @@ class ProfileTest extends TestCase
             'fiscal_code' => 'VRDGLU90A41F205X',
             'birth_date' => '1990-01-01',
             'personal_email' => 'personale@example.test',
+            'company_phone' => '+39 02 7654321',
             'residence_place' => 'Monza',
         ]);
     }

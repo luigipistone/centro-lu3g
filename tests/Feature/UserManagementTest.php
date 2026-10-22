@@ -127,6 +127,7 @@ class UserManagementTest extends TestCase
             'fiscal_code' => 'vrdglu90a41f205x', 'birth_date' => '1990-01-01',
             'birth_place' => 'Milano', 'gender' => 'female',
             'personal_email' => 'giulia.personale@example.test', 'residence_place' => 'Monza',
+            'company_phone' => '+39 02 7654321',
         ])->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('profiles', [
@@ -134,11 +135,13 @@ class UserManagementTest extends TestCase
             'birth_date' => '1990-01-01', 'birth_place' => 'Milano',
             'gender' => 'female', 'personal_email' => 'giulia.personale@example.test',
             'residence_place' => 'Monza',
+            'company_phone' => '+39 02 7654321',
         ]);
         $this->actingAs($superadmin)->get(route('users.show', $target->id))
             ->assertOk()->assertInertia(fn (Assert $page) => $page
                 ->where('record.fiscal_code', 'VRDGLU90A41F205X')
                 ->where('record.residence_place', 'Monza')
+                ->where('record.company_phone', '+39 02 7654321')
             );
     }
 

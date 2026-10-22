@@ -38,6 +38,7 @@ const form = useForm({
     last_name: profile.last_name || user.name?.split(' ').slice(1).join(' ') || '',
     email: user.email,
     phone: profile.phone || '',
+    company_phone: profile.company_phone || '',
     fiscal_code: profile.fiscal_code || '', birth_date: profile.birth_date || '',
     birth_place: profile.birth_place || '', gender: profile.gender || '',
     personal_email: profile.personal_email || '', residence_place: profile.residence_place || '',
@@ -96,6 +97,7 @@ function profilePayload() {
         last_name: form.last_name,
         email: form.email,
         phone: form.phone,
+        company_phone: form.company_phone,
         fiscal_code: form.fiscal_code, birth_date: form.birth_date || null,
         birth_place: form.birth_place, gender: form.gender || null,
         personal_email: form.personal_email, residence_place: form.residence_place,
@@ -229,9 +231,14 @@ onUnmounted(() => {
                 <InputError class="mt-2" :message="form.errors.email" />
               </div>
               <div>
-                <InputLabel for="phone" value="Telefono" />
+                <InputLabel for="phone" value="Telefono personale" />
                 <TextInput id="phone" v-model="form.phone" type="tel" class="mt-1 block w-full" autocomplete="tel" />
                 <InputError class="mt-2" :message="form.errors.phone" />
+              </div>
+              <div>
+                <InputLabel for="company_phone" value="Telefono aziendale" />
+                <TextInput id="company_phone" v-model="form.company_phone" type="tel" class="mt-1 block w-full" autocomplete="tel" />
+                <InputError class="mt-2" :message="form.errors.company_phone" />
               </div>
             </div>
 

@@ -3034,7 +3034,7 @@ class CentroPageController extends Controller
                 ->leftJoin('user_roles', 'user_roles.user_id', '=', 'users.id')
                 ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
                 ->where('users.id', $id)
-                ->select('users.*', 'user_roles.role', 'profiles.avatar_url', 'profiles.employee_code', 'profiles.first_name', 'profiles.last_name', 'profiles.fiscal_code', 'profiles.birth_date', 'profiles.birth_place', 'profiles.gender', 'profiles.personal_email', 'profiles.residence_place', 'profiles.job_title', 'profiles.contract_level', 'profiles.department', 'profiles.manager_user_id', 'profiles.office', 'profiles.employment_status', 'profiles.hire_date', 'profiles.termination_date', 'profiles.weekly_hours', 'profiles.part_time', 'profiles.part_time_percentage', 'profiles.work_schedule', 'profiles.phone', 'profiles.bio', 'profiles.completion_effect', 'profiles.smartworking_day', 'profiles.smartworking_days', 'profiles.smartworking_rules')
+                ->select('users.*', 'user_roles.role', 'profiles.avatar_url', 'profiles.employee_code', 'profiles.first_name', 'profiles.last_name', 'profiles.fiscal_code', 'profiles.birth_date', 'profiles.birth_place', 'profiles.gender', 'profiles.personal_email', 'profiles.residence_place', 'profiles.job_title', 'profiles.contract_level', 'profiles.department', 'profiles.manager_user_id', 'profiles.office', 'profiles.employment_status', 'profiles.hire_date', 'profiles.termination_date', 'profiles.weekly_hours', 'profiles.part_time', 'profiles.part_time_percentage', 'profiles.work_schedule', 'profiles.phone', 'profiles.company_phone', 'profiles.bio', 'profiles.completion_effect', 'profiles.smartworking_day', 'profiles.smartworking_days', 'profiles.smartworking_rules')
                 ->first(),
             'absences' => DB::table('absence_requests')
                 ->leftJoin('users', 'users.id', '=', 'absence_requests.user_id')
@@ -5028,11 +5028,12 @@ class CentroPageController extends Controller
         $this->ensurePermission($request, 'users.profile.personal.update');
 
         $user = User::query()->findOrFail($id);
-        $previousProfile = DB::table('profiles')->where('user_id', $id)->first(['id', 'created_at', 'phone', 'bio', 'completion_effect', 'first_name', 'last_name', 'fiscal_code', 'birth_date', 'birth_place', 'gender', 'personal_email', 'residence_place']);
+        $previousProfile = DB::table('profiles')->where('user_id', $id)->first(['id', 'created_at', 'phone', 'company_phone', 'bio', 'completion_effect', 'first_name', 'last_name', 'fiscal_code', 'birth_date', 'birth_place', 'gender', 'personal_email', 'residence_place']);
         $payload = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'phone' => ['nullable', 'string', 'max:255'],
+            'company_phone' => ['nullable', 'string', 'max:80'],
             'bio' => ['nullable', 'string'],
             'completion_effect' => ['nullable', Rule::in(['balloons', 'fireworks', 'snow', 'glitch'])],
             'first_name' => ['nullable', 'string', 'max:120'],
@@ -5064,6 +5065,7 @@ class CentroPageController extends Controller
                 'personal_email' => $payload['personal_email'] ?? null,
                 'residence_place' => $payload['residence_place'] ?? null,
                 'phone' => $payload['phone'] ?? null,
+                'company_phone' => $payload['company_phone'] ?? null,
                 'bio' => $payload['bio'] ?? null,
                 'completion_effect' => $payload['completion_effect'] ?? 'balloons',
                 'updated_at' => now(),
@@ -5071,7 +5073,7 @@ class CentroPageController extends Controller
             ],
         );
 
-        $profileChanged = collect(['phone', 'bio', 'completion_effect', 'first_name', 'last_name', 'fiscal_code', 'birth_date', 'birth_place', 'gender', 'personal_email', 'residence_place'])
+        $profileChanged = collect(['phone', 'company_phone', 'bio', 'completion_effect', 'first_name', 'last_name', 'fiscal_code', 'birth_date', 'birth_place', 'gender', 'personal_email', 'residence_place'])
             ->contains(fn ($field) => ($previousProfile?->$field ?? null) !== ($payload[$field] ?? ($field === 'completion_effect' ? 'balloons' : null)));
         if ($request->user()->id !== $id && ($user->wasChanged(['name', 'email']) || $profileChanged)) {
             $this->notifyUsers([$id], $request->user()->id, 'profile_updated', $request->user()->name.' ha aggiornato i tuoi dati personali.');
@@ -5105,7 +5107,8 @@ class CentroPageController extends Controller
             ['Nome e cognome', $person->name],
             ['Email aziendale', $person->email],
             ['Email personale', $person->personal_email],
-            ['Telefono', $person->phone],
+            ['Telefono personale', $person->phone],
+            ['Telefono aziendale', $person->company_phone],
             ['Codice fiscale', $person->fiscal_code],
             ['Data di nascita', $date($person->birth_date)],
             ['Luogo di nascita', $person->birth_place],
