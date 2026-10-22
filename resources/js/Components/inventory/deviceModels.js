@@ -1,37 +1,9 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export function createDeviceModels() {
     const materials = new Map();
     const textures = new Map();
-    let intelImac = null;
-    let iphoneXs = null;
-    let onReady = null;
-    const loader = new GLTFLoader();
-
-    function normalizeModel(model, width, rotation = 0) {
-        const bounds = new THREE.Box3().setFromObject(model);
-        const size = bounds.getSize(new THREE.Vector3());
-        if (!size.x || !Number.isFinite(size.x)) return null;
-        const normalized = new THREE.Group();
-        model.scale.setScalar(width / size.x);
-        model.rotation.y = rotation;
-        normalized.add(model);
-        const orientedBounds = new THREE.Box3().setFromObject(model);
-        const center = orientedBounds.getCenter(new THREE.Vector3());
-        model.position.set(-center.x, -orientedBounds.min.y, -center.z);
-        return normalized;
-    }
-
-    loader.load('/models/inventory/imac-intel.glb', ({ scene }) => {
-        intelImac = normalizeModel(scene, .85, Math.PI);
-        onReady?.();
-    }, undefined, () => {});
-    loader.load('/models/inventory/iphone-xs.glb', ({ scene }) => {
-        iphoneXs = normalizeModel(scene, .32);
-        onReady?.();
-    }, undefined, () => {});
 
     function surface(color, metalness = 0, roughness = .55) {
         const key = `${color}:${metalness}:${roughness}`;
@@ -113,57 +85,57 @@ export function createDeviceModels() {
     function addMonitor(parent, width, kind) {
         const hp = kind === 'hp';
         const modern = kind === 'modern';
-        const panelHeight = width * (modern ? .62 : .59);
-        const bottom = modern ? .255 : .29;
-        const shell = hp ? surface('#292c32', .35, .42) : modern ? surface('#c9d1d5', .72, .3) : silver;
-        const face = modern ? surface('#edf1f2', .32, .38) : black;
-        const depth = modern ? .035 : hp ? .045 : .09;
-        addBox(parent, width, panelHeight, depth, 0, bottom + panelHeight / 2, -.075, shell, modern ? .014 : .019);
-        addBox(parent, width * .994, panelHeight * .987, .008, 0, bottom + panelHeight / 2, -.048, face, .008);
-        const chin = modern ? .145 : hp ? .075 : .16;
-        const screenWidth = width * (modern ? .94 : hp ? .96 : .89);
-        const screenHeight = panelHeight * (1 - chin - .045);
-        const screenY = bottom + panelHeight * (chin + .025) + screenHeight / 2;
-        const display = addBox(parent, screenWidth, screenHeight, .004, 0, screenY, -.04, screen(hp ? 'hp' : modern ? 'modern' : 'intel'));
+        const height = width * (modern ? .64 : .59);
+        const bottom = modern ? .27 : .29;
+        const casing = hp ? surface('#30353c', .32, .43) : modern ? surface('#9fc4cf', .67, .31) : silver;
+        const bezel = modern ? surface('#e7f3f6', .22, .45) : surface('#0c1117', .24, .3);
+        const backDepth = modern ? .045 : hp ? .055 : .14;
+        const panelZ = -.08;
+        addBox(parent, width, height, backDepth, 0, bottom + height / 2, panelZ, casing, modern ? .016 : .02);
+        const faceZ = panelZ + backDepth / 2 + .006;
+        addBox(parent, width * .992, height * .987, .008, 0, bottom + height / 2, faceZ, bezel, .009);
+        const chin = modern ? .145 : hp ? .055 : .135;
+        const inset = modern ? .035 : hp ? .025 : .045;
+        const displayHeight = height * (1 - chin - inset * 2);
+        const displayY = bottom + height * chin + height * inset + displayHeight / 2;
+        const display = addBox(parent, width * (1 - inset * 2), displayHeight, .003, 0, displayY, faceZ + .007, screen(hp ? 'hp' : modern ? 'modern' : 'intel'), .002);
         display.receiveShadow = false;
-        addDot(parent, .004, 0, bottom + panelHeight * .978, -.036, lens);
+        addDot(parent, .0035, 0, bottom + height * .979, faceZ + .012, lens);
         if (modern) {
-            addDot(parent, .009, 0, bottom + panelHeight * .072, -.035, surface('#aab4b9', .35, .43));
+            addDot(parent, .009, 0, bottom + height * .069, faceZ + .012, surface('#9faeb5', .45, .35));
         } else if (hp) {
-            addDot(parent, .009, 0, bottom + panelHeight * .035, -.035, silverLight);
-            addBox(parent, width * .96, .008, .012, 0, bottom + .014, -.036, graphite, .002);
-        }
-        const neck = addBox(parent, width * (modern ? .105 : .08), .24, modern ? .032 : .055, 0, .16, -.17, hp ? graphite : silver, .008);
-        neck.rotation.x = modern ? -.12 : -.17;
-        if (hp) {
-            addBox(parent, width * .5, .019, .26, 0, .019, -.12, graphite, .008);
-            addBox(parent, width * .18, .007, .1, 0, .034, -.09, black, .003);
+            addDot(parent, .009, 0, bottom + height * .026, faceZ + .012, silverLight);
         } else {
-            const foot = addBox(parent, width * .4, .018, .29, 0, .019, -.105, silver, .01);
-            foot.rotation.x = -.025;
-        }
-        if (!modern && !hp) {
-            const back = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10), silver);
-            back.scale.set(width * .43, panelHeight * .37, .045);
-            back.position.set(0, bottom + panelHeight / 2, -.145);
+            // The black glass and full-width silver chin distinguish the Intel iMacs.
+            addBox(parent, width * .988, height * chin * .89, .005, 0, bottom + height * chin * .5, faceZ + .007, silver, .004);
+            addDot(parent, .009, 0, bottom + height * chin * .52, faceZ + .014, surface('#8b969d', .4, .4));
+            const back = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), casing);
+            back.scale.set(width * .44, height * .42, .085);
+            back.position.set(0, bottom + height / 2, panelZ - backDepth / 2);
             parent.add(back);
         }
+        const stand = hp ? graphite : modern ? surface('#a8cbd5', .67, .3) : silver;
+        const neck = addBox(parent, width * (hp ? .075 : .09), .24, .045, 0, .17, -.18, stand, .008);
+        neck.rotation.x = -.14;
+        const foot = addBox(parent, width * (hp ? .48 : .43), .018, hp ? .29 : .27, 0, .019, -.12, stand, .009);
+        foot.rotation.x = -.025;
     }
 
     function addTablet(parent, pro) {
         const width = pro ? .53 : .49;
         const height = pro ? .76 : .71;
         const body = new THREE.Group();
-        body.rotation.x = -.12;
-        body.position.y = .08;
+        body.rotation.x = -.13;
+        body.position.y = .045;
         parent.add(body);
-        addBox(body, width, height, pro ? .042 : .031, 0, height / 2, 0, pro ? graphite : surface('#b9c4d1', .8, .28), .016);
-        addBox(body, width * .987, height * .991, .006, 0, height / 2, .019, black, .006);
-        addBox(body, width * .94, height * .955, .003, 0, height / 2, .024, screen(pro ? 'tablet-pro' : 'tablet-air'));
-        addDot(body, .004, 0, height * .985, .028, lens);
-        addBox(parent, width * .5, .025, .33, 0, .024, -.15, silver, .012);
-        const support = addBox(parent, .025, height * .66, .05, 0, height * .33, -.17, silver);
-        support.rotation.x = -.21;
+        const chassis = pro ? graphite : surface('#afbbca', .78, .29);
+        addBox(body, width, height, pro ? .04 : .035, 0, height / 2, 0, chassis, .016);
+        addBox(body, width * .986, height * .991, .005, 0, height / 2, .022, black, .012);
+        addBox(body, width * .92, height * .948, .003, 0, height / 2, .027, screen(pro ? 'tablet-pro' : 'tablet-air'), .004);
+        addDot(body, .0035, 0, height * .982, .03, lens);
+        addBox(parent, width * .5, .02, .31, 0, .02, -.17, surface('#98a4ae', .6, .38), .009);
+        const support = addBox(parent, .021, height * .59, .04, 0, height * .3, -.19, surface('#98a4ae', .6, .38));
+        support.rotation.x = -.22;
         if (pro) {
             addBox(body, .065, .065, .012, -width * .32, height * .85, -.03, black, .01);
             addDot(body, .015, -width * .32, height * .85, -.038, lens);
@@ -175,15 +147,17 @@ export function createDeviceModels() {
 
     function addPhone(parent) {
         const height = .64;
-        addBox(parent, .304, height, .051, 0, height / 2 + .055, 0, surface('#adb7c0', .84, .23), .025);
-        addBox(parent, .29, height * .98, .018, 0, height / 2 + .055, .028, black, .009);
-        addBox(parent, .269, height * .94, .004, 0, height / 2 + .055, .04, screen('phone'));
-        addBox(parent, .126, .027, .007, 0, height * .985, .046, black, .003);
-        addDot(parent, .006, .036, height * .985, .051, lens);
-        addBox(parent, .095, .017, .007, -.097, height * .7, -.031, silver);
-        addBox(parent, .16, .02, .23, 0, .025, -.055, silver, .008);
-        const support = addBox(parent, .022, .27, .03, 0, .15, -.12, silver);
-        support.rotation.x = -.18;
+        const frame = surface('#c4b7a7', .84, .23);
+        addBox(parent, .306, height, .045, 0, height / 2 + .018, 0, frame, .028);
+        addBox(parent, .294, height * .986, .006, 0, height / 2 + .018, .025, black, .021);
+        addBox(parent, .276, height * .963, .002, 0, height / 2 + .018, .03, screen('phone'), .015);
+        addBox(parent, .135, .028, .003, 0, height * .973, .034, black, .009);
+        addDot(parent, .004, .036, height * .971, .038, lens);
+        addBox(parent, .008, .082, .014, -.156, height * .68, 0, frame, .003);
+        addBox(parent, .008, .044, .014, .156, height * .71, 0, frame, .003);
+        addBox(parent, .275, height * .965, .003, 0, height / 2 + .018, -.025, surface('#d9c8b7', .64, .32), .019);
+        addBox(parent, .062, .085, .009, -.069, height * .78, -.032, frame, .013);
+        for (const [x, y] of [[-.082, .802], [-.052, .802]]) addDot(parent, .011, x, height * y, -.038, lens);
     }
 
     function licenseTexture(name, color) {
@@ -224,17 +198,6 @@ export function createDeviceModels() {
     function create(item, index, type) {
         const group = new THREE.Group();
         if (type === 'digital') addLicense(group, item.name, index);
-        else if (/imac/i.test(item.name) && !/m3/i.test(item.name) && intelImac) {
-            const model = intelImac.clone(true);
-            model.traverse((object) => { if (object.isMesh) object.geometry = object.geometry.clone(); });
-            model.scale.setScalar(/27/.test(item.name) ? 1.22 : 1);
-            group.add(model);
-        }
-        else if (/iphone/i.test(item.name) && iphoneXs) {
-            const model = iphoneXs.clone(true);
-            model.traverse((object) => { if (object.isMesh) object.geometry = object.geometry.clone(); });
-            group.add(model);
-        }
         else if (/iphone/i.test(item.name)) addPhone(group);
         else if (/ipad/i.test(item.name)) addTablet(group, /pro/i.test(item.name));
         else if (/monitor hp/i.test(item.name)) addMonitor(group, .87, 'hp');
@@ -243,13 +206,9 @@ export function createDeviceModels() {
     }
 
     function dispose() {
-        [intelImac, iphoneXs].forEach((model) => model?.traverse((object) => {
-            object.geometry?.dispose();
-            if (object.material) (Array.isArray(object.material) ? object.material : [object.material]).forEach((material) => material.dispose());
-        }));
         textures.forEach((texture) => texture.dispose());
         materials.forEach((material) => material.dispose());
     }
 
-    return { create, dispose, setOnReady(callback) { onReady = callback; } };
+    return { create, dispose, setOnReady() {} };
 }
