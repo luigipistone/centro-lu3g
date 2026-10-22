@@ -36,6 +36,14 @@ export function createDeviceModels() {
                 const surface = object.material;
                 if (surface?.map && /screen|retina/i.test(object.name)) {
                     object.material = new THREE.MeshBasicMaterial({ map: surface.map, side: THREE.DoubleSide, toneMapped: false });
+                    if (key === 'imac-24') {
+                        object.material.side = THREE.FrontSide;
+                        object.material.transparent = true;
+                        object.material.blending = THREE.NoBlending;
+                        object.material.depthTest = false;
+                        object.material.depthWrite = false;
+                        object.renderOrder = 999;
+                    }
                 } else if (surface?.map && key.startsWith('ipad')) {
                     object.material = surface.clone();
                     object.material.emissive = new THREE.Color('#ffffff');
