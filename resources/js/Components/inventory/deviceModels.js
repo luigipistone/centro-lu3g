@@ -234,9 +234,6 @@ export function createDeviceModels() {
             const model = iphoneXs.clone(true);
             model.traverse((object) => { if (object.isMesh) object.geometry = object.geometry.clone(); });
             group.add(model);
-            addBox(group, .16, .018, .2, 0, .017, -.045, silver, .008);
-            const support = addBox(group, .018, .29, .025, 0, .16, -.105, silver);
-            support.rotation.x = -.18;
         }
         else if (/iphone/i.test(item.name)) addPhone(group);
         else if (/ipad/i.test(item.name)) addTablet(group, /pro/i.test(item.name));

@@ -33,6 +33,7 @@ const models = createDeviceModels();
 models.setOnReady(build);
 const shelfMaterial = material('#627d99', .35, .48);
 const backMaterial = material('#d5e2ef', 0, .9);
+const occluderMaterial = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true, side: THREE.DoubleSide });
 
 function material(color, metalness = 0, roughness = .6) {
     const key = `${color}:${metalness}:${roughness}`;
@@ -83,6 +84,9 @@ function build() {
         for (let row = 0; row < rows; row++) box(inventory, rackWidth, .075, shelfDepth, x, base + row * shelfStep, 0, shelfMaterial, false);
         for (const edge of [-rackWidth / 2, rackWidth / 2]) box(inventory, .09, height, shelfDepth, x + edge, height / 2, 0, shelfMaterial, false);
         box(inventory, rackWidth, height, .045, x, height / 2, -shelfDepth / 2, backMaterial, false);
+        const occluder = box(inventory, rackWidth, height, .045, x, height / 2, -shelfDepth / 2, occluderMaterial, false);
+        occluder.layers.set(1);
+        occluder.renderOrder = -1;
         box(inventory, rackWidth, .08, shelfDepth, x, height, 0, shelfMaterial, false);
     }
     for (const [i, item] of placements.entries()) {
@@ -118,7 +122,7 @@ function moveRack(index) {
 function finishPointer(event) {
     if (!pointerDown) return;
     const distance = event.clientX - pointerDown.x;
-    if (Math.abs(distance) > 45) moveRack(rackIndex.value + (distance < 0 ? 1 : -1));
+    if (pointerDown.pointerType === 'touch' && !pulledGroup && Math.abs(distance) > 45) moveRack(rackIndex.value + (distance < 0 ? 1 : -1));
 }
 
 function selectAt(event) {
@@ -266,12 +270,13 @@ onBeforeUnmount(() => {
     foregroundRenderer?.dispose();
     models.dispose();
     materials.forEach((material) => material.dispose());
+    occluderMaterial.dispose();
 });
 </script>
 
 <template>
     <div class="inventory-stage relative h-[440px] min-w-0 overflow-hidden bg-[#eaf1f8] sm:h-[520px]" aria-label="Vista 3D dell'inventario">
-        <canvas ref="canvas" class="block h-full w-full touch-none transition-[filter] duration-300" :class="isPulled ? 'blur-[5px]' : ''" @pointerdown="pointerDown = { x: $event.clientX, y: $event.clientY }" @pointerup="finishPointer" @pointermove="hoverAt" @pointerleave="clearHover" @click="selectAt" />
+        <canvas ref="canvas" class="block h-full w-full touch-none transition-[filter] duration-300" :class="isPulled ? 'blur-[5px]' : ''" @pointerdown="pointerDown = { x: $event.clientX, y: $event.clientY, pointerType: $event.pointerType }" @pointerup="finishPointer" @pointermove="hoverAt" @pointerleave="clearHover" @click="selectAt" />
         <canvas ref="foregroundCanvas" class="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true" />
         <div v-if="ready && rackCount > 1" class="absolute inset-x-4 bottom-4 z-10 flex items-center justify-between pointer-events-none">
             <button type="button" class="icon-btn pointer-events-auto h-9 w-9 bg-white/95 shadow-sm" :disabled="rackIndex === 0" title="Scaffale precedente" aria-label="Scaffale precedente" @click="moveRack(rackIndex - 1)"><ChevronLeft class="h-4 w-4" /></button>
