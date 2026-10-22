@@ -223,10 +223,13 @@ onMounted(() => {
         controls.maxDistance = 25;
         controls.minPolarAngle = .4;
         controls.maxPolarAngle = 1.6;
-        scene.add(new THREE.HemisphereLight('#ffffff', '#8a9aac', 2.6));
+        const ambient = new THREE.HemisphereLight('#ffffff', '#8a9aac', 2.6);
+        ambient.layers.enable(1);
+        scene.add(ambient);
         const key = new THREE.DirectionalLight('#ffffff', 2.8);
         key.position.set(-5, 10, 8);
         key.castShadow = false;
+        key.layers.enable(1);
         scene.add(key);
         const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), material('#e6edf5', 0, 1));
         ground.rotation.x = -Math.PI / 2;
