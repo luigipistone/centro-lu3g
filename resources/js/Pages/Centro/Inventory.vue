@@ -5,7 +5,7 @@ import AppSelect from '@/Components/AppSelect.vue';
 import InventoryScene from '@/Components/InventoryScene.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
-import { Boxes, CalendarClock, Check, Laptop, List, Monitor, PackagePlus, Pencil, Plus, Search, Trash2, X } from '@lucide/vue';
+import { Boxes, Check, Laptop, List, Monitor, Pencil, Plus, Search, Trash2, X } from '@lucide/vue';
 
 const props = defineProps({ items: { type: Array, default: () => [] }, users: { type: Array, default: () => [] }, canManage: Boolean });
 const type = ref('physical');
@@ -138,7 +138,7 @@ function safeUrl(value) {
                 </div>
             </div>
 
-            <div v-if="view === 'scene'" class="inventory-workspace grid min-w-0 overflow-hidden rounded-[var(--radius)] border border-white/80 bg-white shadow-[var(--shadow-soft)] lg:grid-cols-[minmax(0,1fr)_340px]">
+            <div v-if="view === 'scene'" class="inventory-workspace grid min-w-0 overflow-hidden border-y border-gray-200 bg-white lg:grid-cols-[minmax(0,1fr)_340px]">
                 <InventoryScene :items="filteredItems" :type="type" :selected-id="selected?.id" @select="selectedId = $event" />
                 <aside class="min-w-0 border-t border-gray-100 bg-white p-5 lg:border-l lg:border-t-0" aria-live="polite">
                     <template v-if="selected">
@@ -174,18 +174,53 @@ function safeUrl(value) {
             </div>
         </div>
 
-        <div v-if="itemDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/35 p-4" @click.self="itemDialog = false"><form class="surface max-h-[90vh] w-full max-w-2xl overflow-y-auto p-6" @submit.prevent="saveItem"><div class="mb-5 flex items-center justify-between"><h3 class="text-lg font-semibold">{{ editingItem ? 'Modifica elemento' : 'Nuovo elemento' }}</h3><button type="button" class="icon-btn h-8 w-8" aria-label="Chiudi" @click="itemDialog = false"><X class="h-4 w-4" /></button></div><div class="grid gap-4 sm:grid-cols-2">
-            <label class="block text-sm font-medium text-gray-700">Tipologia<AppSelect v-model="itemForm.type" class="mt-1" :disabled="!!editingItem" :options="[{ value: 'physical', label: 'Fisico' }, { value: 'digital', label: 'Digitale' }]" /></label>
-            <label class="block text-sm font-medium text-gray-700">Nome<input v-model="itemForm.name" required class="form-control" /><span v-if="itemForm.errors.name" class="text-xs text-red-600">{{ itemForm.errors.name }}</span></label>
-            <label class="block text-sm font-medium text-gray-700">Categoria<input v-model="itemForm.category" class="form-control" /></label>
-            <label v-if="itemForm.type === 'physical' && !editingItem" class="block text-sm font-medium text-gray-700">Quantità iniziale<input v-model.number="itemForm.quantity" type="number" min="1" max="100" class="form-control" /></label>
-            <template v-if="itemForm.type === 'physical'"><label class="block text-sm font-medium text-gray-700">Marca<input v-model="itemForm.brand" class="form-control" /></label><label class="block text-sm font-medium text-gray-700">Modello<input v-model="itemForm.model" class="form-control" /></label><label class="block text-sm font-medium text-gray-700">Anno modello<input v-model="itemForm.model_year" type="number" min="1900" max="2100" class="form-control" /></label></template>
-            <template v-else><label class="block text-sm font-medium text-gray-700">Tipo di licenza<input v-model="itemForm.license_type" class="form-control" /></label><label class="block text-sm font-medium text-gray-700">Capienza<input v-model="itemForm.capacity_total" type="number" min="0" class="form-control" /></label><label class="block text-sm font-medium text-gray-700">Utilizzate<input v-model="itemForm.used_count" type="number" min="0" class="form-control" /><span v-if="itemForm.errors.used_count" class="text-xs text-red-600">{{ itemForm.errors.used_count }}</span></label><label class="block text-sm font-medium text-gray-700">Rinnovo<AppDateInput v-model="itemForm.renewal_date" class="mt-1" /></label><label class="block text-sm font-medium text-gray-700 sm:col-span-2">Link accesso<input v-model="itemForm.access_url" type="url" class="form-control" /><span v-if="itemForm.errors.access_url" class="text-xs text-red-600">{{ itemForm.errors.access_url }}</span></label></template>
-            <label class="block text-sm font-medium text-gray-700 sm:col-span-2">Note<textarea v-model="itemForm.notes" rows="3" class="form-control" /></label>
-        </div><div class="mt-6 flex justify-end gap-2"><button type="button" class="btn btn-outline" @click="itemDialog = false">Annulla</button><button type="submit" class="btn btn-primary" :disabled="itemForm.processing">Salva</button></div></form></div>
+        <Teleport to="body">
+        <div v-if="itemDialog" class="fixed inset-0 z-[3000] flex items-center justify-center bg-gray-900/35 p-4" @click.self="itemDialog = false">
+            <form class="surface max-h-[90vh] w-full max-w-2xl overflow-y-auto p-6" role="dialog" aria-modal="true" aria-labelledby="inventory-item-title" @submit.prevent="saveItem">
+                <div class="mb-5 flex items-center justify-between gap-3 border-b border-gray-100 pb-4">
+                    <h3 id="inventory-item-title" class="text-lg font-semibold text-gray-900">{{ editingItem ? 'Modifica elemento' : 'Nuovo elemento' }}</h3>
+                    <button type="button" class="icon-btn h-9 w-9" title="Chiudi" aria-label="Chiudi" @click="itemDialog = false"><X class="h-4 w-4" /></button>
+                </div>
+                <div class="grid items-start gap-4 sm:grid-cols-2">
+                    <div><span class="block text-sm font-medium text-gray-700">Tipologia</span><AppSelect v-model="itemForm.type" class="mt-1" :disabled="!!editingItem" :options="[{ value: 'physical', label: 'Fisico' }, { value: 'digital', label: 'Digitale' }]" /></div>
+                    <div><label for="inventory-name" class="block text-sm font-medium text-gray-700">Nome</label><input id="inventory-name" v-model="itemForm.name" required class="form-control" /><p v-if="itemForm.errors.name" class="mt-1 text-xs text-red-600">{{ itemForm.errors.name }}</p></div>
+                    <div><label for="inventory-category" class="block text-sm font-medium text-gray-700">Categoria</label><input id="inventory-category" v-model="itemForm.category" class="form-control" /></div>
+                    <div v-if="itemForm.type === 'physical' && !editingItem"><label for="inventory-quantity" class="block text-sm font-medium text-gray-700">Quantità iniziale</label><input id="inventory-quantity" v-model.number="itemForm.quantity" type="number" min="1" max="100" class="form-control" /></div>
+                    <template v-if="itemForm.type === 'physical'">
+                        <div><label for="inventory-brand" class="block text-sm font-medium text-gray-700">Marca</label><input id="inventory-brand" v-model="itemForm.brand" class="form-control" /></div>
+                        <div><label for="inventory-model" class="block text-sm font-medium text-gray-700">Modello</label><input id="inventory-model" v-model="itemForm.model" class="form-control" /></div>
+                        <div><label for="inventory-year" class="block text-sm font-medium text-gray-700">Anno modello</label><input id="inventory-year" v-model="itemForm.model_year" type="number" min="1900" max="2100" class="form-control" /></div>
+                    </template>
+                    <template v-else>
+                        <div><label for="inventory-license" class="block text-sm font-medium text-gray-700">Tipo di licenza</label><input id="inventory-license" v-model="itemForm.license_type" class="form-control" /></div>
+                        <div><label for="inventory-capacity" class="block text-sm font-medium text-gray-700">Capienza</label><input id="inventory-capacity" v-model="itemForm.capacity_total" type="number" min="0" class="form-control" /></div>
+                        <div><label for="inventory-used" class="block text-sm font-medium text-gray-700">Utilizzate</label><input id="inventory-used" v-model="itemForm.used_count" type="number" min="0" class="form-control" /><p v-if="itemForm.errors.used_count" class="mt-1 text-xs text-red-600">{{ itemForm.errors.used_count }}</p></div>
+                        <div><span class="block text-sm font-medium text-gray-700">Rinnovo</span><AppDateInput v-model="itemForm.renewal_date" class="mt-1" /></div>
+                        <div class="sm:col-span-2"><label for="inventory-url" class="block text-sm font-medium text-gray-700">Link accesso</label><input id="inventory-url" v-model="itemForm.access_url" type="url" class="form-control" /><p v-if="itemForm.errors.access_url" class="mt-1 text-xs text-red-600">{{ itemForm.errors.access_url }}</p></div>
+                    </template>
+                    <div class="sm:col-span-2"><label for="inventory-notes" class="block text-sm font-medium text-gray-700">Note</label><textarea id="inventory-notes" v-model="itemForm.notes" rows="3" class="form-control" /></div>
+                </div>
+                <div class="mt-6 flex justify-end gap-2 border-t border-gray-100 pt-4"><button type="button" class="btn btn-outline" @click="itemDialog = false">Annulla</button><button type="submit" class="btn btn-primary" :disabled="itemForm.processing"><Check class="h-4 w-4" />Salva</button></div>
+            </form>
+        </div>
 
-        <div v-if="unitDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/35 p-4" @click.self="unitDialog = false"><form class="surface max-h-[90vh] w-full max-w-xl overflow-y-auto p-6" @submit.prevent="saveUnit"><div class="mb-5 flex items-center justify-between"><h3 class="text-lg font-semibold">Unità fisica</h3><button type="button" class="icon-btn h-8 w-8" aria-label="Chiudi" @click="unitDialog = false"><X class="h-4 w-4" /></button></div><div class="grid gap-4 sm:grid-cols-2"><label class="block text-sm font-medium text-gray-700">Seriale<input v-model="unitForm.serial_number" class="form-control" /></label><label class="block text-sm font-medium text-gray-700">Assegnato a<AppSelect v-model="unitForm.assigned_user_id" class="mt-1" :options="userOptions" /></label><label class="block text-sm font-medium text-gray-700">Sede<input v-model="unitForm.office" class="form-control" /></label><label class="block text-sm font-medium text-gray-700">Stato<AppSelect v-model="unitForm.condition" class="mt-1" :options="conditionOptions" /></label><label class="block text-sm font-medium text-gray-700">Acquistato il<AppDateInput v-model="unitForm.purchased_at" class="mt-1" /></label><label class="block text-sm font-medium text-gray-700">Garanzia fino al<AppDateInput v-model="unitForm.warranty_until" class="mt-1" /></label><label class="block text-sm font-medium text-gray-700 sm:col-span-2">Note<textarea v-model="unitForm.notes" rows="3" class="form-control" /></label></div><div class="mt-6 flex items-center justify-between gap-2"><button type="button" class="btn btn-outline text-red-600" @click="unitDialog = false; askDelete('unit', editingUnit.id, editingUnit.serial_number || 'questa unità')"><Trash2 class="h-4 w-4" />Elimina unità</button><button type="submit" class="btn btn-primary" :disabled="unitForm.processing">Salva</button></div></form></div>
+        <div v-if="unitDialog" class="fixed inset-0 z-[3000] flex items-center justify-center bg-gray-900/35 p-4" @click.self="unitDialog = false">
+            <form class="surface max-h-[90vh] w-full max-w-xl overflow-y-auto p-6" role="dialog" aria-modal="true" aria-labelledby="inventory-unit-title" @submit.prevent="saveUnit">
+                <div class="mb-5 flex items-center justify-between gap-3 border-b border-gray-100 pb-4"><h3 id="inventory-unit-title" class="text-lg font-semibold text-gray-900">Unità fisica</h3><button type="button" class="icon-btn h-9 w-9" title="Chiudi" aria-label="Chiudi" @click="unitDialog = false"><X class="h-4 w-4" /></button></div>
+                <div class="grid items-start gap-4 sm:grid-cols-2">
+                    <div><label for="inventory-serial" class="block text-sm font-medium text-gray-700">Seriale</label><input id="inventory-serial" v-model="unitForm.serial_number" class="form-control" /></div>
+                    <div><span class="block text-sm font-medium text-gray-700">Assegnato a</span><AppSelect v-model="unitForm.assigned_user_id" class="mt-1" :options="userOptions" /></div>
+                    <div><label for="inventory-office" class="block text-sm font-medium text-gray-700">Sede</label><input id="inventory-office" v-model="unitForm.office" class="form-control" /></div>
+                    <div><span class="block text-sm font-medium text-gray-700">Stato</span><AppSelect v-model="unitForm.condition" class="mt-1" :options="conditionOptions" /></div>
+                    <div><span class="block text-sm font-medium text-gray-700">Acquistato il</span><AppDateInput v-model="unitForm.purchased_at" class="mt-1" /></div>
+                    <div><span class="block text-sm font-medium text-gray-700">Garanzia fino al</span><AppDateInput v-model="unitForm.warranty_until" class="mt-1" /></div>
+                    <div class="sm:col-span-2"><label for="inventory-unit-notes" class="block text-sm font-medium text-gray-700">Note</label><textarea id="inventory-unit-notes" v-model="unitForm.notes" rows="3" class="form-control" /></div>
+                </div>
+                <div class="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-4"><button type="button" class="btn btn-outline text-red-600" @click="unitDialog = false; askDelete('unit', editingUnit.id, editingUnit.serial_number || 'questa unità')"><Trash2 class="h-4 w-4" />Elimina unità</button><button type="submit" class="btn btn-primary" :disabled="unitForm.processing"><Check class="h-4 w-4" />Salva</button></div>
+            </form>
+        </div>
 
-        <div v-if="confirmation" class="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/35 p-4" @click.self="confirmation = null"><div class="surface w-full max-w-md p-6"><h3 class="text-lg font-semibold">Eliminare {{ confirmation.label }}?</h3><p class="mt-2 text-sm text-gray-600">Questa operazione non può essere annullata. Gli oggetti assegnati devono essere restituiti prima.</p><div class="mt-6 flex justify-end gap-2"><button type="button" class="btn btn-outline" @click="confirmation = null">Annulla</button><button type="button" class="btn bg-red-600 text-white hover:bg-red-700" @click="deleteConfirmed">Elimina</button></div></div></div>
+        <div v-if="confirmation" class="fixed inset-0 z-[3100] flex items-center justify-center bg-gray-900/35 p-4" @click.self="confirmation = null"><div class="surface w-full max-w-md p-6" role="alertdialog" aria-modal="true"><h3 class="text-lg font-semibold">Eliminare {{ confirmation.label }}?</h3><p class="mt-2 text-sm text-gray-600">Questa operazione non può essere annullata. Gli oggetti assegnati devono essere restituiti prima.</p><div class="mt-6 flex justify-end gap-2 border-t border-gray-100 pt-4"><button type="button" class="btn btn-outline" @click="confirmation = null">Annulla</button><button type="button" class="btn btn-danger" @click="deleteConfirmed"><Trash2 class="h-4 w-4" />Elimina</button></div></div></div>
+        </Teleport>
     </AuthenticatedLayout>
 </template>

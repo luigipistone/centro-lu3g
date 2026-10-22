@@ -2,6 +2,8 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { ZoomOut } from '@lucide/vue';
+import { createDeviceModels } from './inventory/deviceModels';
 
 const props = defineProps({ items: { type: Array, default: () => [] }, type: { type: String, default: 'physical' }, selectedId: String });
 const emit = defineEmits(['select']);
@@ -9,6 +11,7 @@ const canvas = ref(null);
 const labels = ref([]);
 const ready = ref(false);
 const unavailable = ref(false);
+const inspecting = ref(false);
 let renderer, scene, camera, controls, inventory, resizeObserver, visibilityObserver, frameId, selectedGroups = [];
 let active = true;
 let sceneWidth = 11.4;
@@ -16,20 +19,18 @@ let focusX = null;
 let hoveredGroups = [];
 let introStartedAt = null;
 let introDistance = 0;
+let flight = null;
+const homePosition = new THREE.Vector3();
+const homeTarget = new THREE.Vector3();
 const reducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const clickTargets = [];
 const byId = new Map();
 const materials = new Map();
-const metal = material('#aebbc9', .7, .32);
-const bezel = material('#202a38', .12, .46);
-const display = material('#1b4363', .13, .15);
-const stand = material('#aab8c8', .7, .28);
-const white = material('#e6edf3', .18, .55);
+const models = createDeviceModels();
 const shelfMaterial = material('#627d99', .35, .48);
 const backMaterial = material('#d5e2ef', 0, .9);
-const digitalColors = ['#2675a8', '#298d91', '#a56d80', '#597db2', '#b28352', '#697d91'];
 
 function material(color, metalness = 0, roughness = .6) {
     const key = `${color}:${metalness}:${roughness}`;
@@ -44,62 +45,6 @@ function box(parent, width, height, depth, x, y, z, surface, castShadow = true) 
     mesh.receiveShadow = true;
     parent.add(mesh);
     return mesh;
-}
-
-function monitor(parent, size, height, kind, tint = '#496f8e') {
-    const panelWidth = size;
-    const panelHeight = size * .58;
-    box(parent, panelWidth, panelHeight, .055, 0, height + panelHeight / 2 + .26, -.05, kind === 'hp' ? bezel : metal);
-    box(parent, panelWidth * .95, panelHeight * (kind === 'hp' ? .89 : .78), .006, 0,
-        height + panelHeight / 2 + .26 + (kind === 'hp' ? 0 : .055), -.013, display);
-    box(parent, panelWidth * .95, panelHeight * .35, .007, 0,
-        height + panelHeight / 2 + .26 + panelHeight * .23, -.007, material(tint, .05, .35));
-    if (kind !== 'hp') {
-        const chin = box(parent, panelWidth, panelHeight * .14, .065, 0, height + .295, -.018, white);
-        chin.castShadow = false;
-        const mark = new THREE.Mesh(new THREE.CircleGeometry(.025, 20), material('#8394a5', .35, .5));
-        mark.position.set(0, height + .3, .02);
-        parent.add(mark);
-    }
-    box(parent, .055, height, .06, 0, height / 2 + .06, -.18, stand);
-    box(parent, panelWidth * .32, .035, .37, 0, .075, -.13, stand);
-}
-
-function tablet(parent, width, height, tilt = -.13) {
-    const body = new THREE.Group();
-    body.rotation.x = tilt;
-    parent.add(body);
-    box(body, width, height, .036, 0, height / 2 + .06, 0, metal);
-    box(body, width * .92, height * .92, .005, 0, height / 2 + .06, .022, display);
-    box(body, width * .87, height * .3, .006, 0, height * .65, .027, material('#4e819f', .1, .4));
-    box(parent, width * .55, .025, .35, 0, .035, -.22, stand);
-    box(parent, .035, height * .7, .05, 0, height * .35, -.18, stand);
-}
-
-function phone(parent, hue) {
-    box(parent, .29, .58, .035, 0, .32, 0, bezel);
-    box(parent, .265, .52, .005, 0, .32, .022, material(hue, .1, .36));
-    box(parent, .10, .018, .007, 0, .572, .03, bezel);
-    box(parent, .18, .018, .23, 0, .025, -.06, stand);
-    box(parent, .02, .27, .03, 0, .16, -.11, stand);
-}
-
-function meshForItem(item, index) {
-    const group = new THREE.Group();
-    group.userData.itemId = item.id;
-    if (props.type === 'digital') {
-        const color = digitalColors[index % digitalColors.length];
-        box(group, .58, .7, .32, 0, .37, 0, material(color, .17, .42));
-        box(group, .50, .53, .008, 0, .40, .166, white, false);
-        box(group, .35, .035, .009, -.05, .54, .172, material(color), false);
-        box(group, .38, .018, .009, -.035, .43, .172, material('#abbacb'), false);
-        box(group, .29, .018, .009, -.08, .37, .172, material('#c8d3df'), false);
-        box(group, .33, .018, .009, -.06, .31, .172, material('#c8d3df'), false);
-    } else if (/iphone/i.test(item.name)) phone(group, '#5086a1');
-    else if (/ipad/i.test(item.name)) tablet(group, .49, .7);
-    else if (/monitor hp/i.test(item.name)) monitor(group, .88, .18, 'hp', '#587f9c');
-    else if (/imac/i.test(item.name)) monitor(group, /27/.test(item.name) ? .99 : /21/.test(item.name) ? .75 : .84, .18, 'imac', /m3/i.test(item.name) ? '#5a8ca8' : '#54738a');
-    return group;
 }
 
 function clearInventory() {
@@ -160,7 +105,7 @@ function build() {
         const count = placements.filter((entry) => entry.row === row).length;
         const colWidth = physical ? 1.08 : 1.08;
         const x = (col - (count - 1) / 2) * colWidth;
-        const group = meshForItem(item, i);
+        const group = models.create(item, i, props.type);
         group.position.set(x, base + row * shelfStep + .04, physical ? .05 : .13);
         group.userData.baseY = group.position.y;
         group.traverse((object) => { object.userData.itemId = item.id; });
@@ -180,6 +125,10 @@ function build() {
     controls.target.set(0, height / 2, 0);
     controls.update();
     resize();
+    homePosition.copy(camera.position);
+    homeTarget.copy(controls.target);
+    inspecting.value = false;
+    flight = null;
     introStartedAt = reducedMotion ? null : performance.now();
     highlight();
 }
@@ -197,7 +146,34 @@ function selectAt(event) {
     pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(pointer, camera);
     const hit = raycaster.intersectObjects(clickTargets, true)[0];
-    if (hit?.object.userData.itemId) emit('select', hit.object.userData.itemId);
+    if (hit?.object.userData.itemId) {
+        emit('select', hit.object.userData.itemId);
+        let group = hit.object;
+        while (group.parent && group.parent !== inventory) group = group.parent;
+        const target = new THREE.Vector3(group.position.x, group.position.y + .45, group.position.z);
+        const direction = camera.position.clone().sub(controls.target).normalize();
+        flyTo(target.clone().addScaledVector(direction, props.type === 'physical' ? 2.45 : 2.2), target);
+        inspecting.value = true;
+    }
+}
+
+function flyTo(position, target) {
+    introStartedAt = null;
+    if (reducedMotion) {
+        camera.position.copy(position);
+        controls.target.copy(target);
+        controls.update();
+        return;
+    }
+    flight = {
+        fromPosition: camera.position.clone(), fromTarget: controls.target.clone(),
+        position, target, startedAt: performance.now(),
+    };
+}
+
+function resetView() {
+    inspecting.value = false;
+    flyTo(homePosition.clone(), homeTarget.clone());
 }
 
 function hoverAt(event) {
@@ -223,10 +199,12 @@ function resize() {
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     const frameDistance = ((sceneWidth / 2) + .7) / (Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect);
-    camera.position.z = width < 640
+    const distance = width < 640
         ? Math.min(frameDistance, props.type === 'physical' ? 14.5 : 10.5)
         : Math.max(props.type === 'physical' ? 11.8 : 8.6, frameDistance);
-    introDistance = camera.position.z;
+    homePosition.z = distance;
+    if (!inspecting.value) camera.position.z = distance;
+    introDistance = distance;
 }
 
 function animate() {
@@ -240,6 +218,13 @@ function animate() {
         const progress = Math.min((performance.now() - introStartedAt) / 950, 1);
         camera.position.z = introDistance + 1.6 * (1 - progress) ** 3;
         if (progress === 1) introStartedAt = null;
+    }
+    if (flight) {
+        const progress = Math.min((performance.now() - flight.startedAt) / 700, 1);
+        const ease = 1 - (1 - progress) ** 3;
+        camera.position.lerpVectors(flight.fromPosition, flight.position, ease);
+        controls.target.lerpVectors(flight.fromTarget, flight.target, ease);
+        if (progress === 1) flight = null;
     }
     controls.update();
     for (const group of clickTargets) {
@@ -278,7 +263,7 @@ onMounted(() => {
         controls.enableDamping = true;
         controls.dampingFactor = .07;
         controls.enablePan = false;
-        controls.minDistance = 7;
+        controls.minDistance = 1.8;
         controls.maxDistance = 25;
         controls.minPolarAngle = .4;
         controls.maxPolarAngle = 1.6;
@@ -318,19 +303,20 @@ onBeforeUnmount(() => {
     controls?.dispose();
     clearInventory();
     renderer?.dispose();
+    models.dispose();
     materials.forEach((material) => material.dispose());
 });
 </script>
 
 <template>
     <div class="inventory-stage relative h-[440px] min-w-0 overflow-hidden bg-[#eaf1f8] sm:h-[520px]" aria-label="Vista 3D dell'inventario">
-        <canvas ref="canvas" class="block h-full w-full touch-none" @pointerdown="introStartedAt = null" @pointermove="hoverAt" @pointerleave="clearHover" @click="selectAt" />
+        <canvas ref="canvas" class="block h-full w-full touch-none" @pointerdown="introStartedAt = null; flight = null" @pointermove="hoverAt" @pointerleave="clearHover" @click="selectAt" />
         <div v-if="ready" class="pointer-events-none absolute inset-0" aria-hidden="true">
-            <span v-for="label in labels" v-show="label.id === selectedId" :key="label.id" :data-inventory-label="label.id" class="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-md border border-white/80 bg-white/90 px-2 py-1 text-[11px] font-semibold text-gray-800 shadow-sm">
+            <span v-for="label in labels" v-show="label.id === selectedId && !inspecting" :key="label.id" :data-inventory-label="label.id" class="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-md border border-white/80 bg-white/90 px-2 py-1 text-[11px] font-semibold text-gray-800 shadow-sm">
                 {{ label.name }} <span class="text-gray-500">×{{ label.quantity }}</span>
             </span>
         </div>
+        <button v-if="inspecting" type="button" class="icon-btn absolute right-4 top-4 z-10 h-9 w-9 bg-white/90 shadow-sm" title="Vista completa" aria-label="Vista completa" @click="resetView"><ZoomOut class="h-4 w-4" /></button>
         <div v-if="unavailable" class="absolute inset-0 grid place-items-center px-5 text-center text-sm text-gray-600">La vista 3D non è disponibile su questo dispositivo. Puoi usare l'elenco per consultare e modificare l'inventario.</div>
-        <div v-else class="pointer-events-none absolute bottom-4 left-4 rounded-md bg-white/80 px-2.5 py-1.5 text-xs text-gray-600 backdrop-blur-sm">Trascina per ruotare · Scorri per avvicinare · Seleziona un oggetto</div>
     </div>
 </template>
