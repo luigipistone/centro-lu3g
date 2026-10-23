@@ -283,10 +283,18 @@ export function createDeviceModels() {
             }
             if (!addImported(group, key)) addBox(group, .55, .55, .45, 0, .29, 0, graphite, .02);
         }
-        else if (/iphone/i.test(item.name) && !addImported(group, 'iphone')) addPhone(group);
-        else if (/ipad pro/i.test(item.name) && !addImported(group, 'ipad-pro')) addTablet(group, true);
-        else if (/ipad air/i.test(item.name) && !addImported(group, 'ipad-air')) addTablet(group, false);
-        else if (/monitor hp/i.test(item.name) && !addImported(group, 'monitor')) addMonitor(group, .87, 'hp');
+        else if (/iphone/i.test(item.name)) {
+            if (!addImported(group, 'iphone')) addPhone(group);
+        }
+        else if (/ipad pro/i.test(item.name)) {
+            if (!addImported(group, 'ipad-pro')) addTablet(group, true);
+        }
+        else if (/ipad air/i.test(item.name)) {
+            if (!addImported(group, 'ipad-air')) addTablet(group, false);
+        }
+        else if (/monitor hp/i.test(item.name)) {
+            if (!addImported(group, 'monitor')) addMonitor(group, .87, 'hp');
+        }
         else if (/imac/i.test(item.name)) {
             const modern = /m3|24/i.test(item.name);
             const key = modern ? 'imac-24' : 'imac-intel';
