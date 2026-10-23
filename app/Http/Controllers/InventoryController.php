@@ -76,30 +76,31 @@ class InventoryController extends Controller
     {
         $file = $request->file('model_file');
         if (! $file) return null;
-        $handle = fopen($file->getRealPath(), 'rb');
-        $header = fread($handle, 12);
-        fclose($handle);
-        if (strtolower($file->getClientOriginalExtension()) !== 'glb'
-            || strlen($header) !== 12 || substr($header, 0, 4) !== 'glTF'
-            || unpack('V', substr($header, 4, 4))[1] !== 2
-            || unpack('V', substr($header, 8, 4))[1] !== $file->getSize()) {
-            throw ValidationException::withMessages(['model_file' => 'Carica un modello GLB valido (massimo 20 MB).']);
-        }
         $contents = file_get_contents($file->getRealPath());
-        $jsonLength = strlen($contents) >= 20 ? unpack('V', substr($contents, 12, 4))[1] : 0;
-        $document = $jsonLength > 0 && $jsonLength <= strlen($contents) - 20
-            && substr($contents, 16, 4) === 'JSON'
-            ? json_decode(substr($contents, 20, $jsonLength), true) : null;
+        $extension = strtolower($file->getClientOriginalExtension());
+        if ($extension === 'glb') {
+            $validHeader = strlen($contents) >= 20 && substr($contents, 0, 4) === 'glTF'
+                && unpack('V', substr($contents, 4, 4))[1] === 2
+                && unpack('V', substr($contents, 8, 4))[1] === strlen($contents);
+            $jsonLength = $validHeader ? unpack('V', substr($contents, 12, 4))[1] : 0;
+            $document = $jsonLength > 0 && $jsonLength <= strlen($contents) - 20
+                && substr($contents, 16, 4) === 'JSON'
+                ? json_decode(substr($contents, 20, $jsonLength), true) : null;
+        } elseif ($extension === 'gltf') {
+            $document = json_decode($contents, true);
+        } else {
+            $document = null;
+        }
         if (($document['asset']['version'] ?? null) !== '2.0') {
-            throw ValidationException::withMessages(['model_file' => 'Il GLB non contiene un modello 3D valido.']);
+            throw ValidationException::withMessages(['model_file' => 'Carica un modello GLB o glTF 2.0 valido (massimo 20 MB).']);
         }
         foreach (array_merge($document['buffers'] ?? [], $document['images'] ?? []) as $resource) {
             if (isset($resource['uri']) && ! str_starts_with($resource['uri'], 'data:')) {
-                throw ValidationException::withMessages(['model_file' => 'Il modello deve includere le risorse al suo interno.']);
+                throw ValidationException::withMessages(['model_file' => 'Il glTF deve includere texture e buffer nel file. I riferimenti a file esterni non sono supportati.']);
             }
         }
 
-        return $file->store('inventory-models', 'local');
+        return $file->storeAs('inventory-models', Str::uuid().'.'.$extension, 'local');
     }
 
     public function model(Request $request, string $id)
@@ -107,7 +108,8 @@ class InventoryController extends Controller
         $this->authorizePermission($request, 'inventory.view');
         $path = DB::table('inventory_items')->where('id', $id)->where('type', 'physical')->value('model_path');
         abort_unless($path && Storage::disk('local')->exists($path), 404);
-        return response()->file(Storage::disk('local')->path($path), ['Content-Type' => 'model/gltf-binary', 'Cache-Control' => 'private, max-age=3600']);
+        $mime = str_ends_with(strtolower($path), '.gltf') ? 'model/gltf+json' : 'model/gltf-binary';
+        return response()->file(Storage::disk('local')->path($path), ['Content-Type' => $mime, 'Cache-Control' => 'private, max-age=3600']);
     }
 
     public function logo(Request $request, string $id)

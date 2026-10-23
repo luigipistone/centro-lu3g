@@ -17,6 +17,8 @@ const editingItem = ref(null);
 const editingUnit = ref(null);
 const confirmation = ref(null);
 const notice = ref('');
+const modelDropActive = ref(false);
+const modelFileError = ref('');
 
 const selectedItems = computed(() => props.items.filter((item) => item.type === type.value));
 const filteredItems = computed(() => selectedItems.value.filter((item) => `${item.name} ${item.category || ''} ${item.brand || ''}`.toLocaleLowerCase('it').includes(search.value.toLocaleLowerCase('it'))));
@@ -49,6 +51,8 @@ function changeType(value) {
 
 function openItem(item = null) {
     editingItem.value = item;
+    modelFileError.value = '';
+    modelDropActive.value = false;
     itemForm.clearErrors();
     itemForm.defaults({
         type: item?.type || type.value, name: item?.name || '', category: item?.category || '',
@@ -69,8 +73,24 @@ function saveItem() {
 }
 
 function selectModel(event) {
-    const file = event.target.files?.[0];
-    itemForm.model_file = file || null;
+    setModelFile(event.target.files?.[0]);
+    event.target.value = '';
+}
+
+function setModelFile(file) {
+    if (!file) return;
+    if (!/\.(glb|gltf)$/i.test(file.name) || file.size > 20 * 1024 * 1024) {
+        modelFileError.value = 'Carica un file GLB o glTF fino a 20 MB.';
+        return;
+    }
+    modelFileError.value = '';
+    itemForm.clearErrors('model_file');
+    itemForm.model_file = file;
+}
+
+function dropModel(event) {
+    modelDropActive.value = false;
+    setModelFile(event.dataTransfer?.files?.[0]);
 }
 
 function openUnit(unit) {
@@ -182,7 +202,7 @@ function safeUrl(value) {
                         <div><label for="inventory-brand" class="block text-sm font-medium text-gray-700">Marca</label><input id="inventory-brand" v-model="itemForm.brand" class="form-control" /></div>
                         <div><label for="inventory-model" class="block text-sm font-medium text-gray-700">Modello</label><input id="inventory-model" v-model="itemForm.model" class="form-control" /></div>
                         <div><label for="inventory-year" class="block text-sm font-medium text-gray-700">Anno modello</label><input id="inventory-year" v-model="itemForm.model_year" type="number" min="1900" max="2100" class="form-control" /></div>
-                        <div class="sm:col-span-2"><label for="inventory-model-file" class="block text-sm font-medium text-gray-700">Modello 3D (GLB)</label><label for="inventory-model-file" class="mt-1 flex min-h-20 cursor-pointer items-center gap-3 rounded-md border border-dashed border-gray-300 bg-gray-50 px-4 text-sm text-gray-700 hover:border-blue-400"><Upload class="h-5 w-5 shrink-0 text-blue-600" /><span class="min-w-0 truncate">{{ itemForm.model_file?.name || (editingItem?.model_path ? 'Sostituisci il modello attuale' : 'Scegli un file GLB, fino a 20 MB') }}</span></label><input id="inventory-model-file" type="file" accept=".glb,model/gltf-binary" class="sr-only" @change="selectModel" /><p v-if="itemForm.errors.model_file" class="mt-1 text-xs text-red-600">{{ itemForm.errors.model_file }}</p></div>
+                        <div class="sm:col-span-2"><label for="inventory-model-file" class="block text-sm font-medium text-gray-700">Modello 3D</label><label for="inventory-model-file" class="mt-1 flex min-h-20 cursor-pointer items-center gap-3 rounded-md border border-dashed px-4 text-sm text-gray-700 transition-colors" :class="modelDropActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 bg-gray-50 hover:border-blue-400'" @dragenter.prevent="modelDropActive = true" @dragover.prevent="modelDropActive = true" @dragleave.prevent="modelDropActive = false" @drop.prevent="dropModel"><Upload class="h-5 w-5 shrink-0 text-blue-600" /><span class="min-w-0 truncate">{{ itemForm.model_file?.name || (editingItem?.model_path ? 'Trascina qui un modello per sostituirlo o selezionalo' : 'Trascina qui un GLB o glTF oppure selezionalo') }}</span></label><input id="inventory-model-file" type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json" class="sr-only" @change="selectModel" /><p v-if="modelFileError || itemForm.errors.model_file" class="mt-1 text-xs text-red-600">{{ modelFileError || itemForm.errors.model_file }}</p></div>
                     </template>
                     <template v-else>
                         <div><label for="inventory-license" class="block text-sm font-medium text-gray-700">Tipo di licenza</label><input id="inventory-license" v-model="itemForm.license_type" class="form-control" /></div>

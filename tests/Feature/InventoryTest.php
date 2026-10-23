@@ -96,6 +96,43 @@ class InventoryTest extends TestCase
         $this->assertDatabaseMissing('inventory_items', ['name' => 'Modello non valido']);
     }
 
+    public function test_self_contained_gltf_can_be_uploaded_and_served(): void
+    {
+        Storage::fake('local');
+        $manager = $this->withRole('admin');
+        $gltf = json_encode([
+            'asset' => ['version' => '2.0'],
+            'buffers' => [['uri' => 'data:application/octet-stream;base64,AA==', 'byteLength' => 1]],
+            'scenes' => [['nodes' => []]],
+            'scene' => 0,
+        ]);
+
+        $this->actingAs($manager)->post(route('inventory.store'), [
+            'type' => 'physical', 'name' => 'Modello glTF', 'quantity' => 1,
+            'model_file' => UploadedFile::fake()->createWithContent('device.gltf', $gltf),
+        ])->assertSessionHasNoErrors();
+        $item = DB::table('inventory_items')->where('name', 'Modello glTF')->firstOrFail();
+        $this->assertStringEndsWith('.gltf', $item->model_path);
+        Storage::disk('local')->assertExists($item->model_path);
+        $this->actingAs($manager)->get(route('inventory.model', $item->id))->assertOk()
+            ->assertHeader('content-type', 'model/gltf+json');
+    }
+
+    public function test_gltf_with_external_resources_is_rejected(): void
+    {
+        $manager = $this->withRole('admin');
+        $gltf = json_encode([
+            'asset' => ['version' => '2.0'],
+            'buffers' => [['uri' => 'mesh.bin', 'byteLength' => 1]],
+        ]);
+
+        $this->actingAs($manager)->post(route('inventory.store'), [
+            'type' => 'physical', 'name' => 'Modello incompleto', 'quantity' => 1,
+            'model_file' => UploadedFile::fake()->createWithContent('device.gltf', $gltf),
+        ])->assertSessionHasErrors('model_file');
+        $this->assertDatabaseMissing('inventory_items', ['name' => 'Modello incompleto']);
+    }
+
     public function test_digital_logo_uses_its_access_domain_and_inventory_permissions(): void
     {
         $manager = $this->withRole('admin');
