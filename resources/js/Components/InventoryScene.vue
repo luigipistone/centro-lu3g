@@ -139,7 +139,7 @@ function build() {
     }
     rackIndex.value = Math.min(rackIndex.value, rackCount.value - 1);
     targetRackX = rackIndex.value * rackSpacing;
-    camera.position.set(targetRackX, physical ? 3.8 : 3.2, physical ? 7.6 : 6.8);
+    camera.position.set(targetRackX, physical ? 3.8 : 3.2, physical ? 8.4 : 7.5);
     controls.target.set(targetRackX, height / 2, 0);
     controls.update();
     resize();
@@ -243,7 +243,7 @@ function resize() {
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     const frameDistance = ((rackWidth / 2) + .5) / (Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect);
-    if (!pulledGroup) camera.position.z = Math.max(props.type === 'physical' ? 7.6 : 6.8, frameDistance);
+    if (!pulledGroup) camera.position.z = Math.max(props.type === 'physical' ? 8.4 : 7.5, frameDistance * 1.08);
     requestRender();
 }
 
@@ -378,7 +378,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div class="inventory-stage relative h-[480px] min-w-0 overflow-hidden bg-[#eaf1f8] sm:h-[560px]" aria-label="Vista 3D dell'inventario">
+    <div class="inventory-stage relative h-[520px] min-w-0 overflow-hidden bg-[#eaf1f8] sm:h-[600px]" aria-label="Vista 3D dell'inventario">
         <canvas ref="canvas" class="block h-full w-full touch-none transition-[filter] duration-300" :class="[isPulled ? 'blur-[5px]' : '', loading ? 'opacity-0' : '']" @pointerdown="pointerDown = { x: $event.clientX, y: $event.clientY, pointerType: $event.pointerType }" @pointerup="finishPointer" @pointermove="hoverAt" @pointerleave="clearHover" @click="selectAt" />
         <canvas ref="foregroundCanvas" class="pointer-events-none absolute inset-0 h-full w-full" :class="loading ? 'opacity-0' : ''" aria-hidden="true" />
         <div v-if="loading" class="absolute inset-0 grid place-items-center text-sm font-medium text-gray-500" role="status">Caricamento inventario...</div>
