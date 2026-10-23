@@ -11,6 +11,7 @@ const canvas = ref(null);
 const foregroundCanvas = ref(null);
 const ready = ref(false);
 const unavailable = ref(false);
+const loading = ref(true);
 const isPulled = ref(false);
 const rackIndex = ref(0);
 const rackCount = ref(1);
@@ -21,6 +22,7 @@ let pulledGroup = null;
 let targetRackX = 0;
 let shelfFocusY = 2.15;
 let pointerDown = null;
+let loadVersion = 0;
 const rackSpacing = 4.45;
 const rackWidth = 3.75;
 const slotsPerRack = 9;
@@ -31,7 +33,6 @@ const clickTargets = [];
 const byId = new Map();
 const materials = new Map();
 const models = createDeviceModels();
-models.setOnReady(build);
 const shelfMaterial = material('#627d99', .35, .48);
 const backMaterial = material('#d5e2ef', 0, .9);
 const occluderMaterial = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true, side: THREE.DoubleSide });
@@ -119,6 +120,18 @@ function build() {
     controls.target.set(targetRackX, height / 2, 0);
     controls.update();
     resize();
+}
+
+async function loadScene() {
+    if (!scene) return;
+    const version = ++loadVersion;
+    loading.value = true;
+    ready.value = false;
+    await models.prepare(props.items.filter((item) => item.type === props.type), props.type);
+    if (version !== loadVersion) return;
+    build();
+    loading.value = false;
+    ready.value = true;
 }
 
 function moveRack(index) {
@@ -259,15 +272,14 @@ onMounted(() => {
         resizeObserver.observe(canvas.value);
         visibilityObserver = new IntersectionObserver(([entry]) => { active = entry.isIntersecting; });
         visibilityObserver.observe(canvas.value);
-        build();
         resize();
-        ready.value = true;
         animate();
+        loadScene();
     } catch {
         unavailable.value = true;
     }
 });
-watch(() => [props.items, props.type], build, { deep: true });
+watch(() => [props.items, props.type], loadScene, { deep: true });
 watch(() => props.selectedId, (id) => {
     if (!id) {
         pulledGroup = null;
@@ -281,6 +293,7 @@ watch(() => props.selectedId, (id) => {
     }
 });
 onBeforeUnmount(() => {
+    loadVersion++;
     cancelAnimationFrame(frameId);
     resizeObserver?.disconnect();
     visibilityObserver?.disconnect();
@@ -296,8 +309,9 @@ onBeforeUnmount(() => {
 
 <template>
     <div class="inventory-stage relative h-[440px] min-w-0 overflow-hidden bg-[#eaf1f8] sm:h-[520px]" aria-label="Vista 3D dell'inventario">
-        <canvas ref="canvas" class="block h-full w-full touch-none transition-[filter] duration-300" :class="isPulled ? 'blur-[5px]' : ''" @pointerdown="pointerDown = { x: $event.clientX, y: $event.clientY, pointerType: $event.pointerType }" @pointerup="finishPointer" @pointermove="hoverAt" @pointerleave="clearHover" @click="selectAt" />
-        <canvas ref="foregroundCanvas" class="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true" />
+        <canvas ref="canvas" class="block h-full w-full touch-none transition-[filter] duration-300" :class="[isPulled ? 'blur-[5px]' : '', loading ? 'opacity-0' : '']" @pointerdown="pointerDown = { x: $event.clientX, y: $event.clientY, pointerType: $event.pointerType }" @pointerup="finishPointer" @pointermove="hoverAt" @pointerleave="clearHover" @click="selectAt" />
+        <canvas ref="foregroundCanvas" class="pointer-events-none absolute inset-0 h-full w-full" :class="loading ? 'opacity-0' : ''" aria-hidden="true" />
+        <div v-if="loading" class="absolute inset-0 grid place-items-center text-sm font-medium text-gray-500" role="status">Caricamento inventario...</div>
         <div v-if="ready && rackCount > 1" class="absolute inset-x-4 bottom-4 z-10 flex items-center justify-between pointer-events-none">
             <button type="button" class="icon-btn pointer-events-auto h-9 w-9 bg-white/95 shadow-sm" :disabled="rackIndex === 0" title="Scaffale precedente" aria-label="Scaffale precedente" @click="moveRack(rackIndex - 1)"><ChevronLeft class="h-4 w-4" /></button>
             <span class="rounded-md bg-white/95 px-2 py-1 text-xs font-medium text-gray-700">{{ rackIndex + 1 }} / {{ rackCount }}</span>

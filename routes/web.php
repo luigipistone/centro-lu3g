@@ -215,6 +215,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/modules', [CentroPageController::class, 'modules'])->name('modules.index');
     Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
     Route::get('/inventory/{id}/model', [InventoryController::class, 'model'])->name('inventory.model');
+    Route::get('/inventory/{id}/logo', [InventoryController::class, 'logo'])->name('inventory.logo');
     Route::post('/inventory', [InventoryController::class, 'store'])->name('inventory.store');
     Route::put('/inventory/{id}', [InventoryController::class, 'update'])->name('inventory.update');
     Route::delete('/inventory/{id}', [InventoryController::class, 'destroy'])->name('inventory.destroy');

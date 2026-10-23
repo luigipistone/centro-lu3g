@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Http\UploadedFile;
@@ -92,5 +94,20 @@ class InventoryTest extends TestCase
             'model_file' => UploadedFile::fake()->createWithContent('invalid.glb', 'not a glb'),
         ])->assertSessionHasErrors('model_file');
         $this->assertDatabaseMissing('inventory_items', ['name' => 'Modello non valido']);
+    }
+
+    public function test_digital_logo_uses_its_access_domain_and_inventory_permissions(): void
+    {
+        $manager = $this->withRole('admin');
+        $employee = $this->withRole('editor');
+        $item = DB::table('inventory_items')->where('name', 'WPML')->firstOrFail();
+        Cache::forget('inventory-logo:'.hash('sha256', 'wpml.org'));
+        Http::fake(['www.google.com/s2/favicons*' => Http::response('png-bytes', 200, ['Content-Type' => 'image/png'])]);
+
+        $this->actingAs($manager)->get(route('inventory.logo', $item->id))->assertOk()
+            ->assertHeader('content-type', 'image/png')
+            ->assertSee('png-bytes');
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'domain=wpml.org'));
+        $this->actingAs($employee)->get(route('inventory.logo', $item->id))->assertForbidden();
     }
 }

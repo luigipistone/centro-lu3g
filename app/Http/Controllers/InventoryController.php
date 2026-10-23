@@ -6,6 +6,8 @@ use App\Services\RolePermissionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -40,6 +42,7 @@ class InventoryController extends Controller
                 'units' => $units->get($item->id, collect())->values(),
                 'quantity' => $item->type === 'physical' ? $units->get($item->id, collect())->count() : null,
                 'model_url' => $item->model_path ? route('inventory.model', $item->id).'?v='.strtotime($item->updated_at) : null,
+                'logo_url' => $item->type === 'digital' && $item->access_url ? route('inventory.logo', $item->id).'?v='.strtotime($item->updated_at) : null,
             ]);
 
         return Inertia::render('Centro/Inventory', [
@@ -105,6 +108,27 @@ class InventoryController extends Controller
         $path = DB::table('inventory_items')->where('id', $id)->where('type', 'physical')->value('model_path');
         abort_unless($path && Storage::disk('local')->exists($path), 404);
         return response()->file(Storage::disk('local')->path($path), ['Content-Type' => 'model/gltf-binary', 'Cache-Control' => 'private, max-age=3600']);
+    }
+
+    public function logo(Request $request, string $id)
+    {
+        $this->authorizePermission($request, 'inventory.view');
+        $url = DB::table('inventory_items')->where('id', $id)->where('type', 'digital')->value('access_url');
+        $host = $url ? parse_url($url, PHP_URL_HOST) : null;
+        abort_unless($host && filter_var($host, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME), 404);
+
+        $icon = Cache::remember('inventory-logo:'.hash('sha256', $host), now()->addDay(), function () use ($host) {
+            try {
+                $response = Http::timeout(4)->get('https://www.google.com/s2/favicons', ['domain' => $host, 'sz' => 128]);
+                if ($response->successful() && str_starts_with($response->header('Content-Type', ''), 'image/png')
+                    && strlen($response->body()) <= 256 * 1024) return $response->body();
+            } catch (\Throwable) {
+                return null;
+            }
+            return null;
+        });
+        abort_unless($icon, 404);
+        return response($icon, 200, ['Content-Type' => 'image/png', 'Cache-Control' => 'private, max-age=86400']);
     }
 
     public function store(Request $request): RedirectResponse

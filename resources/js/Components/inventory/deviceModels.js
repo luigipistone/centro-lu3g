@@ -6,8 +6,8 @@ export function createDeviceModels() {
     const materials = new Map();
     const textures = new Map();
     const imported = new Map();
-    const loadingCustom = new Set();
-    let onReady = null;
+    const loading = new Map();
+    const logoTextures = new Map();
     const loader = new GLTFLoader();
     const assets = {
         'imac-intel': { file: 'imac-intel.glb', width: .79, rotation: Math.PI },
@@ -18,15 +18,19 @@ export function createDeviceModels() {
         monitor: { file: 'monitor.glb', width: .87, rotation: -Math.PI / 2 },
     };
 
-    for (const [key, asset] of Object.entries(assets)) {
-        loader.load(`/models/inventory/${asset.file}`, ({ scene }) => {
+    function loadBuiltIn(key) {
+        if (imported.has(key)) return Promise.resolve();
+        if (loading.has(key)) return loading.get(key);
+        const asset = assets[key];
+        const promise = new Promise((resolve) => {
+            loader.load(`/models/inventory/${asset.file}`, ({ scene }) => {
             const oriented = new THREE.Group();
             scene.rotation.y = asset.rotation;
             oriented.add(scene);
             oriented.updateMatrixWorld(true);
             const bounds = new THREE.Box3().setFromObject(oriented);
             const size = bounds.getSize(new THREE.Vector3());
-            if (!size.x || !Number.isFinite(size.x)) return;
+            if (!size.x || !Number.isFinite(size.x)) { resolve(); return; }
             oriented.scale.setScalar(asset.width / size.x);
             oriented.updateMatrixWorld(true);
             const scaled = new THREE.Box3().setFromObject(oriented);
@@ -53,8 +57,61 @@ export function createDeviceModels() {
                 }
             });
             imported.set(key, oriented);
-            onReady?.();
-        }, undefined, () => {});
+            resolve();
+            }, undefined, () => resolve());
+        });
+        loading.set(key, promise);
+        return promise;
+    }
+
+    function loadCustom(url) {
+        const key = `custom:${url}`;
+        if (imported.has(key)) return Promise.resolve();
+        if (loading.has(key)) return loading.get(key);
+        const promise = new Promise((resolve) => {
+            loader.load(url, ({ scene }) => {
+                const bounds = new THREE.Box3().setFromObject(scene);
+                const size = bounds.getSize(new THREE.Vector3());
+                if (size.x > 0 && size.y > 0 && Number.isFinite(size.x)) {
+                    scene.scale.setScalar(Math.min(.9 / size.x, .82 / size.y));
+                    scene.updateMatrixWorld(true);
+                    const fitted = new THREE.Box3().setFromObject(scene);
+                    const center = fitted.getCenter(new THREE.Vector3());
+                    scene.position.add(new THREE.Vector3(-center.x, -fitted.min.y, -center.z));
+                    imported.set(key, scene);
+                }
+                resolve();
+            }, undefined, () => resolve());
+        });
+        loading.set(key, promise);
+        return promise;
+    }
+
+    async function loadLogo(url) {
+        if (logoTextures.has(url)) return;
+        try {
+            const texture = await new THREE.TextureLoader().loadAsync(url);
+            texture.colorSpace = THREE.SRGBColorSpace;
+            logoTextures.set(url, texture);
+        } catch {
+            logoTextures.set(url, null);
+        }
+    }
+
+    function prepare(items, type) {
+        if (type === 'digital') return Promise.all(items.filter((item) => item.logo_url).map((item) => loadLogo(item.logo_url)));
+        const keys = new Set();
+        const jobs = [];
+        for (const item of items) {
+            if (item.model_url) jobs.push(loadCustom(item.model_url));
+            else if (/iphone/i.test(item.name)) keys.add('iphone');
+            else if (/ipad pro/i.test(item.name)) keys.add('ipad-pro');
+            else if (/ipad air/i.test(item.name)) keys.add('ipad-air');
+            else if (/monitor hp/i.test(item.name)) keys.add('monitor');
+            else if (/imac/i.test(item.name)) keys.add(/m3|24/i.test(item.name) ? 'imac-24' : 'imac-intel');
+        }
+        keys.forEach((key) => jobs.push(loadBuiltIn(key)));
+        return Promise.all(jobs);
     }
 
     function addImported(parent, key, scale = 1) {
@@ -224,8 +281,8 @@ export function createDeviceModels() {
         for (const [x, y] of [[-.082, .802], [-.052, .802]]) addDot(parent, .011, x, height * y, -.038, lens);
     }
 
-    function licenseTexture(name, color) {
-        const key = `license:${name}:${color}`;
+    function licenseTexture(item, color) {
+        const key = `license:${item.id}:${color}:${item.logo_url || ''}`;
         if (!materials.has(key)) {
             const canvas = document.createElement('canvas');
             canvas.width = 256;
@@ -239,10 +296,24 @@ export function createDeviceModels() {
             context.fillRect(24, 228, 208, 3);
             context.fillRect(24, 251, 150, 3);
             context.fillRect(24, 274, 183, 3);
-            context.fillStyle = color;
-            context.font = '600 70px system-ui, sans-serif';
-            context.textAlign = 'center';
-            context.fillText(name.replace(/[^a-z0-9 ]/gi, '').split(/\s+/).slice(0, 2).map((word) => word[0]).join('').toUpperCase() || 'D', 128, 182);
+            const logo = logoTextures.get(item.logo_url);
+            if (logo?.image) {
+                const image = logo.image;
+                const ratio = Math.min(140 / image.width, 140 / image.height);
+                const width = image.width * ratio;
+                const height = image.height * ratio;
+                context.drawImage(image, (256 - width) / 2, 95 + (140 - height) / 2, width, height);
+            } else {
+                context.strokeStyle = color;
+                context.lineWidth = 10;
+                context.beginPath();
+                context.arc(128, 165, 55, 0, Math.PI * 2);
+                context.moveTo(73, 165);
+                context.lineTo(183, 165);
+                context.moveTo(128, 110);
+                context.lineTo(128, 220);
+                context.stroke();
+            }
             const texture = new THREE.CanvasTexture(canvas);
             texture.colorSpace = THREE.SRGBColorSpace;
             textures.set(key, texture);
@@ -251,36 +322,19 @@ export function createDeviceModels() {
         return materials.get(key);
     }
 
-    function addLicense(parent, name, index) {
+    function addLicense(parent, item, index) {
         const colors = ['#2177a3', '#328b81', '#ad7181', '#577db6', '#b68b50', '#68798e'];
         const color = colors[index % colors.length];
         addBox(parent, .58, .73, .075, 0, .395, 0, surface(color, .2, .46), .018);
-        addBox(parent, .51, .62, .005, 0, .41, .041, licenseTexture(name, color));
+        addBox(parent, .51, .62, .005, 0, .41, .041, licenseTexture(item, color));
         addBox(parent, .56, .025, .17, 0, .025, -.03, surface('#d9e3ec', .35, .43), .01);
     }
 
     function create(item, index, type) {
         const group = new THREE.Group();
-        if (type === 'digital') addLicense(group, item.name, index);
+        if (type === 'digital') addLicense(group, item, index);
         else if (item.model_url) {
             const key = `custom:${item.model_url}`;
-            if (!imported.has(key) && !loadingCustom.has(key)) {
-                loadingCustom.add(key);
-                loader.load(item.model_url, ({ scene }) => {
-                    const bounds = new THREE.Box3().setFromObject(scene);
-                    const size = bounds.getSize(new THREE.Vector3());
-                    if (size.x > 0 && size.y > 0 && Number.isFinite(size.x)) {
-                        scene.scale.setScalar(Math.min(.9 / size.x, .82 / size.y));
-                        scene.updateMatrixWorld(true);
-                        const fitted = new THREE.Box3().setFromObject(scene);
-                        const center = fitted.getCenter(new THREE.Vector3());
-                        scene.position.add(new THREE.Vector3(-center.x, -fitted.min.y, -center.z));
-                        imported.set(key, scene);
-                        onReady?.();
-                    }
-                    loadingCustom.delete(key);
-                }, undefined, () => loadingCustom.delete(key));
-            }
             if (!addImported(group, key)) addBox(group, .55, .55, .45, 0, .29, 0, graphite, .02);
         }
         else if (/iphone/i.test(item.name)) {
@@ -310,8 +364,9 @@ export function createDeviceModels() {
             if (object.material) (Array.isArray(object.material) ? object.material : [object.material]).forEach((material) => material.dispose());
         }));
         textures.forEach((texture) => texture.dispose());
+        logoTextures.forEach((texture) => texture?.dispose());
         materials.forEach((material) => material.dispose());
     }
 
-    return { create, dispose, setOnReady(callback) { onReady = callback; } };
+    return { create, prepare, dispose };
 }

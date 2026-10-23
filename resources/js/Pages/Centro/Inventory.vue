@@ -140,11 +140,13 @@ function safeUrl(value) {
             <div class="inventory-workspace min-w-0 overflow-hidden border-y border-gray-200 bg-white">
                 <InventoryScene :items="filteredItems" :type="type" :selected-id="selected?.id" @select="selectedId = $event" />
             </div>
-            <section v-if="selected" class="mt-6 min-w-0 border-y border-gray-200 bg-white px-4 py-5 sm:px-6" aria-live="polite">
-                        <div class="flex items-start justify-between gap-2"><div class="flex h-11 w-11 items-center justify-center rounded-[var(--radius-sm)] bg-blue-50 text-blue-600"><Monitor v-if="type === 'physical'" class="h-5 w-5" /><Boxes v-else class="h-5 w-5" /></div><div class="flex gap-1"><button v-if="canManage" type="button" class="icon-btn h-9 w-9" title="Modifica elemento" aria-label="Modifica elemento" @click="openItem(selected)"><Pencil class="h-4 w-4" /></button><button v-if="canManage" type="button" class="icon-btn h-9 w-9 text-red-500" title="Elimina elemento" aria-label="Elimina elemento" @click="askDelete('item', selected.id, selected.name)"><Trash2 class="h-4 w-4" /></button><button type="button" class="icon-btn h-9 w-9" title="Chiudi dettagli" aria-label="Chiudi dettagli" @click="selectedId = null"><X class="h-4 w-4" /></button></div></div>
-                        <h3 class="mt-4 text-lg font-semibold text-gray-900">{{ selected.name }}</h3>
-                        <p class="mt-1 text-sm text-gray-500">{{ selected.category || (type === 'physical' ? 'Materiale fisico' : 'Licenza digitale') }}</p>
-                        <dl class="mt-5 grid gap-x-8 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <section v-if="selected" class="mt-6 min-w-0 overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white" aria-live="polite">
+                <div class="flex items-center justify-between gap-3 border-b border-gray-100 bg-gray-50 px-4 py-3">
+                    <div class="flex min-w-0 items-center gap-3"><component :is="type === 'physical' ? Monitor : Boxes" class="h-5 w-5 shrink-0 text-blue-600" /><div class="min-w-0"><h3 class="truncate text-base font-semibold text-gray-900">{{ selected.name }}</h3><p class="text-xs text-gray-500">{{ selected.category || (type === 'physical' ? 'Materiale fisico' : 'Licenza digitale') }}</p></div></div>
+                    <div class="flex shrink-0 gap-1"><button v-if="canManage" type="button" class="icon-btn h-9 w-9" title="Modifica elemento" aria-label="Modifica elemento" @click="openItem(selected)"><Pencil class="h-4 w-4" /></button><button v-if="canManage" type="button" class="icon-btn h-9 w-9 text-red-500" title="Elimina elemento" aria-label="Elimina elemento" @click="askDelete('item', selected.id, selected.name)"><Trash2 class="h-4 w-4" /></button><button type="button" class="icon-btn h-9 w-9" title="Chiudi dettagli" aria-label="Chiudi dettagli" @click="selectedId = null"><X class="h-4 w-4" /></button></div>
+                </div>
+                <div class="px-4 py-3">
+                        <dl class="grid gap-x-8 text-sm sm:grid-cols-2 lg:grid-cols-4">
                             <div v-if="type === 'physical'" class="flex justify-between gap-4 py-2"><dt class="text-gray-500">Unità</dt><dd class="font-medium text-gray-900">{{ selected.quantity }}</dd></div>
                             <div v-if="type === 'physical'" class="flex justify-between gap-4 py-2"><dt class="text-gray-500">Assegnate</dt><dd class="font-medium text-gray-900">{{ selected.units.filter(unit => unit.assigned_user_id).length }}</dd></div>
                             <div v-if="selected.model" class="flex justify-between gap-4 py-2"><dt class="text-gray-500">Modello</dt><dd class="text-right font-medium text-gray-900">{{ selected.model }}</dd></div>
@@ -154,20 +156,13 @@ function safeUrl(value) {
                         </dl>
                         <p v-if="selected.notes" class="mt-4 border-t border-gray-100 pt-3 text-sm text-gray-600">{{ selected.notes }}</p>
                         <a v-if="safeUrl(selected.access_url)" :href="safeUrl(selected.access_url)" target="_blank" rel="noopener noreferrer" class="mt-4 inline-flex text-sm font-semibold text-blue-600 hover:underline">Apri accesso ↗</a>
-                        <div v-if="type === 'physical'" class="mt-6 border-t border-gray-100 pt-4">
+                </div>
+                        <div v-if="type === 'physical'" class="border-t border-gray-100 px-4 py-3">
                             <div class="mb-2 flex items-center justify-between"><h4 class="text-sm font-semibold text-gray-900">Singole unità</h4><button v-if="canManage" type="button" class="icon-btn h-8 w-8" title="Aggiungi unità" aria-label="Aggiungi unità" @click="addUnit"><Plus class="h-4 w-4" /></button></div>
                             <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4"><button v-for="(unit, index) in selected.units" :key="unit.id" type="button" class="flex min-w-0 items-center justify-between gap-2 rounded-md border border-gray-100 px-3 py-2 text-left text-xs transition hover:bg-blue-50" :disabled="!canManage" @click="openUnit(unit)"><span class="min-w-0 truncate font-medium text-gray-800">{{ unit.serial_number || `Unità ${index + 1}` }}</span><span class="shrink-0 text-gray-500">{{ unit.assigned_user_name || conditionLabels[unit.condition] }}</span></button></div>
                         </div>
             </section>
 
-            <div v-if="type === 'digital'" class="mt-7">
-                <div class="mb-3 flex items-center justify-between"><h3 class="text-base font-semibold text-gray-900">Licenze e strumenti digitali</h3><span class="text-sm text-gray-500">{{ filteredItems.length }} voci</span></div>
-                <div class="overflow-x-auto rounded-[var(--radius-sm)] border border-gray-200 bg-white">
-                    <table class="min-w-full divide-y divide-gray-100 text-sm"><thead class="bg-gray-50 text-left text-xs font-semibold uppercase text-gray-500"><tr><th class="px-4 py-3">Nome</th><th class="px-4 py-3">Categoria</th><th class="px-4 py-3">{{ type === 'physical' ? 'Unità' : 'Licenza' }}</th><th class="px-4 py-3">{{ type === 'physical' ? 'Assegnate' : 'Rinnovo' }}</th><th class="px-4 py-3 text-right">Dettaglio</th></tr></thead>
-                        <tbody class="divide-y divide-gray-100"><tr v-for="item in filteredItems" :key="item.id" :class="selected?.id === item.id ? 'bg-blue-50/60' : ''"><td class="px-4 py-3 font-medium text-gray-900">{{ item.name }}</td><td class="px-4 py-3 text-gray-500">{{ item.category || '–' }}</td><td class="px-4 py-3 text-gray-700">{{ type === 'physical' ? item.quantity : item.license_type || '–' }}</td><td class="px-4 py-3 text-gray-700">{{ type === 'physical' ? item.units.filter(unit => unit.assigned_user_id).length : item.renewal_date || '–' }}</td><td class="px-4 py-3 text-right"><button type="button" class="text-sm font-semibold text-blue-600 hover:underline" @click="selectedId = item.id">Apri</button></td></tr><tr v-if="!filteredItems.length"><td colspan="5" class="px-4 py-8 text-center text-gray-500">Nessuna voce trovata.</td></tr></tbody>
-                    </table>
-                </div>
-            </div>
             <p v-if="type === 'physical'" class="mt-3 text-xs text-gray-500">Modelli 3D: iMac Intel di <a href="https://sketchfab.com/3d-models/imac-3d-model-free-agustin-honnun-e632ef53df614e30b9983089ff984fa4" target="_blank" rel="noopener noreferrer" class="underline hover:text-gray-700">Agustín Hönnun</a> e iPhone XS di <a href="https://sketchfab.com/3d-models/apple-iphone-xs-free-956617b095fc4ae592267107f4d2c515" target="_blank" rel="noopener noreferrer" class="underline hover:text-gray-700">Nofil.Khan</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer" class="underline hover:text-gray-700">CC BY 4.0</a></p>
         </div>
 
