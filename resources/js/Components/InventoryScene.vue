@@ -150,6 +150,7 @@ function selectAt(event) {
         pulledGroup = group;
         isPulled.value = true;
     } else {
+        emit('select', null);
         pulledGroup = null;
         isPulled.value = false;
     }
@@ -268,6 +269,11 @@ onMounted(() => {
 });
 watch(() => [props.items, props.type], build, { deep: true });
 watch(() => props.selectedId, (id) => {
+    if (!id) {
+        pulledGroup = null;
+        isPulled.value = false;
+        return;
+    }
     const group = byId.get(id)?.[0];
     if (group) {
         rackIndex.value = group.userData.rack;

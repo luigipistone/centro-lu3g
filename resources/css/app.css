@@ -97,6 +97,13 @@
         transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease, background-color 180ms ease;
     }
 
+    .inventory-modal,
+    html.dark .inventory-modal {
+        background: hsl(var(--card)) !important;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+
     .surface.rounded,
     .surface.rounded-md,
     .surface.rounded-lg,

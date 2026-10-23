@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Http\UploadedFile;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -63,5 +65,32 @@ class InventoryTest extends TestCase
             'assigned_user_id' => $employee->id, 'condition' => 'assigned',
         ]);
         $this->actingAs($manager)->delete(route('inventory.units.destroy', [$item->id, $unit->id]))->assertStatus(422);
+    }
+
+    public function test_physical_model_upload_is_private_and_available_to_inventory_viewers(): void
+    {
+        Storage::fake('local');
+        $manager = $this->withRole('admin');
+        $employee = $this->withRole('editor');
+        $file = new UploadedFile(public_path('models/inventory/monitor.glb'), 'device.glb', 'model/gltf-binary', null, true);
+
+        $this->actingAs($manager)->post(route('inventory.store'), [
+            'type' => 'physical', 'name' => 'Nuovo monitor', 'quantity' => 1, 'model_file' => $file,
+        ])->assertSessionHasNoErrors();
+        $item = DB::table('inventory_items')->where('name', 'Nuovo monitor')->firstOrFail();
+        Storage::disk('local')->assertExists($item->model_path);
+        $this->actingAs($manager)->get(route('inventory.model', $item->id))->assertOk()
+            ->assertHeader('content-type', 'model/gltf-binary');
+        $this->actingAs($employee)->get(route('inventory.model', $item->id))->assertForbidden();
+    }
+
+    public function test_invalid_model_is_rejected(): void
+    {
+        $manager = $this->withRole('admin');
+        $this->actingAs($manager)->post(route('inventory.store'), [
+            'type' => 'physical', 'name' => 'Modello non valido', 'quantity' => 1,
+            'model_file' => UploadedFile::fake()->createWithContent('invalid.glb', 'not a glb'),
+        ])->assertSessionHasErrors('model_file');
+        $this->assertDatabaseMissing('inventory_items', ['name' => 'Modello non valido']);
     }
 }

@@ -6,6 +6,7 @@ use App\Services\RolePermissionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -38,6 +39,7 @@ class InventoryController extends Controller
                 ...(array) $item,
                 'units' => $units->get($item->id, collect())->values(),
                 'quantity' => $item->type === 'physical' ? $units->get($item->id, collect())->count() : null,
+                'model_url' => $item->model_path ? route('inventory.model', $item->id).'?v='.strtotime($item->updated_at) : null,
             ]);
 
         return Inertia::render('Centro/Inventory', [
@@ -63,7 +65,46 @@ class InventoryController extends Controller
             'access_url' => ['nullable', 'url', 'starts_with:https://,http://', 'max:2048'],
             'notes' => ['nullable', 'string', 'max:5000'],
             'quantity' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'model_file' => ['nullable', 'file', 'max:20480'],
         ]);
+    }
+
+    private function storeModel(Request $request): ?string
+    {
+        $file = $request->file('model_file');
+        if (! $file) return null;
+        $handle = fopen($file->getRealPath(), 'rb');
+        $header = fread($handle, 12);
+        fclose($handle);
+        if (strtolower($file->getClientOriginalExtension()) !== 'glb'
+            || strlen($header) !== 12 || substr($header, 0, 4) !== 'glTF'
+            || unpack('V', substr($header, 4, 4))[1] !== 2
+            || unpack('V', substr($header, 8, 4))[1] !== $file->getSize()) {
+            throw ValidationException::withMessages(['model_file' => 'Carica un modello GLB valido (massimo 20 MB).']);
+        }
+        $contents = file_get_contents($file->getRealPath());
+        $jsonLength = strlen($contents) >= 20 ? unpack('V', substr($contents, 12, 4))[1] : 0;
+        $document = $jsonLength > 0 && $jsonLength <= strlen($contents) - 20
+            && substr($contents, 16, 4) === 'JSON'
+            ? json_decode(substr($contents, 20, $jsonLength), true) : null;
+        if (($document['asset']['version'] ?? null) !== '2.0') {
+            throw ValidationException::withMessages(['model_file' => 'Il GLB non contiene un modello 3D valido.']);
+        }
+        foreach (array_merge($document['buffers'] ?? [], $document['images'] ?? []) as $resource) {
+            if (isset($resource['uri']) && ! str_starts_with($resource['uri'], 'data:')) {
+                throw ValidationException::withMessages(['model_file' => 'Il modello deve includere le risorse al suo interno.']);
+            }
+        }
+
+        return $file->store('inventory-models', 'local');
+    }
+
+    public function model(Request $request, string $id)
+    {
+        $this->authorizePermission($request, 'inventory.view');
+        $path = DB::table('inventory_items')->where('id', $id)->where('type', 'physical')->value('model_path');
+        abort_unless($path && Storage::disk('local')->exists($path), 404);
+        return response()->file(Storage::disk('local')->path($path), ['Content-Type' => 'model/gltf-binary', 'Cache-Control' => 'private, max-age=3600']);
     }
 
     public function store(Request $request): RedirectResponse
@@ -71,10 +112,15 @@ class InventoryController extends Controller
         $this->authorizePermission($request, 'inventory.manage');
         $data = $this->itemPayload($request);
         $this->validateCapacity($data);
+        if ($request->hasFile('model_file') && $data['type'] !== 'physical') {
+            throw ValidationException::withMessages(['model_file' => 'Il modello 3D è disponibile solo per gli oggetti fisici.']);
+        }
+        $modelPath = $this->storeModel($request);
         $id = (string) Str::uuid();
-        DB::transaction(function () use ($data, $id, $request) {
+        DB::transaction(function () use ($data, $id, $request, $modelPath) {
             DB::table('inventory_items')->insert([
-                ...collect($data)->except('quantity')->all(),
+                ...collect($data)->except(['quantity', 'model_file'])->all(),
+                'model_path' => $modelPath,
                 'id' => $id, 'created_by' => $request->user()->id,
                 'created_at' => now(), 'updated_at' => now(),
             ]);
@@ -99,9 +145,12 @@ class InventoryController extends Controller
         $data = $this->itemPayload($request);
         $this->validateCapacity($data);
         abort_unless($data['type'] === $item->type, 422);
+        $modelPath = $this->storeModel($request);
         DB::table('inventory_items')->where('id', $id)->update([
-            ...collect($data)->except(['type', 'quantity'])->all(), 'updated_at' => now(),
+            ...collect($data)->except(['type', 'quantity', 'model_file'])->all(),
+            ...($modelPath ? ['model_path' => $modelPath] : []), 'updated_at' => now(),
         ]);
+        if ($modelPath && $item->model_path) Storage::disk('local')->delete($item->model_path);
 
         return back()->with('status', 'Elemento aggiornato.');
     }
@@ -111,7 +160,9 @@ class InventoryController extends Controller
         $this->authorizePermission($request, 'inventory.manage');
         abort_unless(DB::table('inventory_items')->where('id', $id)->exists(), 404);
         abort_if(DB::table('inventory_units')->where('item_id', $id)->whereNotNull('assigned_user_id')->exists(), 422, 'Restituisci gli oggetti assegnati prima di eliminare questa voce.');
+        $modelPath = DB::table('inventory_items')->where('id', $id)->value('model_path');
         DB::table('inventory_items')->where('id', $id)->delete();
+        if ($modelPath) Storage::disk('local')->delete($modelPath);
 
         return back()->with('status', 'Elemento eliminato.');
     }

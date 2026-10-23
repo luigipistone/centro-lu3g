@@ -6,6 +6,7 @@ export function createDeviceModels() {
     const materials = new Map();
     const textures = new Map();
     const imported = new Map();
+    const loadingCustom = new Set();
     let onReady = null;
     const loader = new GLTFLoader();
     const assets = {
@@ -261,6 +262,27 @@ export function createDeviceModels() {
     function create(item, index, type) {
         const group = new THREE.Group();
         if (type === 'digital') addLicense(group, item.name, index);
+        else if (item.model_url) {
+            const key = `custom:${item.model_url}`;
+            if (!imported.has(key) && !loadingCustom.has(key)) {
+                loadingCustom.add(key);
+                loader.load(item.model_url, ({ scene }) => {
+                    const bounds = new THREE.Box3().setFromObject(scene);
+                    const size = bounds.getSize(new THREE.Vector3());
+                    if (size.x > 0 && size.y > 0 && Number.isFinite(size.x)) {
+                        scene.scale.setScalar(Math.min(.9 / size.x, .82 / size.y));
+                        scene.updateMatrixWorld(true);
+                        const fitted = new THREE.Box3().setFromObject(scene);
+                        const center = fitted.getCenter(new THREE.Vector3());
+                        scene.position.add(new THREE.Vector3(-center.x, -fitted.min.y, -center.z));
+                        imported.set(key, scene);
+                        onReady?.();
+                    }
+                    loadingCustom.delete(key);
+                }, undefined, () => loadingCustom.delete(key));
+            }
+            if (!addImported(group, key)) addBox(group, .55, .55, .45, 0, .29, 0, graphite, .02);
+        }
         else if (/iphone/i.test(item.name) && !addImported(group, 'iphone')) addPhone(group);
         else if (/ipad pro/i.test(item.name) && !addImported(group, 'ipad-pro')) addTablet(group, true);
         else if (/ipad air/i.test(item.name) && !addImported(group, 'ipad-air')) addTablet(group, false);
@@ -270,6 +292,7 @@ export function createDeviceModels() {
             const key = modern ? 'imac-24' : 'imac-intel';
             if (!addImported(group, key, /27/.test(item.name) ? 1.22 : 1)) addMonitor(group, /27/.test(item.name) ? 1.03 : /21/.test(item.name) ? .79 : .88, modern ? 'modern' : 'intel');
         }
+        else addBox(group, .55, .55, .45, 0, .29, 0, graphite, .02);
         return group;
     }
 
