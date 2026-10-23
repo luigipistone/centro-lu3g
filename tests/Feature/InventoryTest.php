@@ -101,13 +101,31 @@ class InventoryTest extends TestCase
         $manager = $this->withRole('admin');
         $employee = $this->withRole('editor');
         $item = DB::table('inventory_items')->where('name', 'WPML')->firstOrFail();
-        Cache::forget('inventory-logo:'.hash('sha256', 'wpml.org'));
-        Http::fake(['www.google.com/s2/favicons*' => Http::response('png-bytes', 200, ['Content-Type' => 'image/png'])]);
+        Cache::forget('inventory-logo:v2:'.hash('sha256', 'wpml.org'));
+        $png = file_get_contents(public_path('apple-touch-icon.png'));
+        Http::fake(['www.google.com/s2/favicons*' => Http::response($png, 200, ['Content-Type' => 'image/png'])]);
 
         $this->actingAs($manager)->get(route('inventory.logo', $item->id))->assertOk()
             ->assertHeader('content-type', 'image/png')
-            ->assertSee('png-bytes');
+            ->assertContent($png);
         Http::assertSent(fn ($request) => str_contains($request->url(), 'domain=wpml.org'));
         $this->actingAs($employee)->get(route('inventory.logo', $item->id))->assertForbidden();
+    }
+
+    public function test_digital_logo_accepts_jpeg_favicons(): void
+    {
+        $manager = $this->withRole('admin');
+        $item = DB::table('inventory_items')->where('name', 'Animation Addon Pro')->firstOrFail();
+        Cache::forget('inventory-logo:v2:'.hash('sha256', 'animation-addons.com'));
+        $image = imagecreatetruecolor(1, 1);
+        ob_start();
+        imagejpeg($image);
+        $jpeg = ob_get_clean();
+        imagedestroy($image);
+        Http::fake(['www.google.com/s2/favicons*' => Http::response($jpeg, 200, ['Content-Type' => 'image/jpeg'])]);
+
+        $this->actingAs($manager)->get(route('inventory.logo', $item->id))->assertOk()
+            ->assertHeader('content-type', 'image/jpeg')
+            ->assertContent($jpeg);
     }
 }
