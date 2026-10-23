@@ -10,6 +10,7 @@ import { Boxes, Check, Laptop, Monitor, Pencil, Plus, Search, Trash2, Upload, X 
 const props = defineProps({ items: { type: Array, default: () => [] }, users: { type: Array, default: () => [] }, canManage: Boolean });
 const type = ref('physical');
 const search = ref('');
+const assigneeFilter = ref('');
 const selectedId = ref(null);
 const itemDialog = ref(false);
 const unitDialog = ref(false);
@@ -21,7 +22,24 @@ const modelDropActive = ref(false);
 const modelFileError = ref('');
 
 const selectedItems = computed(() => props.items.filter((item) => item.type === type.value));
-const filteredItems = computed(() => selectedItems.value.filter((item) => `${item.name} ${item.category || ''} ${item.brand || ''}`.toLocaleLowerCase('it').includes(search.value.toLocaleLowerCase('it'))));
+const filteredItems = computed(() => selectedItems.value.flatMap((item) => {
+    if (!`${item.name} ${item.category || ''} ${item.brand || ''}`.toLocaleLowerCase('it').includes(search.value.toLocaleLowerCase('it'))) return [];
+    if (type.value !== 'physical' || !assigneeFilter.value) return [item];
+    const units = (item.units || []).filter((unit) => assigneeFilter.value === 'unassigned'
+        ? !unit.assigned_user_id : unit.assigned_user_id === assigneeFilter.value);
+    return units.length ? [{ ...item, units, quantity: units.length }] : [];
+}));
+const assigneeOptions = computed(() => {
+    const assigned = new Map();
+    selectedItems.value.forEach((item) => (item.units || []).forEach((unit) => {
+        if (unit.assigned_user_id) assigned.set(unit.assigned_user_id, unit.assigned_user_name || 'Utente');
+    }));
+    return [
+        { value: '', label: 'Tutti gli assegnatari' },
+        { value: 'unassigned', label: 'Non assegnati' },
+        ...[...assigned].sort((a, b) => a[1].localeCompare(b[1], 'it')).map(([value, label]) => ({ value, label })),
+    ];
+});
 const selected = computed(() => filteredItems.value.find((item) => item.id === selectedId.value) || null);
 const physicalCount = computed(() => props.items.filter((item) => item.type === 'physical').reduce((sum, item) => sum + Number(item.quantity || 0), 0));
 const digitalCount = computed(() => props.items.filter((item) => item.type === 'digital').length);
@@ -47,6 +65,7 @@ function changeType(value) {
     type.value = value;
     selectedId.value = null;
     search.value = '';
+    assigneeFilter.value = '';
 }
 
 function openItem(item = null) {
@@ -154,7 +173,10 @@ function safeUrl(value) {
                 <div class="inline-flex rounded-[var(--radius-sm)] border border-gray-200 bg-white p-1 shadow-sm" role="tablist" aria-label="Tipo di inventario">
                     <button v-for="option in [{ key: 'physical', label: 'Fisico', count: physicalCount, icon: Laptop }, { key: 'digital', label: 'Digitale', count: digitalCount, icon: Boxes }]" :key="option.key" type="button" role="tab" :aria-selected="type === option.key" class="flex min-h-9 items-center gap-2 rounded-[calc(var(--radius-sm)-4px)] px-3 text-sm font-medium transition" :class="type === option.key ? 'bg-[hsl(var(--primary-app))] text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'" @click="changeType(option.key)"><component :is="option.icon" class="h-4 w-4" />{{ option.label }} <span class="text-xs opacity-75">{{ option.count }}</span></button>
                 </div>
-                <label class="relative block w-full min-w-0 sm:w-64"><Search class="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-400" /><span class="sr-only">Cerca nell'inventario</span><input v-model="search" type="search" class="form-control !mt-0 !pl-10 w-full" placeholder="Cerca nell'inventario" /></label>
+                <div class="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
+                    <AppSelect v-if="type === 'physical'" v-model="assigneeFilter" class="w-full sm:w-56" :options="assigneeOptions" aria-label="Filtra dispositivi per assegnatario" />
+                    <label class="relative block w-full min-w-0 sm:w-64"><Search class="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-400" /><span class="sr-only">Cerca nell'inventario</span><input v-model="search" type="search" class="form-control !mt-0 !pl-10 w-full" placeholder="Cerca nell'inventario" /></label>
+                </div>
             </div>
 
             <div class="inventory-workspace min-w-0 overflow-hidden border-y border-gray-200 bg-white">

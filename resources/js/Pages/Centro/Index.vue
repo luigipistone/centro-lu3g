@@ -2737,7 +2737,15 @@ function centerCalendarScroll() {
 
         calendarScrollResetting = true;
         const currentMonth = element.querySelector('[data-current-calendar-month="true"]');
-        element.scrollTop = currentMonth?.offsetTop || (element.scrollHeight / 3);
+        const today = new Date();
+        const showingCurrentMonth = calendarYear.value === today.getFullYear() && calendarMonth.value === today.getMonth();
+        const todayCell = showingCurrentMonth
+            ? currentMonth?.querySelector(`[data-calendar-date="${formatCalendarDate(today.getFullYear(), today.getMonth(), today.getDate())}"]`)
+            : null;
+        const target = todayCell || currentMonth;
+        element.scrollTop = target
+            ? target.getBoundingClientRect().top - element.getBoundingClientRect().top + element.scrollTop
+            : element.scrollHeight / 3;
         window.clearTimeout(calendarScrollTimer);
         calendarScrollTimer = window.setTimeout(() => {
             calendarScrollResetting = false;
