@@ -139,7 +139,7 @@ function build() {
     }
     rackIndex.value = Math.min(rackIndex.value, rackCount.value - 1);
     targetRackX = rackIndex.value * rackSpacing;
-    camera.position.set(targetRackX, physical ? 3.8 : 3.2, physical ? 8.4 : 7.5);
+    camera.position.set(targetRackX, physical ? 3.8 : 3.2, physical ? 9.3 : 8.3);
     controls.target.set(targetRackX, height / 2, 0);
     controls.update();
     resize();
@@ -243,7 +243,7 @@ function resize() {
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     const frameDistance = ((rackWidth / 2) + .5) / (Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect);
-    if (!pulledGroup) camera.position.z = Math.max(props.type === 'physical' ? 8.4 : 7.5, frameDistance * 1.08);
+    if (!pulledGroup) camera.position.z = Math.max(props.type === 'physical' ? 9.3 : 8.3, frameDistance * 1.16);
     requestRender();
 }
 
