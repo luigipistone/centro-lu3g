@@ -114,11 +114,12 @@ export function createDeviceModels() {
         return Promise.all(jobs);
     }
 
-    function addImported(parent, key, scale = 1) {
+    function addImported(parent, key, scale = 1, rotationY = 0) {
         const source = imported.get(key);
         if (!source) return false;
         const model = source.clone(true);
         model.scale.multiplyScalar(scale);
+        model.rotation.y += rotationY;
         model.traverse((object) => {
             if (object.isMesh) object.geometry = object.geometry.clone();
         });
@@ -335,7 +336,9 @@ export function createDeviceModels() {
         if (type === 'digital') addLicense(group, item, index);
         else if (item.model_url) {
             const key = `custom:${item.model_url}`;
-            if (!addImported(group, key)) addBox(group, .55, .55, .45, 0, .29, 0, graphite, .02);
+            if (!addImported(group, key, 1, /^iphone 13 pro$/i.test(item.name.trim()) ? Math.PI : 0)) {
+                addBox(group, .55, .55, .45, 0, .29, 0, graphite, .02);
+            }
         }
         else if (/iphone/i.test(item.name)) {
             if (!addImported(group, 'iphone')) addPhone(group);
