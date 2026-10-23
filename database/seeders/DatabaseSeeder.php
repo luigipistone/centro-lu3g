@@ -27,29 +27,5 @@ class DatabaseSeeder extends Seeder
             );
         }
 
-        foreach (['preventivo' => 'PREV-', 'proforma' => 'PRO-', 'fattura' => 'FAT-', 'nota_credito' => 'NC-'] as $type => $prefix) {
-            DB::table('document_numbering')->updateOrInsert(
-                ['doc_type' => $type, 'year' => now()->year],
-                [
-                    'id' => (string) str()->uuid(),
-                    'prefix' => $prefix,
-                    'format' => '{prefix}{year}/{seq}',
-                    'current_seq' => 0,
-                    'yearly_reset' => true,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ],
-            );
-        }
-
-        DB::table('document_settings')->updateOrInsert(
-            ['company_name' => 'Centro LU3G'],
-            [
-                'id' => (string) str()->uuid(),
-                'country' => 'Italia',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-        );
     }
 }

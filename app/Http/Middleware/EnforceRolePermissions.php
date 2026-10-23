@@ -87,9 +87,6 @@ class EnforceRolePermissions
         if (Str::startsWith($name, ['updates.', 'updates-'])) {
             return 'updates.'.($request->isMethod('GET') ? 'view' : 'manage');
         }
-        if (Str::startsWith($name, 'billing.')) {
-            return 'billing.'.($request->isMethod('GET') ? 'view' : 'manage');
-        }
         if ($name === 'users.update' || $name === 'users.avatar.update') {
             return 'users.profile.personal.update';
         }

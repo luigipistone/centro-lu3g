@@ -630,7 +630,7 @@ class CentroPageController extends Controller
         }
 
         $config = $this->config($section);
-        $limit = $section === 'billing' ? 500 : 100;
+        $limit = 100;
         $guestVisibleTaskIds = $this->isGuest($request) ? $this->visibleTaskIdsForUser($request->user()->id) : null;
         $guestTaskIds = $this->isGuest($request) && in_array($section, ['tasks', 'calendar'], true)
             ? $guestVisibleTaskIds
@@ -677,7 +677,6 @@ class CentroPageController extends Controller
                     ->whereNotNull('tasks.due_date')
                     ->select('tasks.*', 'projects.name as project_name', 'projects.color as project_color', 'clients.name as client_name', 'services.name as service_name', 'services.color as service_color')
                 )
-                ->when($config['table'] === 'documents', fn ($query) => $query->leftJoin('clients', 'clients.id', '=', 'documents.client_id')->select('documents.*', 'clients.name as client_name'))
                 ->when($config['table'] === 'users', fn ($query) => $query
                     ->leftJoin('user_roles', 'user_roles.user_id', '=', 'users.id')
                     ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
@@ -808,17 +807,10 @@ class CentroPageController extends Controller
                 ->selectRaw('client_id, COUNT(*) as aggregate')
                 ->groupBy('client_id')
                 ->pluck('aggregate', 'client_id');
-            $documentCounts = DB::table('documents')
-                ->whereIn('client_id', $clientIds)
-                ->selectRaw('client_id, COUNT(*) as aggregate')
-                ->groupBy('client_id')
-                ->pluck('aggregate', 'client_id');
-
-            $rows = $rows->map(function ($row) use ($servicesByClient, $projectCounts, $taskCounts, $documentCounts) {
+            $rows = $rows->map(function ($row) use ($servicesByClient, $projectCounts, $taskCounts) {
                 $row->services = ($servicesByClient[$row->id] ?? collect())->values();
                 $row->projects_count = (int) ($projectCounts[$row->id] ?? 0);
                 $row->tasks_count = (int) ($taskCounts[$row->id] ?? 0);
-                $row->documents_count = (int) ($documentCounts[$row->id] ?? 0);
 
                 return $row;
             });
@@ -870,14 +862,11 @@ class CentroPageController extends Controller
             ) : null,
             'attendanceTeams' => $attendanceReportRequested && $this->currentUserRole($request) === 'superadmin'
                 ? DB::table('profiles as p')->join('users as u', 'u.id', '=', 'p.manager_user_id')->distinct()->orderBy('u.name')->get(['u.id', 'u.name']) : [],
-            'billingStats' => $section === 'billing' ? $this->billingStats() : null,
             'clientStats' => $section === 'clients' ? $this->clientStats() : null,
             'clientArchive' => $section === 'clients' && (bool) $request->route('archive'),
-            'documentSettings' => $section === 'settings' ? DB::table('document_settings')->first() : null,
             'organizationOptions' => $section === 'settings' ? DB::table('employee_organization_options')->orderBy('name')->get() : [],
             'emailSettings' => $section === 'settings' ? $this->emailSettingsForView() : null,
             'figmaSettings' => $section === 'settings' ? $this->figmaSettingsForView() : null,
-            'numberings' => $section === 'settings' ? DB::table('document_numbering')->orderBy('doc_type')->orderByDesc('year')->get() : [],
             'backupRuns' => $section === 'settings' ? $this->backupRuns() : [],
             'rolePermissionMatrix' => $section === 'settings' ? app(RolePermissionService::class)->matrix() : null,
             'sectionAvailability' => $section === 'settings' ? app(SectionAvailabilityService::class)->settingsRows() : [],
@@ -3070,11 +3059,9 @@ class CentroPageController extends Controller
                     ->latest()
                     ->limit(20)
                     ->get(),
-                'documents' => DB::table('documents')->where('client_id', $id)->latest()->limit(20)->get(),
                 'contacts' => DB::table('client_contacts')->where('client_id', $id)->latest()->get(),
                 'clientServices' => DB::table('client_services')->where('client_id', $id)->pluck('service_id'),
                 'services' => DB::table('services')->where('active', true)->orderBy('name')->get(['id', 'name', 'color']),
-                'subscriptions' => DB::table('subscriptions')->where('client_id', $id)->latest()->get(),
                 'passwordCredentialsCount' => app(RolePermissionService::class)->allows($this->currentUserRole($request), 'passwords.view')
                     ? $this->passwordItemsQuery($request)->where('password_items.client_id', $id)->count()
                     : null,
@@ -3151,11 +3138,6 @@ class CentroPageController extends Controller
                 'dependents' => ($this->taskDependencyRows(collect([$id]))[$id]['dependents'] ?? collect())->values(),
                 'taskDependencyOptions' => $this->isGuest($request) ? collect() : $this->taskDependencyOptions($id),
             ],
-            'billing' => [
-                'client' => DB::table('clients')->where('id', $record->client_id)->first(),
-                'lines' => DB::table('document_lines')->where('document_id', $id)->orderBy('position')->get(),
-                'payments' => DB::table('document_payments')->where('document_id', $id)->latest('paid_at')->get(),
-            ],
             'users' => [
                 'roleOptions' => ['superadmin', 'admin', 'editor', 'guest'],
                 'absenceRequests' => $this->currentUserRole($request) === 'superadmin'
@@ -3201,10 +3183,6 @@ class CentroPageController extends Controller
 
         if ($section === 'users') {
             return $this->storeUser($request);
-        }
-
-        if ($section === 'billing') {
-            return $this->storeDocument($request);
         }
 
         if (str_starts_with($section, 'updates-')) {
@@ -3319,10 +3297,6 @@ class CentroPageController extends Controller
             return $this->updateUser($request, $id);
         }
         $this->ensureRoleCanUpdateRecord($request, $section, $id);
-
-        if ($section === 'billing') {
-            return $this->updateDocument($request, $id);
-        }
 
         if (str_starts_with($section, 'updates-')) {
             return $this->updateServiceUpdate($request, $id);
@@ -3631,51 +3605,6 @@ class CentroPageController extends Controller
         }, 'log-centro-'.$payload['from'].'-'.$payload['to'].'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
-    public function updateDocumentSettings(Request $request): RedirectResponse
-    {
-        $this->ensureSuperadmin($request);
-
-        $payload = $request->validate([
-            'company_name' => ['required', 'string', 'max:255'],
-            'legal_form' => ['nullable', 'string', 'max:255'],
-            'vat_number' => ['nullable', 'string', 'max:32'],
-            'tax_code' => ['nullable', 'string', 'max:32'],
-            'tax_regime' => ['nullable', 'string', 'max:32'],
-            'street' => ['nullable', 'string', 'max:255'],
-            'street_number' => ['nullable', 'string', 'max:32'],
-            'postal_code' => ['nullable', 'string', 'max:16'],
-            'city' => ['nullable', 'string', 'max:255'],
-            'province' => ['nullable', 'string', 'max:16'],
-            'country' => ['nullable', 'string', 'max:64'],
-            'email' => ['nullable', 'email', 'max:255'],
-            'pec' => ['nullable', 'email', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:64'],
-            'sdi_code' => ['nullable', 'string', 'max:16'],
-            'iban' => ['nullable', 'string', 'max:64'],
-            'bic_swift' => ['nullable', 'string', 'max:32'],
-            'bank_name' => ['nullable', 'string', 'max:255'],
-            'default_payment_method' => ['nullable', 'string', 'max:255'],
-            'default_payment_terms_days' => ['nullable', 'integer', 'min:0', 'max:365'],
-            'default_withholding_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'default_pension_fund_label' => ['nullable', 'string', 'max:255'],
-            'default_pension_fund_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'bollo_threshold' => ['nullable', 'numeric', 'min:0'],
-            'bollo_amount' => ['nullable', 'numeric', 'min:0'],
-            'bollo_charged_to_client' => ['boolean'],
-            'footer_notes' => ['nullable', 'string'],
-        ]);
-
-        $payload = $this->nullifyEmptyStrings($payload);
-        $payload['bollo_charged_to_client'] = $request->boolean('bollo_charged_to_client');
-
-        $existing = DB::table('document_settings')->first();
-        DB::table('document_settings')->updateOrInsert(
-            ['id' => $existing->id ?? (string) str()->uuid()],
-            [...$payload, 'updated_at' => now(), 'created_at' => $existing->created_at ?? now()],
-        );
-
-        return back()->with('status', 'Impostazioni aggiornate.');
-    }
 
     public function updateEmailSettings(Request $request): RedirectResponse
     {
@@ -3802,25 +3731,6 @@ class CentroPageController extends Controller
         Config::set('mail.from.name', $settings->smtp_from_name ?: 'Il Centro');
     }
 
-    public function updateNumbering(Request $request, string $id): RedirectResponse
-    {
-        $this->ensureSuperadmin($request);
-
-        $payload = $request->validate([
-            'prefix' => ['nullable', 'string', 'max:32'],
-            'format' => ['required', 'string', 'max:255'],
-            'current_seq' => ['required', 'integer', 'min:0'],
-            'yearly_reset' => ['boolean'],
-        ]);
-
-        $payload['prefix'] = $payload['prefix'] ?? '';
-        $payload['yearly_reset'] = $request->boolean('yearly_reset');
-        $payload['updated_at'] = now();
-
-        DB::table('document_numbering')->where('id', $id)->update($payload);
-
-        return back()->with('status', 'Numerazione aggiornata.');
-    }
 
     public function runBackup(Request $request, CentroBackupService $backupService): RedirectResponse
     {
@@ -3894,7 +3804,7 @@ class CentroPageController extends Controller
             'clients' => [
                 'section' => 'clients',
                 'title' => 'Clienti',
-                'description' => 'Anagrafica clienti, contatti, servizi collegati e dati di fatturazione.',
+                'description' => 'Anagrafica clienti, contatti e servizi collegati.',
                 'table' => 'clients',
                 'columns' => ['name', 'legal_name', 'email', 'phone', 'city', 'vat_number'],
                 'fields' => [
@@ -3964,22 +3874,6 @@ class CentroPageController extends Controller
                     ['name' => 'recurring_weekday', 'label' => 'Giorno settimana', 'type' => 'number'],
                     ['name' => 'recurring_month_day', 'label' => 'Giorno mese', 'type' => 'number'],
                     ['name' => 'description', 'label' => 'Descrizione', 'type' => 'textarea'],
-                ],
-            ],
-            'billing' => [
-                'section' => 'billing',
-                'title' => 'Billing',
-                'description' => 'Preventivi, proforma, fatture, pagamenti, abbonamenti e numerazioni.',
-                'table' => 'documents',
-                'columns' => ['number', 'client_name', 'doc_type', 'status', 'issue_date', 'total_amount'],
-                'fields' => [
-                    ['name' => 'client_id', 'label' => 'Cliente', 'type' => 'client', 'required' => true],
-                    ['name' => 'doc_type', 'label' => 'Tipo', 'type' => 'select', 'options' => ['preventivo', 'proforma', 'fattura', 'nota_credito']],
-                    ['name' => 'status', 'label' => 'Stato', 'type' => 'select', 'options' => ['draft', 'sent', 'accepted', 'rejected', 'paid', 'partially_paid', 'overdue', 'cancelled']],
-                    ['name' => 'issue_date', 'label' => 'Data emissione', 'type' => 'date', 'required' => true],
-                    ['name' => 'due_date', 'label' => 'Scadenza', 'type' => 'date'],
-                    ['name' => 'total_amount', 'label' => 'Totale', 'type' => 'number'],
-                    ['name' => 'notes', 'label' => 'Note', 'type' => 'textarea'],
                 ],
             ],
             'users' => [
@@ -4112,70 +4006,6 @@ class CentroPageController extends Controller
             ->first(['id', 'name']);
     }
 
-    private function billingStats(): array
-    {
-        $year = (int) now()->format('Y');
-        $today = now()->toDateString();
-        $documents = DB::table('documents')
-            ->leftJoin('clients', 'clients.id', '=', 'documents.client_id')
-            ->select('documents.*', 'clients.name as client_name', 'clients.legal_name as client_legal_name')
-            ->whereYear('issue_date', $year)
-            ->get();
-
-        $invoices = $documents->where('doc_type', 'fattura');
-        $totalInvoiced = (float) $invoices->sum('total_amount');
-        $totalReceived = (float) $invoices->sum('total_paid');
-        $overdue = $invoices->filter(fn ($document) => $document->due_date && $document->due_date < $today && (float) $document->total_paid < (float) $document->total_amount);
-        $overdueAmount = (float) $overdue->sum(fn ($document) => (float) $document->total_amount - (float) $document->total_paid);
-
-        $months = collect(range(1, 12))->map(function (int $month) use ($invoices) {
-            $docs = $invoices->filter(fn ($document) => (int) substr((string) $document->issue_date, 5, 2) === $month);
-
-            return [
-                'month' => ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'][$month - 1],
-                'invoiced' => round((float) $docs->sum('total_amount'), 2),
-                'paid' => round((float) $docs->sum('total_paid'), 2),
-                'open' => round((float) $docs->sum(fn ($document) => max(0, (float) $document->total_amount - (float) $document->total_paid)), 2),
-            ];
-        })->values();
-
-        $topClients = $invoices
-            ->groupBy('client_id')
-            ->map(function ($docs) {
-                $first = $docs->first();
-
-                return [
-                    'name' => $first->client_legal_name ?: ($first->client_name ?: '-'),
-                    'total' => round((float) $docs->sum('total_amount'), 2),
-                    'paid' => round((float) $docs->sum('total_paid'), 2),
-                ];
-            })
-            ->sortByDesc('total')
-            ->values()
-            ->take(5);
-
-        $statusBreakdown = $invoices
-            ->groupBy('status')
-            ->map(fn ($docs, $status) => [
-                'status' => $status,
-                'total' => round((float) $docs->sum('total_amount'), 2),
-                'count' => $docs->count(),
-            ])
-            ->values();
-
-        return [
-            'year' => $year,
-            'totalInvoiced' => round($totalInvoiced, 2),
-            'totalReceived' => round($totalReceived, 2),
-            'openAmount' => round(max(0, $totalInvoiced - $totalReceived), 2),
-            'overdueAmount' => round($overdueAmount, 2),
-            'overdueCount' => $overdue->count(),
-            'collectedPct' => $totalInvoiced > 0 ? round(($totalReceived / $totalInvoiced) * 100) : 0,
-            'monthly' => $months,
-            'topClients' => $topClients,
-            'statusBreakdown' => $statusBreakdown,
-        ];
-    }
 
     private function clientStats(): array
     {
@@ -4183,7 +4013,6 @@ class CentroPageController extends Controller
             'total' => DB::table('clients')->count(),
             'withServices' => DB::table('client_services')->distinct('client_id')->count('client_id'),
             'withOpenTasks' => DB::table('tasks')->where('status', '!=', 'done')->distinct('client_id')->count('client_id'),
-            'withDocuments' => DB::table('documents')->distinct('client_id')->count('client_id'),
         ];
     }
 
@@ -4293,15 +4122,6 @@ class CentroPageController extends Controller
                 'color' => ['required', 'string', 'max:20'],
                 'description' => ['nullable', 'string'],
                 'active' => ['boolean'],
-            ],
-            'billing' => [
-                'client_id' => ['required', 'uuid', 'exists:clients,id'],
-                'doc_type' => ['required', Rule::in(['preventivo', 'proforma', 'fattura', 'nota_credito'])],
-                'status' => ['required', Rule::in(['draft', 'sent', 'accepted', 'rejected', 'paid', 'partially_paid', 'overdue', 'cancelled'])],
-                'issue_date' => ['required', 'date'],
-                'due_date' => ['nullable', 'date'],
-                'total_amount' => ['nullable', 'numeric', 'min:0'],
-                'notes' => ['nullable', 'string'],
             ],
             default => abort(404),
         };
@@ -5836,7 +5656,6 @@ class CentroPageController extends Controller
             'calendar' => 'calendar.view',
             'absences' => 'absences.manage',
             'settings' => 'settings.manage',
-            'billing' => 'billing.'.($action === 'view' ? 'view' : 'manage'),
             'users' => 'users.'.($action === 'view' ? 'view' : 'manage'),
             default => $section.'.'.$action,
         };
@@ -5861,10 +5680,6 @@ class CentroPageController extends Controller
         abort_if($this->isGuest($request) || $this->isEditor($request), 403);
     }
 
-    private function ensureCanManageBilling(Request $request): void
-    {
-        abort_if($this->isGuest($request) || $this->isEditor($request), 403);
-    }
 
     private function canEditorDeleteTask(Request $request, string $taskId): bool
     {
@@ -8429,442 +8244,6 @@ class CentroPageController extends Controller
             ->count();
     }
 
-    private function storeDocument(Request $request): RedirectResponse
-    {
-        $payload = $this->validatedPayload($request, 'billing');
-        $payload = $this->normalizeDocumentPayload($payload, $request->user()->id);
-        $payload['id'] = (string) str()->uuid();
-        $payload['created_at'] = now();
-        $payload['updated_at'] = now();
-
-        DB::table('documents')->insert($payload);
-
-        return back()->with('status', 'Documento creato.');
-    }
-
-    private function updateDocument(Request $request, string $id): RedirectResponse
-    {
-        $payload = $this->normalizeDocumentPayload($this->validatedPayload($request, 'billing'), $request->user()->id, false);
-        $payload['updated_at'] = now();
-
-        DB::table('documents')->where('id', $id)->update($payload);
-
-        return back()->with('status', 'Documento aggiornato.');
-    }
-
-    public function updateDocumentHeader(Request $request, string $id): RedirectResponse
-    {
-        $this->ensureCanManageBilling($request);
-        DB::table('documents')->where('id', $id)->exists() || abort(404);
-
-        $payload = $request->validate([
-            'issue_date' => ['required', 'date'],
-            'due_date' => ['nullable', 'date'],
-            'status' => ['required', Rule::in(['draft', 'sent', 'accepted', 'rejected', 'paid', 'partially_paid', 'overdue', 'cancelled'])],
-            'payment_method' => ['nullable', 'string', 'max:255'],
-            'payment_terms_days' => ['nullable', 'integer', 'min:0'],
-            'causale' => ['nullable', 'string'],
-            'notes' => ['nullable', 'string'],
-            'footer_notes' => ['nullable', 'string'],
-            'withholding_pct' => ['nullable', 'numeric', 'min:0'],
-            'pension_fund_pct' => ['nullable', 'numeric', 'min:0'],
-            'pension_fund_label' => ['nullable', 'string', 'max:255'],
-        ]);
-
-        foreach ($payload as $key => $value) {
-            if ($value === '') {
-                $payload[$key] = null;
-            }
-        }
-
-        DB::table('documents')->where('id', $id)->update([
-            ...$payload,
-            'year' => (int) substr($payload['issue_date'], 0, 4),
-            'updated_at' => now(),
-        ]);
-        $this->recalculateDocument($id);
-
-        return back()->with('status', 'Documento salvato.');
-    }
-
-    public function issueDocument(Request $request, string $id): RedirectResponse
-    {
-        $this->ensureCanManageBilling($request);
-        $document = DB::table('documents')->where('id', $id)->first();
-        abort_if(! $document, 404);
-
-        if ($document->number) {
-            return back()->with('status', 'Documento gia emesso.');
-        }
-
-        $year = $document->year ?: (int) substr((string) $document->issue_date, 0, 4);
-
-        DB::transaction(function () use ($document, $year) {
-            $numbering = DB::table('document_numbering')
-                ->where('doc_type', $document->doc_type)
-                ->where('year', $year)
-                ->lockForUpdate()
-                ->first();
-
-            if (! $numbering) {
-                $numbering = (object) [
-                    'id' => (string) str()->uuid(),
-                    'doc_type' => $document->doc_type,
-                    'year' => $year,
-                    'prefix' => strtoupper(substr((string) $document->doc_type, 0, 1)),
-                    'format' => '{prefix}{year}/{seq}',
-                    'current_seq' => 0,
-                ];
-                DB::table('document_numbering')->insert([
-                    'id' => $numbering->id,
-                    'doc_type' => $numbering->doc_type,
-                    'year' => $numbering->year,
-                    'prefix' => $numbering->prefix,
-                    'format' => $numbering->format,
-                    'current_seq' => 0,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            }
-
-            $seq = ((int) $numbering->current_seq) + 1;
-            $number = str_replace(
-                ['{prefix}', '{year}', '{seq}'],
-                [$numbering->prefix, (string) $year, str_pad((string) $seq, 4, '0', STR_PAD_LEFT)],
-                $numbering->format,
-            );
-
-            DB::table('document_numbering')->where('id', $numbering->id)->update([
-                'current_seq' => $seq,
-                'updated_at' => now(),
-            ]);
-
-            DB::table('documents')->where('id', $document->id)->update([
-                'number' => $number,
-                'seq' => $seq,
-                'year' => $year,
-                'status' => 'sent',
-                'updated_at' => now(),
-            ]);
-        });
-
-        return back()->with('status', 'Documento emesso.');
-    }
-
-    public function duplicateDocument(Request $request, string $id): RedirectResponse
-    {
-        $this->ensureCanManageBilling($request);
-        $newId = $this->copyDocument($id, null, $request->user()->id);
-
-        return redirect()->route('billing.show', $newId)->with('status', 'Documento duplicato.');
-    }
-
-    public function convertDocument(Request $request, string $id, string $type): RedirectResponse
-    {
-        $this->ensureCanManageBilling($request);
-        abort_unless(in_array($type, ['proforma', 'fattura', 'nota_credito'], true), 404);
-        $newId = $this->copyDocument($id, $type, $request->user()->id);
-
-        return redirect()->route('billing.show', $newId)->with('status', 'Documento creato.');
-    }
-
-    public function downloadDocumentPdf(string $id): \Illuminate\Http\Response
-    {
-        $bundle = $this->documentBundle($id);
-        $pdf = $this->documentPdf($bundle);
-
-        return response($pdf, 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="'.$this->documentFilename($bundle['document'], 'pdf').'"',
-        ]);
-    }
-
-    public function downloadDocumentXml(string $id): \Illuminate\Http\Response
-    {
-        $bundle = $this->documentBundle($id);
-        $xml = $this->documentXml($bundle);
-
-        DB::table('documents')->where('id', $id)->update([
-            'xml_generated_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        return response($xml, 200, [
-            'Content-Type' => 'application/xml; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="'.$this->documentFilename($bundle['document'], 'xml').'"',
-        ]);
-    }
-
-    public function sendDocumentEmail(Request $request, string $id): RedirectResponse
-    {
-        $this->ensureCanManageBilling($request);
-        $payload = $request->validate([
-            'recipient' => ['required', 'email', 'max:255'],
-            'cc' => ['nullable', 'string', 'max:500'],
-            'subject' => ['nullable', 'string', 'max:255'],
-            'message' => ['nullable', 'string'],
-            'include_xml' => ['boolean'],
-        ]);
-        $bundle = $this->documentBundle($id);
-        $document = $bundle['document'];
-        $client = $bundle['client'];
-        $documentNumber = $document->number ?: 'bozza';
-        $subject = $payload['subject'] ?: $this->documentTypeLabel($document->doc_type).' '.$documentNumber;
-        $body = nl2br(e($payload['message'] ?: "Buongiorno,\n\nin allegato trova il documento richiesto.\n\nCordiali saluti."));
-        $pdf = $this->documentPdf($bundle);
-        $includeXml = $request->boolean('include_xml') && in_array($document->doc_type, ['fattura', 'nota_credito'], true);
-
-        try {
-            Mail::html($body, function ($message) use ($payload, $subject, $pdf, $bundle, $includeXml) {
-                $message->to($payload['recipient'])->subject($subject);
-                if (! empty($payload['cc'])) {
-                    $message->cc(array_map('trim', explode(',', $payload['cc'])));
-                }
-                $message->attachData($pdf, $this->documentFilename($bundle['document'], 'pdf'), [
-                    'mime' => 'application/pdf',
-                ]);
-                if ($includeXml) {
-                    $message->attachData($this->documentXml($bundle), $this->documentFilename($bundle['document'], 'xml'), [
-                        'mime' => 'application/xml',
-                    ]);
-                }
-            });
-
-            DB::table('document_emails')->insert([
-                'id' => (string) str()->uuid(),
-                'document_id' => $id,
-                'sent_by' => $request->user()->id,
-                'channel' => 'smtp',
-                'recipient' => $payload['recipient'],
-                'cc' => $payload['cc'] ?? null,
-                'subject' => $subject,
-                'status' => 'sent',
-                'sent_at' => now(),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-        } catch (\Throwable $exception) {
-            DB::table('document_emails')->insert([
-                'id' => (string) str()->uuid(),
-                'document_id' => $id,
-                'sent_by' => $request->user()->id,
-                'channel' => 'smtp',
-                'recipient' => $payload['recipient'],
-                'cc' => $payload['cc'] ?? null,
-                'subject' => $subject,
-                'status' => 'failed',
-                'error' => $exception->getMessage(),
-                'sent_at' => now(),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-
-            return back()->with('status', 'Invio non riuscito: '.$exception->getMessage());
-        }
-
-        return back()->with('status', 'Email inviata.');
-    }
-
-    private function copyDocument(string $id, ?string $docType, string $userId): string
-    {
-        $document = DB::table('documents')->where('id', $id)->first();
-        abort_if(! $document, 404);
-
-        $newId = (string) str()->uuid();
-        $targetType = $docType ?: $document->doc_type;
-        $sign = $targetType === 'nota_credito' ? -1 : 1;
-
-        DB::transaction(function () use ($document, $newId, $targetType, $sign, $userId) {
-            $data = (array) $document;
-            unset($data['id']);
-            $data['doc_type'] = $targetType;
-            $data['status'] = 'draft';
-            $data['number'] = null;
-            $data['seq'] = null;
-            $data['issue_date'] = now()->toDateString();
-            $data['due_date'] = null;
-            $data['parent_document_id'] = $document->id;
-            $data['year'] = now()->year;
-            $data['created_by'] = $userId;
-            $data['created_at'] = now();
-            $data['updated_at'] = now();
-
-            DB::table('documents')->insert(['id' => $newId, ...$data]);
-
-            $lines = DB::table('document_lines')->where('document_id', $document->id)->orderBy('position')->get();
-            foreach ($lines as $line) {
-                $lineData = (array) $line;
-                unset($lineData['id']);
-                $lineData['document_id'] = $newId;
-                $lineData['unit_price'] = ((float) $line->unit_price) * $sign;
-                $lineData['subtotal'] = ((float) $line->subtotal) * $sign;
-                $lineData['created_at'] = now();
-                $lineData['updated_at'] = now();
-                DB::table('document_lines')->insert(['id' => (string) str()->uuid(), ...$lineData]);
-            }
-        });
-
-        $this->recalculateDocument($newId);
-
-        return $newId;
-    }
-
-    private function documentBundle(string $id): array
-    {
-        $document = DB::table('documents')->where('id', $id)->first();
-        abort_if(! $document, 404);
-
-        return [
-            'document' => $document,
-            'client' => DB::table('clients')->where('id', $document->client_id)->first(),
-            'settings' => DB::table('document_settings')->first(),
-            'lines' => DB::table('document_lines')->where('document_id', $id)->orderBy('position')->get(),
-            'payments' => DB::table('document_payments')->where('document_id', $id)->orderByDesc('paid_at')->get(),
-        ];
-    }
-
-    private function documentPdf(array $bundle): string
-    {
-        $options = new Options;
-        $options->set('isRemoteEnabled', true);
-        $options->set('defaultFont', 'DejaVu Sans');
-
-        $dompdf = new Dompdf($options);
-        $html = view('documents.pdf', [
-            ...$bundle,
-            'typeLabel' => $this->documentTypeLabel($bundle['document']->doc_type),
-        ])->render();
-        $dompdf->loadHtml($html, 'UTF-8');
-        $dompdf->setPaper('A4');
-        $dompdf->render();
-
-        return $dompdf->output();
-    }
-
-    private function documentXml(array $bundle): string
-    {
-        $document = $bundle['document'];
-        $client = $bundle['client'];
-        $settings = $bundle['settings'];
-        $lines = $bundle['lines'];
-        $doc = new \DOMDocument('1.0', 'UTF-8');
-        $doc->formatOutput = true;
-
-        $root = $doc->createElement('p:FatturaElettronica');
-        $root->setAttribute('versione', 'FPR12');
-        $root->setAttribute('xmlns:p', 'http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2');
-        $root->setAttribute('xmlns:ds', 'http://www.w3.org/2000/09/xmldsig#');
-        $root->setAttribute('xmlns:xsi', 'http://www.w3.org/2001/XMLSchema-instance');
-        $doc->appendChild($root);
-
-        $header = $root->appendChild($doc->createElement('FatturaElettronicaHeader'));
-        $transmission = $header->appendChild($doc->createElement('DatiTrasmissione'));
-        $idTrasmittente = $transmission->appendChild($doc->createElement('IdTrasmittente'));
-        $idTrasmittente->appendChild($doc->createElement('IdPaese', 'IT'));
-        $idTrasmittente->appendChild($doc->createElement('IdCodice', preg_replace('/\D+/', '', (string) ($settings->vat_number ?? '00000000000')) ?: '00000000000'));
-        $transmission->appendChild($doc->createElement('ProgressivoInvio', str_pad((string) ($document->seq ?: 1), 5, '0', STR_PAD_LEFT)));
-        $transmission->appendChild($doc->createElement('FormatoTrasmissione', 'FPR12'));
-        $transmission->appendChild($doc->createElement('CodiceDestinatario', $client->sdi_code ?: '0000000'));
-
-        $supplier = $header->appendChild($doc->createElement('CedentePrestatore'));
-        $supplierData = $supplier->appendChild($doc->createElement('DatiAnagrafici'));
-        $supplierVat = $supplierData->appendChild($doc->createElement('IdFiscaleIVA'));
-        $supplierVat->appendChild($doc->createElement('IdPaese', 'IT'));
-        $supplierVat->appendChild($doc->createElement('IdCodice', preg_replace('/\D+/', '', (string) ($settings->vat_number ?? '00000000000')) ?: '00000000000'));
-        $supplierData->appendChild($doc->createElement('Anagrafica'))->appendChild($doc->createElement('Denominazione', $settings->company_name ?? config('app.name')));
-        $supplierData->appendChild($doc->createElement('RegimeFiscale', $settings->tax_regime ?: 'RF01'));
-        $supplierAddress = $supplier->appendChild($doc->createElement('Sede'));
-        $supplierAddress->appendChild($doc->createElement('Indirizzo', $settings->street ?: '-'));
-        $supplierAddress->appendChild($doc->createElement('CAP', $settings->postal_code ?: '00000'));
-        $supplierAddress->appendChild($doc->createElement('Comune', $settings->city ?: '-'));
-        $supplierAddress->appendChild($doc->createElement('Provincia', $settings->province ?: 'NA'));
-        $supplierAddress->appendChild($doc->createElement('Nazione', $settings->country ?: 'IT'));
-
-        $customer = $header->appendChild($doc->createElement('CessionarioCommittente'));
-        $customerData = $customer->appendChild($doc->createElement('DatiAnagrafici'));
-        if ($client->vat_number) {
-            $customerVat = $customerData->appendChild($doc->createElement('IdFiscaleIVA'));
-            $customerVat->appendChild($doc->createElement('IdPaese', 'IT'));
-            $customerVat->appendChild($doc->createElement('IdCodice', preg_replace('/\D+/', '', (string) $client->vat_number)));
-        }
-        if ($client->tax_code) {
-            $customerData->appendChild($doc->createElement('CodiceFiscale', $client->tax_code));
-        }
-        $customerData->appendChild($doc->createElement('Anagrafica'))->appendChild($doc->createElement('Denominazione', $client->legal_name ?: $client->name));
-        $customerAddress = $customer->appendChild($doc->createElement('Sede'));
-        $customerAddress->appendChild($doc->createElement('Indirizzo', trim(($client->street ?: $client->address ?: '-').' '.($client->street_number ?: ''))));
-        $customerAddress->appendChild($doc->createElement('CAP', $client->postal_code ?: '00000'));
-        $customerAddress->appendChild($doc->createElement('Comune', $client->city ?: '-'));
-        $customerAddress->appendChild($doc->createElement('Provincia', $client->province ?: 'NA'));
-        $customerAddress->appendChild($doc->createElement('Nazione', $client->country ?: 'IT'));
-
-        $body = $root->appendChild($doc->createElement('FatturaElettronicaBody'));
-        $general = $body->appendChild($doc->createElement('DatiGenerali'))->appendChild($doc->createElement('DatiGeneraliDocumento'));
-        $general->appendChild($doc->createElement('TipoDocumento', $document->doc_type === 'nota_credito' ? 'TD04' : 'TD01'));
-        $general->appendChild($doc->createElement('Divisa', $document->currency ?: 'EUR'));
-        $general->appendChild($doc->createElement('Data', $document->issue_date));
-        $general->appendChild($doc->createElement('Numero', $document->number ?: 'BOZZA-'.$document->id));
-        $general->appendChild($doc->createElement('ImportoTotaleDocumento', number_format((float) $document->total_amount, 2, '.', '')));
-
-        $goods = $body->appendChild($doc->createElement('DatiBeniServizi'));
-        foreach ($lines as $index => $line) {
-            $detail = $goods->appendChild($doc->createElement('DettaglioLinee'));
-            $detail->appendChild($doc->createElement('NumeroLinea', (string) ($index + 1)));
-            $detail->appendChild($doc->createElement('Descrizione', $line->description));
-            $detail->appendChild($doc->createElement('Quantita', number_format((float) $line->quantity, 2, '.', '')));
-            $detail->appendChild($doc->createElement('PrezzoUnitario', number_format((float) $line->unit_price, 2, '.', '')));
-            $detail->appendChild($doc->createElement('PrezzoTotale', number_format((float) $line->subtotal, 2, '.', '')));
-            $detail->appendChild($doc->createElement('AliquotaIVA', number_format((float) $line->vat_rate, 2, '.', '')));
-            if ((float) $line->vat_rate === 0.0 && $line->vat_nature_code) {
-                $detail->appendChild($doc->createElement('Natura', $line->vat_nature_code));
-            }
-        }
-
-        $summary = $goods->appendChild($doc->createElement('DatiRiepilogo'));
-        $summary->appendChild($doc->createElement('AliquotaIVA', '22.00'));
-        $summary->appendChild($doc->createElement('ImponibileImporto', number_format((float) $document->total_taxable, 2, '.', '')));
-        $summary->appendChild($doc->createElement('Imposta', number_format((float) $document->total_vat, 2, '.', '')));
-
-        return $doc->saveXML();
-    }
-
-    private function documentFilename(object $document, string $extension): string
-    {
-        $number = preg_replace('/[^A-Za-z0-9_-]+/', '-', (string) ($document->number ?: 'bozza-'.$document->id));
-
-        return strtolower($document->doc_type.'-'.$number.'.'.$extension);
-    }
-
-    private function documentTypeLabel(string $type): string
-    {
-        return [
-            'preventivo' => 'Preventivo',
-            'proforma' => 'Proforma',
-            'fattura' => 'Fattura',
-            'nota_credito' => 'Nota credito',
-        ][$type] ?? $type;
-    }
-
-    private function normalizeDocumentPayload(array $payload, string $userId, bool $withCreator = true): array
-    {
-        $amount = (float) ($payload['total_amount'] ?? 0);
-        $payload['currency'] = 'EUR';
-        $payload['total_taxable'] = $amount;
-        $payload['total_amount'] = $amount;
-        $payload['total_discount'] = 0;
-        $payload['total_vat'] = 0;
-        $payload['total_pension_fund'] = 0;
-        $payload['total_withholding'] = 0;
-        $payload['total_paid'] = 0;
-        $payload['apply_bollo'] = false;
-        $payload['year'] = $payload['issue_date'] ? (int) substr($payload['issue_date'], 0, 4) : now()->year;
-
-        if ($withCreator) {
-            $payload['created_by'] = $userId;
-        }
-
-        return $payload;
-    }
 
     public function storeTaskComment(Request $request, string $id): RedirectResponse
     {
@@ -9692,312 +9071,6 @@ class CentroPageController extends Controller
         return response()->json(['status' => 'ok']);
     }
 
-    public function storeDocumentLine(Request $request, string $id): RedirectResponse
-    {
-        $this->ensureCanManageBilling($request);
-        DB::table('documents')->where('id', $id)->exists() || abort(404);
-
-        [$payload, $subtotal] = $this->validatedDocumentLinePayload($request);
-
-        DB::table('document_lines')->insert([
-            'id' => (string) str()->uuid(),
-            'document_id' => $id,
-            'position' => DB::table('document_lines')->where('document_id', $id)->count(),
-            ...$payload,
-            'subtotal' => $subtotal,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        $this->recalculateDocument($id);
-
-        return back()->with('status', 'Riga aggiunta.');
-    }
-
-    public function updateDocumentLine(Request $request, string $documentId, string $lineId): RedirectResponse
-    {
-        $this->ensureCanManageBilling($request);
-        DB::table('document_lines')->where('document_id', $documentId)->where('id', $lineId)->exists() || abort(404);
-
-        [$payload, $subtotal] = $this->validatedDocumentLinePayload($request);
-
-        DB::table('document_lines')
-            ->where('document_id', $documentId)
-            ->where('id', $lineId)
-            ->update([
-                ...$payload,
-                'subtotal' => $subtotal,
-                'updated_at' => now(),
-            ]);
-
-        $this->recalculateDocument($documentId);
-
-        return back()->with('status', 'Riga aggiornata.');
-    }
-
-    public function destroyDocumentLine(Request $request, string $documentId, string $lineId): RedirectResponse
-    {
-        $this->ensureCanManageBilling($request);
-        DB::table('document_lines')->where('document_id', $documentId)->where('id', $lineId)->delete();
-        $this->recalculateDocument($documentId);
-
-        return back()->with('status', 'Riga eliminata.');
-    }
-
-    public function storeDocumentPayment(Request $request, string $id): RedirectResponse
-    {
-        $this->ensureCanManageBilling($request);
-        DB::table('documents')->where('id', $id)->exists() || abort(404);
-
-        $payload = $this->validatedDocumentPaymentPayload($request);
-
-        DB::table('document_payments')->insert([
-            'id' => (string) str()->uuid(),
-            'document_id' => $id,
-            ...$payload,
-            'created_by' => $request->user()->id,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        $this->recalculateDocument($id);
-
-        return back()->with('status', 'Pagamento registrato.');
-    }
-
-    public function updateDocumentPayment(Request $request, string $documentId, string $paymentId): RedirectResponse
-    {
-        $this->ensureCanManageBilling($request);
-        DB::table('document_payments')->where('document_id', $documentId)->where('id', $paymentId)->exists() || abort(404);
-
-        $payload = $this->validatedDocumentPaymentPayload($request);
-
-        DB::table('document_payments')
-            ->where('document_id', $documentId)
-            ->where('id', $paymentId)
-            ->update([
-                ...$payload,
-                'updated_at' => now(),
-            ]);
-
-        $this->recalculateDocument($documentId);
-
-        return back()->with('status', 'Pagamento aggiornato.');
-    }
-
-    public function destroyDocumentPayment(Request $request, string $documentId, string $paymentId): RedirectResponse
-    {
-        $this->ensureCanManageBilling($request);
-        DB::table('document_payments')->where('document_id', $documentId)->where('id', $paymentId)->delete();
-        $this->recalculateDocument($documentId);
-
-        return back()->with('status', 'Pagamento eliminato.');
-    }
-
-    public function storeSubscription(Request $request, string $clientId): RedirectResponse
-    {
-        $this->ensureCanManageClients($request);
-        DB::table('clients')->where('id', $clientId)->exists() || abort(404);
-        $payload = $this->validatedSubscriptionPayload($request);
-        $payload['id'] = (string) str()->uuid();
-        $payload['client_id'] = $clientId;
-        $payload['created_by'] = $request->user()->id;
-        $payload['created_at'] = now();
-        $payload['updated_at'] = now();
-
-        DB::table('subscriptions')->insert($payload);
-
-        return back()->with('status', 'Abbonamento creato.');
-    }
-
-    public function updateSubscription(Request $request, string $clientId, string $subscriptionId): RedirectResponse
-    {
-        $this->ensureCanManageClients($request);
-        $this->subscriptionForClient($clientId, $subscriptionId);
-        $payload = $this->validatedSubscriptionPayload($request);
-        $payload['updated_at'] = now();
-
-        DB::table('subscriptions')->where('id', $subscriptionId)->update($payload);
-
-        return back()->with('status', 'Abbonamento aggiornato.');
-    }
-
-    public function toggleSubscription(Request $request, string $clientId, string $subscriptionId): RedirectResponse
-    {
-        $this->ensureCanManageClients($request);
-        $this->subscriptionForClient($clientId, $subscriptionId);
-
-        DB::table('subscriptions')->where('id', $subscriptionId)->update([
-            'active' => $request->boolean('active'),
-            'updated_at' => now(),
-        ]);
-
-        return back()->with('status', 'Stato abbonamento aggiornato.');
-    }
-
-    public function destroySubscription(Request $request, string $clientId, string $subscriptionId): RedirectResponse
-    {
-        $this->ensureCanManageClients($request);
-        $this->subscriptionForClient($clientId, $subscriptionId);
-        DB::table('subscriptions')->where('id', $subscriptionId)->delete();
-
-        return back()->with('status', 'Abbonamento eliminato.');
-    }
-
-    public function generateSubscriptionDocument(Request $request, string $clientId, string $subscriptionId): RedirectResponse
-    {
-        $this->ensureCanManageClients($request);
-        $subscription = $this->subscriptionForClient($clientId, $subscriptionId);
-        $settings = DB::table('document_settings')->first();
-        $issueDate = now()->toDateString();
-        $terms = $subscription->payment_terms_days ?? $settings?->default_payment_terms_days ?? 30;
-        $documentId = (string) str()->uuid();
-
-        DB::table('documents')->insert([
-            'id' => $documentId,
-            'client_id' => $clientId,
-            'subscription_id' => $subscription->id,
-            'doc_type' => 'fattura',
-            'status' => 'draft',
-            'issue_date' => $issueDate,
-            'due_date' => now()->addDays((int) $terms)->toDateString(),
-            'currency' => 'EUR',
-            'payment_method' => $settings?->default_payment_method ?? null,
-            'payment_terms_days' => $terms,
-            'causale' => $subscription->name,
-            'notes' => $subscription->notes,
-            'footer_notes' => $settings?->footer_notes ?? null,
-            'withholding_pct' => $settings?->default_withholding_pct ?? 0,
-            'pension_fund_pct' => $settings?->default_pension_fund_pct ?? 0,
-            'pension_fund_label' => $settings?->default_pension_fund_label ?? null,
-            'apply_bollo' => false,
-            'total_taxable' => 0,
-            'total_discount' => 0,
-            'total_vat' => 0,
-            'total_pension_fund' => 0,
-            'total_withholding' => 0,
-            'total_amount' => 0,
-            'total_paid' => 0,
-            'year' => now()->year,
-            'created_by' => $request->user()->id,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        DB::table('document_lines')->insert([
-            'id' => (string) str()->uuid(),
-            'document_id' => $documentId,
-            'position' => 0,
-            'description' => $subscription->description ?: $subscription->name,
-            'quantity' => 1,
-            'unit_price' => (float) $subscription->amount,
-            'discount_pct' => 0,
-            'vat_rate' => (float) $subscription->vat_rate,
-            'vat_nature_code' => $subscription->vat_nature_code,
-            'subtotal' => (float) $subscription->amount,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        $this->recalculateDocument($documentId);
-
-        DB::table('subscriptions')->where('id', $subscriptionId)->update([
-            'next_invoice_date' => $this->nextSubscriptionDate($subscription),
-            'updated_at' => now(),
-        ]);
-
-        return redirect()->route('billing.show', $documentId)->with('status', 'Fattura generata da abbonamento.');
-    }
-
-    private function subscriptionForClient(string $clientId, string $subscriptionId): object
-    {
-        $subscription = DB::table('subscriptions')
-            ->where('client_id', $clientId)
-            ->where('id', $subscriptionId)
-            ->first();
-
-        abort_if(! $subscription, 404);
-
-        return $subscription;
-    }
-
-    private function validatedSubscriptionPayload(Request $request): array
-    {
-        $payload = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string'],
-            'amount' => ['required', 'numeric', 'min:0'],
-            'vat_rate' => ['required', 'numeric', 'min:0'],
-            'vat_nature_code' => ['nullable', 'string', 'max:16'],
-            'frequency_value' => ['required', 'integer', 'min:1'],
-            'frequency_unit' => ['required', Rule::in(['month', 'year'])],
-            'start_date' => ['required', 'date'],
-            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
-            'next_invoice_date' => ['required', 'date'],
-            'payment_terms_days' => ['nullable', 'integer', 'min:0', 'max:365'],
-            'auto_generate' => ['boolean'],
-            'active' => ['boolean'],
-            'notes' => ['nullable', 'string'],
-        ]);
-
-        $payload = $this->nullifyEmptyStrings($payload);
-        $payload['amount'] = (float) $payload['amount'];
-        $payload['vat_rate'] = (float) $payload['vat_rate'];
-        $payload['frequency_value'] = (int) $payload['frequency_value'];
-        $payload['payment_terms_days'] = $payload['payment_terms_days'] === null ? null : (int) $payload['payment_terms_days'];
-        $payload['auto_generate'] = $request->boolean('auto_generate');
-        $payload['active'] = $request->boolean('active', true);
-
-        return $payload;
-    }
-
-    private function nextSubscriptionDate(object $subscription): string
-    {
-        $date = Carbon::parse($subscription->next_invoice_date ?: now());
-        $frequency = max(1, (int) $subscription->frequency_value);
-
-        return ($subscription->frequency_unit === 'year' ? $date->addYears($frequency) : $date->addMonths($frequency))->toDateString();
-    }
-
-    private function validatedDocumentLinePayload(Request $request): array
-    {
-        $payload = $request->validate([
-            'description' => ['required', 'string'],
-            'quantity' => ['required', 'numeric', 'min:0'],
-            'unit_price' => ['required', 'numeric', 'min:0'],
-            'vat_rate' => ['required', 'numeric', 'min:0'],
-            'discount_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
-        ]);
-
-        $quantity = (float) $payload['quantity'];
-        $unitPrice = (float) $payload['unit_price'];
-        $discount = (float) ($payload['discount_pct'] ?? 0);
-
-        return [[
-            'description' => $payload['description'],
-            'quantity' => $quantity,
-            'unit_price' => $unitPrice,
-            'discount_pct' => $discount,
-            'vat_rate' => (float) $payload['vat_rate'],
-        ], round($quantity * $unitPrice * (1 - ($discount / 100)), 2)];
-    }
-
-    private function validatedDocumentPaymentPayload(Request $request): array
-    {
-        $payload = $request->validate([
-            'amount' => ['required', 'numeric', 'min:0'],
-            'paid_at' => ['required', 'date'],
-            'method' => ['nullable', 'string', 'max:255'],
-            'notes' => ['nullable', 'string'],
-        ]);
-
-        return [
-            'amount' => (float) $payload['amount'],
-            'paid_at' => $payload['paid_at'],
-            'method' => $payload['method'] ?? null,
-            'notes' => $payload['notes'] ?? null,
-        ];
-    }
 
     private function validatedClientContactPayload(Request $request): array
     {
@@ -10018,40 +9091,6 @@ class CentroPageController extends Controller
         return $payload;
     }
 
-    private function recalculateDocument(string $id): void
-    {
-        $document = DB::table('documents')->where('id', $id)->first();
-        if (! $document) {
-            return;
-        }
-
-        $lines = DB::table('document_lines')->where('document_id', $id)->get();
-        $taxable = (float) $lines->sum('subtotal');
-        $vat = (float) $lines->sum(fn ($line) => ((float) $line->subtotal) * ((float) $line->vat_rate / 100));
-        $paid = (float) DB::table('document_payments')->where('document_id', $id)->sum('amount');
-        $pensionFund = round($taxable * ((float) ($document->pension_fund_pct ?? 0) / 100), 2);
-        $withholding = round($taxable * ((float) ($document->withholding_pct ?? 0) / 100), 2);
-        $bollo = (bool) $document->apply_bollo ? (float) ($document->bollo_amount ?? 0) : 0;
-        $total = round($taxable + $pensionFund + $vat + $bollo - $withholding, 2);
-
-        $status = $document->status;
-        if ($paid > 0 && $paid < $total) {
-            $status = 'partially_paid';
-        } elseif ($total > 0 && $paid >= $total) {
-            $status = 'paid';
-        }
-
-        DB::table('documents')->where('id', $id)->update([
-            'total_taxable' => round($taxable, 2),
-            'total_vat' => round($vat, 2),
-            'total_pension_fund' => $pensionFund,
-            'total_withholding' => $withholding,
-            'total_amount' => $total,
-            'total_paid' => round($paid, 2),
-            'status' => $status,
-            'updated_at' => now(),
-        ]);
-    }
 
     private function taskActivityRows($taskIds)
     {

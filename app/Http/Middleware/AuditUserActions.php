@@ -110,7 +110,7 @@ class AuditUserActions
         return Str::startsWith($routeName, [
             'clients.', 'projects.', 'tasks.', 'absences.', 'attendance.', 'documents.', 'document-messages.',
             'document-groups.', 'passwords.', 'favorites.', 'modules.', 'ai-agency.', 'updates.', 'updates-',
-            'billing.', 'users.', 'settings.', 'profile.',
+            'users.', 'settings.', 'profile.',
         ]);
     }
 }

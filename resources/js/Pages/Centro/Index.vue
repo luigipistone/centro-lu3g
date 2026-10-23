@@ -22,7 +22,6 @@ import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import {
     AlertTriangle,
     Archive,
-    Banknote,
     Bold,
     Briefcase,
     Building2,
@@ -55,7 +54,6 @@ import {
     Plus,
     Printer,
     Quote,
-    Receipt,
     RefreshCw,
     RotateCcw,
     Save,
@@ -68,7 +66,6 @@ import {
     UserPlus,
     UserRound,
     Users,
-    Wallet,
     X,
 } from '@lucide/vue';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
@@ -86,14 +83,11 @@ const props = defineProps({
     users: Array,
     taskDependencyOptions: Array,
     projectTemplates: Array,
-    billingStats: Object,
     clientStats: Object,
     clientArchive: Boolean,
-    documentSettings: Object,
     organizationOptions: Array,
     emailSettings: Object,
     figmaSettings: Object,
-    numberings: Array,
     backupRuns: Array,
     rolePermissionMatrix: Object,
     sectionAvailability: Array,
@@ -163,14 +157,13 @@ function sectionPermission(action) {
         projects: 'projects',
         tasks: 'tasks',
         calendar: 'tasks',
-        billing: 'billing',
         users: 'users',
         absences: 'absences',
         modules: 'modules',
     }[props.section];
 
     if (!area) return null;
-    if (['billing', 'users', 'absences', 'modules'].includes(area)) {
+    if (['users', 'absences', 'modules'].includes(area)) {
         return `${area}.${action === 'view' ? 'view' : 'manage'}`;
     }
 
@@ -186,9 +179,6 @@ const canCreate = computed(() => {
     const permission = sectionPermission('create');
     return permission ? hasPermission(permission) : false;
 });
-const billingSearch = ref('');
-const billingType = ref('all');
-const billingStatus = ref('all');
 const absenceStatus = ref('all');
 const absenceWorkspaceTab = ref(new URLSearchParams(window.location.search).get('tab') === 'reports' ? 'reports' : 'overview');
 const attendanceWeek = ref(0);
@@ -441,35 +431,6 @@ const updateCadenceOptions = [
     { value: 'monthly', label: 'Mensile' },
 ];
 
-const docSettingDefaults = {
-    company_name: 'Il Centro',
-    legal_form: '',
-    vat_number: '',
-    tax_code: '',
-    tax_regime: '',
-    street: '',
-    street_number: '',
-    postal_code: '',
-    city: '',
-    province: '',
-    country: 'IT',
-    email: '',
-    pec: '',
-    phone: '',
-    sdi_code: '',
-    iban: '',
-    bic_swift: '',
-    bank_name: '',
-    default_payment_method: '',
-    default_payment_terms_days: '',
-    default_withholding_pct: '',
-    default_pension_fund_label: '',
-    default_pension_fund_pct: '',
-    bollo_threshold: '',
-    bollo_amount: '',
-    bollo_charged_to_client: false,
-    footer_notes: '',
-};
 
 const emailSettingDefaults = {
     smtp_enabled: false,
@@ -497,7 +458,6 @@ const emailSettingsInitial = {
     pec_password_saved: toBoolean(props.emailSettings?.pec_password_saved),
 };
 
-const documentSettingsForm = useForm({ ...docSettingDefaults, ...(props.documentSettings || {}) });
 const emailSettingsForm = useForm({
     ...emailSettingsInitial,
     smtp_password: '',
@@ -514,7 +474,6 @@ const figmaSettingsForm = useForm({
     token_days_remaining: props.figmaSettings?.token_days_remaining ?? null,
 });
 const figmaTestForm = useForm({});
-const numberingRows = ref((props.numberings || []).map((row) => ({ ...row })));
 
 const routeBase = computed(() => {
     if (props.section === 'settings') return 'settings';
@@ -661,7 +620,6 @@ function projectCardChipStyle(project) {
 }
 const settingsTabs = [
     ['personalizzazione', 'Personalizzazione', Building2],
-    ['fatturazione', 'Fatturazione', Receipt],
     ['smtp', 'SMTP', Mail],
     ['figma', 'Figma', PanelsTopLeft],
     ['backup', 'Backup', DatabaseBackup],
@@ -709,7 +667,6 @@ const auditAreaLabels = {
     modules: 'Moduli',
     'ai-agency': 'Agenzia AI',
     updates: 'Aggiornamenti',
-    billing: 'Fatturazione',
     users: 'Utenti',
     settings: 'Impostazioni',
     profile: 'Profilo',
@@ -843,7 +800,6 @@ const createButtonLabel = computed(() => ({
     clients: 'Nuovo Cliente',
     projects: 'Nuovo Progetto',
     tasks: 'Nuovo Task',
-    billing: 'Nuovo documento',
     users: 'Nuovo utente',
     settings: 'Aggiungi servizio',
 }[props.section] || 'Nuovo'));
@@ -864,7 +820,7 @@ const modalPanelClass = computed(() => [
 
 const modalFormClass = computed(() => {
     if (props.section === 'tasks') return 'grid gap-3 p-5 md:grid-cols-6';
-    if (props.section === 'clients' || props.section === 'billing') return 'grid gap-4 p-5 md:grid-cols-3';
+    if (props.section === 'clients') return 'grid gap-4 p-5 md:grid-cols-3';
 
     return 'space-y-4 p-5';
 });
@@ -1632,26 +1588,6 @@ function submit() {
     });
 }
 
-function saveDocumentSettings() {
-    const payload = Object.keys(docSettingDefaults).reduce((values, key) => {
-        values[key] = documentSettingsForm[key] ?? docSettingDefaults[key];
-        return values;
-    }, {});
-
-    router.put(route('settings.document.update'), payload, {
-        preserveScroll: true,
-        onSuccess: () => {
-            Object.entries(payload).forEach(([key, value]) => {
-                documentSettingsForm[key] = value;
-            });
-            documentSettingsForm.defaults(payload);
-            documentSettingsForm.clearErrors();
-        },
-        onError: (errors) => {
-            documentSettingsForm.setError(errors);
-        },
-    });
-}
 
 function saveEmailSettings() {
     const hadNewSmtpPassword = Boolean(emailSettingsForm.smtp_password);
@@ -1715,14 +1651,6 @@ function testFigmaConnection() {
     figmaTestForm.post(route('settings.figma.test'), { preserveScroll: true });
 }
 
-function saveNumbering(row) {
-    router.put(route('settings.numbering.update', row.id), {
-        prefix: row.prefix || '',
-        format: row.format || '{prefix}{year}/{seq}',
-        current_seq: row.current_seq || 0,
-        yearly_reset: Boolean(row.yearly_reset),
-    }, { preserveScroll: true });
-}
 
 function runBackup() {
     router.post(route('settings.backup.run'), {}, { preserveScroll: true });
@@ -1878,7 +1806,7 @@ function executeDelete(row, action = null) {
 }
 
 function showRoute(row) {
-    if (!['clients', 'projects', 'tasks', 'billing', 'users'].includes(props.section)) return null;
+    if (!['clients', 'projects', 'tasks', 'users'].includes(props.section)) return null;
     return route(`${props.section}.show`, row.id);
 }
 
@@ -1914,23 +1842,6 @@ function priorityTextColor(priority) {
 
 const subtaskIconPath = 'M20,15c-1.9,0-3.4,1.3-3.9,3H7c-2.8,0-5-2.2-5-5v-3h14.1c0.4,1.7,2,3,3.9,3c2.2,0,4-1.8,4-4s-1.8-4-4-4 c-1.9,0-3.4,1.3-3.9,3H2V3c0-0.6-0.4-1-1-1S0,2.4,0,3v10c0,3.9,3.1,7,7,7h9.1c0.4,1.7,2,3,3.9,3c2.2,0,4-1.8,4-4S22.2,15,20,15z M20,7c1.1,0,2,0.9,2,2s-0.9,2-2,2s-2-0.9-2-2S18.9,7,20,7z M20,21c-1.1,0-2-0.9-2-2s0.9-2,2-2s2,0.9,2,2S21.1,21,20,21z';
 
-const documentTypeLabels = {
-    preventivo: 'Preventivo',
-    proforma: 'Proforma',
-    fattura: 'Fattura',
-    nota_credito: 'Nota credito',
-};
-
-const documentStatusLabels = {
-    draft: 'Bozza',
-    sent: 'Inviato',
-    accepted: 'Accettato',
-    rejected: 'Rifiutato',
-    paid: 'Pagato',
-    partially_paid: 'Parziale',
-    overdue: 'Scaduto',
-    cancelled: 'Annullato',
-};
 
 function activityText(activity) {
     return formatActivityText(activity, columnLabels);
@@ -1984,20 +1895,6 @@ function statusClass(status) {
     }[status] || 'bg-gray-100 text-gray-700';
 }
 
-const billingRows = computed(() => props.rows.filter((row) => {
-    const search = billingSearch.value.trim().toLowerCase();
-    const matchesSearch = !search
-        || (row.number || '').toLowerCase().includes(search)
-        || (row.client_name || '').toLowerCase().includes(search)
-        || (row.notes || '').toLowerCase().includes(search);
-    const matchesType = billingType.value === 'all' || row.doc_type === billingType.value;
-    const matchesStatus = billingStatus.value === 'all' || row.status === billingStatus.value;
-
-    return matchesSearch && matchesType && matchesStatus;
-}));
-
-const maxMonthly = computed(() => Math.max(1, ...((props.billingStats?.monthly || []).map((row) => Math.max(row.invoiced, row.paid)))));
-const maxTopClient = computed(() => Math.max(1, ...((props.billingStats?.topClients || []).map((row) => row.total))));
 const taskColumns = [
     ['todo', 'Da fare'],
     ['in_progress', 'In corso'],
@@ -6034,61 +5931,6 @@ function calendarDayStyle(sectionMonth, cell) {
                 </div>
 
                 <section v-if="settingsTab === 'personalizzazione'" class="grid gap-6 lg:grid-cols-[1fr_320px]">
-                    <form class="app-card" @submit.prevent="saveDocumentSettings">
-                        <h3 class="section-title"><span class="section-icon"><Building2 class="h-4 w-4" :stroke-width="1.7" /></span>Identità aziendale</h3>
-                        <p class="mt-1 text-sm text-gray-500">Questi dati alimentano intestazioni, PDF, XML e firme documentali.</p>
-                        <div class="mt-5 grid gap-4 md:grid-cols-2">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Ragione sociale *</label>
-                                <input v-model="documentSettingsForm.company_name" class="form-control" required />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Forma giuridica</label>
-                                <input v-model="documentSettingsForm.legal_form" class="form-control" />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Partita IVA</label>
-                                <input v-model="documentSettingsForm.vat_number" class="form-control" />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Codice fiscale</label>
-                                <input v-model="documentSettingsForm.tax_code" class="form-control" />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Email</label>
-                                <input v-model="documentSettingsForm.email" type="email" class="form-control" />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">PEC</label>
-                                <input v-model="documentSettingsForm.pec" type="email" class="form-control" />
-                            </div>
-                            <div class="md:col-span-2">
-                                <label class="block text-sm font-medium text-gray-700">Note footer documenti</label>
-                                <textarea v-model="documentSettingsForm.footer_notes" rows="4" class="form-control" />
-                            </div>
-                        </div>
-                        <button type="submit" class="btn btn-primary mt-5" :disabled="documentSettingsForm.processing">
-                            <Save class="h-4 w-4" :stroke-width="1.7" />
-                            Salva identità
-                        </button>
-                    </form>
-
-                    <aside class="app-card">
-                        <h3 class="section-title"><span class="section-icon"><Banknote class="h-4 w-4" :stroke-width="1.7" /></span>Indirizzo e banca</h3>
-                        <div class="mt-4 space-y-3">
-                            <input v-model="documentSettingsForm.street" class="form-control mt-0" placeholder="Via" />
-                            <div class="grid grid-cols-3 gap-3">
-                                <input v-model="documentSettingsForm.street_number" class="form-control mt-0" placeholder="N." />
-                                <input v-model="documentSettingsForm.postal_code" class="form-control mt-0" placeholder="CAP" />
-                                <input v-model="documentSettingsForm.province" class="form-control mt-0" placeholder="Prov." />
-                            </div>
-                            <input v-model="documentSettingsForm.city" class="form-control mt-0" placeholder="Città" />
-                            <input v-model="documentSettingsForm.country" class="form-control mt-0" placeholder="Paese" />
-                            <input v-model="documentSettingsForm.iban" class="form-control mt-0" placeholder="IBAN" />
-                            <input v-model="documentSettingsForm.bic_swift" class="form-control mt-0" placeholder="BIC/SWIFT" />
-                            <input v-model="documentSettingsForm.bank_name" class="form-control mt-0" placeholder="Banca" />
-                        </div>
-                    </aside>
                     <div class="grid gap-6 md:grid-cols-2 lg:col-span-2">
                         <section v-for="group in [{ type: 'office', title: 'Sedi di lavoro', singular: 'sede' }, { type: 'department', title: 'Reparti', singular: 'reparto' }]" :key="group.type" class="app-card">
                             <h3 class="section-title"><span class="section-icon"><Building2 v-if="group.type === 'office'" class="h-4 w-4" :stroke-width="1.7" /><Users v-else class="h-4 w-4" :stroke-width="1.7" /></span>{{ group.title }}</h3>
@@ -6116,92 +5958,6 @@ function calendarDayStyle(sectionMonth, cell) {
                     </div>
                 </section>
 
-                <section v-else-if="settingsTab === 'fatturazione'" class="space-y-6">
-                    <form class="app-card" @submit.prevent="saveDocumentSettings">
-                        <h3 class="section-title"><span class="section-icon"><Receipt class="h-4 w-4" :stroke-width="1.7" /></span>Default fatturazione</h3>
-                        <div class="mt-5 grid gap-4 md:grid-cols-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Regime fiscale</label>
-                                <input v-model="documentSettingsForm.tax_regime" class="form-control" placeholder="RF01" />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Pagamento default</label>
-                                <input v-model="documentSettingsForm.default_payment_method" class="form-control" placeholder="Bonifico" />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Termini pagamento</label>
-                                <input v-model="documentSettingsForm.default_payment_terms_days" type="number" class="form-control" />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Codice SDI</label>
-                                <input v-model="documentSettingsForm.sdi_code" class="form-control" />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Ritenuta %</label>
-                                <input v-model="documentSettingsForm.default_withholding_pct" type="number" step="0.01" class="form-control" />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Cassa label</label>
-                                <input v-model="documentSettingsForm.default_pension_fund_label" class="form-control" />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Cassa %</label>
-                                <input v-model="documentSettingsForm.default_pension_fund_pct" type="number" step="0.01" class="form-control" />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Telefono</label>
-                                <input v-model="documentSettingsForm.phone" class="form-control" />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Soglia bollo</label>
-                                <input v-model="documentSettingsForm.bollo_threshold" type="number" step="0.01" class="form-control" />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Importo bollo</label>
-                                <input v-model="documentSettingsForm.bollo_amount" type="number" step="0.01" class="form-control" />
-                            </div>
-                            <label class="mt-7 flex items-center gap-2 text-sm text-gray-700">
-                                <input v-model="documentSettingsForm.bollo_charged_to_client" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
-                                Bollo a carico cliente
-                            </label>
-                        </div>
-                        <button type="submit" class="btn btn-primary mt-5" :disabled="documentSettingsForm.processing">
-                            <Save class="h-4 w-4" :stroke-width="1.7" />
-                            Salva fatturazione
-                        </button>
-                    </form>
-
-                    <section class="app-card">
-                        <h3 class="section-title"><span class="section-icon"><FileText class="h-4 w-4" :stroke-width="1.7" /></span>Numerazioni</h3>
-                        <div class="mt-4 overflow-x-auto">
-                            <table class="min-w-full divide-y divide-gray-200 text-sm">
-                                <thead class="bg-gray-50">
-                                    <tr>
-                                        <th class="px-3 py-3 text-left font-semibold text-gray-600">Tipo</th>
-                                        <th class="px-3 py-3 text-left font-semibold text-gray-600">Anno</th>
-                                        <th class="px-3 py-3 text-left font-semibold text-gray-600">Prefisso</th>
-                                        <th class="px-3 py-3 text-left font-semibold text-gray-600">Formato</th>
-                                        <th class="px-3 py-3 text-left font-semibold text-gray-600">Progressivo</th>
-                                        <th class="px-3 py-3 text-left font-semibold text-gray-600">Reset</th>
-                                        <th class="px-3 py-3 text-right font-semibold text-gray-600">Azioni</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-gray-100">
-                                    <tr v-for="row in numberingRows" :key="row.id">
-                                        <td class="px-3 py-3">{{ documentTypeLabels[row.doc_type] || row.doc_type }}</td>
-                                        <td class="px-3 py-3">{{ row.year }}</td>
-                                        <td class="px-3 py-3"><input v-model="row.prefix" class="form-control mt-0 w-24" /></td>
-                                        <td class="px-3 py-3"><input v-model="row.format" class="form-control mt-0 min-w-56" /></td>
-                                        <td class="px-3 py-3"><input v-model="row.current_seq" type="number" class="form-control mt-0 w-28" /></td>
-                                        <td class="px-3 py-3"><input v-model="row.yearly_reset" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" /></td>
-                                        <td class="px-3 py-3 text-right"><button type="button" class="action-link" @click="saveNumbering(row)"><Save class="h-4 w-4" :stroke-width="1.7" />Salva</button></td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </section>
-
-                </section>
 
                 <section v-else-if="settingsTab === 'smtp'" class="space-y-6">
                     <form class="app-card" @submit.prevent="saveEmailSettings">
@@ -6590,177 +6346,6 @@ function calendarDayStyle(sectionMonth, cell) {
             </div>
         </div>
 
-        <div v-else-if="section === 'billing'" class="py-8">
-            <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
-                <div class="grid gap-4 md:grid-cols-4">
-                    <div
-                        v-for="card in [
-                            ['Fatturato anno', billingStats?.totalInvoiced, null, TrendingUp, 'bg-indigo-50 text-indigo-600'],
-                            ['Incassato anno', billingStats?.totalReceived, `${billingStats?.collectedPct || 0}% del fatturato`, Wallet, 'bg-emerald-50 text-emerald-600'],
-                            ['Da incassare', billingStats?.openAmount, null, Banknote, 'bg-amber-50 text-amber-700'],
-                            [`Scaduti (${billingStats?.overdueCount || 0})`, billingStats?.overdueAmount, 'Da sollecitare', AlertTriangle, 'bg-red-50 text-red-600'],
-                        ]"
-                        :key="card[0]"
-                        class="app-card flex items-center gap-4"
-                    >
-                        <span :class="['metric-icon', card[4]]">
-                            <component :is="card[3]" class="h-5 w-5" :stroke-width="1.7" />
-                        </span>
-                        <span class="min-w-0">
-                            <span class="block text-xs font-medium uppercase tracking-wide text-gray-500">{{ card[0] }}</span>
-                            <span class="mt-1 block text-2xl font-semibold text-gray-900">{{ money(card[1]) }}</span>
-                            <span v-if="card[2]" class="mt-0.5 block truncate text-xs text-gray-500">{{ card[2] }}</span>
-                        </span>
-                    </div>
-                </div>
-
-                <div class="grid gap-6 lg:grid-cols-[2fr_1fr]">
-                    <section class="app-card">
-                        <div class="mb-4 flex items-center justify-between">
-                            <h3 class="section-title"><span class="section-icon"><TrendingUp class="h-4 w-4" :stroke-width="1.7" /></span>Andamento mensile {{ billingStats?.year }}</h3>
-                            <span class="text-xs text-gray-500">Fatturato / incassato</span>
-                        </div>
-                        <div class="grid h-64 grid-cols-12 items-end gap-2 border-b border-gray-100 pb-2">
-                            <div v-for="month in billingStats?.monthly || []" :key="month.month" class="flex h-full flex-col justify-end gap-1">
-                                <div class="flex flex-1 items-end justify-center gap-1">
-                                    <div class="w-3 rounded-t bg-indigo-500" :style="{ height: `${Math.max(2, (month.invoiced / maxMonthly) * 100)}%` }"></div>
-                                    <div class="w-3 rounded-t bg-emerald-500" :style="{ height: `${Math.max(2, (month.paid / maxMonthly) * 100)}%` }"></div>
-                                </div>
-                                <div class="truncate text-center text-[10px] text-gray-500">{{ month.month }}</div>
-                            </div>
-                        </div>
-                        <div class="mt-3 flex gap-4 text-xs text-gray-500">
-                            <span class="inline-flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-indigo-500"></span>Fatturato</span>
-                            <span class="inline-flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-emerald-500"></span>Incassato</span>
-                        </div>
-                    </section>
-
-                    <section class="app-card">
-                        <h3 class="section-title"><span class="section-icon"><Users class="h-4 w-4" :stroke-width="1.7" /></span>Top clienti</h3>
-                        <div class="mt-4 space-y-4">
-                            <div v-for="client in billingStats?.topClients || []" :key="client.name">
-                                <div class="mb-1 flex justify-between gap-3 text-xs">
-                                    <span class="truncate font-medium text-gray-700">{{ client.name }}</span>
-                                    <span class="text-gray-500">{{ money(client.total) }}</span>
-                                </div>
-                                <div class="h-2 rounded-full bg-gray-100">
-                                    <div class="h-2 rounded-full bg-indigo-500" :style="{ width: `${Math.max(3, (client.total / maxTopClient) * 100)}%` }"></div>
-                                </div>
-                            </div>
-                            <p v-if="!billingStats?.topClients?.length" class="text-sm text-gray-500">Nessuna fattura nell'anno.</p>
-                        </div>
-                    </section>
-                </div>
-
-                <section class="app-card">
-                    <div class="mb-4 grid gap-3 md:grid-cols-[1fr_170px_170px_auto]">
-                        <ClearableSearchInput
-                            v-model="billingSearch"
-                            input-class="mt-0"
-                            placeholder="Cerca per numero, cliente o note..."
-                        />
-                        <AppSelect v-model="billingType" :options="objectOptions(documentTypeLabels, { value: 'all', label: 'Tutti i tipi' })" />
-                        <AppSelect v-model="billingStatus" :options="objectOptions(documentStatusLabels, { value: 'all', label: 'Tutti gli stati' })" />
-                        <button v-if="canCreate" type="button" class="btn btn-primary" @click="openCreate()"><Plus class="h-4 w-4" :stroke-width="1.7" />Nuovo documento</button>
-                    </div>
-
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200 text-sm">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-3 py-3 text-left font-semibold text-gray-600">Numero</th>
-                                    <th class="px-3 py-3 text-left font-semibold text-gray-600">Tipo</th>
-                                    <th class="px-3 py-3 text-left font-semibold text-gray-600">Cliente</th>
-                                    <th class="px-3 py-3 text-left font-semibold text-gray-600">Data</th>
-                                    <th class="px-3 py-3 text-left font-semibold text-gray-600">Scadenza</th>
-                                    <th class="px-3 py-3 text-right font-semibold text-gray-600">Totale</th>
-                                    <th class="px-3 py-3 text-right font-semibold text-gray-600">Pagato</th>
-                                    <th class="px-3 py-3 text-left font-semibold text-gray-600">Stato</th>
-                                    <th class="px-3 py-3 text-right font-semibold text-gray-600">Azioni</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-100">
-                                <tr v-for="row in billingRows" :key="row.id" class="hover:bg-gray-50">
-                                    <td class="px-3 py-3">
-                                        <Link :href="route('billing.show', row.id)" class="font-mono text-xs font-medium text-indigo-600">
-                                            {{ row.number || 'bozza' }}
-                                        </Link>
-                                    </td>
-                                    <td class="px-3 py-3">{{ documentTypeLabels[row.doc_type] || displayValue(row.doc_type) }}</td>
-                                    <td class="px-3 py-3">{{ row.client_name || '-' }}</td>
-                                    <td class="px-3 py-3">{{ dateIt(row.issue_date) }}</td>
-                                    <td class="px-3 py-3">{{ dateIt(row.due_date) }}</td>
-                                    <td class="px-3 py-3 text-right font-medium">{{ money(row.total_amount) }}</td>
-                                    <td class="px-3 py-3 text-right text-gray-500">{{ money(row.total_paid) }}</td>
-                                    <td class="px-3 py-3">
-                                        <span :class="['rounded-full px-2 py-1 text-xs font-medium', statusClass(row.status)]">{{ displayValue(row.status) }}</span>
-                                    </td>
-                                    <td class="whitespace-nowrap px-3 py-3 text-right">
-                                        <Link :href="route('billing.show', row.id)" class="action-link"><ExternalLink class="h-4 w-4" :stroke-width="1.7" />Apri</Link>
-                                        <button type="button" class="danger-link ml-4" @click="remove(row)"><Trash2 class="h-4 w-4" :stroke-width="1.7" />Elimina</button>
-                                    </td>
-                                </tr>
-                                <tr v-if="!billingRows.length">
-                                    <td colspan="9" class="px-4 py-8 text-center text-gray-500">Nessun documento trovato.</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
-
-                <section v-if="false" class="rounded-md bg-white p-5 shadow-sm">
-                    <div class="mb-4 flex items-center justify-between">
-                        <h3 class="font-semibold text-gray-900">{{ editing ? 'Modifica documento' : 'Nuovo documento' }}</h3>
-                        <button v-if="editing" type="button" class="text-sm text-gray-500 hover:text-gray-800" @click="resetForm">Annulla</button>
-                    </div>
-
-                    <form class="grid gap-4 md:grid-cols-3" @submit.prevent="submit">
-                        <div v-for="field in fields" :key="field.name" :class="field.type === 'textarea' ? 'md:col-span-3' : ''">
-                            <label class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
-                            <textarea v-if="field.type === 'textarea'" v-model="form[field.name]" rows="3" class="form-control" />
-                            <AppSelect
-                                v-else-if="['select', 'client', 'project', 'service'].includes(field.type)"
-                                v-model="form[field.name]"
-                                :options="fieldSelectOptions(field)"
-                                placeholder="Seleziona"
-                                searchable
-                            />
-                            <div v-else-if="field.type === 'user'" class="mt-2 flex flex-wrap gap-2">
-                                <button
-                                    v-if="!field.required"
-                                    type="button"
-                                    :class="personAvatarClass(!form[field.name])"
-                                    aria-label="Nessuna persona"
-                                    title="Nessuna persona"
-                                    @click="form[field.name] = ''"
-                                >
-                                    <span class="text-xs font-semibold">-</span>
-                                </button>
-                                <button
-                                    v-for="user in users"
-                                    :key="`${field.name}-${user.id}`"
-                                    type="button"
-                                    :class="personAvatarClass(form[field.name] === user.id)"
-                                    :aria-pressed="form[field.name] === user.id"
-                                    :aria-label="`Seleziona ${user.name || user.email}`"
-                                    :title="user.name || user.email"
-                                    @click="form[field.name] = user.id"
-                                >
-                                    <UserAvatar :user="user" size="md" />
-                                </button>
-                            </div>
-                            <input v-else v-model="form[field.name]" :type="field.type" class="form-control" :required="field.required" />
-                            <div v-if="form.errors[field.name]" class="mt-1 text-sm text-red-600">{{ form.errors[field.name] }}</div>
-                        </div>
-                        <div class="md:col-span-3">
-                            <button type="submit" class="inline-flex justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50" :disabled="form.processing">
-                                {{ editing ? 'Salva modifiche' : 'Crea documento' }}
-                            </button>
-                        </div>
-                    </form>
-                </section>
-            </div>
-        </div>
 
         <div v-else-if="isUpdatesSection" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">

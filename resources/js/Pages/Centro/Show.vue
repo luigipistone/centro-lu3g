@@ -231,10 +231,6 @@ const absenceHourOptions = Array.from({ length: 27 }, (_, index) => {
     const time = `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
     return { value: time, label: time };
 });
-const subscriptionFrequencyOptions = [
-    { value: 'month', label: 'Mese/i' },
-    { value: 'year', label: 'Anno/i' },
-];
 const completionEffectOptions = [
     { value: 'balloons', label: 'Palloncini' },
     { value: 'fireworks', label: "Fuochi d'artificio" },
@@ -415,14 +411,12 @@ function relatedSectionLabel(name) {
     return {
         projects: 'Progetti',
         tasks: 'Task',
-        documents: 'Documenti',
     }[name] || displayValue(name);
 }
 
 function relatedItemHref(name, item) {
     if (name === 'projects') return route('projects.show', item.id);
     if (name === 'tasks') return route('tasks.show', item.id);
-    if (name === 'documents') return route('billing.show', item.id);
 
     return '#';
 }
@@ -430,18 +424,11 @@ function relatedItemHref(name, item) {
 function relatedItemTitle(name, item) {
     if (name === 'projects') return item.name;
     if (name === 'tasks') return item.title;
-    if (name === 'documents') return item.number || docTypeLabel(item.doc_type);
 
     return item.number || item.action || item.content || '-';
 }
 
 function relatedItemMeta(name, item) {
-    if (name === 'documents') {
-        return [docTypeLabel(item.doc_type), item.status ? docStatusLabel(item.status) : null, item.issue_date ? dateIt(item.issue_date) : null]
-            .filter(Boolean)
-            .join(' - ');
-    }
-
     return item.status ? displayValue(item.status) : (item.created_at ? dateIt(item.created_at) : '-');
 }
 
@@ -541,53 +528,6 @@ const showAllTaskActivity = ref(false);
 const taskActionMenuOpen = ref(false);
 const taskActionMenuStyle = ref({});
 const clientRelatedTasksExpanded = ref(false);
-const lineForm = useForm({
-    description: '',
-    quantity: 1,
-    unit_price: 0,
-    vat_rate: 22,
-    discount_pct: 0,
-});
-const paymentForm = useForm({
-    amount: props.record.total_amount || 0,
-    paid_at: new Date().toISOString().slice(0, 10),
-    method: '',
-    notes: '',
-});
-const lineDrafts = ref({});
-const paymentDrafts = ref({});
-const lineAutosaveStates = ref({});
-const paymentAutosaveStates = ref({});
-const lineAutosaveErrors = ref({});
-const paymentAutosaveErrors = ref({});
-const lineAutosaveTimers = {};
-const paymentAutosaveTimers = {};
-const lineAutosaveSequences = {};
-const paymentAutosaveSequences = {};
-const documentForm = useForm({
-    issue_date: props.record.issue_date || new Date().toISOString().slice(0, 10),
-    due_date: props.record.due_date || '',
-    status: props.record.status || 'draft',
-    payment_method: props.record.payment_method || '',
-    payment_terms_days: props.record.payment_terms_days || '',
-    causale: props.record.causale || '',
-    notes: props.record.notes || '',
-    footer_notes: props.record.footer_notes || '',
-    withholding_pct: props.record.withholding_pct || 0,
-    pension_fund_pct: props.record.pension_fund_pct || 0,
-    pension_fund_label: props.record.pension_fund_label || '',
-});
-const documentAutosaveState = ref('idle');
-const documentAutosaveError = ref('');
-let documentAutosaveTimer = null;
-let documentAutosaveSequence = 0;
-const emailForm = useForm({
-    recipient: props.related?.client?.pec || props.related?.client?.email || '',
-    cc: '',
-    subject: '',
-    message: '',
-    include_xml: ['fattura', 'nota_credito'].includes(props.record.doc_type),
-});
 const contactForm = useForm({
     first_name: '',
     last_name: '',
@@ -634,25 +574,6 @@ const clientAutosaveState = ref('idle');
 const clientAutosaveError = ref('');
 let clientAutosaveTimer = null;
 let clientAutosaveSequence = 0;
-const subscriptionDefaults = {
-    name: '',
-    description: '',
-    amount: 0,
-    vat_rate: 22,
-    vat_nature_code: '',
-    frequency_value: 1,
-    frequency_unit: 'month',
-    start_date: new Date().toISOString().slice(0, 10),
-    end_date: '',
-    next_invoice_date: new Date().toISOString().slice(0, 10),
-    payment_terms_days: props.record.payment_terms_days || 30,
-    auto_generate: true,
-    active: true,
-    notes: '',
-};
-const subscriptionForm = useForm({ ...subscriptionDefaults });
-const subscriptionsOpen = ref(false);
-const editingSubscription = ref(null);
 const confirmAction = ref(null);
 const confirmText = ref('');
 const taskForm = useForm({
@@ -1641,142 +1562,11 @@ function saveSubtaskInline(subtask, delay = AUTOSAVE_IDLE_DELAY) {
     }, autosaveDelay(delay));
 }
 
-function addLine() {
-    lineForm.post(route('billing.lines.store', props.record.id), {
-        preserveScroll: true,
-        onSuccess: () => lineForm.reset(),
-    });
-}
-
-function removeLine(line) {
-    openConfirm({
-        title: 'Eliminare questa riga?',
-        description: line.description || 'Riga documento',
-        keyword: 'ELIMINA',
-        button: 'Elimina',
-        danger: true,
-        action: () => router.delete(route('billing.lines.destroy', [props.record.id, line.id]), { preserveScroll: true, onFinish: closeConfirm }),
-    });
-}
-
-function addPayment() {
-    paymentForm.post(route('billing.payments.store', props.record.id), {
-        preserveScroll: true,
-        onSuccess: () => paymentForm.reset(),
-    });
-}
-
-function removePayment(payment) {
-    openConfirm({
-        title: 'Eliminare questo pagamento?',
-        description: `${money(payment.amount)} del ${dateIt(payment.paid_at)}`,
-        keyword: 'ELIMINA',
-        button: 'Elimina',
-        danger: true,
-        action: () => router.delete(route('billing.payments.destroy', [props.record.id, payment.id]), { preserveScroll: true, onFinish: closeConfirm }),
-    });
-}
-
-function lineDraftPayload(lineId) {
-    const draft = lineDrafts.value[lineId] || {};
-    return {
-        description: draft.description || '',
-        quantity: draft.quantity ?? 0,
-        unit_price: draft.unit_price ?? 0,
-        vat_rate: draft.vat_rate ?? 0,
-        discount_pct: draft.discount_pct ?? 0,
-    };
-}
-
-function paymentDraftPayload(paymentId) {
-    const draft = paymentDrafts.value[paymentId] || {};
-    return {
-        amount: draft.amount ?? 0,
-        paid_at: draft.paid_at || new Date().toISOString().slice(0, 10),
-        method: draft.method || '',
-        notes: draft.notes || '',
-    };
-}
 
 function setInlineState(bucket, id, value) {
     bucket.value = { ...bucket.value, [id]: value };
 }
 
-function saveLineInline(line, delay = AUTOSAVE_IDLE_DELAY) {
-    if (props.section !== 'billing') return;
-
-    const payload = lineDraftPayload(line.id);
-    if (!String(payload.description).trim()) {
-        setInlineState(lineAutosaveStates, line.id, 'idle');
-        return;
-    }
-
-    window.clearTimeout(lineAutosaveTimers[line.id]);
-    setInlineState(lineAutosaveStates, line.id, 'queued');
-    setInlineState(lineAutosaveErrors, line.id, '');
-
-    lineAutosaveTimers[line.id] = window.setTimeout(() => {
-        const sequence = (lineAutosaveSequences[line.id] || 0) + 1;
-        lineAutosaveSequences[line.id] = sequence;
-        setInlineState(lineAutosaveStates, line.id, 'saving');
-        router.put(route('billing.lines.update', [props.record.id, line.id]), payload, {
-            preserveScroll: true,
-            preserveState: true,
-            onSuccess: () => {
-                if (sequence !== lineAutosaveSequences[line.id]) return;
-                setInlineState(lineAutosaveStates, line.id, 'saved');
-                window.setTimeout(() => {
-                    if (lineAutosaveStates.value[line.id] === 'saved') {
-                        setInlineState(lineAutosaveStates, line.id, 'idle');
-                    }
-                }, 1600);
-            },
-            onError: () => {
-                if (sequence !== lineAutosaveSequences[line.id]) return;
-                setInlineState(lineAutosaveStates, line.id, 'error');
-                setInlineState(lineAutosaveErrors, line.id, 'Non salvato');
-            },
-        });
-    }, autosaveDelay(delay));
-}
-
-function savePaymentInline(payment, delay = AUTOSAVE_IDLE_DELAY) {
-    if (props.section !== 'billing') return;
-
-    const payload = paymentDraftPayload(payment.id);
-    if (!payload.paid_at) {
-        setInlineState(paymentAutosaveStates, payment.id, 'idle');
-        return;
-    }
-
-    window.clearTimeout(paymentAutosaveTimers[payment.id]);
-    setInlineState(paymentAutosaveStates, payment.id, 'queued');
-    setInlineState(paymentAutosaveErrors, payment.id, '');
-
-    paymentAutosaveTimers[payment.id] = window.setTimeout(() => {
-        const sequence = (paymentAutosaveSequences[payment.id] || 0) + 1;
-        paymentAutosaveSequences[payment.id] = sequence;
-        setInlineState(paymentAutosaveStates, payment.id, 'saving');
-        router.put(route('billing.payments.update', [props.record.id, payment.id]), payload, {
-            preserveScroll: true,
-            preserveState: true,
-            onSuccess: () => {
-                if (sequence !== paymentAutosaveSequences[payment.id]) return;
-                setInlineState(paymentAutosaveStates, payment.id, 'saved');
-                window.setTimeout(() => {
-                    if (paymentAutosaveStates.value[payment.id] === 'saved') {
-                        setInlineState(paymentAutosaveStates, payment.id, 'idle');
-                    }
-                }, 1600);
-            },
-            onError: () => {
-                if (sequence !== paymentAutosaveSequences[payment.id]) return;
-                setInlineState(paymentAutosaveStates, payment.id, 'error');
-                setInlineState(paymentAutosaveErrors, payment.id, 'Non salvato');
-            },
-        });
-    }, autosaveDelay(delay));
-}
 
 function autosaveLabel(state, error = '') {
     if (state === 'queued') return 'In attesa';
@@ -1786,82 +1576,6 @@ function autosaveLabel(state, error = '') {
     return '';
 }
 
-function documentPayload() {
-    return {
-        issue_date: documentForm.issue_date,
-        due_date: documentForm.due_date,
-        status: documentForm.status,
-        payment_method: documentForm.payment_method,
-        payment_terms_days: documentForm.payment_terms_days,
-        causale: documentForm.causale,
-        notes: documentForm.notes,
-        footer_notes: documentForm.footer_notes,
-        withholding_pct: documentForm.withholding_pct,
-        pension_fund_pct: documentForm.pension_fund_pct,
-        pension_fund_label: documentForm.pension_fund_label,
-    };
-}
-
-function saveDocumentInline(delay = AUTOSAVE_IDLE_DELAY) {
-    if (props.section !== 'billing') return;
-
-    window.clearTimeout(documentAutosaveTimer);
-    documentAutosaveState.value = 'queued';
-    documentAutosaveError.value = '';
-
-    documentAutosaveTimer = window.setTimeout(() => {
-        const sequence = ++documentAutosaveSequence;
-        documentAutosaveState.value = 'saving';
-        documentForm.transform(() => documentPayload()).put(route('billing.header.update', props.record.id), {
-            preserveScroll: true,
-            preserveState: true,
-            onSuccess: () => {
-                if (sequence !== documentAutosaveSequence) return;
-                documentAutosaveState.value = 'saved';
-                window.setTimeout(() => {
-                    if (documentAutosaveState.value === 'saved') {
-                        documentAutosaveState.value = 'idle';
-                    }
-                }, 1800);
-            },
-            onError: () => {
-                if (sequence !== documentAutosaveSequence) return;
-                documentAutosaveState.value = 'error';
-                documentAutosaveError.value = 'Non salvato';
-            },
-            onFinish: () => {
-                documentForm.transform((data) => data);
-            },
-        });
-    }, autosaveDelay(delay));
-}
-
-function issueDocument() {
-    openConfirm({
-        title: 'Emettere il documento?',
-        description: 'Verrà assegnato il numero progressivo e il documento non resterà più una semplice bozza.',
-        keyword: 'EMETTI',
-        button: 'Emetti',
-        danger: false,
-        action: () => router.post(route('billing.issue', props.record.id), {}, { preserveScroll: true, onFinish: closeConfirm }),
-    });
-}
-
-function duplicateDocument() {
-    router.post(route('billing.duplicate', props.record.id));
-}
-
-function convertDocument(type) {
-    router.post(route('billing.convert', [props.record.id, type]));
-}
-
-function printDocument() {
-    window.print();
-}
-
-function sendDocumentEmail() {
-    emailForm.post(route('billing.email', props.record.id), { preserveScroll: true });
-}
 
 function addContact() {
     if (!canEditClient.value) return;
@@ -2610,62 +2324,6 @@ function deleteProjectFromDetail() {
     });
 }
 
-function resetSubscriptionForm() {
-    if (!canEditClient.value) return;
-    editingSubscription.value = null;
-    subscriptionForm.clearErrors();
-    subscriptionForm.defaults({ ...subscriptionDefaults });
-    subscriptionForm.reset();
-    Object.assign(subscriptionForm, { ...subscriptionDefaults });
-}
-
-function editSubscription(subscription) {
-    if (!canEditClient.value) return;
-    subscriptionsOpen.value = true;
-    editingSubscription.value = subscription;
-    subscriptionForm.clearErrors();
-    Object.keys(subscriptionDefaults).forEach((key) => {
-        subscriptionForm[key] = subscription[key] ?? subscriptionDefaults[key];
-    });
-}
-
-function saveSubscription() {
-    if (!canEditClient.value) return;
-    if (editingSubscription.value) {
-        subscriptionForm.put(route('clients.subscriptions.update', [props.record.id, editingSubscription.value.id]), {
-            preserveScroll: true,
-            onSuccess: resetSubscriptionForm,
-        });
-        return;
-    }
-
-    subscriptionForm.post(route('clients.subscriptions.store', props.record.id), {
-        preserveScroll: true,
-        onSuccess: resetSubscriptionForm,
-    });
-}
-
-function toggleSubscription(subscription) {
-    if (!canEditClient.value) return;
-    router.patch(route('clients.subscriptions.active', [props.record.id, subscription.id]), { active: !subscription.active }, { preserveScroll: true });
-}
-
-function generateSubscription(subscription) {
-    if (!canEditClient.value) return;
-    router.post(route('clients.subscriptions.generate', [props.record.id, subscription.id]));
-}
-
-function removeSubscription(subscription) {
-    if (!canEditClient.value) return;
-    openConfirm({
-        title: 'Eliminare questo abbonamento?',
-        description: subscription.name || 'Abbonamento',
-        keyword: 'ELIMINA',
-        button: 'Elimina',
-        danger: true,
-        action: () => router.delete(route('clients.subscriptions.destroy', [props.record.id, subscription.id]), { preserveScroll: true, onFinish: closeConfirm }),
-    });
-}
 
 function openConfirm(action) {
     if (isSuperadmin.value && action?.danger && action?.keyword === 'ELIMINA') {
@@ -3784,11 +3442,6 @@ function addSubtask() {
     });
 }
 
-function paymentTermsLabel(days) {
-    if (days === null || days === undefined || days === '') return null;
-    if (Number(days) === 0) return 'A vista';
-    return `${days} giorni`;
-}
 
 function fullClientAddress(record) {
     return [
@@ -3798,50 +3451,12 @@ function fullClientAddress(record) {
     ].filter(Boolean).join(' - ') || record.address;
 }
 
-function subscriptionFrequency(subscription) {
-    const unit = subscription.frequency_unit === 'year' ? 'anno' : 'mese';
-    const plural = Number(subscription.frequency_value) > 1 ? (subscription.frequency_unit === 'year' ? 'anni' : 'mesi') : unit;
-    return `ogni ${subscription.frequency_value} ${plural}`;
-}
 
 function activityText(activity) {
     return formatActivityText(activity, labels);
 }
 
-function docTypeLabel(type) {
-    return {
-        preventivo: 'Preventivo',
-        proforma: 'Proforma',
-        fattura: 'Fattura',
-        nota_credito: 'Nota credito',
-    }[type] || type;
-}
 
-function docStatusLabel(status) {
-    return {
-        draft: 'Bozza',
-        sent: 'Inviato',
-        accepted: 'Accettato',
-        rejected: 'Rifiutato',
-        paid: 'Pagato',
-        partially_paid: 'Parziale',
-        overdue: 'Scaduto',
-        cancelled: 'Annullato',
-    }[status] || status;
-}
-
-function statusClass(status) {
-    return {
-        draft: 'bg-gray-100 text-gray-700',
-        sent: 'bg-sky-100 text-sky-700',
-        accepted: 'bg-indigo-100 text-indigo-700',
-        rejected: 'bg-red-100 text-red-700',
-        paid: 'bg-emerald-100 text-emerald-700',
-        partially_paid: 'bg-amber-100 text-amber-700',
-        overdue: 'bg-rose-100 text-rose-700',
-        cancelled: 'bg-slate-100 text-slate-600',
-    }[status] || 'bg-gray-100 text-gray-700';
-}
 
 function remainingAmount() {
     return Number(props.record.total_amount || 0) - Number(props.record.total_paid || 0);
@@ -3969,60 +3584,6 @@ watch(
     () => saveClientInline(),
 );
 
-watch(
-    () => [
-        documentForm.issue_date,
-        documentForm.due_date,
-        documentForm.status,
-        documentForm.payment_method,
-        documentForm.payment_terms_days,
-        documentForm.causale,
-        documentForm.notes,
-        documentForm.footer_notes,
-        documentForm.withholding_pct,
-        documentForm.pension_fund_pct,
-        documentForm.pension_fund_label,
-    ],
-    () => saveDocumentInline(),
-);
-
-watch(
-    () => props.related?.lines || [],
-    (lines) => {
-        const next = {};
-        for (const line of lines) {
-            next[line.id] = {
-                ...(lineDrafts.value[line.id] || {}),
-                description: line.description || '',
-                quantity: line.quantity ?? 0,
-                unit_price: line.unit_price ?? 0,
-                vat_rate: line.vat_rate ?? 0,
-                discount_pct: line.discount_pct ?? 0,
-                subtotal: line.subtotal ?? 0,
-            };
-        }
-        lineDrafts.value = next;
-    },
-    { immediate: true },
-);
-
-watch(
-    () => props.related?.payments || [],
-    (payments) => {
-        const next = {};
-        for (const payment of payments) {
-            next[payment.id] = {
-                ...(paymentDrafts.value[payment.id] || {}),
-                amount: payment.amount ?? 0,
-                paid_at: payment.paid_at || '',
-                method: payment.method || '',
-                notes: payment.notes || '',
-            };
-        }
-        paymentDrafts.value = next;
-    },
-    { immediate: true },
-);
 
 watch(
     () => props.related?.contacts || [],
@@ -4298,328 +3859,8 @@ onUnmounted(() => {
         </div>
 
         <div class="detail-page py-8">
-            <div v-if="section === 'billing'" class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
-                <div class="flex flex-wrap items-start justify-between gap-4 rounded-md bg-white p-5 shadow-sm">
-                    <div>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <h2 class="text-xl font-semibold text-gray-900">{{ docTypeLabel(record.doc_type) }}</h2>
-                            <span class="font-mono text-sm text-gray-500">{{ record.number || 'bozza' }}</span>
-                            <span :class="['rounded-full px-2 py-1 text-xs font-medium', statusClass(record.status)]">{{ docStatusLabel(record.status) }}</span>
-                        </div>
-                        <p class="mt-1 text-sm text-gray-500">
-                            {{ related.client?.legal_name || related.client?.name || 'Cliente' }} · {{ dateIt(record.issue_date) }}
-                        </p>
-                    </div>
-                    <div class="flex flex-wrap gap-2">
-                        <div
-                            v-if="documentAutosaveState !== 'idle'"
-                            :class="[
-                                'inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold transition',
-                                documentAutosaveState === 'saving' || documentAutosaveState === 'queued' ? 'bg-sky-50 text-sky-700' : '',
-                                documentAutosaveState === 'saved' ? 'bg-emerald-50 text-emerald-700' : '',
-                                documentAutosaveState === 'error' ? 'bg-red-50 text-red-700' : '',
-                            ]"
-                        >
-                            <span v-if="documentAutosaveState === 'queued'">In attesa...</span>
-                            <span v-else-if="documentAutosaveState === 'saving'">Salvataggio...</span>
-                            <span v-else-if="documentAutosaveState === 'saved'">Salvato</span>
-                            <span v-else>{{ documentAutosaveError || 'Errore salvataggio' }}</span>
-                        </div>
-                        <button v-if="!record.number" type="button" class="btn border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100" @click="issueDocument"><Send class="h-4 w-4" :stroke-width="1.7" />Emetti</button>
-                        <a :href="route('billing.pdf', record.id)" class="btn btn-outline"><Download class="h-4 w-4" :stroke-width="1.7" />PDF</a>
-                        <a v-if="['fattura', 'nota_credito'].includes(record.doc_type)" :href="route('billing.xml', record.id)" class="btn btn-outline"><FileText class="h-4 w-4" :stroke-width="1.7" />XML</a>
-                        <button type="button" class="btn btn-outline" @click="printDocument"><Printer class="h-4 w-4" :stroke-width="1.7" />Stampa</button>
-                        <button type="button" class="btn btn-outline" @click="duplicateDocument"><Copy class="h-4 w-4" :stroke-width="1.7" />Duplica</button>
-                        <button v-if="record.doc_type === 'preventivo'" type="button" class="btn btn-outline" @click="convertDocument('fattura')">Converti fattura</button>
-                        <button v-if="record.doc_type === 'proforma'" type="button" class="btn btn-outline" @click="convertDocument('fattura')">Converti fattura</button>
-                        <button v-if="record.doc_type === 'fattura'" type="button" class="btn btn-outline" @click="convertDocument('nota_credito')">Nota credito</button>
-                    </div>
-                </div>
 
-                <div class="grid gap-6 lg:grid-cols-[1fr_340px]">
-                    <div class="space-y-6">
-                        <section class="surface rounded-md p-5">
-                            <div class="mb-4">
-                                <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Dati documento</h3>
-                                <p class="mt-1 text-sm text-gray-500">Le modifiche ai dati documento si salvano automaticamente.</p>
-                            </div>
-                            <div class="grid gap-4 md:grid-cols-3">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Data emissione</label>
-                                    <AppDateInput v-model="documentForm.issue_date" @change="saveDocumentInline(0)" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Scadenza</label>
-                                    <AppDateInput v-model="documentForm.due_date" @change="saveDocumentInline(0)" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Stato</label>
-                                    <AppSelect v-model="documentForm.status" :options="documentStatusOptions" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Termini pagamento</label>
-                                    <input v-model="documentForm.payment_terms_days" type="number" min="0" class="form-control" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Metodo pagamento</label>
-                                    <input v-model="documentForm.payment_method" class="form-control" placeholder="Bonifico, MP05..." />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Cassa previdenziale %</label>
-                                    <input v-model="documentForm.pension_fund_pct" type="number" step="0.01" min="0" class="form-control" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Ritenuta %</label>
-                                    <input v-model="documentForm.withholding_pct" type="number" step="0.01" min="0" class="form-control" />
-                                </div>
-                                <div class="md:col-span-2">
-                                    <label class="block text-sm font-medium text-gray-700">Causale</label>
-                                    <input v-model="documentForm.causale" class="form-control" />
-                                </div>
-                                <div class="md:col-span-3">
-                                    <label class="block text-sm font-medium text-gray-700">Note interne</label>
-                                    <textarea v-model="documentForm.notes" rows="2" class="form-control"></textarea>
-                                </div>
-                                <div class="md:col-span-3">
-                                    <label class="block text-sm font-medium text-gray-700">Note visibili al cliente</label>
-                                    <textarea v-model="documentForm.footer_notes" rows="3" class="form-control"></textarea>
-                                </div>
-                            </div>
-                        </section>
-
-                        <section class="surface rounded-md p-5">
-                            <div class="mb-5 flex items-center justify-between">
-                                <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Righe documento</h3>
-                                <div class="text-sm font-semibold text-gray-900">{{ money(record.total_amount) }}</div>
-                            </div>
-                            <form class="mb-5 grid gap-3 md:grid-cols-[1fr_90px_120px_90px_90px_auto]" @submit.prevent="addLine">
-                                <input v-model="lineForm.description" class="form-control mt-0" placeholder="Descrizione" required />
-                                <input v-model="lineForm.quantity" class="form-control mt-0" type="number" step="0.01" min="0" required />
-                                <input v-model="lineForm.unit_price" class="form-control mt-0" type="number" step="0.01" min="0" required />
-                                <input v-model="lineForm.vat_rate" class="form-control mt-0" type="number" step="0.01" min="0" required />
-                                <input v-model="lineForm.discount_pct" class="form-control mt-0" type="number" step="0.01" min="0" max="100" />
-                                <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
-                            </form>
-                            <div class="overflow-x-auto">
-                                <table class="min-w-full divide-y divide-gray-200 text-sm">
-                                    <thead class="bg-gray-50">
-                                        <tr>
-                                            <th class="px-3 py-2 text-left">Descrizione</th>
-                                            <th class="px-3 py-2 text-right">Qta</th>
-                                            <th class="px-3 py-2 text-right">Prezzo</th>
-                                            <th class="px-3 py-2 text-right">Sconto</th>
-                                            <th class="px-3 py-2 text-right">IVA</th>
-                                            <th class="px-3 py-2 text-right">Subtotale</th>
-                                            <th class="px-3 py-2"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-gray-100">
-                                        <tr v-for="line in related.lines" :key="line.id" class="align-top">
-                                            <td class="min-w-[260px] px-3 py-2">
-                                                <input
-                                                    v-if="lineDrafts[line.id]"
-                                                    v-model="lineDrafts[line.id].description"
-                                                    class="form-control mt-0"
-                                                    @input="saveLineInline(line)"
-                                                />
-                                                <div v-if="lineAutosaveStates[line.id] && lineAutosaveStates[line.id] !== 'idle'" :class="['mt-1 text-[11px] font-medium', lineAutosaveStates[line.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
-                                                    {{ autosaveLabel(lineAutosaveStates[line.id], lineAutosaveErrors[line.id]) }}
-                                                </div>
-                                            </td>
-                                            <td class="w-24 px-3 py-2">
-                                                <input
-                                                    v-if="lineDrafts[line.id]"
-                                                    v-model="lineDrafts[line.id].quantity"
-                                                    class="form-control mt-0 text-right"
-                                                    type="number"
-                                                    step="0.01"
-                                                    min="0"
-                                                    @input="saveLineInline(line)"
-                                                />
-                                            </td>
-                                            <td class="w-32 px-3 py-2">
-                                                <input
-                                                    v-if="lineDrafts[line.id]"
-                                                    v-model="lineDrafts[line.id].unit_price"
-                                                    class="form-control mt-0 text-right"
-                                                    type="number"
-                                                    step="0.01"
-                                                    min="0"
-                                                    @input="saveLineInline(line)"
-                                                />
-                                            </td>
-                                            <td class="w-24 px-3 py-2">
-                                                <input
-                                                    v-if="lineDrafts[line.id]"
-                                                    v-model="lineDrafts[line.id].discount_pct"
-                                                    class="form-control mt-0 text-right"
-                                                    type="number"
-                                                    step="0.01"
-                                                    min="0"
-                                                    max="100"
-                                                    @input="saveLineInline(line)"
-                                                />
-                                            </td>
-                                            <td class="w-24 px-3 py-2">
-                                                <input
-                                                    v-if="lineDrafts[line.id]"
-                                                    v-model="lineDrafts[line.id].vat_rate"
-                                                    class="form-control mt-0 text-right"
-                                                    type="number"
-                                                    step="0.01"
-                                                    min="0"
-                                                    @input="saveLineInline(line)"
-                                                />
-                                            </td>
-                                            <td class="px-3 py-2 text-right font-medium text-gray-900">{{ money(line.subtotal) }}</td>
-                                            <td class="px-3 py-2 text-right">
-                                                <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-md text-red-600 transition hover:bg-red-50 hover:text-red-700" aria-label="Elimina riga" @click="removeLine(line)">
-                                                    <Trash2 class="h-4 w-4" :stroke-width="1.7" />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                        <tr v-if="!related.lines?.length">
-                                            <td colspan="7" class="px-3 py-8 text-center text-gray-500">Nessuna riga.</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </section>
-
-                        <section class="surface rounded-md p-5">
-                            <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Pagamenti</h3>
-                            <form class="mb-5 grid gap-3 md:grid-cols-[120px_150px_1fr_auto]" @submit.prevent="addPayment">
-                                <input v-model="paymentForm.amount" class="form-control mt-0" type="number" step="0.01" min="0" required />
-                                <AppDateInput v-model="paymentForm.paid_at" />
-                                <input v-model="paymentForm.method" class="form-control mt-0" placeholder="Metodo" />
-                                <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Registra</button>
-                            </form>
-                            <div class="space-y-2">
-                                <div v-for="payment in related.payments" :key="payment.id" class="grid gap-2 rounded-md border border-gray-100 bg-gray-50 p-3 text-sm transition hover:border-indigo-100 hover:bg-white sm:grid-cols-[120px_150px_1fr_auto]">
-                                    <input
-                                        v-if="paymentDrafts[payment.id]"
-                                        v-model="paymentDrafts[payment.id].amount"
-                                        class="form-control mt-0 text-right"
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
-                                        @input="savePaymentInline(payment)"
-                                    />
-                                    <AppDateInput
-                                        v-if="paymentDrafts[payment.id]"
-                                        v-model="paymentDrafts[payment.id].paid_at"
-                                        @change="savePaymentInline(payment, 0)"
-                                    />
-                                    <div class="space-y-1">
-                                        <input
-                                            v-if="paymentDrafts[payment.id]"
-                                            v-model="paymentDrafts[payment.id].method"
-                                            class="form-control mt-0"
-                                            placeholder="Metodo"
-                                            @input="savePaymentInline(payment)"
-                                        />
-                                        <input
-                                            v-if="paymentDrafts[payment.id]"
-                                            v-model="paymentDrafts[payment.id].notes"
-                                            class="form-control mt-0 text-xs"
-                                            placeholder="Note pagamento"
-                                            @input="savePaymentInline(payment)"
-                                        />
-                                        <div v-if="paymentAutosaveStates[payment.id] && paymentAutosaveStates[payment.id] !== 'idle'" :class="['text-[11px] font-medium', paymentAutosaveStates[payment.id] === 'error' ? 'text-red-600' : 'text-gray-400']">
-                                            {{ autosaveLabel(paymentAutosaveStates[payment.id], paymentAutosaveErrors[payment.id]) }}
-                                        </div>
-                                    </div>
-                                    <button type="button" class="inline-flex h-9 w-9 items-center justify-center justify-self-end rounded-md text-red-600 transition hover:bg-red-50 hover:text-red-700" aria-label="Elimina pagamento" @click="removePayment(payment)">
-                                        <Trash2 class="h-4 w-4" :stroke-width="1.7" />
-                                    </button>
-                                </div>
-                                <p v-if="!related.payments?.length" class="text-sm text-gray-500">Nessun pagamento registrato.</p>
-                            </div>
-                        </section>
-                    </div>
-
-                    <aside class="space-y-6">
-                        <section class="surface rounded-md p-5">
-                            <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Riepilogo</h3>
-                            <div class="space-y-2 text-sm">
-                                <div class="flex justify-between"><span>Imponibile</span><span>{{ money(record.total_taxable) }}</span></div>
-                                <div class="flex justify-between"><span>IVA</span><span>{{ money(record.total_vat) }}</span></div>
-                                <div class="flex justify-between"><span>Cassa</span><span>{{ money(record.total_pension_fund) }}</span></div>
-                                <div class="flex justify-between"><span>Ritenuta</span><span class="text-red-600">-{{ money(record.total_withholding) }}</span></div>
-                                <div class="my-3 border-t border-gray-100"></div>
-                                <div class="flex justify-between text-lg font-semibold"><span>Totale</span><span>{{ money(record.total_amount) }}</span></div>
-                                <div class="flex justify-between"><span>Pagato</span><span>{{ money(record.total_paid) }}</span></div>
-                                <div class="flex justify-between font-semibold"><span>Residuo</span><span :class="remainingAmount() > 0 ? 'text-red-600' : 'text-emerald-600'">{{ money(remainingAmount()) }}</span></div>
-                            </div>
-                        </section>
-
-                        <section class="surface rounded-md p-5">
-                            <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Anteprima</h3>
-                            <div class="rounded-md border border-gray-200 bg-white p-5 text-sm">
-                                <div class="flex justify-between gap-4">
-                                    <div>
-                                        <div class="font-semibold text-gray-900">Centro LU3G</div>
-                                        <div class="text-xs text-gray-500">Documento commerciale</div>
-                                    </div>
-                                    <div class="text-right">
-                                        <div class="font-semibold text-gray-900">{{ docTypeLabel(record.doc_type) }}</div>
-                                        <div class="font-mono text-xs text-gray-500">{{ record.number || 'bozza' }}</div>
-                                    </div>
-                                </div>
-                                <div class="mt-6 rounded-md bg-gray-50 p-3">
-                                    <div class="text-xs uppercase tracking-wide text-gray-400">Cliente</div>
-                                    <div class="mt-1 font-medium text-gray-900">{{ related.client?.legal_name || related.client?.name }}</div>
-                                    <div class="text-xs text-gray-500">{{ related.client?.vat_number || related.client?.tax_code || '' }}</div>
-                                </div>
-                                <div class="mt-5 space-y-2">
-                                    <div v-for="line in related.lines?.slice(0, 4)" :key="line.id" class="flex justify-between gap-3 border-b border-gray-100 pb-2">
-                                        <span class="truncate">{{ line.description }}</span>
-                                        <span class="font-medium">{{ money(Number(line.subtotal) + (Number(line.subtotal) * Number(line.vat_rate || 0) / 100)) }}</span>
-                                    </div>
-                                    <div v-if="related.lines?.length > 4" class="text-xs text-gray-500">altre {{ related.lines.length - 4 }} righe...</div>
-                                </div>
-                                <div class="mt-5 flex justify-between border-t border-gray-200 pt-3 text-base font-semibold">
-                                    <span>Totale</span>
-                                    <span>{{ money(record.total_amount) }}</span>
-                                </div>
-                            </div>
-                        </section>
-
-                        <section class="surface rounded-md p-5">
-                            <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Invio email</h3>
-                            <form class="space-y-3" @submit.prevent="sendDocumentEmail">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Destinatario</label>
-                                    <input v-model="emailForm.recipient" type="email" class="form-control" required />
-                                    <div v-if="emailForm.errors.recipient" class="mt-1 text-sm text-red-600">{{ emailForm.errors.recipient }}</div>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">CC</label>
-                                    <input v-model="emailForm.cc" class="form-control" placeholder="email1, email2" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Oggetto</label>
-                                    <input v-model="emailForm.subject" class="form-control" :placeholder="`${docTypeLabel(record.doc_type)} ${record.number || 'bozza'}`" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Messaggio</label>
-                                    <textarea v-model="emailForm.message" rows="4" class="form-control" placeholder="Messaggio opzionale..."></textarea>
-                                </div>
-                                <label v-if="['fattura', 'nota_credito'].includes(record.doc_type)" class="flex items-center gap-2 text-sm text-gray-700">
-                                    <input v-model="emailForm.include_xml" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
-                                    Allega XML
-                                </label>
-                                <p class="text-xs text-gray-500">Viene sempre allegato il PDF. L'invio usa il mailer configurato in Laravel/Plesk.</p>
-                                <button type="submit" class="inline-flex w-full justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50" :disabled="emailForm.processing">
-                                    Invia documento
-                                </button>
-                            </form>
-                        </section>
-                    </aside>
-                </div>
-            </div>
-
-            <div v-else :class="['mx-auto grid max-w-[1600px] grid-cols-1 gap-6 px-4 sm:px-6 lg:px-8', section === 'users' ? 'lg:grid-cols-[minmax(0,1fr)]' : 'lg:grid-cols-[minmax(0,1fr)_360px]']">
+            <div :class="['mx-auto grid max-w-[1600px] grid-cols-1 gap-6 px-4 sm:px-6 lg:px-8', section === 'users' ? 'lg:grid-cols-[minmax(0,1fr)]' : 'lg:grid-cols-[minmax(0,1fr)_360px]']">
                 <section v-if="section === 'clients'" class="space-y-6">
                     <div class="flex justify-end">
                         <button type="button" role="switch" :aria-checked="clientActive" :disabled="!canEditClient || clientActiveSaving" class="inline-flex items-center gap-3 text-sm font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-60" @click="setClientActive">
@@ -4902,139 +4143,6 @@ onUnmounted(() => {
                         </p>
                     </section>
 
-                    <section class="surface rounded-md p-5">
-                        <div
-                            class="mb-5 flex cursor-pointer flex-wrap items-center justify-between gap-3 rounded-[var(--radius-sm)] px-1 py-1 transition hover:bg-gray-50"
-                            role="button"
-                            tabindex="0"
-                            :aria-expanded="subscriptionsOpen"
-                            @click="subscriptionsOpen = !subscriptionsOpen"
-                            @keydown.enter.prevent="subscriptionsOpen = !subscriptionsOpen"
-                            @keydown.space.prevent="subscriptionsOpen = !subscriptionsOpen"
-                        >
-                            <div>
-                                <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Abbonamenti</h3>
-                                <p class="mt-1 text-sm text-gray-500">{{ related.subscriptions?.length || 0 }} ricorrenze collegate al cliente</p>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <button v-if="canEditClient && editingSubscription" type="button" class="text-sm font-medium text-gray-500 hover:text-gray-800" @click.stop="resetSubscriptionForm">
-                                    Annulla modifica
-                                </button>
-                                <span class="icon-btn pointer-events-none h-9 w-9">
-                                    <ChevronDown :class="['h-4 w-4 transition-transform', subscriptionsOpen ? 'rotate-180' : '']" :stroke-width="1.8" />
-                                </span>
-                            </div>
-                        </div>
-
-                        <div v-show="subscriptionsOpen" class="space-y-5">
-                        <form v-if="canEditClient" class="grid gap-3 rounded-md border border-gray-100 bg-gray-50 p-4 md:grid-cols-4" @submit.prevent="saveSubscription">
-                            <div class="md:col-span-2">
-                                <label class="block text-sm font-medium text-gray-700">Nome *</label>
-                                <input v-model="subscriptionForm.name" class="form-control" required />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Importo</label>
-                                <input v-model="subscriptionForm.amount" type="number" step="0.01" min="0" class="form-control" required />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">IVA %</label>
-                                <input v-model="subscriptionForm.vat_rate" type="number" step="0.01" min="0" class="form-control" required />
-                            </div>
-                            <div class="md:col-span-2">
-                                <label class="block text-sm font-medium text-gray-700">Descrizione riga fattura</label>
-                                <input v-model="subscriptionForm.description" class="form-control" />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Ogni</label>
-                                <input v-model="subscriptionForm.frequency_value" type="number" min="1" class="form-control" required />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Unita'</label>
-                                <AppSelect v-model="subscriptionForm.frequency_unit" :options="subscriptionFrequencyOptions" />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Inizio</label>
-                                <AppDateInput v-model="subscriptionForm.start_date" />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Fine</label>
-                                <AppDateInput v-model="subscriptionForm.end_date" />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Prossima emissione</label>
-                                <AppDateInput v-model="subscriptionForm.next_invoice_date" />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Termini pagamento</label>
-                                <input v-model="subscriptionForm.payment_terms_days" type="number" min="0" class="form-control" />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Natura IVA</label>
-                                <input v-model="subscriptionForm.vat_nature_code" class="form-control" placeholder="N2.2, N4..." />
-                            </div>
-                            <div class="flex items-end gap-4">
-                                <label class="mb-2 flex items-center gap-2 text-sm text-gray-700">
-                                    <input v-model="subscriptionForm.auto_generate" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
-                                    Auto
-                                </label>
-                                <label class="mb-2 flex items-center gap-2 text-sm text-gray-700">
-                                    <input v-model="subscriptionForm.active" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
-                                    Attivo
-                                </label>
-                            </div>
-                            <div class="md:col-span-3">
-                                <label class="block text-sm font-medium text-gray-700">Note interne</label>
-                                <input v-model="subscriptionForm.notes" class="form-control" />
-                            </div>
-                            <div class="flex items-end">
-                                <button type="submit" class="inline-flex w-full justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50" :disabled="subscriptionForm.processing">
-                                    {{ editingSubscription ? 'Salva' : 'Crea' }}
-                                </button>
-                            </div>
-                        </form>
-
-                        <div class="space-y-3">
-                            <article
-                                v-for="subscription in related.subscriptions || []"
-                                :key="subscription.id"
-                                :class="['rounded-md border p-4', subscription.active ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50 opacity-70']"
-                            >
-                                <div class="flex flex-wrap items-start justify-between gap-3">
-                                    <div class="min-w-0">
-                                        <div class="flex flex-wrap items-center gap-2">
-                                            <h4 class="font-semibold text-gray-900">{{ subscription.name }}</h4>
-                                            <span :class="['rounded-full px-2 py-0.5 text-xs font-medium', subscription.active ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600']">
-                                                {{ subscription.active ? 'Attivo' : 'In pausa' }}
-                                            </span>
-                                            <span v-if="subscription.auto_generate" class="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">automatico</span>
-                                        </div>
-                                        <p class="mt-1 text-sm text-gray-500">
-                                            {{ money(subscription.amount) }} + IVA {{ subscription.vat_rate }}% · {{ subscriptionFrequency(subscription) }} · prossima {{ dateIt(subscription.next_invoice_date) }}
-                                        </p>
-                                        <p v-if="subscription.description" class="mt-1 text-sm text-gray-600">{{ subscription.description }}</p>
-                                    </div>
-                                    <div v-if="canEditClient" class="flex flex-wrap gap-2">
-                                        <button type="button" class="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50" @click="generateSubscription(subscription)">
-                                            Genera fattura
-                                        </button>
-                                        <button type="button" class="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50" @click="editSubscription(subscription)">
-                                            Modifica
-                                        </button>
-                                        <button type="button" class="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50" @click="toggleSubscription(subscription)">
-                                            {{ subscription.active ? 'Pausa' : 'Riattiva' }}
-                                        </button>
-                                        <button type="button" class="rounded-md border border-red-100 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50" @click="removeSubscription(subscription)">
-                                            Elimina
-                                        </button>
-                                    </div>
-                                </div>
-                            </article>
-                            <p v-if="!(related.subscriptions || []).length" class="rounded-md border border-dashed border-gray-300 bg-white px-4 py-8 text-center text-sm text-gray-500">
-                                Nessun abbonamento ricorrente per questo cliente.
-                            </p>
-                        </div>
-                        </div>
-                    </section>
                 </section>
 
                 <section v-if="section === 'projects'" class="space-y-6">
@@ -6913,61 +6021,6 @@ onUnmounted(() => {
                     </div>
                 </section>
 
-                <section v-if="section === 'billing'" class="surface rounded-md p-5 lg:col-span-2">
-                    <div class="mb-5 flex items-center justify-between">
-                        <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Righe documento</h3>
-                        <div class="text-sm font-semibold text-gray-900">Totale: EUR {{ Number(record.total_amount || 0).toFixed(2) }}</div>
-                    </div>
-                    <form class="mb-5 grid gap-3 md:grid-cols-[1fr_90px_120px_90px_90px_auto]" @submit.prevent="addLine">
-                        <input v-model="lineForm.description" class="form-control mt-0" placeholder="Descrizione" required />
-                        <input v-model="lineForm.quantity" class="form-control mt-0" type="number" step="0.01" min="0" required />
-                        <input v-model="lineForm.unit_price" class="form-control mt-0" type="number" step="0.01" min="0" required />
-                        <input v-model="lineForm.vat_rate" class="form-control mt-0" type="number" step="0.01" min="0" required />
-                        <input v-model="lineForm.discount_pct" class="form-control mt-0" type="number" step="0.01" min="0" max="100" />
-                        <button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
-                    </form>
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200 text-sm">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-3 py-2 text-left">Descrizione</th>
-                                    <th class="px-3 py-2 text-right">Qta</th>
-                                    <th class="px-3 py-2 text-right">Prezzo</th>
-                                    <th class="px-3 py-2 text-right">IVA</th>
-                                    <th class="px-3 py-2 text-right">Subtotale</th>
-                                    <th class="px-3 py-2"></th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-100">
-                                <tr v-for="line in related.lines" :key="line.id">
-                                    <td class="px-3 py-2">{{ line.description }}</td>
-                                    <td class="px-3 py-2 text-right">{{ line.quantity }}</td>
-                                    <td class="px-3 py-2 text-right">{{ line.unit_price }}</td>
-                                    <td class="px-3 py-2 text-right">{{ line.vat_rate }}%</td>
-                                    <td class="px-3 py-2 text-right">{{ Number(line.subtotal).toFixed(2) }}</td>
-                                    <td class="px-3 py-2 text-right"><button class="text-red-600" @click="removeLine(line)">Elimina</button></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
-
-                <section v-if="section === 'billing'" class="surface rounded-md p-5 lg:col-span-2">
-                    <h3 class="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Pagamenti</h3>
-                    <form class="mb-5 grid gap-3 md:grid-cols-[120px_150px_1fr_auto]" @submit.prevent="addPayment">
-                        <input v-model="paymentForm.amount" class="form-control mt-0" type="number" step="0.01" min="0" required />
-                        <AppDateInput v-model="paymentForm.paid_at" />
-                        <input v-model="paymentForm.method" class="form-control mt-0" placeholder="Metodo" />
-                        <button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Registra</button>
-                    </form>
-                    <div class="space-y-2">
-                        <div v-for="payment in related.payments" :key="payment.id" class="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2 text-sm">
-                            <span>EUR {{ Number(payment.amount).toFixed(2) }} · {{ payment.paid_at }} · {{ payment.method || '-' }}</span>
-                            <button class="text-red-600" @click="removePayment(payment)">Elimina</button>
-                        </div>
-                        <p v-if="!related.payments?.length" class="text-sm text-gray-500">Nessun pagamento registrato.</p>
-                    </div>
-                </section>
             </div>
         </div>
         <Transition name="calendar-task-drawer">

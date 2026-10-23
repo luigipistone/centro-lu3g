@@ -42,8 +42,6 @@ class RolePermissionService
             ['group' => 'Assenze Manager', 'key' => 'absences.reports.view', 'label' => 'Report ed esportazioni del team', 'managerOnly' => true],
             ['group' => 'Operatività', 'key' => 'updates.view', 'label' => 'Visualizzare aggiornamenti'],
             ['group' => 'Operatività', 'key' => 'updates.manage', 'label' => 'Gestire aggiornamenti'],
-            ['group' => 'Amministrazione', 'key' => 'billing.view', 'label' => 'Visualizzare fatturazione'],
-            ['group' => 'Amministrazione', 'key' => 'billing.manage', 'label' => 'Gestire fatturazione'],
             ['group' => 'Amministrazione', 'key' => 'users.view', 'label' => 'Visualizzare utenti'],
             ['group' => 'Amministrazione', 'key' => 'users.manage', 'label' => 'Gestire utenti'],
             ['group' => 'Profili dipendenti', 'key' => 'users.profile.personal.update', 'label' => 'Modificare dati personali degli utenti'],

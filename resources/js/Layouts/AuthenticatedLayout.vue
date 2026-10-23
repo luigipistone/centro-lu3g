@@ -22,7 +22,6 @@ import {
     LogOut,
     Mail,
     Megaphone,
-    Receipt,
     Search,
     Settings,
     Moon,
@@ -305,7 +304,7 @@ const groups = computed(() => {
     const sectionForRoute = (name) => ({
         'clients.index': 'clients', 'projects.index': 'projects', 'tasks.index': 'tasks',
         'calendar.index': 'calendar', 'documents.index': 'documents', 'passwords.index': 'passwords', 'favorites.index': 'favorites', 'tools.index': 'tools',
-        'absences.index': 'absences', 'billing.index': 'billing', 'users.index': 'users',
+        'absences.index': 'absences', 'users.index': 'users',
         'modules.index': 'modules', 'inventory.index': 'inventory', 'ai-agency.index': 'ai_agency',
         'updates.social': 'social', 'updates.newsletter': 'newsletter',
         'updates.seo': 'seo', 'updates.adv': 'adv',
@@ -348,7 +347,6 @@ const groups = computed(() => {
             collapsible: true,
             links: compact([
                 permitted('notifications.index', 'Notifiche', Bell),
-                permitted('billing.index', 'Fatturazione', Receipt, 'billing.view'),
                 permitted('users.index', 'Utenti', UserCog, 'users.view'),
                 permitted('modules.index', 'Moduli', PackageOpen, 'modules.view'),
                 permitted('inventory.index', 'Inventario', Boxes, 'inventory.view'),
