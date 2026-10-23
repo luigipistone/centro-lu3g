@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { ChevronLeft, ChevronRight } from '@lucide/vue';
 import { createDeviceModels } from './inventory/deviceModels';
+import { placePhysicalItems } from './inventory/inventoryLayout';
 
 const props = defineProps({ items: { type: Array, default: () => [] }, type: { type: String, default: 'physical' }, selectedId: String });
 const emit = defineEmits(['select']);
@@ -85,9 +86,10 @@ function build() {
     const height = base + rows * shelfStep;
     shelfFocusY = height / 2;
     const placements = physical
-        ? items.flatMap((item) => Array.from({ length: Math.min(Number(item.quantity || 0), 100) }, () => item))
-        : items;
-    rackCount.value = Math.max(1, Math.ceil(placements.length / slotsPerRack));
+        ? placePhysicalItems(items)
+        : items.map((item, slot) => ({ item, slot, span: 1 }));
+    const occupiedSlots = placements.length ? placements.at(-1).slot + placements.at(-1).span : 0;
+    rackCount.value = Math.max(1, Math.ceil(occupiedSlots / slotsPerRack));
     for (let rack = 0; rack < rackCount.value; rack++) {
         const x = rack * rackSpacing;
         for (let row = 0; row < rows; row++) box(inventory, rackWidth, .075, shelfDepth, x, base + row * shelfStep, 0, shelfMaterial, false);
@@ -99,12 +101,13 @@ function build() {
         depthMaskBox(inventory, rackWidth, height, .045, x, height / 2, -shelfDepth / 2);
         box(inventory, rackWidth, .08, shelfDepth, x, height, 0, shelfMaterial, false);
     }
-    for (const [i, item] of placements.entries()) {
-        const rack = Math.floor(i / slotsPerRack);
-        const slot = i % slotsPerRack;
-        const row = rows - 1 - Math.floor(slot / columns);
-        const col = slot % columns;
-        const x = rack * rackSpacing + (col - 1) * 1.08;
+    for (const [i, placement] of placements.entries()) {
+        const { item, span } = placement;
+        const rack = Math.floor(placement.slot / slotsPerRack);
+        const rackSlot = placement.slot % slotsPerRack;
+        const row = rows - 1 - Math.floor(rackSlot / columns);
+        const col = rackSlot % columns;
+        const x = rack * rackSpacing + (col - 1) * 1.08 + (span - 1) * .54;
         const group = models.create(item, i, props.type);
         group.position.set(x, base + row * shelfStep + .04, physical ? .05 : .13);
         group.userData.home = group.position.clone();

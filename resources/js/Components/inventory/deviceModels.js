@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { isTelevision } from './inventoryLayout';
 
 export function createDeviceModels() {
     const materials = new Map();
@@ -64,16 +65,20 @@ export function createDeviceModels() {
         return promise;
     }
 
-    function loadCustom(url) {
+    function loadCustom(url, television = false) {
         const key = `custom:${url}`;
         if (imported.has(key)) return Promise.resolve();
         if (loading.has(key)) return loading.get(key);
         const promise = new Promise((resolve) => {
             loader.load(url, ({ scene }) => {
+                if (television) {
+                    const cube = scene.getObjectByName('Cube');
+                    if (cube?.isMesh) cube.parent?.remove(cube);
+                }
                 const bounds = new THREE.Box3().setFromObject(scene);
                 const size = bounds.getSize(new THREE.Vector3());
                 if (size.x > 0 && size.y > 0 && Number.isFinite(size.x)) {
-                    scene.scale.setScalar(Math.min(.9 / size.x, .82 / size.y));
+                    scene.scale.setScalar(Math.min((television ? 1.95 : .9) / size.x, (television ? 1.18 : .82) / size.y));
                     scene.updateMatrixWorld(true);
                     const fitted = new THREE.Box3().setFromObject(scene);
                     const center = fitted.getCenter(new THREE.Vector3());
@@ -103,7 +108,7 @@ export function createDeviceModels() {
         const keys = new Set();
         const jobs = [];
         for (const item of items) {
-            if (item.model_url) jobs.push(loadCustom(item.model_url));
+            if (item.model_url) jobs.push(loadCustom(item.model_url, isTelevision(item)));
             else if (/iphone/i.test(item.name)) keys.add('iphone');
             else if (/ipad pro/i.test(item.name)) keys.add('ipad-pro');
             else if (/ipad air/i.test(item.name)) keys.add('ipad-air');
@@ -345,7 +350,8 @@ export function createDeviceModels() {
             const name = item.name.trim();
             const mini = /^iphone 13 mini$/i.test(name);
             const rotation = /^iphone 13 pro$/i.test(name) || mini ? Math.PI
-                : /^macbook pro\b/i.test(name) ? Math.PI / 2 : 0;
+                : /^macbook pro\b/i.test(name) ? Math.PI / 2
+                : isTelevision(item) ? Math.PI : 0;
             if (!addImported(group, key, mini ? .8 : 1, rotation)) {
                 addBox(group, .55, .55, .45, 0, .29, 0, graphite, .02);
             }
