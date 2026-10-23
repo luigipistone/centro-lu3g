@@ -120,6 +120,12 @@ export function createDeviceModels() {
         const model = source.clone(true);
         model.scale.multiplyScalar(scale);
         model.rotation.y += rotationY;
+        if (rotationY) {
+            model.updateMatrixWorld(true);
+            const centerAfter = new THREE.Box3().setFromObject(model).getCenter(new THREE.Vector3());
+            model.position.x -= centerAfter.x;
+            model.position.z -= centerAfter.z;
+        }
         model.traverse((object) => {
             if (object.isMesh) object.geometry = object.geometry.clone();
         });
@@ -336,7 +342,11 @@ export function createDeviceModels() {
         if (type === 'digital') addLicense(group, item, index);
         else if (item.model_url) {
             const key = `custom:${item.model_url}`;
-            if (!addImported(group, key, 1, /^iphone 13 pro$/i.test(item.name.trim()) ? Math.PI : 0)) {
+            const name = item.name.trim();
+            const mini = /^iphone 13 mini$/i.test(name);
+            const rotation = /^iphone 13 pro$/i.test(name) || mini ? Math.PI
+                : /^macbook pro\b/i.test(name) ? Math.PI / 2 : 0;
+            if (!addImported(group, key, mini ? .8 : 1, rotation)) {
                 addBox(group, .55, .55, .45, 0, .29, 0, graphite, .02);
             }
         }
