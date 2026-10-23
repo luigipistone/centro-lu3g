@@ -101,7 +101,7 @@ class InventoryTest extends TestCase
         $manager = $this->withRole('admin');
         $employee = $this->withRole('editor');
         $item = DB::table('inventory_items')->where('name', 'WPML')->firstOrFail();
-        Cache::forget('inventory-logo:v2:'.hash('sha256', 'wpml.org'));
+        Cache::forget('inventory-logo:v3:'.hash('sha256', 'wpml.org'));
         $png = file_get_contents(public_path('apple-touch-icon.png'));
         Http::fake(['www.google.com/s2/favicons*' => Http::response($png, 200, ['Content-Type' => 'image/png'])]);
 
@@ -116,7 +116,7 @@ class InventoryTest extends TestCase
     {
         $manager = $this->withRole('admin');
         $item = DB::table('inventory_items')->where('name', 'Animation Addon Pro')->firstOrFail();
-        Cache::forget('inventory-logo:v2:'.hash('sha256', 'animation-addons.com'));
+        Cache::forget('inventory-logo:v3:'.hash('sha256', 'animation-addons.com'));
         $image = imagecreatetruecolor(1, 1);
         ob_start();
         imagejpeg($image);

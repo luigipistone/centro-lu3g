@@ -117,13 +117,13 @@ class InventoryController extends Controller
         $host = $url ? parse_url($url, PHP_URL_HOST) : null;
         abort_unless($host && filter_var($host, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME), 404);
 
-        $icon = Cache::remember('inventory-logo:v2:'.hash('sha256', $host), now()->addDay(), function () use ($host) {
+        $icon = Cache::remember('inventory-logo:v3:'.hash('sha256', $host), now()->addDay(), function () use ($host) {
             try {
                 $response = Http::timeout(4)->get('https://www.google.com/s2/favicons', ['domain' => $host, 'sz' => 128]);
                 if ($response->successful() && strlen($response->body()) <= 256 * 1024) {
                     $mime = (new \finfo(FILEINFO_MIME_TYPE))->buffer($response->body());
                     if (in_array($mime, ['image/png', 'image/jpeg', 'image/webp'], true)) {
-                        return ['body' => $response->body(), 'mime' => $mime];
+                        return ['body' => base64_encode($response->body()), 'mime' => $mime];
                     }
                 }
             } catch (\Throwable) {
@@ -132,7 +132,7 @@ class InventoryController extends Controller
             return null;
         });
         abort_unless($icon, 404);
-        return response($icon['body'], 200, ['Content-Type' => $icon['mime'], 'Cache-Control' => 'private, max-age=86400']);
+        return response(base64_decode($icon['body']), 200, ['Content-Type' => $icon['mime'], 'Cache-Control' => 'private, max-age=86400']);
     }
 
     public function store(Request $request): RedirectResponse
