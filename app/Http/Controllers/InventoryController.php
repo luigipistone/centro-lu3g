@@ -68,7 +68,7 @@ class InventoryController extends Controller
             'access_url' => ['nullable', 'url', 'starts_with:https://,http://', 'max:2048'],
             'notes' => ['nullable', 'string', 'max:5000'],
             'quantity' => ['nullable', 'integer', 'min:1', 'max:100'],
-            'model_file' => ['nullable', 'file', 'max:20480'],
+            'model_file' => ['nullable', 'file', 'max:40960'],
         ]);
     }
 
@@ -92,7 +92,7 @@ class InventoryController extends Controller
             $document = null;
         }
         if (($document['asset']['version'] ?? null) !== '2.0') {
-            throw ValidationException::withMessages(['model_file' => 'Carica un modello GLB o glTF 2.0 valido (massimo 20 MB).']);
+            throw ValidationException::withMessages(['model_file' => 'Carica un modello GLB o glTF 2.0 valido (massimo 40 MB).']);
         }
         foreach (array_merge($document['buffers'] ?? [], $document['images'] ?? []) as $resource) {
             if (isset($resource['uri']) && ! str_starts_with($resource['uri'], 'data:')) {

@@ -96,6 +96,36 @@ class InventoryTest extends TestCase
         $this->assertDatabaseMissing('inventory_items', ['name' => 'Modello non valido']);
     }
 
+    public function test_glb_upload_accepts_40_mb_but_rejects_larger_files(): void
+    {
+        Storage::fake('local');
+        $manager = $this->withRole('admin');
+        $maxBytes = 40 * 1024 * 1024;
+        $json = str_pad('{"asset":{"version":"2.0"}}', 28);
+        $binLength = $maxBytes - 12 - 8 - strlen($json) - 8;
+        $path = tempnam(sys_get_temp_dir(), 'inventory-glb-');
+        $handle = fopen($path, 'wb');
+        fwrite($handle, pack('V3', 0x46546C67, 2, $maxBytes).pack('V2', strlen($json), 0x4E4F534A).$json.pack('V2', $binLength, 0x004E4942));
+        ftruncate($handle, $maxBytes);
+        fclose($handle);
+
+        try {
+            $this->actingAs($manager)->post(route('inventory.store'), [
+                'type' => 'physical', 'name' => 'Modello 40 MB', 'quantity' => 1,
+                'model_file' => new UploadedFile($path, 'device.glb', 'model/gltf-binary', null, true),
+            ])->assertSessionHasNoErrors();
+            $item = DB::table('inventory_items')->where('name', 'Modello 40 MB')->firstOrFail();
+            Storage::disk('local')->assertExists($item->model_path);
+        } finally {
+            @unlink($path);
+        }
+
+        $this->actingAs($manager)->post(route('inventory.store'), [
+            'type' => 'physical', 'name' => 'Modello troppo grande', 'quantity' => 1,
+            'model_file' => UploadedFile::fake()->create('device.glb', 40961, 'model/gltf-binary'),
+        ])->assertSessionHasErrors('model_file');
+    }
+
     public function test_self_contained_gltf_can_be_uploaded_and_served(): void
     {
         Storage::fake('local');

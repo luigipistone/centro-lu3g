@@ -98,8 +98,8 @@ function selectModel(event) {
 
 function setModelFile(file) {
     if (!file) return;
-    if (!/\.(glb|gltf)$/i.test(file.name) || file.size > 20 * 1024 * 1024) {
-        modelFileError.value = 'Carica un file GLB o glTF fino a 20 MB.';
+    if (!/\.(glb|gltf)$/i.test(file.name) || file.size > 40 * 1024 * 1024) {
+        modelFileError.value = 'Carica un file GLB o glTF fino a 40 MB.';
         return;
     }
     modelFileError.value = '';
