@@ -221,7 +221,7 @@ function animate() {
     renderer.render(scene, camera);
     const viewX = camera.position.x - controls.target.x;
     const viewZ = camera.position.z - controls.target.z;
-    if (pulledGroup && viewZ > 0 && Math.abs(viewX) < viewZ * 1.8) {
+    if (pulledGroup && viewZ > 0 && Math.abs(viewX) < viewZ * 2.2) {
         const background = scene.background;
         scene.background = null;
         camera.layers.set(1);
