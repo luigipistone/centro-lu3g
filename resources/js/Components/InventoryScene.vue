@@ -24,6 +24,11 @@ let targetRackX = 0;
 let shelfFocusY = 2.15;
 let pointerDown = null;
 let loadVersion = 0;
+let renderedType = null;
+let framePending = false;
+let hoverFrameId = null;
+let hoverX = 0;
+let hoverY = 0;
 const rackSpacing = 4.45;
 const rackWidth = 3.75;
 const slotsPerRack = 9;
@@ -31,8 +36,13 @@ const reducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(pre
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const clickTargets = [];
+const emptyGroups = [];
 const byId = new Map();
 const materials = new Map();
+const goalScale = new THREE.Vector3();
+const destination = new THREE.Vector3();
+const focus = new THREE.Vector3();
+const shift = new THREE.Vector3();
 const models = createDeviceModels();
 const shelfMaterial = material('#627d99', .35, .48);
 const backMaterial = material('#d5e2ef', 0, .9);
@@ -62,13 +72,21 @@ function depthMaskBox(parent, width, height, depth, x, y, z) {
 function clearInventory() {
     if (!inventory) return;
     scene.remove(inventory);
-    inventory.traverse((object) => object.geometry?.dispose());
+    inventory.traverse((object) => {
+        if (!object.userData.sharedGeometry) object.geometry?.dispose();
+    });
     inventory = null;
     clickTargets.length = 0;
     byId.clear();
     hoveredGroups = [];
-    pulledGroup = null;
-    isPulled.value = false;
+    setPulledGroup(null);
+    requestRender();
+}
+
+function requestRender() {
+    if (!active || framePending || !renderer) return;
+    framePending = true;
+    frameId = requestAnimationFrame(animate);
 }
 
 function build() {
@@ -112,6 +130,8 @@ function build() {
         group.position.set(x, base + row * shelfStep + .04, physical ? .05 : .13);
         group.userData.home = group.position.clone();
         group.userData.rack = rack;
+        group.userData.focusOffset = new THREE.Box3().setFromObject(group)
+            .getCenter(new THREE.Vector3()).sub(group.position);
         group.traverse((object) => { object.userData.itemId = item.id; });
         inventory.add(group);
         clickTargets.push(group);
@@ -123,16 +143,20 @@ function build() {
     controls.target.set(targetRackX, height / 2, 0);
     controls.update();
     resize();
+    requestRender();
 }
 
 async function loadScene() {
     if (!scene) return;
     const version = ++loadVersion;
-    loading.value = true;
-    ready.value = false;
+    if (!ready.value || renderedType !== props.type) {
+        loading.value = true;
+        ready.value = false;
+    }
     await models.prepare(props.items.filter((item) => item.type === props.type), props.type);
     if (version !== loadVersion) return;
     build();
+    renderedType = props.type;
     loading.value = false;
     ready.value = true;
 }
@@ -140,8 +164,17 @@ async function loadScene() {
 function moveRack(index) {
     rackIndex.value = THREE.MathUtils.clamp(index, 0, rackCount.value - 1);
     targetRackX = rackIndex.value * rackSpacing;
-    pulledGroup = null;
-    isPulled.value = false;
+    setPulledGroup(null);
+    requestRender();
+}
+
+function setPulledGroup(group) {
+    if (pulledGroup === group) return;
+    if (pulledGroup) pulledGroup.traverse((object) => object.layers.set(0));
+    pulledGroup = group;
+    if (group) group.traverse((object) => object.layers.set(1));
+    isPulled.value = Boolean(group);
+    requestRender();
 }
 
 function finishPointer(event) {
@@ -161,29 +194,43 @@ function selectAt(event) {
         emit('select', hit.object.userData.itemId);
         let group = hit.object;
         while (group.parent && group.parent !== inventory) group = group.parent;
-        pulledGroup = pulledGroup === group ? null : group;
+        const shouldPull = pulledGroup !== group;
         moveRack(group.userData.rack);
-        pulledGroup = group;
-        isPulled.value = true;
+        setPulledGroup(shouldPull ? group : null);
     } else {
         emit('select', null);
-        pulledGroup = null;
-        isPulled.value = false;
+        setPulledGroup(null);
     }
 }
 
 function hoverAt(event) {
     if (!renderer) return;
+    hoverX = event.clientX;
+    hoverY = event.clientY;
+    if (hoverFrameId !== null) return;
+    hoverFrameId = requestAnimationFrame(updateHover);
+}
+
+function updateHover() {
+    hoverFrameId = null;
+    if (!canvas.value || !renderer) return;
     const rect = canvas.value.getBoundingClientRect();
-    pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+    pointer.set(((hoverX - rect.left) / rect.width) * 2 - 1, -((hoverY - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(pointer, camera);
     const id = raycaster.intersectObjects(clickTargets, true)[0]?.object.userData.itemId;
-    hoveredGroups = byId.get(id) || [];
+    const nextHovered = byId.get(id) || emptyGroups;
+    if (hoveredGroups !== nextHovered) {
+        hoveredGroups = nextHovered;
+        requestRender();
+    }
     canvas.value.style.cursor = id ? 'pointer' : 'grab';
 }
 
 function clearHover() {
-    hoveredGroups = [];
+    if (hoverFrameId !== null) cancelAnimationFrame(hoverFrameId);
+    hoverFrameId = null;
+    hoveredGroups = emptyGroups;
+    requestRender();
     if (canvas.value) canvas.value.style.cursor = 'grab';
 }
 
@@ -197,29 +244,43 @@ function resize() {
     camera.updateProjectionMatrix();
     const frameDistance = ((rackWidth / 2) + .5) / (Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect);
     if (!pulledGroup) camera.position.z = Math.max(props.type === 'physical' ? 7.6 : 6.8, frameDistance);
+    requestRender();
 }
 
 function animate() {
-    frameId = requestAnimationFrame(animate);
+    framePending = false;
     if (!active || !renderer) return;
     const slide = reducedMotion ? 1 : .09;
+    let moving = false;
     for (const group of clickTargets) {
         const hovered = hoveredGroups.includes(group);
         const pulled = group === pulledGroup;
         const goal = pulled ? 1.65 : hovered ? 1.045 : 1;
-        group.scale.lerp(new THREE.Vector3(goal, goal, goal), reducedMotion ? 1 : .12);
+        goalScale.setScalar(goal);
+        if (group.scale.distanceToSquared(goalScale) > .000001) {
+            group.scale.lerp(goalScale, reducedMotion ? 1 : .12);
+            moving = true;
+        } else group.scale.copy(goalScale);
         const home = group.userData.home;
-        const destination = pulled ? new THREE.Vector3(group.userData.rack * rackSpacing, 1.15, 2.1) : home;
-        group.position.lerp(destination, reducedMotion ? 1 : .12);
-        group.traverse((object) => object.layers.set(pulled ? 1 : 0));
+        destination.copy(home);
+        if (pulled) destination.set(group.userData.rack * rackSpacing, 1.15, 2.1);
+        if (group.position.distanceToSquared(destination) > .000001) {
+            group.position.lerp(destination, reducedMotion ? 1 : .12);
+            moving = true;
+        } else group.position.copy(destination);
     }
-    const focus = pulledGroup
-        ? new THREE.Box3().setFromObject(pulledGroup).getCenter(new THREE.Vector3())
-        : new THREE.Vector3(targetRackX, shelfFocusY, 0);
-    const shift = focus.sub(controls.target).multiplyScalar(pulledGroup ? 1 : slide);
-    controls.target.add(shift);
-    camera.position.add(shift);
-    controls.update();
+    if (pulledGroup) {
+        focus.copy(pulledGroup.position).addScaledVector(pulledGroup.userData.focusOffset, pulledGroup.scale.x);
+    } else {
+        focus.set(targetRackX, shelfFocusY, 0);
+    }
+    shift.copy(focus).sub(controls.target).multiplyScalar(pulledGroup ? 1 : slide);
+    if (shift.lengthSq() > .000001) {
+        controls.target.add(shift);
+        camera.position.add(shift);
+        moving = true;
+    }
+    if (controls.update()) moving = true;
     camera.layers.set(0);
     renderer.render(scene, camera);
     const viewX = camera.position.x - controls.target.x;
@@ -234,16 +295,17 @@ function animate() {
     } else {
         foregroundRenderer.clear();
     }
+    if (moving) requestRender();
 }
 
 onMounted(() => {
     try {
         renderer = new THREE.WebGLRenderer({ canvas: canvas.value, antialias: true, powerPreference: 'high-performance' });
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         renderer.shadowMap.enabled = false;
         foregroundRenderer = new THREE.WebGLRenderer({ canvas: foregroundCanvas.value, antialias: true, alpha: true, powerPreference: 'high-performance' });
-        foregroundRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        foregroundRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
         foregroundRenderer.outputColorSpace = THREE.SRGBColorSpace;
         foregroundRenderer.setClearColor(0x000000, 0);
         scene = new THREE.Scene();
@@ -258,6 +320,7 @@ onMounted(() => {
         controls.maxDistance = 25;
         controls.minPolarAngle = .4;
         controls.maxPolarAngle = 1.6;
+        controls.addEventListener('change', requestRender);
         const ambient = new THREE.HemisphereLight('#ffffff', '#8a9aac', 2.6);
         ambient.layers.enable(1);
         scene.add(ambient);
@@ -273,10 +336,13 @@ onMounted(() => {
         scene.add(ground);
         resizeObserver = new ResizeObserver(resize);
         resizeObserver.observe(canvas.value);
-        visibilityObserver = new IntersectionObserver(([entry]) => { active = entry.isIntersecting; });
+        visibilityObserver = new IntersectionObserver(([entry]) => {
+            active = entry.isIntersecting;
+            if (active) requestRender();
+        });
         visibilityObserver.observe(canvas.value);
         resize();
-        animate();
+        requestRender();
         loadScene();
     } catch {
         unavailable.value = true;
@@ -285,19 +351,20 @@ onMounted(() => {
 watch(() => [props.items, props.type], loadScene, { deep: true });
 watch(() => props.selectedId, (id) => {
     if (!id) {
-        pulledGroup = null;
-        isPulled.value = false;
+        setPulledGroup(null);
         return;
     }
     const group = byId.get(id)?.[0];
     if (group) {
         rackIndex.value = group.userData.rack;
         targetRackX = rackIndex.value * rackSpacing;
+        requestRender();
     }
 });
 onBeforeUnmount(() => {
     loadVersion++;
     cancelAnimationFrame(frameId);
+    if (hoverFrameId !== null) cancelAnimationFrame(hoverFrameId);
     resizeObserver?.disconnect();
     visibilityObserver?.disconnect();
     controls?.dispose();

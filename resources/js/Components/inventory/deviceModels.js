@@ -12,10 +12,10 @@ export function createDeviceModels() {
     const loader = new GLTFLoader();
     const assets = {
         'imac-intel': { file: 'imac-intel.glb', width: .79, rotation: Math.PI },
-        'imac-24': { file: 'imac-24.glb', width: .89, rotation: 0 },
+        'imac-24': { file: 'imac-24.glb?v=2', width: .89, rotation: 0 },
         iphone: { file: 'iphone-xs.glb', width: .3, rotation: 0 },
-        'ipad-pro': { file: 'ipad-pro.glb', width: .58, rotation: 0 },
-        'ipad-air': { file: 'ipad-air.glb', width: .49, rotation: 0 },
+        'ipad-pro': { file: 'ipad-pro.glb?v=2', width: .58, rotation: 0 },
+        'ipad-air': { file: 'ipad-air.glb?v=2', width: .49, rotation: 0 },
         monitor: { file: 'monitor.glb', width: .87, rotation: -Math.PI / 2 },
     };
 
@@ -132,7 +132,7 @@ export function createDeviceModels() {
             model.position.z -= centerAfter.z;
         }
         model.traverse((object) => {
-            if (object.isMesh) object.geometry = object.geometry.clone();
+            if (object.isMesh) object.userData.sharedGeometry = true;
         });
         parent.add(model);
         return true;
