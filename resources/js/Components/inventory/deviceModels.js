@@ -13,7 +13,7 @@ export function createDeviceModels() {
         'imac-intel': { file: 'imac-intel.glb', width: .79, rotation: Math.PI },
         'imac-24': { file: 'imac-24.glb', width: .89, rotation: 0 },
         iphone: { file: 'iphone-xs.glb', width: .3, rotation: 0 },
-        'ipad-pro': { file: 'ipad-pro.glb', width: .51, rotation: 0 },
+        'ipad-pro': { file: 'ipad-pro.glb', width: .58, rotation: 0 },
         'ipad-air': { file: 'ipad-air.glb', width: .49, rotation: 0 },
         monitor: { file: 'monitor.glb', width: .87, rotation: -Math.PI / 2 },
     };
@@ -244,8 +244,8 @@ export function createDeviceModels() {
     }
 
     function addTablet(parent, pro) {
-        const width = pro ? .53 : .49;
-        const height = pro ? .76 : .71;
+        const width = pro ? .58 : .49;
+        const height = pro ? .82 : .71;
         const body = new THREE.Group();
         body.rotation.x = -.13;
         body.position.y = .045;
