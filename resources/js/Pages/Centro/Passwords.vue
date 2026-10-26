@@ -4,7 +4,7 @@ import AppSelect from '@/Components/AppSelect.vue';
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, BarChart3, Bold, Boxes, Building2, Cable, CheckCircle2, ChevronDown, Copy, Database, Download, ExternalLink, FileUp, Globe2, Italic, KeyRound, List, ListOrdered, Mail, Megaphone, Network, PanelsTopLeft, Pencil, Plus, Quote, Router, Server, Share2, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
+import { ArrowLeft, BarChart3, Bold, Boxes, Building2, Cable, CheckCircle2, ChevronDown, Copy, Database, Download, ExternalLink, Eye, EyeOff, FileUp, Globe2, Italic, KeyRound, List, ListOrdered, Mail, Megaphone, Network, PanelsTopLeft, Pencil, Plus, Quote, Router, Server, Share2, ShieldAlert, Trash2, Underline, Users, Vault, X } from '@lucide/vue';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -1212,22 +1212,33 @@ if (props.selectedGroup) {
                         <span class="block text-sm font-medium text-gray-700">Nome utente</span>
                         <input v-model="itemForm.username" class="form-control" name="centro_password_item_username" autocomplete="off" />
                     </label>
-                    <label class="block">
-                        <span class="block text-sm font-medium text-gray-700">Password</span>
+                    <div class="block">
+                        <label for="centro_password_item_secret" class="block text-sm font-medium text-gray-700">Password</label>
                         <div class="flex gap-2">
-                            <input
-                                :value="displayPasswordInputValue()"
-                                :type="editPasswordVisible ? 'text' : 'password'"
-                                class="form-control"
-                                name="centro_password_item_secret"
-                                autocomplete="new-password"
-                                :placeholder="editingItem ? 'Password salvata' : ''"
-                                @focus="handlePasswordFieldFocus"
-                                @input="handlePasswordFieldInput"
-                            />
-                            <button v-if="editingItem" type="button" class="btn btn-outline h-[38px] shrink-0 px-3" @click="editPasswordVisible = !editPasswordVisible">
-                                {{ editPasswordVisible ? 'Nascondi' : 'Vedi' }}
-                            </button>
+                            <div class="relative min-w-0 flex-1">
+                                <input
+                                    id="centro_password_item_secret"
+                                    :value="displayPasswordInputValue()"
+                                    :type="editPasswordVisible ? 'text' : 'password'"
+                                    class="form-control pr-12"
+                                    name="centro_password_item_secret"
+                                    autocomplete="new-password"
+                                    :placeholder="editingItem ? 'Password salvata' : ''"
+                                    @focus="handlePasswordFieldFocus"
+                                    @input="handlePasswordFieldInput"
+                                />
+                                <button
+                                    type="button"
+                                    class="absolute inset-y-0 right-3 flex items-center text-gray-500 transition hover:text-gray-800 focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--primary-app)/0.5)]"
+                                    :aria-label="editPasswordVisible ? 'Nascondi password' : 'Mostra password'"
+                                    :aria-pressed="editPasswordVisible"
+                                    :title="editPasswordVisible ? 'Nascondi password' : 'Mostra password'"
+                                    @click="editPasswordVisible = !editPasswordVisible"
+                                >
+                                    <EyeOff v-if="editPasswordVisible" class="h-4 w-4" :stroke-width="1.8" />
+                                    <Eye v-else class="h-4 w-4" :stroke-width="1.8" />
+                                </button>
+                            </div>
                             <button type="button" class="btn btn-outline h-[38px] shrink-0" @click="openGenerator">Genera</button>
                         </div>
                         <p v-if="editPasswordError" class="mt-2 text-sm text-red-600">{{ editPasswordError }}</p>
@@ -1275,7 +1286,7 @@ if (props.selectedGroup) {
                                 </label>
                             </div>
                         </div>
-                    </label>
+                    </div>
                     <label class="block">
                         <span class="block text-sm font-medium text-gray-700">Cassaforte</span>
                         <AppSelect
