@@ -2848,6 +2848,7 @@ class CentroPageController extends Controller
         $this->purgeExpiredArchivedNotifications($request->user()->id);
 
         $archived = $request->boolean('archived');
+        $role = DB::table('user_roles')->where('user_id', $request->user()->id)->value('role');
 
         return Inertia::render('Centro/Notifications', [
             'notifications' => DB::table('notifications')
@@ -2867,7 +2868,15 @@ class CentroPageController extends Controller
                     'notifications.archived_at',
                     'notifications.created_at',
                     'tasks.title as task_title',
-                ]),
+                ])
+                ->map(function ($notification) use ($role) {
+                    $notification->url = \App\Services\NotificationDestination::url(
+                        $notification->type, $notification->task_id, $notification->company_document_id,
+                        $notification->company_message_id, $role,
+                    );
+
+                    return $notification;
+                }),
             'archived' => $archived,
             'activeCount' => DB::table('notifications')
                 ->where('user_id', $request->user()->id)
@@ -2991,20 +3000,7 @@ class CentroPageController extends Controller
 
     public function testPush(Request $request): JsonResponse
     {
-        $notificationId = (string) str()->uuid();
-
-        $this->sendBrowserPushNotification(
-            (string) $request->user()->id,
-            $notificationId,
-            'Notifica push di prova da Il Centro.',
-        );
-
-        return response()->json([
-            'status' => 'queued',
-            'subscriptions' => DB::table('push_subscriptions')
-                ->where('user_id', $request->user()->id)
-                ->count(),
-        ]);
+        return response()->json(app(CentroNotificationService::class)->testBrowserPush((string) $request->user()->id));
     }
 
     public function show(Request $request, string $id): Response

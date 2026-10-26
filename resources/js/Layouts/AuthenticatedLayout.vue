@@ -9,6 +9,7 @@ import { browserNotificationSupport, enableCentroBrowserNotifications, ensureCen
 import { Link, router, usePage } from '@inertiajs/vue3';
 import {
     Bell,
+    ExternalLink,
     Bookmark,
     Briefcase,
     Calendar,
@@ -203,6 +204,12 @@ function rememberLatestNotification() {
     }
 }
 
+function handlePushMessage(event) {
+    if (event.data?.type !== 'centro:push-received') return;
+    if (event.data.id) window.localStorage.setItem(notificationStorageKey.value, event.data.id);
+    router.reload({ only: ['notifications'], preserveScroll: true, preserveState: true });
+}
+
 async function enableBrowserNotifications() {
     if (notificationPermissionBusy.value) return;
 
@@ -238,11 +245,7 @@ async function maybeShowBrowserNotification(notification) {
 }
 
 function notificationHref(notification) {
-    if (notification.task_id) return route('tasks.show', notification.task_id);
-    if (notification.company_document_id) return route('documents.show', notification.company_document_id);
-    if (notification.company_message_id) return route('document-messages.show', notification.company_message_id);
-
-    return route('notifications.index');
+    return notification.url || route('notifications.index');
 }
 
 function openNotification(notification) {
@@ -286,6 +289,7 @@ onMounted(() => {
     window.addEventListener('centro:task-completed', playCompletionEffect);
     window.addEventListener('centro:browser-notification-permission', handleBrowserPermissionEvent);
     window.addEventListener('centro:close-floating-ui', closeLayoutFloatingUi);
+    navigator.serviceWorker?.addEventListener('message', handlePushMessage);
     notificationPoller = window.setInterval(() => {
         router.reload({ only: ['notifications'], preserveScroll: true, preserveState: true });
     }, 15000);
@@ -298,6 +302,7 @@ onUnmounted(() => {
     window.removeEventListener('centro:task-completed', playCompletionEffect);
     window.removeEventListener('centro:browser-notification-permission', handleBrowserPermissionEvent);
     window.removeEventListener('centro:close-floating-ui', closeLayoutFloatingUi);
+    navigator.serviceWorker?.removeEventListener('message', handlePushMessage);
 });
 
 const groups = computed(() => {
@@ -443,16 +448,19 @@ const groups = computed(() => {
                                 {{ notificationStatusMessage }}
                             </div>
                             <div v-if="$page.props.notifications?.latest?.length" class="max-h-80 overflow-y-auto py-1">
-                                <button
+                                <div
                                     v-for="notification in $page.props.notifications.latest"
                                     :key="notification.id"
-                                    type="button"
-                                    :class="['block w-full border-l-2 px-3 py-2 text-left text-sm transition hover:bg-white/58', notification.read ? 'border-transparent text-gray-600' : 'border-indigo-600 bg-indigo-50/70 text-gray-900']"
-                                    @click="openNotification(notification)"
+                                    :class="['flex items-center border-l-2 transition hover:bg-white/58', notification.read ? 'border-transparent text-gray-600' : 'border-indigo-600 bg-indigo-50/70 text-gray-900']"
                                 >
-                                    <span class="line-clamp-2">{{ notification.message }}</span>
-                                    <span class="mt-1 block text-[11px] text-gray-400">{{ notification.read ? 'Letta' : 'Da leggere' }}</span>
-                                </button>
+                                    <button type="button" class="min-w-0 flex-1 px-3 py-2 text-left text-sm" @click="openNotification(notification)">
+                                        <span class="line-clamp-2">{{ notification.message }}</span>
+                                        <span class="mt-1 block text-[11px] text-gray-400">{{ notification.read ? 'Letta' : 'Da leggere' }}</span>
+                                    </button>
+                                    <button type="button" class="icon-btn mr-2 h-8 w-8 shrink-0" title="Apri la sezione" :aria-label="`Apri la sezione: ${notification.message}`" @click="openNotification(notification)">
+                                        <ExternalLink class="h-4 w-4" :stroke-width="1.7" />
+                                    </button>
+                                </div>
                             </div>
                             <div v-else class="px-3 py-8 text-center text-sm text-gray-500">Nessuna notifica</div>
                         </div>

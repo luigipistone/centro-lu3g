@@ -20,7 +20,11 @@ self.addEventListener('push', (event) => {
         },
     };
 
-    event.waitUntil(self.registration.showNotification(title, options));
+    event.waitUntil((async () => {
+        await self.registration.showNotification(title, options);
+        const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        for (const client of clients) client.postMessage({ type: 'centro:push-received', id: payload.id });
+    })());
 });
 
 self.addEventListener('notificationclick', (event) => {

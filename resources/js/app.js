@@ -53,6 +53,9 @@ function enableBrowserNotificationsFromNativeClick(event) {
             if (subscribed) {
                 trigger.dataset.notificationActivation = 'subscribed';
             }
+            window.dispatchEvent(new CustomEvent('centro:browser-push-subscription', {
+                detail: { subscribed },
+            }));
         })
         .catch((error) => {
             trigger.dataset.notificationActivation = 'failed';

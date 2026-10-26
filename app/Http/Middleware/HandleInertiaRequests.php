@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Services\RolePermissionService;
 use App\Services\SectionAvailabilityService;
+use App\Services\NotificationDestination;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -56,7 +57,7 @@ class HandleInertiaRequests extends Middleware
                     'completion_effect' => $completionEffect,
                 ] : null,
             ],
-            'notifications' => fn () => $user ? $this->notificationPayload($user->id) : ['active' => 0, 'unread' => 0, 'latest' => []],
+            'notifications' => fn () => $user ? $this->notificationPayload($user->id, $role) : ['active' => 0, 'unread' => 0, 'latest' => []],
             'sectionVisibility' => fn () => $user ? app(SectionAvailabilityService::class)->statuses() : [],
             'push' => [
                 'vapidPublicKey' => config('services.webpush.public_key'),
@@ -87,7 +88,7 @@ class HandleInertiaRequests extends Middleware
             ->delete();
     }
 
-    private function notificationPayload(string $userId): array
+    private function notificationPayload(string $userId, ?string $role): array
     {
         $counts = DB::table('notifications')
             ->where('user_id', $userId)
@@ -104,7 +105,15 @@ class HandleInertiaRequests extends Middleware
                 ->where('read', false)
                 ->latest()
                 ->limit(8)
-                ->get(['id', 'task_id', 'company_document_id', 'company_message_id', 'type', 'message', 'read', 'created_at']),
+                ->get(['id', 'task_id', 'company_document_id', 'company_message_id', 'type', 'message', 'read', 'created_at'])
+                ->map(function ($notification) use ($role) {
+                    $notification->url = NotificationDestination::url(
+                        $notification->type, $notification->task_id, $notification->company_document_id,
+                        $notification->company_message_id, $role,
+                    );
+
+                    return $notification;
+                }),
         ];
     }
 }

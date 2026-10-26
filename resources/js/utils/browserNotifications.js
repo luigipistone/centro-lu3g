@@ -53,6 +53,21 @@ export async function registerCentroServiceWorker() {
     }
 }
 
+export async function centroPushSubscriptionStatus(vapidPublicKey = null) {
+    if (browserNotificationSupport() !== 'granted') return 'permission_required';
+    if (!window.isSecureContext || !vapidPublicKey || !('PushManager' in window) || !('serviceWorker' in navigator)) return 'unavailable';
+
+    const registration = await registerCentroServiceWorker();
+    if (!registration) return 'unavailable';
+
+    try {
+        const subscription = await withTimeout(registration.pushManager.getSubscription(), 8000, null);
+        return subscription ? 'subscribed' : 'not_subscribed';
+    } catch {
+        return 'unavailable';
+    }
+}
+
 function urlBase64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
     const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');

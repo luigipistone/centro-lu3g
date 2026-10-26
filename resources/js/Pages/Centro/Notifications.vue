@@ -1,9 +1,9 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { browserNotificationSupport, enableCentroBrowserNotifications } from '@/utils/browserNotifications';
+import { browserNotificationSupport, centroPushSubscriptionStatus, enableCentroBrowserNotifications } from '@/utils/browserNotifications';
 import { APP_TIME_ZONE } from '@/utils/formatters';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { Archive, Bell, Check, RotateCcw } from '@lucide/vue';
+import { Archive, Bell, Check, ExternalLink, RotateCcw } from '@lucide/vue';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 
 const props = defineProps({
@@ -19,22 +19,33 @@ const confirmText = ref('');
 const browserPermission = ref(browserNotificationSupport());
 const browserNotificationMessage = ref('');
 const browserNotificationBusy = ref(false);
+const pushStatus = ref('checking');
+const pushTestBusy = ref(false);
+const pushTestMessage = ref('');
 
 const emptyLabel = computed(() => props.archived ? 'Nessuna notifica archiviata.' : 'Nessuna notifica attiva.');
 
 function handleBrowserPermissionEvent(event) {
     browserPermission.value = event.detail?.permission || browserNotificationSupport();
     browserNotificationMessage.value = browserPermission.value === 'granted'
-        ? 'Notifiche browser attivate.'
+        ? 'Permesso browser concesso. Verifica della registrazione push in corso.'
         : 'Il browser non ha concesso il permesso notifiche.';
+    refreshPushStatus();
+}
+
+async function refreshPushStatus() {
+    pushStatus.value = await centroPushSubscriptionStatus(page.props.push?.vapidPublicKey);
 }
 
 onMounted(() => {
     window.addEventListener('centro:browser-notification-permission', handleBrowserPermissionEvent);
+    window.addEventListener('centro:browser-push-subscription', refreshPushStatus);
+    refreshPushStatus();
 });
 
 onUnmounted(() => {
     window.removeEventListener('centro:browser-notification-permission', handleBrowserPermissionEvent);
+    window.removeEventListener('centro:browser-push-subscription', refreshPushStatus);
 });
 
 function markRead(notification) {
@@ -42,11 +53,19 @@ function markRead(notification) {
 }
 
 function notificationHref(notification) {
-    if (notification.task_id) return route('tasks.show', notification.task_id);
-    if (notification.company_document_id) return route('documents.show', notification.company_document_id);
-    if (notification.company_message_id) return route('document-messages.show', notification.company_message_id);
+    return notification.url || route('notifications.index');
+}
 
-    return null;
+function openNotification(notification) {
+    const destination = notificationHref(notification);
+    if (props.archived || notification.read) {
+        router.visit(destination);
+        return;
+    }
+    router.patch(route('notifications.read', notification.id), {}, {
+        preserveScroll: true,
+        onFinish: () => router.visit(destination),
+    });
 }
 
 function markAllRead() {
@@ -85,12 +104,32 @@ async function enableBrowserNotifications() {
         const result = await enableCentroBrowserNotifications(page.props.push?.vapidPublicKey);
         browserPermission.value = result.permission;
         browserNotificationMessage.value = result.message;
+        await refreshPushStatus();
     } catch (error) {
         console.warn('Attivazione notifiche non riuscita', error);
         browserPermission.value = browserNotificationSupport();
         browserNotificationMessage.value = 'Attivazione non riuscita. Controlla i permessi notifiche del browser per questo sito.';
     } finally {
         browserNotificationBusy.value = false;
+    }
+}
+
+async function testBrowserPush() {
+    if (pushTestBusy.value) return;
+    pushTestBusy.value = true;
+    pushTestMessage.value = '';
+    try {
+        const { data } = await window.axios.post(route('push.test'));
+        pushTestMessage.value = data.status === 'sent'
+            ? `Push inviato a ${data.sent} dispositivo${data.sent === 1 ? '' : 'i'}. Controlla che la notifica compaia nel browser.`
+            : data.status === 'not_configured' ? 'Le chiavi push non sono configurate sul server.'
+            : data.status === 'no_subscription' ? 'Nessun dispositivo registrato per questo account. Completa l’attivazione del browser.'
+            : 'Il servizio push non ha accettato la notifica. Controlla la registrazione del dispositivo.';
+        await refreshPushStatus();
+    } catch {
+        pushTestMessage.value = 'Test push non riuscito. Riprova o controlla la connessione.';
+    } finally {
+        pushTestBusy.value = false;
     }
 }
 
@@ -153,21 +192,25 @@ function formatDate(value) {
 
                     <div class="flex flex-wrap items-center gap-2">
                         <button
-                            v-if="browserPermission === 'default'"
+                            v-if="browserPermission === 'default' || (browserPermission === 'granted' && pushStatus !== 'subscribed')"
                             type="button"
                             class="btn btn-outline"
                             :disabled="browserNotificationBusy"
                             @click="enableBrowserNotifications"
                         >
                             <Bell class="h-4 w-4" :stroke-width="1.7" />
-                            {{ browserNotificationBusy ? 'Attivazione...' : 'Attiva browser' }}
+                            {{ browserNotificationBusy ? 'Attivazione...' : browserPermission === 'granted' ? 'Completa push' : 'Attiva browser' }}
                         </button>
-                        <span v-else-if="browserPermission === 'granted'" class="inline-flex min-h-10 items-center rounded-[var(--radius-sm)] border border-green-100 bg-green-50 px-3 text-sm font-semibold text-green-700">
-                            Browser attivo
+                        <span v-if="browserPermission === 'granted' && pushStatus === 'subscribed'" class="inline-flex min-h-10 items-center rounded-[var(--radius-sm)] border border-green-100 bg-green-50 px-3 text-sm font-semibold text-green-700">
+                            Push attivo
                         </span>
                         <span v-else-if="browserPermission === 'denied'" class="inline-flex min-h-10 items-center rounded-[var(--radius-sm)] border border-amber-100 bg-amber-50 px-3 text-sm font-semibold text-amber-700">
                             Browser bloccato
                         </span>
+                        <button v-if="browserPermission === 'granted'" type="button" class="btn btn-outline" :disabled="pushTestBusy" @click="testBrowserPush">
+                            <Bell class="h-4 w-4" :stroke-width="1.7" />
+                            {{ pushTestBusy ? 'Invio...' : 'Prova push' }}
+                        </button>
                         <button v-if="!archived" type="button" class="btn btn-outline" @click="markAllRead">
                             <Check class="h-4 w-4" :stroke-width="1.7" />
                             Segna lette
@@ -185,6 +228,9 @@ function formatDate(value) {
                 <div v-if="browserNotificationMessage" class="rounded-[var(--radius-sm)] border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-700">
                     {{ browserNotificationMessage }}
                 </div>
+                <div v-if="pushTestMessage" class="rounded-[var(--radius-sm)] border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+                    {{ pushTestMessage }}
+                </div>
 
                 <section class="surface overflow-hidden">
                     <div v-if="notifications.length" class="divide-y divide-gray-100">
@@ -196,24 +242,25 @@ function formatDate(value) {
                             <span :class="['mt-2 h-2.5 w-2.5 shrink-0 rounded-full', notification.read || archived ? 'bg-gray-300' : 'bg-indigo-600']" />
                             <div class="min-w-0 flex-1">
                                 <Link
-                                    v-if="notificationHref(notification)"
                                     :href="notificationHref(notification)"
                                     class="block text-sm font-semibold text-gray-900 transition hover:text-indigo-600"
-                                    @click="!archived && markRead(notification)"
+                                    @click.prevent="openNotification(notification)"
                                 >
                                     {{ notification.message }}
                                 </Link>
-                                <p v-else class="text-sm font-semibold text-gray-900">{{ notification.message }}</p>
                                 <p class="mt-1 text-xs text-gray-500">
                                     {{ formatDate(notification.created_at) }}
                                     <span v-if="notification.task_title"> · {{ notification.task_title }}</span>
                                 </p>
                             </div>
-                            <div class="flex shrink-0 items-center gap-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100">
+                            <div class="flex shrink-0 items-center gap-1">
+                                <button type="button" class="icon-btn h-9 w-9" title="Apri la sezione" :aria-label="`Apri la sezione: ${notification.message}`" @click="openNotification(notification)">
+                                    <ExternalLink class="h-4 w-4" :stroke-width="1.7" />
+                                </button>
                                 <button
                                     v-if="!archived && !notification.read"
                                     type="button"
-                                    class="icon-btn h-9 w-9"
+                                    class="icon-btn h-9 w-9 transition sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
                                     title="Segna come letta"
                                     @click="markRead(notification)"
                                 >
@@ -222,7 +269,7 @@ function formatDate(value) {
                                 <button
                                     v-if="!archived"
                                     type="button"
-                                    class="icon-btn h-9 w-9"
+                                    class="icon-btn h-9 w-9 transition sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
                                     title="Archivia"
                                     @click="archive(notification)"
                                 >
@@ -231,7 +278,7 @@ function formatDate(value) {
                                 <button
                                     v-else
                                     type="button"
-                                    class="icon-btn h-9 w-9"
+                                    class="icon-btn h-9 w-9 transition sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
                                     title="Ripristina"
                                     @click="restore(notification)"
                                 >

@@ -91,11 +91,11 @@ class CentroNotificationService
             }
 
             if ($preferences['browser'] && $externalAllowed) {
-                $this->sendBrowserPushNotification($userId, $notificationId, $message, $taskId, $companyDocumentId, $companyMessageId);
+                $this->sendBrowserPushNotification($userId, $notificationId, $message, $type, $taskId, $companyDocumentId, $companyMessageId);
             }
 
             if ($preferences['mail'] && $externalAllowed) {
-                $this->sendMailNotification($userId, $message, $taskId, $companyDocumentId, $companyMessageId);
+                $this->sendMailNotification($userId, $message, $type, $taskId, $companyDocumentId, $companyMessageId);
             }
         }
     }
@@ -140,13 +140,18 @@ class CentroNotificationService
         return $taskId !== null && in_array($type, ['task_updated'], true);
     }
 
-    private function sendBrowserPushNotification(string $userId, string $notificationId, string $message, ?string $taskId = null, ?string $companyDocumentId = null, ?string $companyMessageId = null): void
+    public function testBrowserPush(string $userId): array
+    {
+        return $this->sendBrowserPushNotification($userId, (string) str()->uuid(), 'Notifica push di prova da Il Centro.', 'system_test');
+    }
+
+    private function sendBrowserPushNotification(string $userId, string $notificationId, string $message, string $type, ?string $taskId = null, ?string $companyDocumentId = null, ?string $companyMessageId = null): array
     {
         $publicKey = config('services.webpush.public_key');
         $privateKey = config('services.webpush.private_key');
 
         if (! $publicKey || ! $privateKey) {
-            return;
+            return ['status' => 'not_configured', 'subscriptions' => 0, 'sent' => 0, 'failed' => 0];
         }
 
         $subscriptions = DB::table('push_subscriptions')
@@ -154,7 +159,7 @@ class CentroNotificationService
             ->get();
 
         if ($subscriptions->isEmpty()) {
-            return;
+            return ['status' => 'no_subscription', 'subscriptions' => 0, 'sent' => 0, 'failed' => 0];
         }
 
         $webPush = new WebPush([
@@ -170,7 +175,10 @@ class CentroNotificationService
             'title' => 'Il Centro',
             'body' => $message,
             'tag' => $notificationId,
-            'url' => $taskId ? route('tasks.show', $taskId) : ($companyDocumentId ? route('documents.show', $companyDocumentId) : ($companyMessageId ? route('document-messages.show', $companyMessageId) : route('notifications.index'))),
+            'url' => NotificationDestination::url(
+                $type, $taskId, $companyDocumentId, $companyMessageId,
+                DB::table('user_roles')->where('user_id', $userId)->value('role'),
+            ),
         ], JSON_THROW_ON_ERROR);
 
         foreach ($subscriptions as $subscription) {
@@ -185,27 +193,44 @@ class CentroNotificationService
             );
         }
 
-        foreach ($webPush->flush() as $report) {
-            if ($report->isSuccess()) {
-                continue;
-            }
+        $sent = 0;
+        $failed = 0;
+        try {
+            foreach ($webPush->flush() as $report) {
+                if ($report->isSuccess()) {
+                    $sent++;
+                    continue;
+                }
 
+                $failed++;
+
+                Log::warning('Invio notifica push browser non riuscito.', [
+                    'user_id' => $userId,
+                    'notification_id' => $notificationId,
+                    'endpoint' => $report->getEndpoint(),
+                    'reason' => $report->getReason(),
+                ]);
+
+                if ($report->isSubscriptionExpired()) {
+                    DB::table('push_subscriptions')
+                        ->where('endpoint', $report->getEndpoint())
+                        ->delete();
+                }
+            }
+        } catch (\Throwable $exception) {
             Log::warning('Invio notifica push browser non riuscito.', [
                 'user_id' => $userId,
                 'notification_id' => $notificationId,
-                'endpoint' => $report->getEndpoint(),
-                'reason' => $report->getReason(),
+                'reason' => $exception->getMessage(),
             ]);
 
-            if ($report->isSubscriptionExpired()) {
-                DB::table('push_subscriptions')
-                    ->where('endpoint', $report->getEndpoint())
-                    ->delete();
-            }
+            return ['status' => 'failed', 'subscriptions' => $subscriptions->count(), 'sent' => $sent, 'failed' => $failed + 1];
         }
+
+        return ['status' => $sent > 0 ? 'sent' : 'failed', 'subscriptions' => $subscriptions->count(), 'sent' => $sent, 'failed' => $failed];
     }
 
-    private function sendMailNotification(string $userId, string $message, ?string $taskId = null, ?string $companyDocumentId = null, ?string $companyMessageId = null): void
+    private function sendMailNotification(string $userId, string $message, string $type, ?string $taskId = null, ?string $companyDocumentId = null, ?string $companyMessageId = null): void
     {
         $settings = DB::table('email_settings')->first();
         if (! $settings || ! $settings->smtp_enabled || ! $settings->smtp_host || ! $settings->smtp_from_email) {
@@ -226,7 +251,10 @@ class CentroNotificationService
         Config::set('mail.from.address', $settings->smtp_from_email);
         Config::set('mail.from.name', $settings->smtp_from_name ?: 'Il Centro');
 
-        $url = $taskId ? route('tasks.show', $taskId) : ($companyDocumentId ? route('documents.show', $companyDocumentId) : ($companyMessageId ? route('document-messages.show', $companyMessageId) : route('notifications.index')));
+        $url = NotificationDestination::url(
+            $type, $taskId, $companyDocumentId, $companyMessageId,
+            DB::table('user_roles')->where('user_id', $userId)->value('role'),
+        );
 
         try {
             Mail::html($this->notificationEmailHtml($message, $url, $user->name ?: null), function ($mail) use ($user, $settings) {
