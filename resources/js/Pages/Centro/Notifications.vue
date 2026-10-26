@@ -254,7 +254,7 @@ function formatDate(value) {
                                 </p>
                             </div>
                             <div class="flex shrink-0 items-center gap-1">
-                                <button type="button" class="icon-btn h-9 w-9" title="Apri la sezione" :aria-label="`Apri la sezione: ${notification.message}`" @click="openNotification(notification)">
+                                <button type="button" class="icon-btn h-9 w-9 transition sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100" title="Apri la sezione" :aria-label="`Apri la sezione: ${notification.message}`" @click="openNotification(notification)">
                                     <ExternalLink class="h-4 w-4" :stroke-width="1.7" />
                                 </button>
                                 <button
