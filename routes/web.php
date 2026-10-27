@@ -49,6 +49,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/tools/text-cleaner', fn () => Inertia::render('Centro/TextCleaner'))->name('tools.text-cleaner');
     Route::get('/tools/styled-text', fn () => Inertia::render('Centro/StyledText'))->name('tools.styled-text');
     Route::get('/tools/qr-code', fn () => Inertia::render('Centro/QrCode'))->name('tools.qr-code');
+    Route::get('/tools/colors', fn () => Inertia::render('Centro/ColorConverter'))->name('tools.colors');
     Route::get('/tools/video-to-webm', [VideoConversionController::class, 'index'])->name('tools.video-to-webm');
     Route::get('/tools/video-to-webm/conversions', [VideoConversionController::class, 'conversions'])->name('tools.video-to-webm.conversions');
     Route::post('/tools/video-to-webm/conversions', [VideoConversionController::class, 'store'])->name('tools.video-to-webm.store');

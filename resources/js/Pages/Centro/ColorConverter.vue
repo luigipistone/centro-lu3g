@@ -1,0 +1,158 @@
+<script setup>
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import { Head, Link, usePage } from '@inertiajs/vue3';
+import { ArrowLeft, Check, Copy, Palette, Trash2 } from '@lucide/vue';
+import { computed, onMounted, reactive, ref } from 'vue';
+import { hslToRgb, parseHex, parseHsl, parseRgb, rgbToHex, rgbToHsl } from '@/utils/colorConverter';
+
+const page = usePage();
+const storageKey = `centro-color-history-${page.props.auth?.user?.id || 'user'}`;
+const color = ref({ r: 31, g: 99, b: 214 });
+const hexInput = ref(rgbToHex(color.value));
+const rgbInput = reactive({ r: String(color.value.r), g: String(color.value.g), b: String(color.value.b) });
+const hslInput = reactive(rgbToHsl(color.value));
+const history = ref([]);
+const error = ref('');
+const copied = ref('');
+let copiedTimer;
+
+const hex = computed(() => rgbToHex(color.value));
+const rgbText = computed(() => `rgb(${color.value.r}, ${color.value.g}, ${color.value.b})`);
+const hslText = computed(() => {
+    const { h, s, l } = rgbToHsl(color.value);
+    return `hsl(${h}, ${s}%, ${l}%)`;
+});
+const inputClass = 'mt-2 block w-full min-w-0 rounded-[var(--radius-sm)] border-gray-200 bg-white text-sm text-gray-900 focus:border-[hsl(var(--primary-app))] focus:ring-[hsl(var(--primary-app)/0.18)]';
+
+function syncInputs(source) {
+    if (source !== 'hex') hexInput.value = hex.value;
+    if (source !== 'rgb') Object.assign(rgbInput, color.value);
+    if (source !== 'hsl') Object.assign(hslInput, rgbToHsl(color.value));
+    error.value = '';
+    copied.value = '';
+}
+
+function updateHex() {
+    const parsed = parseHex(hexInput.value);
+    if (!parsed) { error.value = 'Inserisci un HEX di 3 o 6 caratteri.'; return; }
+    color.value = parsed;
+    syncInputs('hex');
+}
+
+function normalizeHexInput() {
+    if (!error.value) hexInput.value = hex.value;
+}
+
+function updateRgb() {
+    const parsed = parseRgb(rgbInput);
+    if (!parsed) { error.value = 'I valori RGB devono essere numeri interi da 0 a 255.'; return; }
+    color.value = parsed;
+    syncInputs('rgb');
+}
+
+function updateHsl() {
+    const parsed = parseHsl(hslInput);
+    if (!parsed) { error.value = 'Usa tonalità 0–360 e saturazione/luminosità 0–100.'; return; }
+    color.value = hslToRgb(parsed);
+    syncInputs('hsl');
+}
+
+function setColor(value) {
+    const parsed = parseHex(value);
+    if (!parsed) return;
+    color.value = parsed;
+    syncInputs();
+}
+
+function rememberColor(value) {
+    history.value = [value, ...history.value.filter((item) => item !== value)].slice(0, 8);
+    try { localStorage.setItem(storageKey, JSON.stringify(history.value)); } catch { /* Private browsing may disable storage. */ }
+}
+
+async function copyValue(kind) {
+    if (error.value) return;
+    const value = kind === 'rgb' ? rgbText.value : kind === 'hsl' ? hslText.value : hex.value;
+    try {
+        await navigator.clipboard.writeText(value);
+        rememberColor(hex.value);
+        copied.value = kind;
+        window.clearTimeout(copiedTimer);
+        copiedTimer = window.setTimeout(() => { copied.value = ''; }, 2200);
+    } catch {
+        error.value = 'Copia non disponibile. Seleziona il valore per copiarlo.';
+    }
+}
+
+function clearHistory() {
+    history.value = [];
+    try { localStorage.removeItem(storageKey); } catch { /* Private browsing may disable storage. */ }
+}
+
+onMounted(() => {
+    try {
+        const saved = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        if (Array.isArray(saved)) history.value = [...new Set(saved.filter((item) => typeof item === 'string' && parseHex(item)).map((item) => rgbToHex(parseHex(item))))].slice(0, 8);
+    } catch { history.value = []; }
+});
+</script>
+
+<template>
+    <Head title="Converti colori" />
+    <AuthenticatedLayout>
+        <template #header>
+            <div class="flex flex-col gap-1">
+                <Link :href="route('tools.index')" class="inline-flex w-fit items-center gap-2 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]"><ArrowLeft class="h-4 w-4" :stroke-width="1.8" />Torna a Strumenti</Link>
+                <h2 class="text-xl font-semibold leading-tight text-gray-800">Converti colori</h2>
+            </div>
+        </template>
+
+        <div class="py-8">
+            <div class="mx-auto max-w-[1200px] space-y-5 px-4 sm:px-6 lg:px-8">
+                <section class="surface p-5 sm:p-6">
+                    <div class="flex items-center gap-3"><span class="flex h-11 w-11 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]"><Palette class="h-6 w-6" :stroke-width="1.7" /></span><h3 class="text-base font-semibold text-gray-900">Colore</h3></div>
+                    <div class="mt-5 grid gap-6 lg:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.2fr)]">
+                        <div class="min-w-0">
+                            <div class="relative h-44 overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 sm:h-52" :style="{ backgroundColor: hex }">
+                                <input type="color" :value="hex" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label="Scegli un colore" title="Scegli un colore" @input="setColor($event.target.value)" />
+                            </div>
+                            <p class="mt-2 text-sm font-medium text-gray-700">{{ hex }}</p>
+                        </div>
+                        <div class="min-w-0 space-y-5">
+                            <div class="grid gap-3 sm:grid-cols-[80px_minmax(0,1fr)_44px] sm:items-end">
+                                <label for="color-hex" class="text-sm font-semibold text-gray-800 sm:pb-3">HEX</label>
+                                <input id="color-hex" v-model="hexInput" type="text" maxlength="7" spellcheck="false" placeholder="#1F63D6" :class="inputClass" class="!mt-0" @input="updateHex" @blur="normalizeHexInput" />
+                                <button type="button" class="icon-btn h-10 w-10" :disabled="!!error" :title="copied === 'hex' ? 'Copiato' : 'Copia HEX'" aria-label="Copia HEX" @click="copyValue('hex')"><Check v-if="copied === 'hex'" class="h-4 w-4" /><Copy v-else class="h-4 w-4" /></button>
+                            </div>
+                            <div class="grid gap-3 sm:grid-cols-[80px_minmax(0,1fr)_44px] sm:items-end">
+                                <span class="text-sm font-semibold text-gray-800 sm:pb-3">RGB</span>
+                                <div class="grid grid-cols-3 gap-2">
+                                    <label v-for="channel in ['r', 'g', 'b']" :key="channel" class="min-w-0"><span class="block text-xs font-medium uppercase text-gray-500">{{ channel }}</span><input v-model="rgbInput[channel]" type="number" min="0" max="255" step="1" :aria-label="channel.toUpperCase()" :class="inputClass" class="!mt-1" @input="updateRgb" /></label>
+                                </div>
+                                <button type="button" class="icon-btn h-10 w-10" :disabled="!!error" :title="copied === 'rgb' ? 'Copiato' : 'Copia RGB'" aria-label="Copia RGB" @click="copyValue('rgb')"><Check v-if="copied === 'rgb'" class="h-4 w-4" /><Copy v-else class="h-4 w-4" /></button>
+                            </div>
+                            <div class="grid gap-3 sm:grid-cols-[80px_minmax(0,1fr)_44px] sm:items-end">
+                                <span class="text-sm font-semibold text-gray-800 sm:pb-3">HSL</span>
+                                <div class="grid grid-cols-3 gap-2">
+                                    <label v-for="channel in ['h', 's', 'l']" :key="channel" class="min-w-0"><span class="block text-xs font-medium uppercase text-gray-500">{{ channel }}</span><input v-model="hslInput[channel]" type="number" :min="0" :max="channel === 'h' ? 360 : 100" step="any" :aria-label="channel.toUpperCase()" :class="inputClass" class="!mt-1" @input="updateHsl" /></label>
+                                </div>
+                                <button type="button" class="icon-btn h-10 w-10" :disabled="!!error" :title="copied === 'hsl' ? 'Copiato' : 'Copia HSL'" aria-label="Copia HSL" @click="copyValue('hsl')"><Check v-if="copied === 'hsl'" class="h-4 w-4" /><Copy v-else class="h-4 w-4" /></button>
+                            </div>
+                            <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="surface p-5 sm:p-6">
+                    <div class="flex items-center justify-between gap-3"><h3 class="text-base font-semibold text-gray-900">Copiati di recente</h3><button v-if="history.length" type="button" class="icon-btn h-9 w-9" title="Svuota cronologia" aria-label="Svuota cronologia" @click="clearHistory"><Trash2 class="h-4 w-4" /></button></div>
+                    <p v-if="!history.length" class="mt-4 text-sm text-gray-500">Nessun colore copiato.</p>
+                    <div v-else class="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                        <div v-for="saved in history" :key="saved" class="flex min-w-0 items-center gap-2 rounded-[var(--radius-sm)] border border-gray-200 p-2">
+                            <button type="button" class="flex min-w-0 flex-1 items-center gap-2 text-left text-sm font-medium text-gray-800" :title="`Seleziona ${saved}`" @click="setColor(saved)"><span class="h-9 w-9 shrink-0 rounded-[var(--radius-sm)] border border-gray-200" :style="{ backgroundColor: saved }" /><span class="truncate">{{ saved }}</span></button>
+                            <button type="button" class="icon-btn h-9 w-9 shrink-0" :aria-label="`Copia ${saved}`" :title="`Copia ${saved}`" @click="setColor(saved); copyValue('hex')"><Copy class="h-4 w-4" /></button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </AuthenticatedLayout>
+</template>
