@@ -894,6 +894,7 @@ class CentroPageController extends Controller
             'organizationOptions' => $section === 'settings' ? DB::table('employee_organization_options')->orderBy('name')->get() : [],
             'emailSettings' => $section === 'settings' ? $this->emailSettingsForView() : null,
             'figmaSettings' => $section === 'settings' ? $this->figmaSettingsForView() : null,
+            'githubSettings' => $section === 'settings' ? ['token_saved' => filled(DB::table('github_settings')->value('encrypted_token'))] : null,
             'backupRuns' => $section === 'settings' ? $this->backupRuns() : [],
             'rolePermissionMatrix' => $section === 'settings' ? app(RolePermissionService::class)->matrix() : null,
             'sectionAvailability' => $section === 'settings' ? app(SectionAvailabilityService::class)->settingsRows() : [],

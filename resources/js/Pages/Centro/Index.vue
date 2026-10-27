@@ -90,6 +90,7 @@ const props = defineProps({
     organizationOptions: Array,
     emailSettings: Object,
     figmaSettings: Object,
+    githubSettings: Object,
     backupRuns: Array,
     rolePermissionMatrix: Object,
     sectionAvailability: Array,
@@ -356,7 +357,8 @@ const taskSearchSelectQueries = ref({
     priority: '',
 });
 const taskDescriptionEditor = ref(null);
-const settingsTab = ref(['log', 'sezioni'].includes(new URLSearchParams(window.location.search).get('tab')) ? new URLSearchParams(window.location.search).get('tab') : 'personalizzazione');
+const requestedSettingsTab = new URLSearchParams(window.location.search).get('tab');
+const settingsTab = ref(['log', 'sezioni'].includes(requestedSettingsTab) || (requestedSettingsTab === 'github' && isSuperadmin.value) ? requestedSettingsTab : 'personalizzazione');
 const organizationDrafts = ref({ department: '', office: '' });
 const organizationEditingId = ref(null);
 const organizationEditingName = ref('');
@@ -502,6 +504,8 @@ const figmaSettingsForm = useForm({
     token_days_remaining: props.figmaSettings?.token_days_remaining ?? null,
 });
 const figmaTestForm = useForm({});
+const githubSettingsForm = useForm({ token: '' });
+const githubTestForm = useForm({});
 
 const routeBase = computed(() => {
     if (props.section === 'settings') return 'settings';
@@ -650,6 +654,7 @@ const settingsTabs = [
     ['personalizzazione', 'Personalizzazione', Building2],
     ['smtp', 'SMTP', Mail],
     ['figma', 'Figma', PanelsTopLeft],
+    ['github', 'GitHub', GitBranch],
     ['backup', 'Backup', DatabaseBackup],
     ['ruoli', 'Ruoli', ShieldCheck],
     ['sezioni', 'Sezioni', PanelsTopLeft],
@@ -1677,6 +1682,17 @@ function saveFigmaSettings() {
 
 function testFigmaConnection() {
     figmaTestForm.post(route('settings.figma.test'), { preserveScroll: true });
+}
+
+function saveGitHubSettings() {
+    githubSettingsForm.put(route('settings.github.update'), {
+        preserveScroll: true,
+        onSuccess: () => { githubSettingsForm.token = ''; },
+    });
+}
+
+function testGitHubConnection() {
+    githubTestForm.post(route('settings.github.test'), { preserveScroll: true });
 }
 
 
@@ -5949,7 +5965,7 @@ function calendarDayStyle(sectionMonth, cell) {
 
                 <div class="surface flex flex-wrap gap-2 p-2">
                     <button
-                        v-for="tab in settingsTabs"
+                        v-for="tab in settingsTabs.filter(item => item[0] !== 'github' || isSuperadmin)"
                         :key="tab[0]"
                         type="button"
                         :class="['settings-tab flex-none whitespace-nowrap', settingsTab === tab[0] ? 'settings-tab-active' : '']"
@@ -6125,6 +6141,27 @@ function calendarDayStyle(sectionMonth, cell) {
                             <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': figmaTestForm.processing }" :stroke-width="1.7" />
                             {{ figmaTestForm.processing ? 'Verifica...' : 'Testa connessione' }}
                         </button>
+                    </div>
+                </section>
+
+                <section v-else-if="settingsTab === 'github' && isSuperadmin" class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+                    <form class="app-card" @submit.prevent="saveGitHubSettings">
+                        <h3 class="section-title"><span class="section-icon"><GitBranch class="h-4 w-4" :stroke-width="1.7" /></span>Connessione GitHub</h3>
+                        <p class="mt-2 text-sm text-gray-500">Repository di lu3gofficial con Plugin_Wordpress = yes.</p>
+                        <div class="mt-5">
+                            <label class="block text-sm font-medium text-gray-700">Token GitHub</label>
+                            <input v-model="githubSettingsForm.token" type="password" class="form-control" placeholder="Inserisci un token" autocomplete="new-password" />
+                            <p v-if="githubSettings?.token_saved" class="mt-1 text-xs font-medium text-emerald-600">Token salvato e cifrato. Inseriscine uno nuovo solo per sostituirlo.</p>
+                            <p v-else class="mt-1 text-xs text-gray-500">Richiede accesso in lettura alle repository e alle custom property dell’organizzazione.</p>
+                            <p v-if="githubSettingsForm.errors.token" class="mt-1 text-sm text-red-600">{{ githubSettingsForm.errors.token }}</p>
+                        </div>
+                        <button type="submit" class="btn btn-primary mt-5" :disabled="githubSettingsForm.processing"><Save class="h-4 w-4" :stroke-width="1.7" />{{ githubSettingsForm.processing ? 'Salvataggio...' : 'Salva GitHub' }}</button>
+                    </form>
+                    <div class="app-card">
+                        <h3 class="section-title"><span class="section-icon"><RefreshCw class="h-4 w-4" :stroke-width="1.7" /></span>Verifica connessione</h3>
+                        <p class="mt-2 text-sm text-gray-500">Controlla l’accesso e il filtro delle repository.</p>
+                        <p v-if="githubTestForm.errors.github_test" class="mt-4 text-sm text-red-600">{{ githubTestForm.errors.github_test }}</p>
+                        <button type="button" class="btn btn-outline mt-5" :disabled="githubTestForm.processing || !githubSettings?.token_saved" @click="testGitHubConnection"><RefreshCw class="h-4 w-4" :class="{ 'animate-spin': githubTestForm.processing }" :stroke-width="1.7" />{{ githubTestForm.processing ? 'Verifica...' : 'Testa connessione' }}</button>
                     </div>
                 </section>
 

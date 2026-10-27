@@ -3,6 +3,7 @@
 use App\Http\Controllers\AiAgencyController;
 use App\Http\Controllers\CentroPageController;
 use App\Http\Controllers\FigmaIntegrationController;
+use App\Http\Controllers\WebRepositoryController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\ProfileController;
@@ -33,7 +34,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/clients/import', [CentroPageController::class, 'clientCsvImportPage'])->name('clients.import');
     Route::post('/clients/import/preview', [CentroPageController::class, 'previewClientCsv'])->name('clients.import.preview');
     Route::post('/clients/import', [CentroPageController::class, 'importClientCsv'])->name('clients.import.store');
-    Route::get('/tools', fn () => Inertia::render('Centro/ToolsIndex'))->name('tools.index');
+    Route::get('/tools', [WebRepositoryController::class, 'tools'])->name('tools.index');
+    Route::get('/tools/web-repositories', [WebRepositoryController::class, 'index'])->middleware('throttle:10,1')->name('tools.web-repositories');
     Route::get('/tools/short-links', [ShortLinkController::class, 'index'])->name('tools.short-links');
     Route::get('/tools/campaign-url-builder', fn () => Inertia::render('Centro/CampaignUrlBuilder'))->name('tools.campaign-url-builder');
     Route::get('/tools/short-links/counts', [ShortLinkController::class, 'counts'])->name('tools.short-links.counts');
@@ -278,6 +280,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/settings/email/test', [CentroPageController::class, 'sendTestEmail'])->name('settings.email.test');
     Route::put('/settings/figma', [FigmaIntegrationController::class, 'update'])->name('settings.figma.update');
     Route::post('/settings/figma/test', [FigmaIntegrationController::class, 'test'])->name('settings.figma.test');
+    Route::put('/settings/github', [WebRepositoryController::class, 'update'])->name('settings.github.update');
+    Route::post('/settings/github/test', [WebRepositoryController::class, 'test'])->name('settings.github.test');
     Route::get('/figma/projects', [FigmaIntegrationController::class, 'projects'])->name('figma.projects');
     Route::get('/figma/projects/{projectId}/files', [FigmaIntegrationController::class, 'files'])->name('figma.project-files');
     Route::post('/settings/backup', [CentroPageController::class, 'runBackup'])->name('settings.backup.run');
