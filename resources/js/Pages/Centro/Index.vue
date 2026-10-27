@@ -6152,7 +6152,7 @@ function calendarDayStyle(sectionMonth, cell) {
                             <label class="block text-sm font-medium text-gray-700">Token GitHub</label>
                             <input v-model="githubSettingsForm.token" type="password" class="form-control" placeholder="Inserisci un token" autocomplete="new-password" />
                             <p v-if="githubSettings?.token_saved" class="mt-1 text-xs font-medium text-emerald-600">Token salvato e cifrato. Inseriscine uno nuovo solo per sostituirlo.</p>
-                            <p v-else class="mt-1 text-xs text-gray-500">Richiede accesso in lettura alle repository e alle custom property dell’organizzazione.</p>
+                            <p class="mt-1 text-xs text-gray-500">Permessi: Metadata e Contents in lettura sulle repository, Custom properties in lettura sull’organizzazione.</p>
                             <p v-if="githubSettingsForm.errors.token" class="mt-1 text-sm text-red-600">{{ githubSettingsForm.errors.token }}</p>
                         </div>
                         <button type="submit" class="btn btn-primary mt-5" :disabled="githubSettingsForm.processing"><Save class="h-4 w-4" :stroke-width="1.7" />{{ githubSettingsForm.processing ? 'Salvataggio...' : 'Salva GitHub' }}</button>

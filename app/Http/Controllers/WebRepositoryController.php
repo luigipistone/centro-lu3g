@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\WebRepositoryService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -57,6 +58,29 @@ class WebRepositoryController extends Controller
         Cache::forget('web-repositories:lu3gofficial');
 
         return back()->with('status', 'Connessione GitHub salvata.');
+    }
+
+    public function download(Request $request, WebRepositoryService $github, string $repository): BinaryFileResponse|RedirectResponse
+    {
+        abort_unless($this->canView($request), 403);
+
+        try {
+            $path = $github->downloadArchive($repository);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $exception) {
+            abort(404);
+        } catch (Throwable $exception) {
+            report($exception);
+            return redirect()->route('tools.web-repositories')
+                ->withErrors(['github_download' => $exception instanceof \RuntimeException
+                    ? $exception->getMessage()
+                    : 'Download non riuscito. Riprova tra poco.']);
+        }
+
+        $response = response()->download($path, $repository.'.zip')->deleteFileAfterSend(true);
+        $response->setPrivate();
+        $response->headers->addCacheControlDirective('no-store');
+
+        return $response;
     }
 
     public function test(Request $request, WebRepositoryService $github): RedirectResponse

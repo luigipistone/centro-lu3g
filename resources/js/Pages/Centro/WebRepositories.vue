@@ -2,12 +2,14 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
-import { ArrowLeft, ExternalLink, GitBranch, LockKeyhole, RefreshCw, Search } from '@lucide/vue';
+import { ArrowLeft, Download, ExternalLink, GitBranch, LockKeyhole, RefreshCw, Search } from '@lucide/vue';
 
 const props = defineProps({ repositories: Array, configured: Boolean, error: String });
+const page = usePage();
 const search = ref('');
 const refreshing = ref(false);
-const isSuperadmin = computed(() => usePage().props.auth?.user?.role === 'superadmin');
+const isSuperadmin = computed(() => page.props.auth?.user?.role === 'superadmin');
+const downloadError = computed(() => page.props.errors?.github_download);
 const filtered = computed(() => (props.repositories || []).filter(repo =>
     `${repo.name} ${repo.description || ''}`.toLocaleLowerCase('it').includes(search.value.trim().toLocaleLowerCase('it')),
 ));
@@ -36,15 +38,16 @@ function refresh() {
                 <div v-else-if="error" class="surface border border-red-200 p-5 text-sm text-red-700">{{ error }}</div>
                 <template v-else>
                     <div class="flex flex-wrap items-end justify-between gap-3">
-                        <label class="min-w-0 flex-1 sm:max-w-md"><span class="mb-1 block text-sm font-medium text-gray-700">Cerca repository</span><span class="relative block"><Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" /><input v-model="search" class="form-control mt-0 pl-10" type="search" placeholder="Nome o descrizione" /></span></label>
+                        <label class="min-w-0 flex-1 sm:max-w-md"><span class="mb-1 block text-sm font-medium text-gray-700">Cerca repository</span><span class="relative block"><Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" /><input v-model="search" class="form-control mt-0" style="padding-left: 2.5rem" type="search" placeholder="Nome o descrizione" /></span></label>
                         <button type="button" class="btn btn-outline" :disabled="refreshing" @click="refresh"><RefreshCw class="h-4 w-4" :class="{ 'animate-spin': refreshing }" :stroke-width="1.7" />Aggiorna</button>
                     </div>
                     <p class="text-sm text-gray-500">{{ filtered.length }} repository · lu3gofficial</p>
+                    <p v-if="downloadError" class="surface border border-red-200 p-4 text-sm text-red-700">{{ downloadError }}</p>
                     <div v-if="filtered.length" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                        <a v-for="repo in filtered" :key="repo.url" :href="repo.url" target="_blank" rel="noopener noreferrer" class="surface group flex min-h-[150px] flex-col justify-between p-5 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]">
-                            <div class="flex min-w-0 items-start gap-3"><span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]"><GitBranch class="h-5 w-5" :stroke-width="1.7" /></span><span class="min-w-0"><span class="block break-words font-semibold text-gray-900">{{ repo.name }}</span><span v-if="repo.description" class="mt-1 line-clamp-2 block text-sm text-gray-500">{{ repo.description }}</span></span></div>
-                            <span class="mt-4 flex items-center justify-between gap-2 text-xs text-gray-500"><span class="flex items-center gap-1"><LockKeyhole v-if="repo.private" class="h-3.5 w-3.5" />{{ repo.private ? 'Privata' : 'Pubblica' }}<span v-if="repo.language">· {{ repo.language }}</span></span><ExternalLink class="h-4 w-4 shrink-0 transition group-hover:text-[hsl(var(--primary-app))]" /></span>
-                        </a>
+                        <div v-for="repo in filtered" :key="repo.url" class="surface group flex min-h-[150px] flex-col justify-between p-5 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]">
+                            <div class="flex min-w-0 items-start gap-3"><span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]"><GitBranch class="h-5 w-5" :stroke-width="1.7" /></span><span class="min-w-0"><a :href="repo.url" target="_blank" rel="noopener noreferrer" class="block break-words font-semibold text-gray-900 hover:text-[hsl(var(--primary-app))]">{{ repo.name }}</a><span v-if="repo.description" class="mt-1 line-clamp-2 block text-sm text-gray-500">{{ repo.description }}</span></span></div>
+                            <div class="mt-4 flex items-center justify-between gap-2 text-xs text-gray-500"><span class="flex items-center gap-1"><LockKeyhole v-if="repo.private" class="h-3.5 w-3.5" />{{ repo.private ? 'Privata' : 'Pubblica' }}<span v-if="repo.language">· {{ repo.language }}</span></span><span class="flex items-center gap-1"><a :href="repo.url" target="_blank" rel="noopener noreferrer" class="icon-btn" :aria-label="`Apri ${repo.name} su GitHub`" title="Apri su GitHub"><ExternalLink class="h-4 w-4" /></a><a :href="route('tools.web-repositories.download', repo.name)" class="icon-btn" :aria-label="`Scarica ZIP di ${repo.name}`" title="Scarica ZIP"><Download class="h-4 w-4" /></a></span></div>
+                        </div>
                     </div>
                     <div v-else class="surface p-6 text-sm text-gray-500">{{ search ? 'Nessuna repository corrisponde alla ricerca.' : 'Nessuna repository con Plugin_Wordpress = yes.' }}</div>
                 </template>

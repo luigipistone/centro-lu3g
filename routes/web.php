@@ -36,6 +36,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/clients/import', [CentroPageController::class, 'importClientCsv'])->name('clients.import.store');
     Route::get('/tools', [WebRepositoryController::class, 'tools'])->name('tools.index');
     Route::get('/tools/web-repositories', [WebRepositoryController::class, 'index'])->middleware('throttle:10,1')->name('tools.web-repositories');
+    Route::get('/tools/web-repositories/{repository}/download', [WebRepositoryController::class, 'download'])->middleware('throttle:5,1')->name('tools.web-repositories.download');
     Route::get('/tools/short-links', [ShortLinkController::class, 'index'])->name('tools.short-links');
     Route::get('/tools/campaign-url-builder', fn () => Inertia::render('Centro/CampaignUrlBuilder'))->name('tools.campaign-url-builder');
     Route::get('/tools/short-links/counts', [ShortLinkController::class, 'counts'])->name('tools.short-links.counts');
