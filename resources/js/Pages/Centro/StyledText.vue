@@ -42,7 +42,7 @@ async function copy(style) {
             </div>
         </template>
         <div class="py-8">
-            <div class="mx-auto max-w-[1200px] space-y-5 px-4 sm:px-6 lg:px-8">
+            <div class="mx-auto max-w-[1600px] space-y-5 px-4 sm:px-6 lg:px-8">
                 <section class="surface p-5 sm:p-6">
                     <div class="mb-3 flex items-center justify-between gap-3">
                         <label for="styled-text-input" class="text-sm font-semibold text-gray-900">Testo</label>

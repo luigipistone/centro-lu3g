@@ -163,7 +163,7 @@ onMounted(() => {
         </template>
 
         <div class="py-8">
-            <div class="mx-auto max-w-[1200px] space-y-5 px-4 sm:px-6 lg:px-8">
+            <div class="mx-auto max-w-[1600px] space-y-5 px-4 sm:px-6 lg:px-8">
                 <section class="surface p-5 sm:p-6">
                     <div class="flex items-center gap-3"><span class="flex h-11 w-11 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]"><Palette class="h-6 w-6" :stroke-width="1.7" /></span><h3 class="text-base font-semibold text-gray-900">Colore</h3></div>
                     <div class="mt-5 grid gap-6 lg:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.2fr)]">
