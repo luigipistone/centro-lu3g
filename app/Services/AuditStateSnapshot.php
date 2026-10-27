@@ -52,7 +52,7 @@ class AuditStateSnapshot
             }
             $fields = $request->input('section') === 'contract'
                 ? ['contract_level', 'employment_status', 'hire_date', 'termination_date']
-                : ['job_title', 'department', 'manager_user_id', 'office', 'weekly_hours', 'part_time', 'part_time_percentage', 'smartworking_day'];
+                : ['job_title', 'department', 'team_division', 'manager_user_id', 'office', 'weekly_hours', 'part_time', 'part_time_percentage', 'smartworking_day'];
             $row = DB::table('profiles')->where('user_id', $id)->first($fields);
 
             return $row ? (array) $row : null;

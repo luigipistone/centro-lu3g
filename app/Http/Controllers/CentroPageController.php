@@ -3046,7 +3046,7 @@ class CentroPageController extends Controller
                 ->leftJoin('user_roles', 'user_roles.user_id', '=', 'users.id')
                 ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
                 ->where('users.id', $id)
-                ->select('users.*', 'user_roles.role', 'profiles.avatar_url', 'profiles.employee_code', 'profiles.first_name', 'profiles.last_name', 'profiles.fiscal_code', 'profiles.birth_date', 'profiles.birth_place', 'profiles.gender', 'profiles.personal_email', 'profiles.residence_place', 'profiles.job_title', 'profiles.contract_level', 'profiles.department', 'profiles.manager_user_id', 'profiles.office', 'profiles.employment_status', 'profiles.hire_date', 'profiles.termination_date', 'profiles.weekly_hours', 'profiles.part_time', 'profiles.part_time_percentage', 'profiles.work_schedule', 'profiles.phone', 'profiles.company_phone', 'profiles.bio', 'profiles.completion_effect', 'profiles.smartworking_day', 'profiles.smartworking_days', 'profiles.smartworking_rules')
+                ->select('users.*', 'user_roles.role', 'profiles.avatar_url', 'profiles.employee_code', 'profiles.first_name', 'profiles.last_name', 'profiles.fiscal_code', 'profiles.birth_date', 'profiles.birth_place', 'profiles.gender', 'profiles.personal_email', 'profiles.residence_place', 'profiles.job_title', 'profiles.contract_level', 'profiles.department', 'profiles.team_division', 'profiles.manager_user_id', 'profiles.office', 'profiles.employment_status', 'profiles.hire_date', 'profiles.termination_date', 'profiles.weekly_hours', 'profiles.part_time', 'profiles.part_time_percentage', 'profiles.work_schedule', 'profiles.phone', 'profiles.company_phone', 'profiles.bio', 'profiles.completion_effect', 'profiles.smartworking_day', 'profiles.smartworking_days', 'profiles.smartworking_rules')
                 ->first(),
             'absences' => DB::table('absence_requests')
                 ->leftJoin('users', 'users.id', '=', 'absence_requests.user_id')
@@ -4940,6 +4940,7 @@ class CentroPageController extends Controller
         $date = fn ($value) => $value ? Carbon::parse($value)->format('d/m/Y') : '';
         $gender = ['female' => 'Donna', 'male' => 'Uomo', 'other' => 'Altro', 'undisclosed' => 'Non indicato'];
         $status = ['active' => 'Attivo', 'suspended' => 'Sospeso', 'ended' => 'Terminato'];
+        $teamDivisions = ['web' => 'Web', 'design' => 'Design', 'digital_marketing' => 'Digital Marketing'];
         $smartDays = json_decode($person->smartworking_days ?: '[]', true) ?: [];
         if (! $smartDays && $person->smartworking_day) {
             $smartDays = [$person->smartworking_day];
@@ -4961,6 +4962,7 @@ class CentroPageController extends Controller
             ['Rapporto di lavoro', ''],
             ['Qualifica', $person->job_title],
             ['Reparto', $person->department],
+            ['Team (divisione)', $teamDivisions[$person->team_division] ?? ''],
             ['Responsabile', $person->manager_name],
             ['Sede', $person->office],
             ['Ore settimanali', $person->weekly_hours],
@@ -5105,6 +5107,7 @@ class CentroPageController extends Controller
         $rules = match ($section) {
             'operational' => [
                 'job_title' => ['nullable', 'string', 'max:255'], 'department' => ['nullable', 'string', 'max:255'],
+                'team_division' => ['nullable', Rule::in(['web', 'design', 'digital_marketing'])],
                 'manager_user_id' => ['nullable', 'uuid', 'exists:users,id'], 'office' => ['nullable', 'string', 'max:255'],
                 'weekly_hours' => ['nullable', 'numeric', 'min:0', 'max:168'], 'part_time' => ['nullable', 'boolean'],
                 'part_time_percentage' => ['nullable', 'integer', 'min:1', 'max:100'], 'smartworking_days' => ['nullable', 'array'],

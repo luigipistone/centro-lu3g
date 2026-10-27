@@ -269,6 +269,34 @@ class UserManagementTest extends TestCase
         $zip->close();
     }
 
+    public function test_team_division_is_saved_shown_and_limited_to_known_values(): void
+    {
+        $superadmin = User::factory()->create();
+        $employee = User::factory()->create();
+        $this->role($superadmin, 'superadmin');
+        $this->role($employee, 'editor');
+
+        $this->actingAs($superadmin)->put(route('users.sensitive.update', $employee->id), [
+            'section' => 'operational', 'confirmed' => true, 'team_division' => 'web',
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('profiles', ['user_id' => $employee->id, 'team_division' => 'web']);
+        $this->actingAs($superadmin)->get(route('users.show', $employee->id))
+            ->assertInertia(fn (Assert $page) => $page->where('record.team_division', 'web'));
+        $this->actingAs($employee)->get(route('profile.edit'))
+            ->assertInertia(fn (Assert $page) => $page->where('profile.team_division', 'web'));
+
+        $export = $this->actingAs($superadmin)->get(route('users.export', [$employee->id, 'xlsx']))->assertOk();
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($export->baseResponse->getFile()->getPathname()) === true);
+        $this->assertStringContainsString('Team (divisione)', $zip->getFromName('xl/worksheets/sheet1.xml'));
+        $zip->close();
+
+        $this->actingAs($superadmin)->put(route('users.sensitive.update', $employee->id), [
+            'section' => 'operational', 'confirmed' => true, 'team_division' => 'sales',
+        ])->assertSessionHasErrors('team_division');
+        $this->assertDatabaseHas('profiles', ['user_id' => $employee->id, 'team_division' => 'web']);
+    }
+
     private function role(User $user, string $role): void
     {
         DB::table('user_roles')->insert([

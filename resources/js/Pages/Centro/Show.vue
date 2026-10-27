@@ -791,7 +791,7 @@ const userForm = useForm({
     fiscal_code: props.record.fiscal_code || '', birth_date: props.record.birth_date || '',
     birth_place: props.record.birth_place || '', gender: props.record.gender || '',
     personal_email: props.record.personal_email || '', residence_place: props.record.residence_place || '',
-    department: props.record.department || '', manager_user_id: props.record.manager_user_id || '', office: props.record.office || '',
+    department: props.record.department || '', team_division: props.record.team_division || '', manager_user_id: props.record.manager_user_id || '', office: props.record.office || '',
     employment_status: props.record.employment_status || 'active', hire_date: props.record.hire_date || '', termination_date: props.record.termination_date || '',
     weekly_hours: props.record.weekly_hours || 40, part_time: Boolean(props.record.part_time), part_time_percentage: props.record.part_time_percentage || '',
     smartworking_days: parsedSmartworkingDays, smartworking_rules: props.record.smartworking_rules || '',
@@ -2129,7 +2129,7 @@ function userPayload() {
 
 function sensitivePayload(section) {
     if (section === 'operational') return {
-        section, confirmed: true, job_title: userForm.job_title, department: userForm.department,
+        section, confirmed: true, job_title: userForm.job_title, department: userForm.department, team_division: userForm.team_division,
         manager_user_id: userForm.manager_user_id || null, office: userForm.office,
         weekly_hours: userForm.weekly_hours || null, part_time: userForm.part_time,
         part_time_percentage: userForm.part_time ? (userForm.part_time_percentage || null) : null,
@@ -5152,6 +5152,7 @@ onUnmounted(() => {
                         <div class="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                             <div><label class="block text-sm font-medium text-gray-700">Qualifica</label><input v-model="userForm.job_title" class="form-control" :disabled="!userFieldAccess.operational_update" /></div>
                             <div><label class="block text-sm font-medium text-gray-700">Reparto</label><AppSelect v-model="userForm.department" :disabled="!userFieldAccess.operational_update" :options="[{ value: '', label: 'Nessun reparto' }, ...(related.organizationOptions || []).filter(item => item.type === 'department').map(item => ({ value: item.name, label: item.name }))]" searchable /><div v-if="userForm.errors.department" class="mt-1 text-sm text-red-600">{{ userForm.errors.department }}</div></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Team (divisione)</label><AppSelect v-model="userForm.team_division" :disabled="!userFieldAccess.operational_update" :options="[{ value: '', label: 'Nessun team' }, { value: 'web', label: 'Web' }, { value: 'design', label: 'Design' }, { value: 'digital_marketing', label: 'Digital Marketing' }]" /><div v-if="userForm.errors.team_division" class="mt-1 text-sm text-red-600">{{ userForm.errors.team_division }}</div></div>
                             <div><label class="block text-sm font-medium text-gray-700">Responsabile</label><AppSelect v-model="userForm.manager_user_id" :disabled="!userFieldAccess.operational_update" :options="[{ value: '', label: 'Nessuno' }, ...related.managerOptions.map(user => ({ value: user.id, label: user.name }))]" /></div>
                             <div><label class="block text-sm font-medium text-gray-700">Sede di lavoro</label><AppSelect v-model="userForm.office" :disabled="!userFieldAccess.operational_update" :options="[{ value: '', label: 'Nessuna sede' }, ...(related.organizationOptions || []).filter(item => item.type === 'office').map(item => ({ value: item.name, label: item.name }))]" searchable /><div v-if="userForm.errors.office" class="mt-1 text-sm text-red-600">{{ userForm.errors.office }}</div></div>
                         </div>

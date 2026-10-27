@@ -45,6 +45,7 @@ const profileTabs = [
     { value: 'security', label: 'Sicurezza', icon: ShieldCheck },
 ];
 const employmentStatusLabels = { active: 'Attivo', suspended: 'Sospeso', ended: 'Terminato' };
+const teamDivisionLabels = { web: 'Web', design: 'Design', digital_marketing: 'Digital Marketing' };
 const dossierStatusLabels = { missing: 'Mancante', valid: 'Valido', expiring: 'In scadenza', expired: 'Scaduto', replaced: 'Sostituito' };
 const dossierStatusClasses = { missing: 'bg-red-50 text-red-700', expired: 'bg-red-50 text-red-700', expiring: 'bg-amber-50 text-amber-700', valid: 'bg-emerald-50 text-emerald-700', replaced: 'bg-gray-100 text-gray-500' };
 const activeEmployeeDossierItems = computed(() => props.employeeDossier.items.filter((item) => !item.replaced_at));
@@ -236,7 +237,7 @@ watch(() => absenceForm.type, () => {
                     <p class="mt-1 text-sm text-gray-600">Dati organizzativi gestiti dall’amministrazione.</p>
                     <dl class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                         <div v-for="item in [
-                            ['Matricola', profile?.employee_code], ['Qualifica', profile?.job_title], ['Reparto', profile?.department],
+                            ['Matricola', profile?.employee_code], ['Qualifica', profile?.job_title], ['Reparto', profile?.department], ['Team (divisione)', teamDivisionLabels[profile?.team_division]],
                             ['Responsabile', profile?.manager_name], ['Sede', profile?.office], ['Stato del rapporto', employmentStatusLabels[profile?.employment_status] || profile?.employment_status],
                             ['Data di assunzione', formatDate(profile?.hire_date)], ['Data di licenziamento', formatDate(profile?.termination_date)],
                         ]" :key="item[0]" class="rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 px-4 py-3">
