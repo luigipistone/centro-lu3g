@@ -168,13 +168,12 @@ onMounted(() => {
                     <div class="flex items-center gap-3"><span class="flex h-11 w-11 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]"><Palette class="h-6 w-6" :stroke-width="1.7" /></span><h3 class="text-base font-semibold text-gray-900">Colore</h3></div>
                     <div class="mt-5 grid gap-6 lg:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.2fr)]">
                         <div class="min-w-0">
-                            <div ref="pickerArea" role="group" tabindex="0" aria-label="Saturazione e luminosità. Usa le frecce per regolarle." class="relative h-44 cursor-crosshair touch-none overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--primary-app))] sm:h-52" :style="{ backgroundColor: pickerHue }" @pointerdown="startPickerDrag" @pointermove="movePickerDrag" @pointerup="stopPickerDrag" @pointercancel="stopPickerDrag" @keydown="handlePickerKey">
+                            <div ref="pickerArea" role="group" tabindex="0" aria-label="Saturazione e luminosità. Usa le frecce per regolarle." class="picker-area relative h-44 cursor-crosshair touch-none overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 sm:h-52" :style="{ backgroundColor: pickerHue }" @pointerdown="startPickerDrag" @pointermove="movePickerDrag" @pointerup="stopPickerDrag" @pointercancel="stopPickerDrag" @keydown="handlePickerKey">
                                 <div class="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,#fff,transparent)]" />
                                 <div class="pointer-events-none absolute inset-0 bg-[linear-gradient(to_top,#000,transparent)]" />
-                                <span class="pointer-events-none absolute h-5 w-5 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.55),0_1px_4px_rgba(0,0,0,0.35)]" :style="{ left: `${picker.s}%`, top: `${100 - picker.v}%`, transform: 'translate(-50%, -50%)' }" />
+                                <span class="picker-marker pointer-events-none absolute h-5 w-5 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.55),0_1px_4px_rgba(0,0,0,0.35)]" :style="{ left: `${picker.s}%`, top: `${100 - picker.v}%`, transform: 'translate(-50%, -50%)' }" />
                             </div>
                             <input :value="picker.h" type="range" min="0" max="359" step="1" class="color-hue-slider mt-4 w-full cursor-pointer" aria-label="Tonalità" title="Tonalità" @input="updatePickerHue" />
-                            <div class="mt-3 flex items-center gap-3"><span class="h-9 w-9 shrink-0 rounded-[var(--radius-sm)] border border-gray-200" :style="{ backgroundColor: hex }" /><span class="text-sm font-medium text-gray-700">{{ hex }}</span></div>
                         </div>
                         <div class="min-w-0 space-y-5">
                             <div class="grid gap-3 sm:grid-cols-[80px_minmax(0,1fr)_44px] sm:items-end">
@@ -217,7 +216,12 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.picker-area:focus { outline: none; }
+.picker-area:focus-visible .picker-marker { width: 24px; height: 24px; }
 .color-hue-slider { appearance: none; height: 12px; border-radius: var(--radius-sm); background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); }
+.color-hue-slider:focus { outline: none; }
+.color-hue-slider:focus-visible::-webkit-slider-thumb { width: 24px; height: 24px; }
+.color-hue-slider:focus-visible::-moz-range-thumb { width: 20px; height: 20px; }
 .color-hue-slider::-webkit-slider-thumb { appearance: none; width: 20px; height: 20px; border: 2px solid #fff; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1px #555, 0 1px 4px #5558; }
 .color-hue-slider::-moz-range-thumb { width: 16px; height: 16px; border: 2px solid #fff; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1px #555, 0 1px 4px #5558; }
 </style>
