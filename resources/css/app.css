@@ -930,6 +930,17 @@ html.dark [class*="bg-slate-50"] {
     box-shadow: var(--shadow-soft);
 }
 
+html.dark .toolbar {
+    border-color: hsl(220 22% 28% / 0.72);
+    background: hsl(222 26% 14% / 0.94);
+}
+
+html.dark .metric-icon {
+    color: hsl(var(--primary-app));
+    background: linear-gradient(180deg, hsl(213 52% 24%), hsl(222 32% 18%));
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.12), 0 8px 18px hsl(0 0% 0% / 0.16);
+}
+
 html.dark aside,
 html.dark nav,
 html.dark header {
