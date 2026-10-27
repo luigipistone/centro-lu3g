@@ -67,3 +67,30 @@ export function hslToRgb({ h, s, l }) {
     const [r, g, b] = sectors[Math.floor(hue) % 6];
     return { r: Math.round((r + offset) * 255), g: Math.round((g + offset) * 255), b: Math.round((b + offset) * 255) };
 }
+
+export function rgbToHsv({ r, g, b }) {
+    const [red, green, blue] = [r, g, b].map((value) => value / 255);
+    const max = Math.max(red, green, blue);
+    const min = Math.min(red, green, blue);
+    const delta = max - min;
+    let hue = 0;
+    if (delta) {
+        if (max === red) hue = ((green - blue) / delta) % 6;
+        else if (max === green) hue = (blue - red) / delta + 2;
+        else hue = (red - green) / delta + 4;
+    }
+    return { h: (hue * 60 + 360) % 360, s: max ? (delta / max) * 100 : 0, v: max * 100 };
+}
+
+export function hsvToRgb({ h, s, v }) {
+    const hue = (h % 360) / 60;
+    const chroma = (v / 100) * (s / 100);
+    const secondary = chroma * (1 - Math.abs((hue % 2) - 1));
+    const offset = v / 100 - chroma;
+    const sectors = [
+        [chroma, secondary, 0], [secondary, chroma, 0], [0, chroma, secondary],
+        [0, secondary, chroma], [secondary, 0, chroma], [chroma, 0, secondary],
+    ];
+    const [r, g, b] = sectors[Math.floor(hue) % 6];
+    return { r: Math.round((r + offset) * 255), g: Math.round((g + offset) * 255), b: Math.round((b + offset) * 255) };
+}

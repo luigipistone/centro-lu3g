@@ -3,11 +3,14 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { ArrowLeft, Check, Copy, Palette, Trash2 } from '@lucide/vue';
 import { computed, onMounted, reactive, ref } from 'vue';
-import { hslToRgb, parseHex, parseHsl, parseRgb, rgbToHex, rgbToHsl } from '@/utils/colorConverter';
+import { hslToRgb, hsvToRgb, parseHex, parseHsl, parseRgb, rgbToHex, rgbToHsl, rgbToHsv } from '@/utils/colorConverter';
 
 const page = usePage();
 const storageKey = `centro-color-history-${page.props.auth?.user?.id || 'user'}`;
 const color = ref({ r: 31, g: 99, b: 214 });
+const picker = reactive(rgbToHsv(color.value));
+const pickerArea = ref(null);
+let activePointerId = null;
 const hexInput = ref(rgbToHex(color.value));
 const rgbInput = reactive({ r: String(color.value.r), g: String(color.value.g), b: String(color.value.b) });
 const hslInput = reactive(rgbToHsl(color.value));
@@ -17,6 +20,7 @@ const copied = ref('');
 let copiedTimer;
 
 const hex = computed(() => rgbToHex(color.value));
+const pickerHue = computed(() => rgbToHex(hsvToRgb({ h: picker.h, s: 100, v: 100 })));
 const rgbText = computed(() => `rgb(${color.value.r}, ${color.value.g}, ${color.value.b})`);
 const hslText = computed(() => {
     const { h, s, l } = rgbToHsl(color.value);
@@ -25,6 +29,12 @@ const hslText = computed(() => {
 const inputClass = 'mt-2 block w-full min-w-0 rounded-[var(--radius-sm)] border-gray-200 bg-white text-sm text-gray-900 focus:border-[hsl(var(--primary-app))] focus:ring-[hsl(var(--primary-app)/0.18)]';
 
 function syncInputs(source) {
+    if (source !== 'picker') {
+        const next = rgbToHsv(color.value);
+        if (next.s > 0) picker.h = next.h;
+        picker.s = next.s;
+        picker.v = next.v;
+    }
     if (source !== 'hex') hexInput.value = hex.value;
     if (source !== 'rgb') Object.assign(rgbInput, color.value);
     if (source !== 'hsl') Object.assign(hslInput, rgbToHsl(color.value));
@@ -62,6 +72,52 @@ function setColor(value) {
     if (!parsed) return;
     color.value = parsed;
     syncInputs();
+}
+
+function updateFromPicker() {
+    color.value = hsvToRgb(picker);
+    syncInputs('picker');
+}
+
+function updatePickerHue(event) {
+    picker.h = Number(event.target.value);
+    updateFromPicker();
+}
+
+function setPickerPosition(event) {
+    if (!pickerArea.value) return;
+    const bounds = pickerArea.value.getBoundingClientRect();
+    picker.s = Math.max(0, Math.min(100, ((event.clientX - bounds.left) / bounds.width) * 100));
+    picker.v = 100 - Math.max(0, Math.min(100, ((event.clientY - bounds.top) / bounds.height) * 100));
+    updateFromPicker();
+}
+
+function startPickerDrag(event) {
+    if (event.button !== 0 || activePointerId !== null) return;
+    activePointerId = event.pointerId;
+    pickerArea.value.setPointerCapture(event.pointerId);
+    setPickerPosition(event);
+}
+
+function movePickerDrag(event) {
+    if (event.pointerId === activePointerId) setPickerPosition(event);
+}
+
+function stopPickerDrag(event) {
+    if (event.pointerId !== activePointerId) return;
+    if (pickerArea.value?.hasPointerCapture(event.pointerId)) pickerArea.value.releasePointerCapture(event.pointerId);
+    activePointerId = null;
+}
+
+function handlePickerKey(event) {
+    const step = event.shiftKey ? 10 : 1;
+    if (event.key === 'ArrowLeft') picker.s = Math.max(0, picker.s - step);
+    else if (event.key === 'ArrowRight') picker.s = Math.min(100, picker.s + step);
+    else if (event.key === 'ArrowUp') picker.v = Math.min(100, picker.v + step);
+    else if (event.key === 'ArrowDown') picker.v = Math.max(0, picker.v - step);
+    else return;
+    event.preventDefault();
+    updateFromPicker();
 }
 
 function rememberColor(value) {
@@ -112,10 +168,13 @@ onMounted(() => {
                     <div class="flex items-center gap-3"><span class="flex h-11 w-11 items-center justify-center rounded-[var(--radius-sm)] bg-[hsl(var(--primary-app)/0.10)] text-[hsl(var(--primary-app))]"><Palette class="h-6 w-6" :stroke-width="1.7" /></span><h3 class="text-base font-semibold text-gray-900">Colore</h3></div>
                     <div class="mt-5 grid gap-6 lg:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.2fr)]">
                         <div class="min-w-0">
-                            <div class="relative h-44 overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 sm:h-52" :style="{ backgroundColor: hex }">
-                                <input type="color" :value="hex" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label="Scegli un colore" title="Scegli un colore" @input="setColor($event.target.value)" />
+                            <div ref="pickerArea" role="group" tabindex="0" aria-label="Saturazione e luminosità. Usa le frecce per regolarle." class="relative h-44 cursor-crosshair touch-none overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--primary-app))] sm:h-52" :style="{ backgroundColor: pickerHue }" @pointerdown="startPickerDrag" @pointermove="movePickerDrag" @pointerup="stopPickerDrag" @pointercancel="stopPickerDrag" @keydown="handlePickerKey">
+                                <div class="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,#fff,transparent)]" />
+                                <div class="pointer-events-none absolute inset-0 bg-[linear-gradient(to_top,#000,transparent)]" />
+                                <span class="pointer-events-none absolute h-5 w-5 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.55),0_1px_4px_rgba(0,0,0,0.35)]" :style="{ left: `${picker.s}%`, top: `${100 - picker.v}%`, transform: 'translate(-50%, -50%)' }" />
                             </div>
-                            <p class="mt-2 text-sm font-medium text-gray-700">{{ hex }}</p>
+                            <input :value="picker.h" type="range" min="0" max="359" step="1" class="color-hue-slider mt-4 w-full cursor-pointer" aria-label="Tonalità" title="Tonalità" @input="updatePickerHue" />
+                            <div class="mt-3 flex items-center gap-3"><span class="h-9 w-9 shrink-0 rounded-[var(--radius-sm)] border border-gray-200" :style="{ backgroundColor: hex }" /><span class="text-sm font-medium text-gray-700">{{ hex }}</span></div>
                         </div>
                         <div class="min-w-0 space-y-5">
                             <div class="grid gap-3 sm:grid-cols-[80px_minmax(0,1fr)_44px] sm:items-end">
@@ -156,3 +215,9 @@ onMounted(() => {
         </div>
     </AuthenticatedLayout>
 </template>
+
+<style scoped>
+.color-hue-slider { appearance: none; height: 12px; border-radius: var(--radius-sm); background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); }
+.color-hue-slider::-webkit-slider-thumb { appearance: none; width: 20px; height: 20px; border: 2px solid #fff; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1px #555, 0 1px 4px #5558; }
+.color-hue-slider::-moz-range-thumb { width: 16px; height: 16px; border: 2px solid #fff; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1px #555, 0 1px 4px #5558; }
+</style>
