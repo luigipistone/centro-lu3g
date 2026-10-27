@@ -635,8 +635,10 @@ class CentroPageController extends Controller
         $guestTaskIds = $this->isGuest($request) && in_array($section, ['tasks', 'calendar'], true)
             ? $guestVisibleTaskIds
             : null;
+        $absencePagination = null;
+        $absenceTodayRequests = collect();
         if ($section === 'absences') {
-            $rows = DB::table('absence_requests')
+            $absenceQuery = DB::table('absence_requests')
                 ->leftJoin('users', 'users.id', '=', 'absence_requests.user_id')
                 ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
                 ->select(
@@ -645,11 +647,34 @@ class CentroPageController extends Controller
                     'users.email as user_email',
                     'profiles.avatar_url as user_avatar_url',
                 )
-                ->when($this->currentUserRole($request) === 'admin', fn ($query) => $query->whereIn('absence_requests.user_id', DB::table('profiles')->where('manager_user_id', $request->user()->id)->pluck('user_id')))
-                ->latest('absence_requests.created_at')
-                ->limit(300)
+                ->when($this->currentUserRole($request) === 'admin', fn ($query) => $query->whereIn('absence_requests.user_id', DB::table('profiles')->where('manager_user_id', $request->user()->id)->select('user_id')));
+
+            $today = now('Europe/Rome')->toDateString();
+            $absenceTodayRequests = (clone $absenceQuery)
+                ->where('absence_requests.status', 'approved')
+                ->whereDate('absence_requests.start_date', '<=', $today)
+                ->whereRaw('DATE(COALESCE(absence_requests.end_date, absence_requests.start_date)) >= ?', [$today])
                 ->get()
                 ->map(fn ($row) => $this->safeAbsenceRow($request, $row));
+
+            $absenceStatus = $request->query('status', 'all');
+            if (! in_array($absenceStatus, ['all', 'pending', 'approved', 'rejected', 'needs_info'], true)) {
+                $absenceStatus = 'all';
+            }
+
+            $absencePage = (clone $absenceQuery)
+                ->when($absenceStatus !== 'all', fn ($query) => $query->where('absence_requests.status', $absenceStatus))
+                ->orderByDesc('absence_requests.created_at')
+                ->orderByDesc('absence_requests.id')
+                ->paginate(25);
+            $rows = $absencePage->getCollection()->map(fn ($row) => $this->safeAbsenceRow($request, $row));
+            $absencePagination = [
+                'currentPage' => $absencePage->currentPage(),
+                'lastPage' => $absencePage->lastPage(),
+                'total' => $absencePage->total(),
+                'from' => $absencePage->firstItem(),
+                'to' => $absencePage->lastItem(),
+            ];
         } elseif (str_starts_with($section, 'updates-')) {
             $rows = $this->serviceUpdateRows($config['serviceName']);
         } else {
@@ -833,6 +858,8 @@ class CentroPageController extends Controller
         return Inertia::render('Centro/Index', [
             ...$config,
             'rows' => $rows,
+            'absencePagination' => $absencePagination,
+            'absenceTodayRequests' => $absenceTodayRequests,
             'attendanceEvents' => $section === 'calendar' ? app(AttendanceService::class)->calendarEvents(
                 $request->user()->id, $this->currentUserRole($request) === 'superadmin', $this->currentUserRole($request) === 'admin',
                 now('Europe/Rome')->subMonths(2)->startOfMonth()->toDateString(), now('Europe/Rome')->addMonths(2)->endOfMonth()->toDateString(),

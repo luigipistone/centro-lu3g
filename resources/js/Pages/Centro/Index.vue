@@ -77,6 +77,8 @@ const props = defineProps({
     columns: Array,
     fields: Array,
     rows: Array,
+    absencePagination: Object,
+    absenceTodayRequests: Array,
     clients: Array,
     projects: Array,
     services: Array,
@@ -179,8 +181,34 @@ const canCreate = computed(() => {
     const permission = sectionPermission('create');
     return permission ? hasPermission(permission) : false;
 });
-const absenceStatus = ref('all');
+const absenceStatus = ref(new URLSearchParams(window.location.search).get('status') || 'all');
+const absencePageLoading = ref(false);
 const absenceWorkspaceTab = ref(new URLSearchParams(window.location.search).get('tab') === 'reports' ? 'reports' : 'overview');
+const absencePageNumbers = computed(() => {
+    const last = props.absencePagination?.lastPage || 1;
+    const current = props.absencePagination?.currentPage || 1;
+    const start = Math.max(1, Math.min(current - 2, last - 4));
+    return Array.from({ length: Math.min(5, last) }, (_, index) => start + index);
+});
+
+function loadAbsencePage(pageNumber, status = absenceStatus.value) {
+    const last = props.absencePagination?.lastPage || 1;
+    if (absencePageLoading.value || pageNumber < 1 || (status === absenceStatus.value && pageNumber > last)) return;
+    absenceStatus.value = status;
+    router.get(route('absences.index'), {
+        ...(status !== 'all' ? { status } : {}),
+        page: pageNumber,
+    }, {
+        only: ['rows', 'absencePagination'],
+        preserveState: true,
+        preserveScroll: true,
+        onStart: () => { absencePageLoading.value = true; },
+        onFinish: () => { absencePageLoading.value = false; },
+    });
+}
+watch(() => page.url, (url) => {
+    if (props.section === 'absences') absenceStatus.value = new URLSearchParams(String(url).split('?')[1] || '').get('status') || 'all';
+});
 const attendanceWeek = ref(0);
 const visibleAttendanceWeek = computed(() => (props.attendanceAvailability || []).slice(attendanceWeek.value * 7, attendanceWeek.value * 7 + 7));
 const attendanceWeekLabel = computed(() => {
@@ -2078,19 +2106,13 @@ const userRoleFilters = computed(() => [
 const usersByRole = computed(() => roleOrder
     .map((role) => ({ role, rows: userRows.value.filter((row) => (row.role || 'guest') === role) }))
     .filter((group) => group.rows.length));
-const absenceRows = computed(() => props.rows.filter((row) => absenceStatus.value === 'all' || row.status === absenceStatus.value));
-const absenceStats = computed(() => ({
-    pending: props.rows.filter((row) => row.status === 'pending').length,
-    approved: props.rows.filter((row) => row.status === 'approved').length,
-    rejected: props.rows.filter((row) => row.status === 'rejected').length,
-    total: props.rows.length,
-}));
+const absenceRows = computed(() => props.rows);
 const absenceTodayIso = computed(() => {
     const today = new Date();
     return formatCalendarDate(today.getFullYear(), today.getMonth(), today.getDate());
 });
-const absenceTodayRows = computed(() => props.rows
-    .filter((row) => row.status === 'approved' && !['smart_working', 'travel'].includes(row.type) && isAbsenceActiveOn(row, absenceTodayIso.value))
+const absenceTodayRows = computed(() => (props.absenceTodayRequests || [])
+    .filter((row) => !['smart_working', 'travel'].includes(row.type) && isAbsenceActiveOn(row, absenceTodayIso.value))
     .sort((a, b) => {
         const timeCompare = String(a.start_time || '').localeCompare(String(b.start_time || ''));
         if (timeCompare) return timeCompare;
@@ -2100,7 +2122,7 @@ const absenceTodayRows = computed(() => props.rows
 const smartworkingDayKeys = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const smartworkingTodayKey = computed(() => smartworkingDayKeys[new Date().getDay()]);
 const smartworkingTodayRows = computed(() => (props.attendanceTeamUsers || [])
-    .filter((user) => user.smartworking_day === smartworkingTodayKey.value || props.rows.some((row) => row.user_id === user.id && row.type === 'smart_working' && row.status === 'approved' && isAbsenceActiveOn(row, absenceTodayIso.value)))
+    .filter((user) => user.smartworking_day === smartworkingTodayKey.value || (props.absenceTodayRequests || []).some((row) => row.user_id === user.id && row.type === 'smart_working' && isAbsenceActiveOn(row, absenceTodayIso.value)))
     .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))));
 
 function absenceUser(row) {
@@ -5289,9 +5311,9 @@ function calendarDayStyle(sectionMonth, cell) {
                 <section class="app-card">
                     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                         <div class="w-full sm:w-56">
-                            <AppSelect v-model="absenceStatus" :options="absenceStatusOptions" />
+                            <AppSelect :model-value="absenceStatus" :options="absenceStatusOptions" @update:model-value="loadAbsencePage(1, $event)" />
                         </div>
-                        <button type="button" class="btn btn-outline" @click="absenceStatus = 'all'"><RotateCcw class="h-4 w-4" :stroke-width="1.7" />Reset</button>
+                        <button type="button" class="btn btn-outline" @click="loadAbsencePage(1, 'all')"><RotateCcw class="h-4 w-4" :stroke-width="1.7" />Reset</button>
                     </div>
 
                     <div class="overflow-x-auto">
@@ -5380,6 +5402,14 @@ function calendarDayStyle(sectionMonth, cell) {
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+                    <div v-if="absencePagination?.total" class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
+                        <span class="text-sm text-gray-500">{{ absencePagination.from }}–{{ absencePagination.to }} di {{ absencePagination.total }} richieste</span>
+                        <nav v-if="absencePagination.lastPage > 1" class="flex items-center gap-1" aria-label="Pagine richieste assenze">
+                            <button type="button" class="icon-btn h-9 w-9" :disabled="absencePageLoading || absencePagination.currentPage === 1" title="Pagina precedente" aria-label="Pagina precedente" @click="loadAbsencePage(absencePagination.currentPage - 1)"><ChevronLeft class="h-4 w-4" /></button>
+                            <button v-for="pageNumber in absencePageNumbers" :key="pageNumber" type="button" :class="['h-9 min-w-9 rounded-[var(--radius-sm)] px-2 text-sm font-semibold transition', pageNumber === absencePagination.currentPage ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-100']" :disabled="absencePageLoading" :aria-current="pageNumber === absencePagination.currentPage ? 'page' : undefined" @click="loadAbsencePage(pageNumber)">{{ pageNumber }}</button>
+                            <button type="button" class="icon-btn h-9 w-9" :disabled="absencePageLoading || absencePagination.currentPage === absencePagination.lastPage" title="Pagina successiva" aria-label="Pagina successiva" @click="loadAbsencePage(absencePagination.currentPage + 1)"><ChevronRight class="h-4 w-4" /></button>
+                        </nav>
                     </div>
                 </section>
                 </template>

@@ -17,6 +17,77 @@ class AttendanceManagementTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_absence_requests_are_paginated_and_today_summary_is_not_limited_to_the_current_page(): void
+    {
+        $superadmin = User::factory()->create();
+        $employee = User::factory()->create();
+        $this->role($superadmin, 'superadmin');
+        $this->role($employee, 'editor');
+
+        $today = now('Europe/Rome')->toDateString();
+        $rows = [];
+        for ($index = 0; $index < 35; $index++) {
+            $rows[] = [
+                'id' => (string) Str::uuid(), 'user_id' => $employee->id, 'type' => 'vacation',
+                'start_date' => '2025-01-01', 'end_date' => '2025-01-01', 'status' => 'pending',
+                'created_at' => now()->subDays($index), 'updated_at' => now()->subDays($index),
+            ];
+        }
+        $rows[] = [
+            'id' => (string) Str::uuid(), 'user_id' => $employee->id, 'type' => 'vacation',
+            'start_date' => $today, 'end_date' => $today, 'status' => 'approved',
+            'created_at' => now()->subYear(), 'updated_at' => now()->subYear(),
+        ];
+        DB::table('absence_requests')->insert($rows);
+
+        $this->actingAs($superadmin)->get(route('absences.index'))->assertOk()->assertInertia(fn ($page) => $page
+            ->has('rows', 25)
+            ->where('absencePagination.currentPage', 1)
+            ->where('absencePagination.lastPage', 2)
+            ->where('absencePagination.total', 36)
+            ->has('absenceTodayRequests', 1)
+        );
+
+        $this->actingAs($superadmin)->get(route('absences.index', ['page' => 2]))->assertOk()->assertInertia(fn ($page) => $page
+            ->has('rows', 11)
+            ->where('absencePagination.from', 26)
+            ->where('absencePagination.to', 36)
+            ->has('absenceTodayRequests', 1)
+        );
+
+        $this->actingAs($superadmin)->get(route('absences.index', ['status' => 'approved']))->assertOk()->assertInertia(fn ($page) => $page
+            ->has('rows', 1)
+            ->where('absencePagination.total', 1)
+            ->where('rows.0.status', 'approved')
+        );
+    }
+
+    public function test_manager_absence_pagination_only_counts_own_team_requests(): void
+    {
+        $manager = User::factory()->create();
+        $ownEmployee = User::factory()->create();
+        $otherEmployee = User::factory()->create();
+        $this->role($manager, 'admin');
+        $this->role($ownEmployee, 'editor');
+        $this->role($otherEmployee, 'editor');
+        DB::table('profiles')->insert([
+            'id' => (string) Str::uuid(), 'user_id' => $ownEmployee->id,
+            'manager_user_id' => $manager->id, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        foreach ([$ownEmployee, $otherEmployee] as $employee) {
+            for ($index = 0; $index < 27; $index++) {
+                $this->absence($employee);
+            }
+        }
+
+        $this->actingAs($manager)->get(route('absences.index', ['page' => 2]))->assertOk()->assertInertia(fn ($page) => $page
+            ->has('rows', 2)
+            ->where('absencePagination.total', 27)
+            ->where('absencePagination.lastPage', 2)
+        );
+    }
+
     public function test_superadmin_can_create_absence_from_employee_profile(): void
     {
         $superadmin = User::factory()->create();
