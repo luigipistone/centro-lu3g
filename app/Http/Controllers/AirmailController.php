@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\HeaderUtils;
@@ -141,7 +142,7 @@ class AirmailController extends Controller
         $data = $validator->validated();
         $result = DB::transaction(function () use ($request, $storage, $id, $fileId, $data) {
             $transfer = $this->ownedTransfer($request, $id, true);
-            abort_unless($transfer->status === 'uploading' && $transfer->expires_at > now(), 409);
+            abort_unless($transfer->status === 'uploading' && Carbon::parse($transfer->expires_at)->isFuture(), 409);
             $file = DB::table('airmail_files')->where('id', $fileId)->where('transfer_id', $id)->lockForUpdate()->first();
             abort_unless($file, 404);
             $maxChunks = (int) ceil($file->size / config('airmail.chunk_bytes'));
@@ -177,7 +178,7 @@ class AirmailController extends Controller
     {
         $transfer = DB::transaction(function () use ($request, $storage, $id) {
             $transfer = $this->ownedTransfer($request, $id, true);
-            abort_unless($transfer->status === 'uploading' && $transfer->expires_at > now(), 409);
+            abort_unless($transfer->status === 'uploading' && Carbon::parse($transfer->expires_at)->isFuture(), 409);
             abort_if(DB::table('airmail_files')->where('transfer_id', $id)->where('status', '!=', 'done')->exists(), 409, 'Completa tutti i caricamenti.');
             $token = Str::random(48);
             DB::table('airmail_transfers')->where('id', $id)->update([
@@ -273,7 +274,7 @@ class AirmailController extends Controller
     {
         abort_unless(preg_match('/^[A-Za-z0-9]{48}$/', $token), 404);
         $transfer = DB::table('airmail_transfers')->where('token_hash', hash('sha256', $token))->first();
-        abort_unless($transfer && $transfer->status === 'ready' && $transfer->expires_at > now(), 404);
+        abort_unless($transfer && $transfer->status === 'ready' && Carbon::parse($transfer->expires_at)->isFuture(), 404);
         return $transfer;
     }
 
@@ -288,11 +289,13 @@ class AirmailController extends Controller
 
     private function formatTransfer(object $transfer): array
     {
+        $expired = Carbon::parse($transfer->expires_at)->isPast();
         return [
             'id' => $transfer->id, 'mode' => $transfer->mode, 'recipient_email' => $transfer->recipient_email,
-            'status' => $transfer->status, 'expires_at' => $transfer->expires_at,
+            'status' => $expired && in_array($transfer->status, ['uploading', 'ready'], true) ? 'expired' : $transfer->status,
+            'expires_at' => $transfer->expires_at,
             'created_at' => $transfer->created_at, 'email_sent' => filled($transfer->email_sent_at),
-            'url' => $transfer->encrypted_token && $transfer->status === 'ready' && $transfer->expires_at > now()
+            'url' => $transfer->encrypted_token && $transfer->status === 'ready' && ! $expired
                 ? route('airmail.open', Crypt::decryptString($transfer->encrypted_token)) : null,
         ];
     }

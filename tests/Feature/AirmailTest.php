@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Illuminate\Support\Carbon;
 use Mockery;
 use Tests\TestCase;
 
@@ -167,7 +168,12 @@ class AirmailTest extends TestCase
             ->assertOk()->assertJsonPath('email_sent', false)->json();
         $this->assertSame('link', $published['transfer']['mode']);
         $this->assertNotNull($published['transfer']['url']);
+        $this->assertGreaterThan(now()->addDays(2)->timestamp, Carbon::parse(DB::table('airmail_transfers')->where('id', $created['id'])->value('expires_at'))->timestamp);
         $this->assertNull(DB::table('airmail_transfers')->where('id', $created['id'])->value('email_sent_at'));
         $this->get(parse_url($published['transfer']['url'], PHP_URL_PATH))->assertOk()->assertSee('foto.jpg');
+
+        DB::table('airmail_transfers')->where('id', $created['id'])->update(['expires_at' => now()->subMinute()]);
+        $this->actingAs($owner)->getJson(route('tools.airmail.show', $created['id']))
+            ->assertOk()->assertJsonPath('transfer.status', 'expired')->assertJsonPath('transfer.url', null);
     }
 }

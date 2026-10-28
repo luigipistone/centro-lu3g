@@ -28,6 +28,7 @@ const uploadFileNumber = ref(0);
 const error = ref('');
 const result = ref('');
 const createdLink = ref('');
+const copiedTransferId = ref(null);
 const deletingId = ref(null);
 const deleteTarget = ref(null);
 const deleteError = ref('');
@@ -153,14 +154,17 @@ async function send() {
         uploadStage.value = 'Creazione del link';
         const { data } = await axios.post(route('tools.airmail.publish', transfer.id));
         progress.value = 100;
-        createdLink.value = data.transfer.url;
-        result.value = mode.value === 'link'
-            ? 'Link pronto. Copialo e condividilo.'
-            : data.email_sent ? 'Invio completato. Il destinatario ha ricevuto il link.' : 'File pronti. L’email non è stata inviata: copia il link qui sotto.';
+        createdLink.value = data.transfer.url || '';
+        if (!createdLink.value) {
+            error.value = 'Il link è già scaduto. Crea un nuovo trasferimento per condividerlo.';
+        } else {
+            result.value = mode.value === 'link'
+                ? 'Link pronto. Copialo e condividilo.'
+                : data.email_sent ? 'Invio completato. Il destinatario ha ricevuto il link.' : 'File pronti. L’email non è stata inviata: copia il link qui sotto.';
+        }
         files.value = [];
         resumeId.value = null;
         transferList.value.unshift(data.transfer);
-        router.reload({ only: ['transfers'] });
     } catch (exception) {
         error.value = exception?.code === 'ERR_CANCELED'
             ? 'Caricamento interrotto. Puoi riprenderlo dalla lista.'
@@ -201,10 +205,14 @@ function changeMode(value) {
     createdLink.value = '';
 }
 
-async function copyLink(url) {
+async function copyLink(url, transferId = null) {
     try {
         await navigator.clipboard.writeText(url);
         result.value = 'Link copiato.';
+        copiedTransferId.value = transferId;
+        if (transferId) window.setTimeout(() => {
+            if (copiedTransferId.value === transferId) copiedTransferId.value = null;
+        }, 2000);
     } catch {
         error.value = 'Impossibile copiare il link.';
     }
@@ -294,9 +302,9 @@ async function removeTransfer() {
                         <p v-if="!transferList.length" class="mt-5 text-sm text-gray-500">Nessun invio ancora.</p>
                         <div v-else class="mt-4 divide-y divide-gray-100">
                             <div v-for="transfer in transferList" :key="transfer.id" class="flex flex-wrap items-center gap-3 py-3 text-sm">
-                                <div class="min-w-0 flex-1"><p class="truncate font-medium text-gray-900">{{ transfer.mode === 'link' ? 'Link creato' : transfer.recipient_email }}</p><p class="text-xs text-gray-500">{{ transfer.status === 'ready' ? `Disponibile fino al ${dateLabel(transfer.expires_at)}` : transfer.status === 'uploading' ? 'Caricamento da completare' : transfer.status === 'expired' ? 'Scaduto' : 'Eliminato' }}</p></div>
+                                <div class="min-w-0 flex-1"><p class="truncate font-medium text-gray-900">{{ transfer.mode === 'link' ? 'Link creato' : transfer.recipient_email }}</p><a v-if="transfer.url" :href="transfer.url" target="_blank" rel="noopener noreferrer" class="mt-0.5 block w-fit max-w-full truncate text-xs font-medium text-[hsl(var(--primary-app))] hover:underline" :title="transfer.url">{{ transfer.url }}</a><p class="text-xs text-gray-500">{{ transfer.status === 'ready' ? `Disponibile fino al ${dateLabel(transfer.expires_at)}` : transfer.status === 'uploading' ? 'Caricamento da completare' : transfer.status === 'expired' ? 'Scaduto' : 'Eliminato' }}</p></div>
                                 <button v-if="transfer.status === 'uploading'" type="button" class="btn btn-outline" @click="resume(transfer)">Riprendi</button>
-                                <button v-if="transfer.url" type="button" class="icon-btn" title="Copia link" aria-label="Copia link" @click="copyLink(transfer.url)"><Copy class="h-4 w-4" /></button>
+                                <button v-if="transfer.url" type="button" class="btn btn-outline" :aria-label="`Copia link del trasferimento`" @click="copyLink(transfer.url, transfer.id)"><Copy class="h-4 w-4" />{{ copiedTransferId === transfer.id ? 'Copiato' : 'Copia link' }}</button>
                                 <button v-if="['uploading', 'ready'].includes(transfer.status)" type="button" class="icon-btn text-red-600" title="Elimina invio" aria-label="Elimina invio" :disabled="Boolean(deletingId)" @click="askDelete(transfer)"><Trash2 class="h-4 w-4" /></button>
                             </div>
                         </div>
