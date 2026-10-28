@@ -57,6 +57,7 @@ import {
     RefreshCw,
     RotateCcw,
     Save,
+    Send,
     Settings,
     ShieldCheck,
     TrendingUp,
