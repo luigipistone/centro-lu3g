@@ -42,7 +42,7 @@
         .brand-name { font-size: 16px; font-weight: 750; }
         .brand-divider { width: 1px; height: 20px; margin-inline: 2px; background: hsl(220 18% 88%); }
         .brand-service { color: var(--muted); font-size: 14px; font-weight: 600; }
-        main { width: min(100% - 32px, 960px); margin: 48px auto 80px; }
+        main { width: min(100% - 32px, 1120px); margin: 48px auto 80px; }
         .page-heading { margin-bottom: 24px; }
         h1 { margin: 0; font-size: 24px; line-height: 1.3; font-weight: 750; overflow-wrap: anywhere; }
         .intro { margin: 7px 0 0; color: var(--muted); font-size: 14px; line-height: 1.6; }

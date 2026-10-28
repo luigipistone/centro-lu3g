@@ -36,6 +36,9 @@ const resumeId = ref(null);
 const abortController = ref(null);
 const transferList = ref(props.transfers);
 watch(() => props.transfers, (value) => { transferList.value = value; });
+const visibleTransfers = computed(() => transferList.value.filter((transfer) =>
+    ['uploading', 'ready'].includes(transfer.status) && new Date(transfer.expires_at).getTime() > Date.now()
+));
 
 const totalBytes = computed(() => files.value.reduce((sum, file) => sum + file.size, 0));
 const totalLabel = computed(() => formatBytes(totalBytes.value));
@@ -208,7 +211,7 @@ function changeMode(value) {
 async function copyLink(url, transferId = null) {
     try {
         await navigator.clipboard.writeText(url);
-        result.value = 'Link copiato.';
+        if (!transferId) result.value = 'Link copiato.';
         copiedTransferId.value = transferId;
         if (transferId) window.setTimeout(() => {
             if (copiedTransferId.value === transferId) copiedTransferId.value = null;
@@ -237,7 +240,7 @@ async function removeTransfer() {
     deleteError.value = '';
     try {
         await axios.delete(route('tools.airmail.destroy', transfer.id));
-        transferList.value = transferList.value.map((item) => item.id === transfer.id ? { ...item, status: 'deleted', url: null } : item);
+        transferList.value = transferList.value.filter((item) => item.id !== transfer.id);
         deleteTarget.value = null;
     } catch (exception) {
         deleteError.value = messageFor(exception);
@@ -299,9 +302,9 @@ async function removeTransfer() {
 
                     <section class="app-card">
                         <h3 class="section-title">I tuoi invii</h3>
-                        <p v-if="!transferList.length" class="mt-5 text-sm text-gray-500">Nessun invio ancora.</p>
+                        <p v-if="!visibleTransfers.length" class="mt-5 text-sm text-gray-500">Nessun invio attivo.</p>
                         <div v-else class="mt-4 divide-y divide-gray-100">
-                            <div v-for="transfer in transferList" :key="transfer.id" class="flex flex-wrap items-center gap-3 py-3 text-sm">
+                            <div v-for="transfer in visibleTransfers" :key="transfer.id" class="flex flex-wrap items-center gap-3 py-3 text-sm">
                                 <div class="min-w-0 flex-1"><p class="truncate font-medium text-gray-900">{{ transfer.mode === 'link' ? 'Link creato' : transfer.recipient_email }}</p><a v-if="transfer.url" :href="transfer.url" target="_blank" rel="noopener noreferrer" class="mt-0.5 block w-fit max-w-full truncate text-xs font-medium text-[hsl(var(--primary-app))] hover:underline" :title="transfer.url">{{ transfer.url }}</a><p class="text-xs text-gray-500">{{ transfer.status === 'ready' ? `Disponibile fino al ${dateLabel(transfer.expires_at)}` : transfer.status === 'uploading' ? 'Caricamento da completare' : transfer.status === 'expired' ? 'Scaduto' : 'Eliminato' }}</p></div>
                                 <button v-if="transfer.status === 'uploading'" type="button" class="btn btn-outline" @click="resume(transfer)">Riprendi</button>
                                 <button v-if="transfer.url" type="button" class="btn btn-outline" :aria-label="`Copia link del trasferimento`" @click="copyLink(transfer.url, transfer.id)"><Copy class="h-4 w-4" />{{ copiedTransferId === transfer.id ? 'Copiato' : 'Copia link' }}</button>

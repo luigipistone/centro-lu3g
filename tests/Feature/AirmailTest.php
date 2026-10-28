@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Illuminate\Support\Carbon;
+use Inertia\Testing\AssertableInertia as Assert;
 use Mockery;
 use Tests\TestCase;
 
@@ -171,9 +172,16 @@ class AirmailTest extends TestCase
         $this->assertGreaterThan(now()->addDays(2)->timestamp, Carbon::parse(DB::table('airmail_transfers')->where('id', $created['id'])->value('expires_at'))->timestamp);
         $this->assertNull(DB::table('airmail_transfers')->where('id', $created['id'])->value('email_sent_at'));
         $this->get(parse_url($published['transfer']['url'], PHP_URL_PATH))->assertOk()->assertSee('foto.jpg');
+        $this->actingAs($owner)->get(route('tools.airmail'))
+            ->assertInertia(fn (Assert $page) => $page->component('Centro/Airmail')->has('transfers', 1));
 
         DB::table('airmail_transfers')->where('id', $created['id'])->update(['expires_at' => now()->subMinute()]);
         $this->actingAs($owner)->getJson(route('tools.airmail.show', $created['id']))
             ->assertOk()->assertJsonPath('transfer.status', 'expired')->assertJsonPath('transfer.url', null);
+        $this->actingAs($owner)->get(route('tools.airmail'))
+            ->assertInertia(fn (Assert $page) => $page->component('Centro/Airmail')->has('transfers', 0));
+        DB::table('airmail_transfers')->where('id', $created['id'])->update(['status' => 'deleted', 'expires_at' => now()->addDay()]);
+        $this->actingAs($owner)->get(route('tools.airmail'))
+            ->assertInertia(fn (Assert $page) => $page->component('Centro/Airmail')->has('transfers', 0));
     }
 }

@@ -29,6 +29,8 @@ class AirmailController extends Controller
             'isSuperadmin' => $this->isSuperadmin($request),
             'transfers' => DB::table('airmail_transfers')
                 ->where('user_id', $request->user()->id)
+                ->whereIn('status', ['uploading', 'ready'])
+                ->where('expires_at', '>', now())
                 ->orderByDesc('created_at')->limit(40)->get()
                 ->map(fn ($transfer) => $this->formatTransfer($transfer))->all(),
         ]);
