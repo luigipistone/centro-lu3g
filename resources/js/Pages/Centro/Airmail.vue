@@ -208,14 +208,14 @@ async function removeTransfer(transfer) {
                         <section class="app-card flex min-w-0 flex-col gap-5">
                             <h3 class="section-title"><span class="section-icon"><Send class="h-4 w-4" :stroke-width="1.7" /></span>File da condividere</h3>
                             <input ref="input" type="file" multiple class="sr-only" @change="selectFiles($event.target.files)" />
-                            <ToolDropzone label="Trascina qui i file oppure selezionali" hint="Fino a 20 file, 3 GB complessivi" aria-label="Seleziona i file da inviare" :disabled="sending" @select="input?.click()" @drop="selectFiles($event.dataTransfer.files)" />
-                            <div v-if="files.length" class="divide-y divide-gray-100 rounded-[var(--radius-sm)] border border-gray-200">
-                                <div v-for="(file, index) in files" :key="`${file.name}-${index}`" class="flex min-w-0 items-center gap-3 px-3 py-2.5 text-sm">
+                            <ToolDropzone label="Trascina qui i file oppure selezionali" hint="Fino a 20 file, 3 GB complessivi" aria-label="Seleziona i file da inviare" :disabled="sending" showcase @select="input?.click()" @drop="selectFiles($event.dataTransfer.files)" />
+                            <TransitionGroup v-if="files.length" name="airmail-file" tag="div" class="divide-y divide-gray-100 rounded-[var(--radius-sm)] border border-gray-200">
+                                <div v-for="(file, index) in files" :key="`${file.name}-${file.size}-${file.lastModified}-${index}`" class="flex min-w-0 items-center gap-3 px-3 py-2.5 text-sm">
                                     <span class="min-w-0 flex-1 truncate text-gray-800" :title="file.name">{{ file.name }}</span>
                                     <span class="shrink-0 text-gray-500">{{ formatBytes(file.size) }}</span>
                                     <button type="button" class="icon-btn" :disabled="sending" :aria-label="`Rimuovi ${file.name}`" :title="`Rimuovi ${file.name}`" @click="removeFile(index)"><X class="h-4 w-4" /></button>
                                 </div>
-                            </div>
+                            </TransitionGroup>
                             <p v-if="files.length" class="text-right text-sm font-medium text-gray-600">Totale: {{ totalLabel }}</p>
                         </section>
                         <section class="app-card flex min-w-0 flex-col gap-4">
@@ -254,3 +254,16 @@ async function removeTransfer(transfer) {
         </div>
     </AuthenticatedLayout>
 </template>
+
+<style scoped>
+.airmail-file-enter-active,
+.airmail-file-leave-active {
+    transition: opacity 240ms ease, transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.airmail-file-enter-from { opacity: 0; transform: translateY(-12px) scale(0.98); }
+.airmail-file-leave-to { opacity: 0; transform: translateX(14px); }
+@media (prefers-reduced-motion: reduce) {
+    .airmail-file-enter-active,
+    .airmail-file-leave-active { transition: none; }
+}
+</style>
