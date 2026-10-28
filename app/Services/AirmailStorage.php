@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -102,7 +103,8 @@ class AirmailStorage
         }
 
         return Http::withBasicAuth(config('airmail.username'), Crypt::decryptString($encrypted))
-            ->connectTimeout(10)->timeout(180)->retry(2, 300);
+            ->connectTimeout(10)->timeout(180)
+            ->retry(2, 300, fn ($exception) => $exception instanceof ConnectionException, throw: false);
     }
 
     private function filesUrl(string $path = ''): string

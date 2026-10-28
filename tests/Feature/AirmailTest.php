@@ -10,6 +10,7 @@ use Illuminate\Http\Client\Response as ClientResponse;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Mockery;
 use Tests\TestCase;
@@ -96,5 +97,22 @@ class AirmailTest extends TestCase
                 ['name' => 'two.bin', 'size' => 2 * 1024 * 1024 * 1024],
             ],
         ])->assertUnprocessable();
+    }
+
+    public function test_cleanup_accepts_missing_chunk_collections(): void
+    {
+        DB::table('airmail_settings')->insert([
+            'id' => (string) Str::uuid(),
+            'encrypted_password' => Crypt::encryptString('temporary-test'),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        Http::fake(['*' => Http::response('', 404)]);
+
+        app(AirmailStorage::class)->removeTransfer(
+            (object) ['id' => (string) Str::uuid()],
+            [(string) Str::uuid()],
+        );
+
+        Http::assertSentCount(2);
     }
 }
