@@ -69,7 +69,7 @@ class AirmailTest extends TestCase
         $published = $this->actingAs($owner)->postJson(route('tools.airmail.publish', $id))->assertOk()->json();
         $this->assertFalse($published['email_sent']);
         $path = parse_url($published['transfer']['url'], PHP_URL_PATH);
-        $this->get($path)->assertOk()->assertSee('report.pdf');
+        $this->get($path)->assertOk()->assertSee('report.pdf')->assertSee('File condivisi da')->assertSee('/brand/logo-gestionale-webapp.svg');
         auth()->logout();
         $this->get($path)->assertOk()->assertSee('report.pdf');
         $this->get(route('airmail.download', [basename($path), (string) Str::uuid()]))->assertNotFound();
