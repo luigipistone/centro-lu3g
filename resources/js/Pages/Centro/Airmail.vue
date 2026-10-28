@@ -1,5 +1,6 @@
 <script setup>
 import ToolDropzone from '@/Components/ToolDropzone.vue';
+import Modal from '@/Components/Modal.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ArrowLeft, Copy, Link2, LoaderCircle, Mail, Send, Trash2, X } from '@lucide/vue';
@@ -28,6 +29,8 @@ const error = ref('');
 const result = ref('');
 const createdLink = ref('');
 const deletingId = ref(null);
+const deleteTarget = ref(null);
+const deleteError = ref('');
 const resumeId = ref(null);
 const abortController = ref(null);
 const transferList = ref(props.transfers);
@@ -207,15 +210,29 @@ async function copyLink(url) {
     }
 }
 
-async function removeTransfer(transfer) {
-    if (deletingId.value || !window.confirm('Eliminare questo invio e tutti i suoi file?')) return;
+function askDelete(transfer) {
+    if (deletingId.value) return;
+    deleteError.value = '';
+    deleteTarget.value = transfer;
+}
+
+function closeDelete() {
+    if (deletingId.value) return;
+    deleteTarget.value = null;
+    deleteError.value = '';
+}
+
+async function removeTransfer() {
+    const transfer = deleteTarget.value;
+    if (!transfer || deletingId.value) return;
     deletingId.value = transfer.id;
-    error.value = '';
+    deleteError.value = '';
     try {
         await axios.delete(route('tools.airmail.destroy', transfer.id));
         transferList.value = transferList.value.map((item) => item.id === transfer.id ? { ...item, status: 'deleted', url: null } : item);
+        deleteTarget.value = null;
     } catch (exception) {
-        error.value = messageFor(exception);
+        deleteError.value = messageFor(exception);
     } finally {
         deletingId.value = null;
     }
@@ -280,13 +297,26 @@ async function removeTransfer(transfer) {
                                 <div class="min-w-0 flex-1"><p class="truncate font-medium text-gray-900">{{ transfer.mode === 'link' ? 'Link creato' : transfer.recipient_email }}</p><p class="text-xs text-gray-500">{{ transfer.status === 'ready' ? `Disponibile fino al ${dateLabel(transfer.expires_at)}` : transfer.status === 'uploading' ? 'Caricamento da completare' : transfer.status === 'expired' ? 'Scaduto' : 'Eliminato' }}</p></div>
                                 <button v-if="transfer.status === 'uploading'" type="button" class="btn btn-outline" @click="resume(transfer)">Riprendi</button>
                                 <button v-if="transfer.url" type="button" class="icon-btn" title="Copia link" aria-label="Copia link" @click="copyLink(transfer.url)"><Copy class="h-4 w-4" /></button>
-                                <button v-if="['uploading', 'ready'].includes(transfer.status)" type="button" class="icon-btn text-red-600" title="Elimina invio" aria-label="Elimina invio" :disabled="deletingId === transfer.id" @click="removeTransfer(transfer)"><Trash2 class="h-4 w-4" /></button>
+                                <button v-if="['uploading', 'ready'].includes(transfer.status)" type="button" class="icon-btn text-red-600" title="Elimina invio" aria-label="Elimina invio" :disabled="Boolean(deletingId)" @click="askDelete(transfer)"><Trash2 class="h-4 w-4" /></button>
                             </div>
                         </div>
                     </section>
                 </template>
             </div>
         </div>
+        <Modal :show="Boolean(deleteTarget)" max-width="md" :closeable="!deletingId" @close="closeDelete">
+            <div class="p-6">
+                <h3 class="text-lg font-semibold text-gray-900">Eliminare il trasferimento?</h3>
+                <p class="mt-2 text-sm text-gray-600">
+                    {{ deleteTarget?.mode === 'link' ? 'Il link creato' : `L’invio a ${deleteTarget?.recipient_email}` }} e tutti i suoi file verranno eliminati. Il link non sarà più utilizzabile.
+                </p>
+                <p v-if="deleteError" role="alert" class="mt-4 text-sm text-red-600">{{ deleteError }}</p>
+                <div class="mt-6 flex flex-wrap justify-end gap-2">
+                    <button type="button" class="btn btn-outline" :disabled="Boolean(deletingId)" @click="closeDelete">Annulla</button>
+                    <button type="button" class="btn btn-danger" :disabled="Boolean(deletingId)" @click="removeTransfer"><LoaderCircle v-if="deletingId" class="h-4 w-4 animate-spin" /><Trash2 v-else class="h-4 w-4" />Elimina</button>
+                </div>
+            </div>
+        </Modal>
     </AuthenticatedLayout>
 </template>
 
