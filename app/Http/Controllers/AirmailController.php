@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -61,14 +62,19 @@ class AirmailController extends Controller
     public function create(Request $request, AirmailStorage $storage): JsonResponse
     {
         abort_unless($storage->isConfigured(), 503);
-        $data = $request->validate([
-            'recipient_email' => ['required', 'email', 'max:255'],
+        $validator = Validator::make($request->all(), [
+            'mode' => ['required', 'in:send,link'],
+            'recipient_email' => ['nullable', 'required_if:mode,send', 'email', 'max:255'],
             'message' => ['nullable', 'string', 'max:2000'],
             'expires_days' => ['required', 'integer', 'in:1,3,7'],
             'files' => ['required', 'array', 'min:1', 'max:20'],
             'files.*.name' => ['required', 'string', 'max:200'],
             'files.*.size' => ['required', 'integer', 'min:1', 'max:'.config('airmail.max_bytes')],
         ]);
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()->toArray()], 422);
+        }
+        $data = $validator->validated();
         $total = array_sum(array_column($data['files'], 'size'));
         if ($total > config('airmail.max_bytes')) {
             return response()->json(['errors' => ['files' => ['Massimo 3 GB complessivi per invio.']]], 422);
@@ -90,7 +96,8 @@ class AirmailController extends Controller
             DB::transaction(function () use ($request, $data, $id, &$files) {
                 DB::table('airmail_transfers')->insert([
                     'id' => $id, 'user_id' => $request->user()->id,
-                    'recipient_email' => $data['recipient_email'], 'message' => $data['message'] ?? null,
+                    'mode' => $data['mode'], 'recipient_email' => $data['mode'] === 'send' ? $data['recipient_email'] : null,
+                    'message' => $data['message'] ?? null,
                     'status' => 'uploading', 'expires_at' => now()->addDays($data['expires_days']),
                     'created_at' => now(), 'updated_at' => now(),
                 ]);
@@ -124,10 +131,14 @@ class AirmailController extends Controller
 
     public function uploadChunk(Request $request, AirmailStorage $storage, string $id, string $fileId): JsonResponse
     {
-        $data = $request->validate([
+        $validator = Validator::make($request->all(), [
             'index' => ['required', 'integer', 'min:1', 'max:10000'],
             'chunk' => ['required', 'file', 'max:16384'],
         ]);
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()->toArray()], 422);
+        }
+        $data = $validator->validated();
         $result = DB::transaction(function () use ($request, $storage, $id, $fileId, $data) {
             $transfer = $this->ownedTransfer($request, $id, true);
             abort_unless($transfer->status === 'uploading' && $transfer->expires_at > now(), 409);
@@ -176,7 +187,7 @@ class AirmailController extends Controller
             return DB::table('airmail_transfers')->where('id', $id)->first();
         });
 
-        $emailSent = $this->sendEmail($request, $transfer);
+        $emailSent = $transfer->mode === 'send' && $this->sendEmail($request, $transfer);
         if ($emailSent) {
             DB::table('airmail_transfers')->where('id', $id)->update(['email_sent_at' => now()]);
         }
@@ -278,7 +289,7 @@ class AirmailController extends Controller
     private function formatTransfer(object $transfer): array
     {
         return [
-            'id' => $transfer->id, 'recipient_email' => $transfer->recipient_email,
+            'id' => $transfer->id, 'mode' => $transfer->mode, 'recipient_email' => $transfer->recipient_email,
             'status' => $transfer->status, 'expires_at' => $transfer->expires_at,
             'created_at' => $transfer->created_at, 'email_sent' => filled($transfer->email_sent_at),
             'url' => $transfer->encrypted_token && $transfer->status === 'ready' && $transfer->expires_at > now()

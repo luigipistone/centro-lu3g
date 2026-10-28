@@ -2,7 +2,7 @@
 import ToolDropzone from '@/Components/ToolDropzone.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ArrowLeft, Copy, LoaderCircle, Send, Trash2, X } from '@lucide/vue';
+import { ArrowLeft, Copy, Link2, LoaderCircle, Mail, Send, Trash2, X } from '@lucide/vue';
 import axios from 'axios';
 import { computed, ref, watch } from 'vue';
 
@@ -16,6 +16,7 @@ const chunkBytes = 16 * 1024 * 1024;
 const maxBytes = 3 * 1024 * 1024 * 1024;
 const input = ref(null);
 const files = ref([]);
+const mode = ref('send');
 const recipient = ref('');
 const message = ref('');
 const expiresDays = ref(3);
@@ -23,6 +24,7 @@ const sending = ref(false);
 const progress = ref(0);
 const error = ref('');
 const result = ref('');
+const createdLink = ref('');
 const deletingId = ref(null);
 const resumeId = ref(null);
 const abortController = ref(null);
@@ -67,6 +69,7 @@ async function send() {
     if (sending.value || !files.value.length) return;
     error.value = '';
     result.value = '';
+    createdLink.value = '';
     sending.value = true;
     abortController.value = new AbortController();
     try {
@@ -81,7 +84,8 @@ async function send() {
             }
         } else {
             const { data } = await axios.post(route('tools.airmail.create'), {
-                recipient_email: recipient.value,
+                mode: mode.value,
+                recipient_email: mode.value === 'send' ? recipient.value : null,
                 message: message.value,
                 expires_days: expiresDays.value,
                 files: files.value.map((file) => ({ name: file.name, size: file.size })),
@@ -117,7 +121,10 @@ async function send() {
         }
         const { data } = await axios.post(route('tools.airmail.publish', transfer.id));
         progress.value = 100;
-        result.value = data.email_sent ? 'Invio completato. Il destinatario ha ricevuto il link.' : 'File pronti. L’email non è stata inviata: copia il link dalla lista.';
+        createdLink.value = data.transfer.url;
+        result.value = mode.value === 'link'
+            ? 'Link pronto. Copialo e condividilo.'
+            : data.email_sent ? 'Invio completato. Il destinatario ha ricevuto il link.' : 'File pronti. L’email non è stata inviata: copia il link qui sotto.';
         files.value = [];
         resumeId.value = null;
         transferList.value.unshift(data.transfer);
@@ -133,11 +140,27 @@ async function send() {
 
 function resume(transfer) {
     resumeId.value = transfer.id;
-    recipient.value = transfer.recipient_email;
+    mode.value = transfer.mode || 'send';
+    recipient.value = transfer.recipient_email || '';
     files.value = [];
     result.value = '';
+    createdLink.value = '';
     error.value = 'Seleziona nuovamente tutti i file originali nello stesso ordine, poi premi Riprendi invio.';
     window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function cancelResume() {
+    resumeId.value = null;
+    files.value = [];
+    error.value = '';
+}
+
+function changeMode(value) {
+    if (sending.value || resumeId.value) return;
+    mode.value = value;
+    error.value = '';
+    result.value = '';
+    createdLink.value = '';
 }
 
 async function copyLink(url) {
@@ -183,7 +206,7 @@ async function removeTransfer(transfer) {
                 <template v-else>
                     <div class="grid items-stretch gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
                         <section class="app-card flex min-w-0 flex-col gap-5">
-                            <h3 class="section-title"><span class="section-icon"><Send class="h-4 w-4" :stroke-width="1.7" /></span>File da inviare</h3>
+                            <h3 class="section-title"><span class="section-icon"><Send class="h-4 w-4" :stroke-width="1.7" /></span>File da condividere</h3>
                             <input ref="input" type="file" multiple class="sr-only" @change="selectFiles($event.target.files)" />
                             <ToolDropzone label="Trascina qui i file oppure selezionali" hint="Fino a 20 file, 3 GB complessivi" aria-label="Seleziona i file da inviare" :disabled="sending" @select="input?.click()" @drop="selectFiles($event.dataTransfer.files)" />
                             <div v-if="files.length" class="divide-y divide-gray-100 rounded-[var(--radius-sm)] border border-gray-200">
@@ -196,15 +219,21 @@ async function removeTransfer(transfer) {
                             <p v-if="files.length" class="text-right text-sm font-medium text-gray-600">Totale: {{ totalLabel }}</p>
                         </section>
                         <section class="app-card flex min-w-0 flex-col gap-4">
-                            <h3 class="section-title">Destinatario</h3>
-                            <div><label for="airmail-recipient" class="block text-sm font-medium text-gray-700">Email</label><input id="airmail-recipient" v-model.trim="recipient" type="email" class="form-control mt-1" autocomplete="email" :disabled="sending || Boolean(resumeId)" /></div>
+                            <h3 class="section-title">Condivisione</h3>
+                            <div class="grid grid-cols-2 gap-1 rounded-[var(--radius-sm)] border border-gray-200 bg-gray-100 p-1" role="group" aria-label="Modalità di condivisione">
+                                <button type="button" class="flex min-h-10 items-center justify-center gap-2 rounded-[var(--radius-sm)] px-3 text-sm font-semibold transition" :class="mode === 'send' ? 'bg-white text-[hsl(var(--primary-app))] shadow-sm' : 'text-gray-600 hover:text-gray-900'" :aria-pressed="mode === 'send'" :disabled="sending || Boolean(resumeId)" @click="changeMode('send')"><Mail class="h-4 w-4" />Invia</button>
+                                <button type="button" class="flex min-h-10 items-center justify-center gap-2 rounded-[var(--radius-sm)] px-3 text-sm font-semibold transition" :class="mode === 'link' ? 'bg-white text-[hsl(var(--primary-app))] shadow-sm' : 'text-gray-600 hover:text-gray-900'" :aria-pressed="mode === 'link'" :disabled="sending || Boolean(resumeId)" @click="changeMode('link')"><Link2 class="h-4 w-4" />Crea link</button>
+                            </div>
+                            <div v-if="mode === 'send'"><label for="airmail-recipient" class="block text-sm font-medium text-gray-700">Email destinatario</label><input id="airmail-recipient" v-model.trim="recipient" type="email" class="form-control mt-1" autocomplete="email" :disabled="sending || Boolean(resumeId)" /></div>
                             <div><label for="airmail-message" class="block text-sm font-medium text-gray-700">Messaggio</label><textarea id="airmail-message" v-model="message" rows="3" class="form-control mt-1" :disabled="sending || Boolean(resumeId)" /></div>
                             <div><label for="airmail-expiry" class="block text-sm font-medium text-gray-700">Scadenza</label><select id="airmail-expiry" v-model.number="expiresDays" class="form-control mt-1" :disabled="sending || Boolean(resumeId)"><option :value="1">1 giorno</option><option :value="3">3 giorni</option><option :value="7">7 giorni</option></select></div>
                             <div v-if="sending" class="space-y-2"><div class="h-2 overflow-hidden rounded-full bg-gray-100"><div class="h-full bg-[hsl(var(--primary-app))] transition-all" :style="{ width: `${progress}%` }" /></div><p class="text-sm text-gray-600">Caricamento {{ progress }}%</p></div>
                             <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
                             <p v-if="result" role="status" class="text-sm text-emerald-700">{{ result }}</p>
-                            <button type="button" class="btn btn-primary mt-auto w-full justify-center" :disabled="sending || !files.length || !recipient" @click="send"><LoaderCircle v-if="sending" class="h-4 w-4 animate-spin" /><Send v-else class="h-4 w-4" />{{ sending ? 'Invio in corso...' : resumeId ? 'Riprendi invio' : 'Invia file' }}</button>
+                            <div v-if="createdLink" class="flex min-w-0 gap-2"><input :value="createdLink" class="form-control min-w-0 flex-1" readonly aria-label="Link creato" @focus="$event.target.select()" /><button type="button" class="btn btn-outline shrink-0" title="Copia link" aria-label="Copia link" @click="copyLink(createdLink)"><Copy class="h-4 w-4" /></button></div>
+                            <button type="button" class="btn btn-primary mt-auto w-full justify-center" :disabled="sending || !files.length || (mode === 'send' && !recipient)" @click="send"><LoaderCircle v-if="sending" class="h-4 w-4 animate-spin" /><Link2 v-else-if="mode === 'link'" class="h-4 w-4" /><Send v-else class="h-4 w-4" />{{ sending ? 'Caricamento in corso...' : resumeId ? 'Riprendi caricamento' : mode === 'link' ? 'Crea link' : 'Invia file' }}</button>
                             <button v-if="sending" type="button" class="btn btn-outline w-full justify-center" @click="abortController?.abort()">Interrompi</button>
+                            <button v-if="resumeId && !sending" type="button" class="btn btn-outline w-full justify-center" @click="cancelResume">Annulla ripresa</button>
                         </section>
                     </div>
 
@@ -213,7 +242,7 @@ async function removeTransfer(transfer) {
                         <p v-if="!transferList.length" class="mt-5 text-sm text-gray-500">Nessun invio ancora.</p>
                         <div v-else class="mt-4 divide-y divide-gray-100">
                             <div v-for="transfer in transferList" :key="transfer.id" class="flex flex-wrap items-center gap-3 py-3 text-sm">
-                                <div class="min-w-0 flex-1"><p class="truncate font-medium text-gray-900">{{ transfer.recipient_email }}</p><p class="text-xs text-gray-500">{{ transfer.status === 'ready' ? `Disponibile fino al ${dateLabel(transfer.expires_at)}` : transfer.status === 'uploading' ? 'Caricamento da completare' : transfer.status === 'expired' ? 'Scaduto' : 'Eliminato' }}</p></div>
+                                <div class="min-w-0 flex-1"><p class="truncate font-medium text-gray-900">{{ transfer.mode === 'link' ? 'Link creato' : transfer.recipient_email }}</p><p class="text-xs text-gray-500">{{ transfer.status === 'ready' ? `Disponibile fino al ${dateLabel(transfer.expires_at)}` : transfer.status === 'uploading' ? 'Caricamento da completare' : transfer.status === 'expired' ? 'Scaduto' : 'Eliminato' }}</p></div>
                                 <button v-if="transfer.status === 'uploading'" type="button" class="btn btn-outline" @click="resume(transfer)">Riprendi</button>
                                 <button v-if="transfer.url" type="button" class="icon-btn" title="Copia link" aria-label="Copia link" @click="copyLink(transfer.url)"><Copy class="h-4 w-4" /></button>
                                 <button v-if="['uploading', 'ready'].includes(transfer.status)" type="button" class="icon-btn text-red-600" title="Elimina invio" aria-label="Elimina invio" :disabled="deletingId === transfer.id" @click="removeTransfer(transfer)"><Trash2 class="h-4 w-4" /></button>

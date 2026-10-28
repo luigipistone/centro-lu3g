@@ -52,7 +52,7 @@ class AirmailTest extends TestCase
         $this->app->instance(AirmailStorage::class, $storage);
 
         $created = $this->actingAs($owner)->postJson(route('tools.airmail.create'), [
-            'recipient_email' => 'recipient@example.com', 'expires_days' => 1,
+            'mode' => 'send', 'recipient_email' => 'recipient@example.com', 'expires_days' => 1,
             'files' => [['name' => 'report.pdf', 'size' => 1024]],
         ])->assertCreated()->json();
         $id = $created['id'];
@@ -83,7 +83,7 @@ class AirmailTest extends TestCase
     {
         $user = $this->userWithRole('editor');
         $this->actingAs($user)->postJson(route('tools.airmail.create'), [
-            'recipient_email' => 'recipient@example.com', 'expires_days' => 1,
+            'mode' => 'send', 'recipient_email' => 'recipient@example.com', 'expires_days' => 1,
             'files' => [['name' => 'f.txt', 'size' => 1]],
         ])->assertStatus(503);
 
@@ -91,7 +91,7 @@ class AirmailTest extends TestCase
         $storage->shouldReceive('isConfigured')->andReturn(true);
         $this->app->instance(AirmailStorage::class, $storage);
         $this->actingAs($user)->postJson(route('tools.airmail.create'), [
-            'recipient_email' => 'recipient@example.com', 'expires_days' => 1,
+            'mode' => 'send', 'recipient_email' => 'recipient@example.com', 'expires_days' => 1,
             'files' => [
                 ['name' => 'one.bin', 'size' => 2 * 1024 * 1024 * 1024],
                 ['name' => 'two.bin', 'size' => 2 * 1024 * 1024 * 1024],
@@ -114,5 +114,37 @@ class AirmailTest extends TestCase
         );
 
         Http::assertSentCount(2);
+    }
+
+    public function test_link_mode_needs_no_recipient_and_does_not_send_email(): void
+    {
+        $owner = $this->userWithRole('editor');
+        $storage = Mockery::mock(AirmailStorage::class);
+        $storage->shouldReceive('isConfigured')->andReturn(true);
+        $storage->shouldReceive('createTransferFolder')->once();
+        $storage->shouldReceive('uploadChunk')->once();
+        $storage->shouldReceive('finishFile')->once();
+        $this->app->instance(AirmailStorage::class, $storage);
+
+        $payload = ['expires_days' => 3, 'files' => [['name' => 'foto.jpg', 'size' => 1024]]];
+        $invalid = $this->actingAs($owner)->postJson(route('tools.airmail.create'), ['mode' => 'send'] + $payload)
+            ->assertUnprocessable();
+        $this->assertArrayHasKey('recipient_email', $invalid->json('errors'));
+
+        $created = $this->actingAs($owner)->postJson(route('tools.airmail.create'), ['mode' => 'link'] + $payload)
+            ->assertCreated()->json();
+        $transfer = DB::table('airmail_transfers')->where('id', $created['id'])->first();
+        $this->assertSame('link', $transfer->mode);
+        $this->assertNull($transfer->recipient_email);
+
+        $this->actingAs($owner)->postJson(route('tools.airmail.chunk', [$created['id'], $created['files'][0]['id']]), [
+            'index' => 1, 'chunk' => UploadedFile::fake()->create('part.bin', 1),
+        ])->assertOk();
+        $published = $this->actingAs($owner)->postJson(route('tools.airmail.publish', $created['id']))
+            ->assertOk()->assertJsonPath('email_sent', false)->json();
+        $this->assertSame('link', $published['transfer']['mode']);
+        $this->assertNotNull($published['transfer']['url']);
+        $this->assertNull(DB::table('airmail_transfers')->where('id', $created['id'])->value('email_sent_at'));
+        $this->get(parse_url($published['transfer']['url'], PHP_URL_PATH))->assertOk()->assertSee('foto.jpg');
     }
 }
