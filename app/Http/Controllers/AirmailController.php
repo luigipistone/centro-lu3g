@@ -323,13 +323,20 @@ class AirmailController extends Controller
         Config::set('mail.from.name', $settings->smtp_from_name ?: 'Il Centro');
 
         $url = route('airmail.open', Crypt::decryptString($transfer->encrypted_token));
-        $text = $request->user()->name." ti ha inviato dei file con Airmail.\n\n";
-        if ($transfer->message) {
-            $text .= $transfer->message."\n\n";
-        }
-        $text .= "Apri e scarica: {$url}\n\nIl link scade il ".\Illuminate\Support\Carbon::parse($transfer->expires_at)->timezone('Europe/Rome')->format('d/m/Y H:i').'.';
         try {
-            Mail::raw($text, fn ($mail) => $mail->to($transfer->recipient_email)->subject('File ricevuti con Airmail - Il Centro'));
+            $html = view('emails.airmail-transfer', [
+                'sender' => $request->user()->name,
+                'message' => $transfer->message,
+                'url' => $url,
+                'expiresAt' => Carbon::parse($transfer->expires_at)->format('d/m/Y H:i'),
+                'logoUrl' => rtrim(config('app.url'), '/').'/brand/logo-gestionale-webapp.svg',
+            ])->render();
+            Mail::html($html, function ($mail) use ($transfer, $settings) {
+                $mail->to($transfer->recipient_email)->subject('File ricevuti con Airmail - Il Centro');
+                if ($settings->smtp_reply_to) {
+                    $mail->replyTo($settings->smtp_reply_to);
+                }
+            });
             return true;
         } catch (\Throwable $exception) {
             Log::warning('Invio email Airmail non riuscito.', ['transfer_id' => $transfer->id, 'reason' => $exception->getMessage()]);

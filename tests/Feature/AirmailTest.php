@@ -42,6 +42,24 @@ class AirmailTest extends TestCase
         $this->assertSame('temporary-test', Crypt::decryptString($stored));
     }
 
+    public function test_transfer_email_uses_centro_html_style_and_escapes_message(): void
+    {
+        $html = view('emails.airmail-transfer', [
+            'sender' => 'Luigi Pistone',
+            'message' => '<script>alert(1)</script>',
+            'url' => 'https://centro.lu3g.com/airmail/example',
+            'expiresAt' => '29/10/2026 15:47',
+            'logoUrl' => 'https://centro.lu3g.com/brand/logo-gestionale-webapp.svg',
+        ])->render();
+
+        $this->assertStringContainsString('Il Centro', $html);
+        $this->assertStringContainsString('background:#0b6ef3', $html);
+        $this->assertStringContainsString('Apri e scarica i file', $html);
+        $this->assertStringContainsString('29/10/2026 15:47', $html);
+        $this->assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $html);
+        $this->assertStringNotContainsString('<script>alert(1)</script>', $html);
+    }
+
     public function test_upload_is_owned_and_public_link_expires(): void
     {
         $owner = $this->userWithRole('editor');
