@@ -895,6 +895,7 @@ class CentroPageController extends Controller
             'emailSettings' => $section === 'settings' ? $this->emailSettingsForView() : null,
             'figmaSettings' => $section === 'settings' ? $this->figmaSettingsForView() : null,
             'githubSettings' => $section === 'settings' ? ['token_saved' => filled(DB::table('github_settings')->value('encrypted_token'))] : null,
+            'airmailSettings' => $section === 'settings' ? ['password_saved' => filled(DB::table('airmail_settings')->value('encrypted_password'))] : null,
             'backupRuns' => $section === 'settings' ? $this->backupRuns() : [],
             'rolePermissionMatrix' => $section === 'settings' ? app(RolePermissionService::class)->matrix() : null,
             'sectionAvailability' => $section === 'settings' ? app(SectionAvailabilityService::class)->settingsRows() : [],

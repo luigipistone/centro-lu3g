@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AiAgencyController;
+use App\Http\Controllers\AirmailController;
 use App\Http\Controllers\CentroPageController;
 use App\Http\Controllers\FigmaIntegrationController;
 use App\Http\Controllers\WebRepositoryController;
@@ -22,6 +23,8 @@ Route::get('/', function () {
 Route::get('/s/{code}', [ShortLinkController::class, 'redirect'])->where('code', '[A-Za-z0-9]{6,8}')->middleware('throttle:120,1')->name('short-links.redirect');
 Route::get('/go/{code}', [ShortLinkController::class, 'redirect'])->where('code', '[A-Za-z0-9]{8}')->middleware('throttle:120,1')->name('short-links.legacy');
 Route::get('/public/go/{code}', [ShortLinkController::class, 'redirect'])->where('code', '[A-Za-z0-9]{8}')->middleware('throttle:120,1')->name('short-links.legacy-public');
+Route::get('/airmail/{token}', [AirmailController::class, 'open'])->where('token', '[A-Za-z0-9]{48}')->middleware('throttle:60,1')->name('airmail.open');
+Route::get('/airmail/{token}/files/{fileId}', [AirmailController::class, 'download'])->where('token', '[A-Za-z0-9]{48}')->middleware('throttle:60,1')->name('airmail.download');
 
 Route::get('/dashboard', [CentroPageController::class, 'dashboard'])->middleware(['auth', 'verified'])->name('dashboard');
 
@@ -35,6 +38,12 @@ Route::middleware('auth')->group(function () {
     Route::post('/clients/import/preview', [CentroPageController::class, 'previewClientCsv'])->name('clients.import.preview');
     Route::post('/clients/import', [CentroPageController::class, 'importClientCsv'])->name('clients.import.store');
     Route::get('/tools', [WebRepositoryController::class, 'tools'])->name('tools.index');
+    Route::get('/tools/airmail', [AirmailController::class, 'index'])->name('tools.airmail');
+    Route::post('/tools/airmail/transfers', [AirmailController::class, 'create'])->middleware('throttle:10,1')->name('tools.airmail.create');
+    Route::get('/tools/airmail/transfers/{id}', [AirmailController::class, 'show'])->name('tools.airmail.show');
+    Route::post('/tools/airmail/transfers/{id}/files/{fileId}/chunks', [AirmailController::class, 'uploadChunk'])->name('tools.airmail.chunk');
+    Route::post('/tools/airmail/transfers/{id}/publish', [AirmailController::class, 'publish'])->middleware('throttle:10,1')->name('tools.airmail.publish');
+    Route::delete('/tools/airmail/transfers/{id}', [AirmailController::class, 'destroy'])->name('tools.airmail.destroy');
     Route::get('/tools/web-repositories', [WebRepositoryController::class, 'index'])->middleware('throttle:10,1')->name('tools.web-repositories');
     Route::get('/tools/web-repositories/{repository}/download', [WebRepositoryController::class, 'download'])->middleware('throttle:5,1')->name('tools.web-repositories.download');
     Route::get('/tools/short-links', [ShortLinkController::class, 'index'])->name('tools.short-links');
@@ -283,6 +292,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/settings/figma/test', [FigmaIntegrationController::class, 'test'])->name('settings.figma.test');
     Route::put('/settings/github', [WebRepositoryController::class, 'update'])->name('settings.github.update');
     Route::post('/settings/github/test', [WebRepositoryController::class, 'test'])->name('settings.github.test');
+    Route::put('/settings/airmail', [AirmailController::class, 'saveSettings'])->name('settings.airmail.update');
+    Route::post('/settings/airmail/test', [AirmailController::class, 'testSettings'])->name('settings.airmail.test');
     Route::get('/figma/projects', [FigmaIntegrationController::class, 'projects'])->name('figma.projects');
     Route::get('/figma/projects/{projectId}/files', [FigmaIntegrationController::class, 'files'])->name('figma.project-files');
     Route::post('/settings/backup', [CentroPageController::class, 'runBackup'])->name('settings.backup.run');

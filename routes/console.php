@@ -1,6 +1,7 @@
 <?php
 
 use App\Services\CentroBackupService;
+use App\Services\AirmailStorage;
 use App\Services\CentroNotificationService;
 use App\Services\EmployeeDossierExpiryService;
 use App\Services\ScheduledCompanyMessageService;
@@ -48,6 +49,30 @@ Artisan::command('centro:clean-video-conversions', function () {
 })->purpose('Elimina i video temporanei dopo due ore');
 
 Schedule::command('centro:clean-video-conversions')->everyFiveMinutes()->withoutOverlapping();
+
+Artisan::command('centro:clean-airmail', function (AirmailStorage $storage) {
+    if (! $storage->isConfigured()) {
+        return;
+    }
+    $transfers = DB::table('airmail_transfers')
+        ->whereIn('status', ['uploading', 'ready'])
+        ->where(function ($query) {
+            $query->where('expires_at', '<=', now())
+                ->orWhere(fn ($draft) => $draft->where('status', 'uploading')->where('created_at', '<=', now()->subDay()));
+        })->limit(50)->get();
+    foreach ($transfers as $transfer) {
+        try {
+            $fileIds = DB::table('airmail_files')->where('transfer_id', $transfer->id)->pluck('id')->all();
+            $storage->removeTransfer($transfer, $fileIds);
+            DB::table('airmail_transfers')->where('id', $transfer->id)->update(['status' => 'expired', 'updated_at' => now()]);
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+    }
+    $this->info($transfers->count().' invii Airmail controllati.');
+})->purpose('Elimina gli invii Airmail scaduti e i caricamenti abbandonati');
+
+Schedule::command('centro:clean-airmail')->everyFiveMinutes()->withoutOverlapping();
 
 Schedule::call(function () {
     if (! Schema::hasTable('figma_settings') || ! Schema::hasColumn('figma_settings', 'token_expires_at')) {

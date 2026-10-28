@@ -91,6 +91,7 @@ const props = defineProps({
     emailSettings: Object,
     figmaSettings: Object,
     githubSettings: Object,
+    airmailSettings: Object,
     backupRuns: Array,
     rolePermissionMatrix: Object,
     sectionAvailability: Array,
@@ -358,7 +359,7 @@ const taskSearchSelectQueries = ref({
 });
 const taskDescriptionEditor = ref(null);
 const requestedSettingsTab = new URLSearchParams(window.location.search).get('tab');
-const settingsTab = ref(['log', 'sezioni'].includes(requestedSettingsTab) || (requestedSettingsTab === 'github' && isSuperadmin.value) ? requestedSettingsTab : 'personalizzazione');
+const settingsTab = ref(['log', 'sezioni'].includes(requestedSettingsTab) || (['github', 'airmail'].includes(requestedSettingsTab) && isSuperadmin.value) ? requestedSettingsTab : 'personalizzazione');
 const organizationDrafts = ref({ department: '', office: '' });
 const organizationEditingId = ref(null);
 const organizationEditingName = ref('');
@@ -506,6 +507,8 @@ const figmaSettingsForm = useForm({
 const figmaTestForm = useForm({});
 const githubSettingsForm = useForm({ token: '' });
 const githubTestForm = useForm({});
+const airmailSettingsForm = useForm({ password: '' });
+const airmailTestForm = useForm({});
 
 const routeBase = computed(() => {
     if (props.section === 'settings') return 'settings';
@@ -655,6 +658,7 @@ const settingsTabs = [
     ['smtp', 'SMTP', Mail],
     ['figma', 'Figma', PanelsTopLeft],
     ['github', 'GitHub', GitBranch],
+    ['airmail', 'Airmail', Send],
     ['backup', 'Backup', DatabaseBackup],
     ['ruoli', 'Ruoli', ShieldCheck],
     ['sezioni', 'Sezioni', PanelsTopLeft],
@@ -1693,6 +1697,17 @@ function saveGitHubSettings() {
 
 function testGitHubConnection() {
     githubTestForm.post(route('settings.github.test'), { preserveScroll: true });
+}
+
+function saveAirmailSettings() {
+    airmailSettingsForm.put(route('settings.airmail.update'), {
+        preserveScroll: true,
+        onSuccess: () => { airmailSettingsForm.password = ''; },
+    });
+}
+
+function testAirmailConnection() {
+    airmailTestForm.post(route('settings.airmail.test'), { preserveScroll: true });
 }
 
 
@@ -5965,7 +5980,7 @@ function calendarDayStyle(sectionMonth, cell) {
 
                 <div class="surface flex flex-wrap gap-2 p-2">
                     <button
-                        v-for="tab in settingsTabs.filter(item => item[0] !== 'github' || isSuperadmin)"
+                        v-for="tab in settingsTabs.filter(item => !['github', 'airmail'].includes(item[0]) || isSuperadmin)"
                         :key="tab[0]"
                         type="button"
                         :class="['settings-tab flex-none whitespace-nowrap', settingsTab === tab[0] ? 'settings-tab-active' : '']"
@@ -6162,6 +6177,26 @@ function calendarDayStyle(sectionMonth, cell) {
                         <p class="mt-2 text-sm text-gray-500">Controlla l’accesso e il filtro delle repository.</p>
                         <p v-if="githubTestForm.errors.github_test" class="mt-4 text-sm text-red-600">{{ githubTestForm.errors.github_test }}</p>
                         <button type="button" class="btn btn-outline mt-5" :disabled="githubTestForm.processing || !githubSettings?.token_saved" @click="testGitHubConnection"><RefreshCw class="h-4 w-4" :class="{ 'animate-spin': githubTestForm.processing }" :stroke-width="1.7" />{{ githubTestForm.processing ? 'Verifica...' : 'Testa connessione' }}</button>
+                    </div>
+                </section>
+
+                <section v-else-if="settingsTab === 'airmail' && isSuperadmin" class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+                    <form class="app-card" @submit.prevent="saveAirmailSettings">
+                        <h3 class="section-title"><span class="section-icon"><Send class="h-4 w-4" :stroke-width="1.7" /></span>Storage Airmail</h3>
+                        <p class="mt-2 text-sm text-gray-500">Cloud Storage da 200 GB, separato dai backup. I file saranno salvati nella cartella Airmail.</p>
+                        <div class="mt-5">
+                            <label class="block text-sm font-medium text-gray-700" for="airmail-password">Password per applicazioni Nextcloud</label>
+                            <input id="airmail-password" v-model="airmailSettingsForm.password" type="password" class="form-control mt-1" placeholder="Inserisci la password" autocomplete="new-password" />
+                            <p v-if="airmailSettings?.password_saved" class="mt-1 text-xs font-medium text-emerald-600">Accesso salvato e cifrato. Inserisci una nuova password solo per sostituirlo.</p>
+                            <p v-if="airmailSettingsForm.errors.password" class="mt-1 text-sm text-red-600">{{ airmailSettingsForm.errors.password }}</p>
+                        </div>
+                        <button type="submit" class="btn btn-primary mt-5" :disabled="airmailSettingsForm.processing"><Save class="h-4 w-4" :stroke-width="1.7" />{{ airmailSettingsForm.processing ? 'Salvataggio...' : 'Salva accesso' }}</button>
+                    </form>
+                    <div class="app-card">
+                        <h3 class="section-title"><span class="section-icon"><RefreshCw class="h-4 w-4" :stroke-width="1.7" /></span>Verifica connessione</h3>
+                        <p class="mt-2 text-sm text-gray-500">Controlla l'accesso allo storage senza modificare i file.</p>
+                        <p v-if="airmailTestForm.errors.airmail_test" class="mt-4 text-sm text-red-600">{{ airmailTestForm.errors.airmail_test }}</p>
+                        <button type="button" class="btn btn-outline mt-5" :disabled="airmailTestForm.processing || !airmailSettings?.password_saved" @click="testAirmailConnection"><RefreshCw class="h-4 w-4" :class="{ 'animate-spin': airmailTestForm.processing }" :stroke-width="1.7" />{{ airmailTestForm.processing ? 'Verifica...' : 'Testa connessione' }}</button>
                     </div>
                 </section>
 
