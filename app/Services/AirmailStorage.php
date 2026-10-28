@@ -49,7 +49,9 @@ class AirmailStorage
             ])->withBody($stream, 'application/octet-stream')
                 ->send('PUT', $upload.'/'.sprintf('%05d', $index));
         } finally {
-            fclose($stream);
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
         }
         $this->requireStatus($response, [201, 204], 'Invio del blocco non riuscito.');
     }

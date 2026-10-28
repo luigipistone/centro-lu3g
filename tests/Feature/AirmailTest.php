@@ -116,6 +116,29 @@ class AirmailTest extends TestCase
         Http::assertSentCount(2);
     }
 
+    public function test_chunk_upload_succeeds_when_http_client_closes_its_stream(): void
+    {
+        DB::table('airmail_settings')->insert([
+            'id' => (string) Str::uuid(),
+            'encrypted_password' => Crypt::encryptString('temporary-test'),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        Http::fake(function ($request) {
+            if ($request->method() === 'PUT') {
+                $request->toPsrRequest()->getBody()->close();
+            }
+            return Http::response('', 201);
+        });
+        $chunk = UploadedFile::fake()->create('part.bin', 1);
+        app(AirmailStorage::class)->uploadChunk(
+            (object) ['id' => (string) Str::uuid()],
+            (object) ['id' => (string) Str::uuid(), 'stored_name' => 'part.bin', 'size' => 1024, 'uploaded_chunks' => 0],
+            1,
+            $chunk->getRealPath(),
+        );
+        Http::assertSentCount(2);
+    }
+
     public function test_link_mode_needs_no_recipient_and_does_not_send_email(): void
     {
         $owner = $this->userWithRole('editor');

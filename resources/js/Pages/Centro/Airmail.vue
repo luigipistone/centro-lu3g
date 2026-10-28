@@ -22,6 +22,8 @@ const message = ref('');
 const expiresDays = ref(3);
 const sending = ref(false);
 const progress = ref(0);
+const uploadStage = ref('');
+const uploadFileNumber = ref(0);
 const error = ref('');
 const result = ref('');
 const createdLink = ref('');
@@ -62,7 +64,40 @@ function removeFile(index) {
 
 function messageFor(errorObject) {
     const errors = errorObject?.response?.data?.errors;
-    return errors ? Object.values(errors).flat()[0] : (errorObject?.response?.data?.message || 'Operazione non riuscita. Riprova.');
+    if (errors) return Object.values(errors).flat()[0];
+    if ([502, 503, 504].includes(errorObject?.response?.status)) return 'Il server o lo storage non risponde. Il caricamento resta salvato: puoi riprenderlo.';
+    return errorObject?.response?.data?.message || 'Operazione non riuscita. Riprova.';
+}
+
+function isTemporaryUploadError(exception) {
+    return !exception.response || [408, 429, 500, 502, 503, 504].includes(exception.response.status);
+}
+
+async function uploadChunkWithRetry(transferId, remoteId, index, file, start, uploaded) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        const form = new FormData();
+        form.append('index', String(index));
+        form.append('chunk', file.slice(start, Math.min(start + chunkBytes, file.size)), file.name);
+        try {
+            uploadStage.value = attempt > 1 ? `Connessione instabile, nuovo tentativo ${attempt}/3` : 'Invio al server';
+            await axios.post(route('tools.airmail.chunk', [transferId, remoteId]), form, {
+                signal: abortController.value.signal,
+                timeout: 240000,
+                onUploadProgress: (event) => {
+                    const current = uploaded + Math.min(event.loaded || 0, file.size - start);
+                    progress.value = Math.min(99, Math.round((current / totalBytes.value) * 100));
+                    if (event.total && event.loaded >= event.total) uploadStage.value = 'Salvataggio nello storage';
+                },
+            });
+            return;
+        } catch (exception) {
+            if (exception?.code === 'ERR_CANCELED' || attempt === 3 || !isTemporaryUploadError(exception)) throw exception;
+            progress.value = Math.min(99, Math.round((uploaded / totalBytes.value) * 100));
+            uploadStage.value = `Connessione instabile, nuovo tentativo ${attempt + 1}/3`;
+            await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+            if (abortController.value?.signal.aborted) throw exception;
+        }
+    }
 }
 
 async function send() {
@@ -71,6 +106,8 @@ async function send() {
     result.value = '';
     createdLink.value = '';
     sending.value = true;
+    uploadStage.value = 'Preparazione del caricamento';
+    uploadFileNumber.value = 0;
     abortController.value = new AbortController();
     try {
         let transfer;
@@ -101,24 +138,16 @@ async function send() {
             const file = files.value[fileIndex];
             const remote = remoteFiles[fileIndex];
             if (remote.status === 'done') continue;
+            uploadFileNumber.value = fileIndex + 1;
             const count = Math.ceil(file.size / chunkBytes);
             for (let index = remote.uploaded_chunks + 1; index <= count; index++) {
                 const start = (index - 1) * chunkBytes;
-                const form = new FormData();
-                form.append('index', String(index));
-                form.append('chunk', file.slice(start, Math.min(start + chunkBytes, file.size)), file.name);
-                await axios.post(route('tools.airmail.chunk', [transfer.id, remote.id]), form, {
-                    signal: abortController.value.signal,
-                    timeout: 240000,
-                    onUploadProgress: (event) => {
-                        const current = uploaded + Math.min(event.loaded || 0, file.size - start);
-                        progress.value = Math.min(99, Math.round((current / totalBytes.value) * 100));
-                    },
-                });
+                await uploadChunkWithRetry(transfer.id, remote.id, index, file, start, uploaded);
                 uploaded += Math.min(chunkBytes, file.size - start);
                 progress.value = Math.min(99, Math.round((uploaded / totalBytes.value) * 100));
             }
         }
+        uploadStage.value = 'Creazione del link';
         const { data } = await axios.post(route('tools.airmail.publish', transfer.id));
         progress.value = 100;
         createdLink.value = data.transfer.url;
@@ -130,10 +159,16 @@ async function send() {
         transferList.value.unshift(data.transfer);
         router.reload({ only: ['transfers'] });
     } catch (exception) {
-        error.value = exception?.code === 'ERR_CANCELED' ? 'Caricamento interrotto. Puoi riprenderlo dalla lista.' : (exception?.response ? messageFor(exception) : exception.message);
+        error.value = exception?.code === 'ERR_CANCELED'
+            ? 'Caricamento interrotto. Puoi riprenderlo dalla lista.'
+            : exception?.response
+                ? messageFor(exception)
+                : 'Connessione interrotta o troppo lenta. Il caricamento resta salvato: puoi riprenderlo.';
         if (resumeId.value) router.reload({ only: ['transfers'] });
     } finally {
         sending.value = false;
+        uploadStage.value = '';
+        uploadFileNumber.value = 0;
         abortController.value = null;
     }
 }
@@ -227,7 +262,7 @@ async function removeTransfer(transfer) {
                             <div v-if="mode === 'send'"><label for="airmail-recipient" class="block text-sm font-medium text-gray-700">Email destinatario</label><input id="airmail-recipient" v-model.trim="recipient" type="email" class="form-control mt-1" autocomplete="email" :disabled="sending || Boolean(resumeId)" /></div>
                             <div><label for="airmail-message" class="block text-sm font-medium text-gray-700">Messaggio</label><textarea id="airmail-message" v-model="message" rows="3" class="form-control mt-1" :disabled="sending || Boolean(resumeId)" /></div>
                             <div><label for="airmail-expiry" class="block text-sm font-medium text-gray-700">Scadenza</label><select id="airmail-expiry" v-model.number="expiresDays" class="form-control mt-1" :disabled="sending || Boolean(resumeId)"><option :value="1">1 giorno</option><option :value="3">3 giorni</option><option :value="7">7 giorni</option></select></div>
-                            <div v-if="sending" class="space-y-2"><div class="h-2 overflow-hidden rounded-full bg-gray-100"><div class="h-full bg-[hsl(var(--primary-app))] transition-all" :style="{ width: `${progress}%` }" /></div><p class="text-sm text-gray-600">Caricamento {{ progress }}%</p></div>
+                            <div v-if="sending" class="space-y-2" role="status" aria-live="polite"><div class="h-2 overflow-hidden rounded-full bg-gray-100"><div class="h-full bg-[hsl(var(--primary-app))] transition-all" :style="{ width: `${progress}%` }" /></div><p class="text-sm text-gray-600">{{ uploadStage }}<template v-if="uploadFileNumber"> · File {{ uploadFileNumber }} di {{ files.length }}</template> · {{ progress }}%</p></div>
                             <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
                             <p v-if="result" role="status" class="text-sm text-emerald-700">{{ result }}</p>
                             <div v-if="createdLink" class="flex min-w-0 gap-2"><input :value="createdLink" class="form-control min-w-0 flex-1" readonly aria-label="Link creato" @focus="$event.target.select()" /><button type="button" class="btn btn-outline shrink-0" title="Copia link" aria-label="Copia link" @click="copyLink(createdLink)"><Copy class="h-4 w-4" /></button></div>
