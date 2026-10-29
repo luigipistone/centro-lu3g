@@ -17,6 +17,74 @@ class AttendanceManagementTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_approved_absence_revocation_waits_for_the_configured_manager_and_can_be_rejected(): void
+    {
+        $superadmin = User::factory()->create();
+        $manager = User::factory()->create();
+        $employee = User::factory()->create();
+        $other = User::factory()->create();
+        foreach ([$superadmin, $manager, $employee, $other] as $index => $user) {
+            $this->role($user, ['superadmin', 'admin', 'editor', 'editor'][$index]);
+        }
+        DB::table('profiles')->insert([
+            'id' => (string) Str::uuid(), 'user_id' => $employee->id,
+            'manager_user_id' => $manager->id, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('attendance_settings')->insert([
+            'approvers' => json_encode(['vacation' => 'admin']), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $id = $this->absence($employee);
+        DB::table('absence_requests')->where('id', $id)->update(['status' => 'approved']);
+
+        $this->actingAs($other)->post(route('profile.absences.revocation.request', $id))->assertStatus(409);
+        $this->actingAs($employee)->post(route('profile.absences.revocation.request', $id))->assertRedirect();
+        $this->actingAs($employee)->post(route('profile.absences.revocation.request', $id))->assertStatus(409);
+        $this->assertDatabaseHas('absence_requests', ['id' => $id, 'status' => 'approved']);
+        $this->assertNotNull(DB::table('absence_requests')->where('id', $id)->value('revocation_requested_at'));
+        $this->assertDatabaseHas('notifications', ['user_id' => $manager->id, 'type' => 'absence_revocation_requested']);
+        $this->assertDatabaseMissing('notifications', ['user_id' => $superadmin->id, 'type' => 'absence_revocation_requested']);
+        $this->assertDatabaseHas('audit_logs', ['route_name' => 'profile.absences.revocation.request', 'related_request_id' => $id]);
+
+        $this->actingAs($manager)->patch(route('absences.revocation.decide', $id), [
+            'decision' => 'rejected', 'reason' => 'Ferie già confermate',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('absence_requests', [
+            'id' => $id, 'status' => 'approved', 'revocation_requested_at' => null,
+            'revocation_decision_reason' => 'Ferie già confermate',
+        ]);
+        $this->assertDatabaseHas('notifications', ['user_id' => $employee->id, 'type' => 'absence_revocation_decided']);
+        $this->assertDatabaseHas('audit_logs', ['route_name' => 'absences.revocation.decide', 'related_request_id' => $id, 'reviewed_by' => $manager->id]);
+    }
+
+    public function test_only_configured_approver_can_remove_approved_absence_and_its_attachment(): void
+    {
+        Storage::fake('local');
+        $superadmin = User::factory()->create();
+        $manager = User::factory()->create();
+        $employee = User::factory()->create();
+        $this->role($superadmin, 'superadmin');
+        $this->role($manager, 'admin');
+        $this->role($employee, 'editor');
+        DB::table('profiles')->insert([
+            'id' => (string) Str::uuid(), 'user_id' => $employee->id,
+            'manager_user_id' => $manager->id, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $path = 'absence-medical-documents/test.pdf';
+        Storage::disk('local')->put($path, 'test');
+        $id = $this->absence($employee, 'sickness', $path);
+        DB::table('absence_requests')->where('id', $id)->update(['status' => 'approved']);
+        $this->actingAs($employee)->post(route('profile.absences.revocation.request', $id))->assertRedirect();
+
+        $this->actingAs($manager)->patch(route('absences.revocation.decide', $id), ['decision' => 'approved'])->assertForbidden();
+        $this->assertDatabaseHas('absence_requests', ['id' => $id, 'status' => 'approved']);
+        Storage::disk('local')->assertExists($path);
+
+        $this->actingAs($superadmin)->patch(route('absences.revocation.decide', $id), ['decision' => 'approved'])->assertRedirect();
+        $this->assertDatabaseMissing('absence_requests', ['id' => $id]);
+        Storage::disk('local')->assertMissing($path);
+        $this->assertDatabaseHas('audit_logs', ['route_name' => 'absences.revocation.decide', 'related_request_id' => $id, 'reviewed_by' => $superadmin->id]);
+    }
+
     public function test_absence_requests_are_paginated_and_today_summary_is_not_limited_to_the_current_page(): void
     {
         $superadmin = User::factory()->create();

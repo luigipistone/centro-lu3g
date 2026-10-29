@@ -129,6 +129,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/absences/{id}/medical-document', [CentroPageController::class, 'downloadAbsenceMedicalDocument'])->name('absences.medical-document.download');
     Route::post('/absences/{id}/medical-document', [CentroPageController::class, 'updateAbsenceMedicalDocument'])->name('absences.medical-document.update');
     Route::patch('/absences/{id}/status', [CentroPageController::class, 'updateAbsenceStatus'])->name('absences.status.update');
+    Route::patch('/absences/{id}/revocation', [CentroPageController::class, 'decideAbsenceRevocation'])->name('absences.revocation.decide');
     Route::delete('/absences/{id}', [CentroPageController::class, 'destroyAbsence'])->name('absences.destroy');
     Route::put('/attendance/settings', [CentroPageController::class, 'updateAttendanceSettings'])->name('attendance.settings.update');
     Route::post('/attendance/holidays', [CentroPageController::class, 'storeAttendanceHoliday'])->name('attendance.holidays.store');
@@ -306,6 +307,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/profile/avatar', [ProfileController::class, 'updateAvatar'])->name('profile.avatar.update');
     Route::post('/profile/absences', [ProfileController::class, 'storeAbsence'])->name('profile.absences.store');
     Route::delete('/profile/absences/{id}', [ProfileController::class, 'destroyAbsence'])->name('profile.absences.destroy');
+    Route::post('/profile/absences/{id}/revocation', [ProfileController::class, 'requestAbsenceRevocation'])->name('profile.absences.revocation.request');
     Route::patch('/profile/absences/{id}/supplement', [ProfileController::class, 'supplementAbsence'])->name('profile.absences.supplement');
     Route::get('/avatars/{filename}', [ProfileController::class, 'avatar'])->name('profile.avatar');
     Route::post('/profile/archive-request', [ProfileController::class, 'requestArchive'])->name('profile.archive-request');

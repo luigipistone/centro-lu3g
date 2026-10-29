@@ -261,6 +261,34 @@ class ProfileController extends Controller
         return Redirect::route('profile.edit')->with('status', 'Richiesta annullata.');
     }
 
+    public function requestAbsenceRevocation(Request $request, string $id): RedirectResponse
+    {
+        $updated = DB::table('absence_requests')
+            ->where('id', $id)
+            ->where('user_id', $request->user()->id)
+            ->where('status', 'approved')
+            ->whereNull('revocation_requested_at')
+            ->update([
+                'revocation_requested_at' => now(),
+                'revocation_decision_reason' => null,
+                'updated_at' => now(),
+            ]);
+        abort_unless($updated, 409);
+
+        $absence = DB::table('absence_requests')->where('id', $id)->first();
+        $request->attributes->set('audit_related_request_id', $id);
+        $request->attributes->set('audit_subject_id', $id);
+        $notifications = app(CentroNotificationService::class);
+        $notifications->notifyUsers(
+            $notifications->absenceApproverIds($absence->user_id, $absence->type),
+            $request->user()->id,
+            'absence_revocation_requested',
+            $request->user()->name.' ha richiesto la revoca di un\'assenza approvata.',
+        );
+
+        return back()->with('status', 'Richiesta di revoca inviata. L\'assenza resta approvata fino alla decisione.');
+    }
+
     public function supplementAbsence(Request $request, string $id): RedirectResponse
     {
         $absence = DB::table('absence_requests')->where('id', $id)

@@ -920,6 +920,9 @@ const absenceMedicalDocumentInput = ref(null);
 const absenceDecision = ref(null);
 const absenceDecisionReason = ref('');
 const absenceDecisionError = ref('');
+const revocationRejectionReason = ref('');
+const rejectingRevocation = ref(false);
+const revocationDecisionError = ref('');
 const absenceMedicalDocumentForm = useForm({ medical_document: null });
 
 function normalizeHexColor(value, fallback = '#2563eb') {
@@ -1065,6 +1068,21 @@ function submitAbsenceDecision(status = absenceDecision.value) {
         preserveState: true,
         onSuccess: () => { absenceForm.status = status; absenceDecision.value = null; },
         onError: (errors) => { absenceDecisionError.value = errors.reason || 'Operazione non riuscita.'; },
+    });
+}
+
+function decideAbsenceRevocation(decision) {
+    if (decision === 'rejected' && !rejectingRevocation.value) {
+        rejectingRevocation.value = true;
+        return;
+    }
+    if (decision === 'rejected' && revocationRejectionReason.value.trim().length < 5) {
+        revocationDecisionError.value = 'Scrivi almeno 5 caratteri.';
+        return;
+    }
+    router.patch(route('absences.revocation.decide', props.record.id), { decision, reason: decision === 'rejected' ? revocationRejectionReason.value : '' }, {
+        preserveScroll: true,
+        onError: (errors) => { revocationDecisionError.value = errors.reason || 'Operazione non riuscita.'; },
     });
 }
 
@@ -5499,6 +5517,17 @@ onUnmounted(() => {
                                 <button v-if="canApproveCurrentAbsence && absenceForm.status === 'pending'" type="button" class="btn btn-primary justify-center" @click="setAbsenceStatus('approved')">Approva</button>
                                 <button v-if="canApproveCurrentAbsence && absenceForm.status === 'pending'" type="button" class="btn btn-outline justify-center" @click="setAbsenceStatus('rejected')">Rifiuta</button>
                                 <button v-if="isSuperadmin && absenceForm.status === 'pending'" type="button" class="btn btn-outline justify-center" @click="setAbsenceStatus('needs_info')">Richiedi integrazione</button>
+                                <template v-if="canApproveCurrentAbsence && record.revocation_requested_at">
+                                    <p class="text-sm text-amber-700">Revoca richiesta. L'assenza resta attiva fino alla decisione.</p>
+                                    <button type="button" class="btn btn-primary justify-center" @click="decideAbsenceRevocation('approved')">Approva revoca</button>
+                                    <button type="button" class="btn btn-outline justify-center" @click="decideAbsenceRevocation('rejected')">Rifiuta revoca</button>
+                                    <div v-if="rejectingRevocation" class="space-y-2">
+                                        <label class="block text-sm font-medium text-gray-700">Motivo del rifiuto</label>
+                                        <textarea v-model="revocationRejectionReason" class="form-control" rows="3" placeholder="Scrivi un motivo chiaro per il dipendente"></textarea>
+                                        <p v-if="revocationDecisionError" class="text-xs text-red-600">{{ revocationDecisionError }}</p>
+                                        <div class="flex justify-end gap-2"><button type="button" class="btn btn-outline" @click="rejectingRevocation = false">Annulla</button><button type="button" class="btn btn-primary" @click="decideAbsenceRevocation('rejected')">Conferma</button></div>
+                                    </div>
+                                </template>
                                 <button type="button" class="btn border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 justify-center" @click="deleteAbsenceFromDetail">
                                     <Trash2 class="h-4 w-4" :stroke-width="1.7" />
                                     Elimina

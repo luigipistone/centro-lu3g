@@ -2016,6 +2016,7 @@ const absenceStatusOptions = [
     { value: 'approved', label: 'Approvate' },
     { value: 'rejected', label: 'Rifiutate' },
     { value: 'needs_info', label: 'Da integrare' },
+    { value: 'revocation_pending', label: 'Revoche richieste' },
 ];
 const absenceHourOptions = Array.from({ length: 14 }, (_, index) => {
     const hour = String(index + 7).padStart(2, '0');
@@ -5407,6 +5408,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                     </td>
                                     <td class="px-3 py-3">
                                         <span :class="['inline-flex rounded-full px-2 py-1 text-xs font-semibold', absenceStatusClass(row.status)]">{{ absenceStatusLabels[row.status] || row.status }}</span>
+                                        <div v-if="row.revocation_requested_at" class="mt-1 text-xs font-semibold text-amber-700">Revoca richiesta</div>
                                     </td>
                                     <td class="whitespace-nowrap px-3 py-3 text-right">
                                         <div class="inline-flex items-center justify-end gap-1">

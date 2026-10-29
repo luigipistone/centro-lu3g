@@ -658,12 +658,14 @@ class CentroPageController extends Controller
                 ->map(fn ($row) => $this->safeAbsenceRow($request, $row));
 
             $absenceStatus = $request->query('status', 'all');
-            if (! in_array($absenceStatus, ['all', 'pending', 'approved', 'rejected', 'needs_info'], true)) {
+            if (! in_array($absenceStatus, ['all', 'pending', 'approved', 'rejected', 'needs_info', 'revocation_pending'], true)) {
                 $absenceStatus = 'all';
             }
 
             $absencePage = (clone $absenceQuery)
-                ->when($absenceStatus !== 'all', fn ($query) => $query->where('absence_requests.status', $absenceStatus))
+                ->when($absenceStatus === 'revocation_pending', fn ($query) => $query->where('absence_requests.status', 'approved')->whereNotNull('absence_requests.revocation_requested_at'))
+                ->when(! in_array($absenceStatus, ['all', 'revocation_pending'], true), fn ($query) => $query->where('absence_requests.status', $absenceStatus))
+                ->orderByRaw('CASE WHEN absence_requests.revocation_requested_at IS NOT NULL THEN 0 ELSE 1 END')
                 ->orderByDesc('absence_requests.created_at')
                 ->orderByDesc('absence_requests.id')
                 ->paginate(25);
@@ -1090,6 +1092,59 @@ class CentroPageController extends Controller
         );
 
         return back()->with('status', ['approved' => 'Richiesta approvata.', 'rejected' => 'Richiesta rifiutata.', 'needs_info' => 'Integrazione richiesta.'][$payload['status']]);
+    }
+
+    public function decideAbsenceRevocation(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        $payload = $request->validate([
+            'decision' => ['required', Rule::in(['approved', 'rejected'])],
+            'reason' => ['nullable', 'required_if:decision,rejected', 'string', 'min:5', 'max:2000'],
+        ]);
+
+        $absence = DB::table('absence_requests')->where('id', $id)->first();
+        abort_unless($absence, 404);
+        $this->ensureCanManageAbsence($request, $absence);
+        $approvers = app(AttendanceService::class)->settings()['approvers'];
+        if ($this->currentUserRole($request) === 'admin') {
+            abort_unless(($approvers[$absence->type] ?? 'superadmin') === 'admin', 403);
+        }
+
+        $request->attributes->set('audit_related_request_id', $id);
+        $request->attributes->set('audit_subject_id', $id);
+        $request->attributes->set('audit_reviewed_by', $request->user()->id);
+        $request->attributes->set('audit_reason', $payload['reason'] ?? null);
+
+        $deletedPath = DB::transaction(function () use ($absence, $payload) {
+            $current = DB::table('absence_requests')->where('id', $absence->id)->lockForUpdate()->first();
+            abort_unless($current && $current->status === 'approved' && $current->revocation_requested_at, 409);
+
+            if ($payload['decision'] === 'approved') {
+                DB::table('absence_requests')->where('id', $current->id)->delete();
+                return $current->medical_document_path;
+            }
+
+            DB::table('absence_requests')->where('id', $current->id)->update([
+                'revocation_requested_at' => null,
+                'revocation_decision_reason' => $payload['reason'],
+                'updated_at' => now(),
+            ]);
+            return null;
+        });
+        if ($deletedPath) {
+            Storage::disk('local')->delete($deletedPath);
+        }
+
+        app(CentroNotificationService::class)->notifyUsers(
+            [$absence->user_id], $request->user()->id, 'absence_revocation_decided',
+            $payload['decision'] === 'approved'
+                ? $request->user()->name.' ha approvato la revoca della tua assenza.'
+                : $request->user()->name.' ha rifiutato la revoca della tua assenza.',
+        );
+
+        return $payload['decision'] === 'approved'
+            ? redirect()->route('absences.index')->with('status', 'Revoca approvata. L\'assenza è stata rimossa.')
+            : back()->with('status', 'Revoca rifiutata. L\'assenza resta approvata.');
     }
 
     public function updateAbsence(Request $request, string $id): RedirectResponse

@@ -11,7 +11,7 @@ class AuditStateSnapshot
         'clients' => ['clients', ['is_pa', 'country', 'city', 'payment_terms_days']],
         'projects' => ['projects', ['client_id', 'service_id', 'status', 'color']],
         'tasks' => ['tasks', ['project_id', 'client_id', 'service_id', 'parent_task_id', 'task_type', 'status', 'priority', 'start_date', 'due_date', 'due_time']],
-        'absences' => ['absence_requests', ['type', 'start_date', 'end_date', 'start_time', 'end_time', 'status']],
+        'absences' => ['absence_requests', ['type', 'start_date', 'end_date', 'start_time', 'end_time', 'status', 'revocation_requested_at', 'revocation_decision_reason']],
         'documents' => ['company_documents', ['category', 'audience', 'document_year']],
         'document-messages' => ['company_messages', ['audience']],
     ];
@@ -28,6 +28,12 @@ class AuditStateSnapshot
         if ($routeName === 'profile.absences.store') {
             $id = $request->attributes->get('audit_related_request_id');
             $row = $id ? DB::table('absence_requests')->where('id', $id)->first(['type', 'start_date', 'end_date', 'start_time', 'end_time', 'status']) : null;
+
+            return $row ? (array) $row : null;
+        }
+        if ($routeName === 'profile.absences.revocation.request') {
+            $row = DB::table('absence_requests')->where('id', $request->route('id'))
+                ->first(['type', 'start_date', 'end_date', 'status', 'revocation_requested_at']);
 
             return $row ? (array) $row : null;
         }
@@ -94,6 +100,6 @@ class AuditStateSnapshot
     private function isRecordMutation(string $routeName): bool
     {
         return in_array(substr($routeName, strrpos($routeName, '.') + 1), ['store', 'update', 'destroy'], true)
-            || in_array($routeName, ['tasks.status.update', 'tasks.schedule.update', 'absences.status.update', 'documents.category.update'], true);
+            || in_array($routeName, ['tasks.status.update', 'tasks.schedule.update', 'absences.status.update', 'absences.revocation.decide', 'documents.category.update'], true);
     }
 }

@@ -160,6 +160,10 @@ function cancelAbsence(absence) {
     router.delete(route('profile.absences.destroy', absence.id), { preserveScroll: true });
 }
 
+function requestAbsenceRevocation(absence) {
+    router.post(route('profile.absences.revocation.request', absence.id), {}, { preserveScroll: true });
+}
+
 function updateAbsenceNotesFromEditor() {
     absenceForm.notes = absenceNotesEditor.value?.innerHTML || '';
 }
@@ -413,6 +417,8 @@ watch(() => absenceForm.type, () => {
                                     </a>
                                     <div v-if="absence.notes" class="mt-1 text-sm text-gray-600" v-html="absence.notes"></div>
                                     <p v-if="absence.decision_reason" class="mt-2 text-sm text-red-700">Motivo del rifiuto: {{ absence.decision_reason }}</p>
+                                    <p v-if="absence.revocation_requested_at" class="mt-2 text-sm text-amber-700">Revoca richiesta, in attesa di approvazione. L'assenza resta attiva.</p>
+                                    <p v-else-if="absence.revocation_decision_reason" class="mt-2 text-sm text-red-700">Revoca rifiutata: {{ absence.revocation_decision_reason }}</p>
                                     <div v-if="absence.status === 'needs_info'" class="mt-3 max-w-xl space-y-2">
                                         <p class="text-sm text-amber-700">Integrazione richiesta: {{ absence.integration_request }}</p>
                                         <textarea v-model="supplementText[absence.id]" class="form-control" rows="2" placeholder="Scrivi le informazioni richieste"></textarea>
@@ -422,6 +428,7 @@ watch(() => absenceForm.type, () => {
                                 <div class="flex items-center gap-2">
                                     <span class="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">{{ absenceStatusLabels[absence.status] || absence.status }}</span>
                                     <button v-if="absence.status === 'pending'" type="button" class="danger-link" @click="cancelAbsence(absence)">Annulla</button>
+                                    <button v-else-if="absence.status === 'approved' && !absence.revocation_requested_at" type="button" class="danger-link" @click="requestAbsenceRevocation(absence)">Richiedi revoca</button>
                                 </div>
                             </div>
                         </div>

@@ -26,6 +26,19 @@ class CentroNotificationService
             ->push($userId)->filter()->unique()->values()->all();
     }
 
+    public function absenceApproverIds(string $userId, string $type): array
+    {
+        $approver = app(AttendanceService::class)->settings()['approvers'][$type] ?? 'superadmin';
+        if ($approver === 'admin') {
+            $managerId = DB::table('profiles')->where('user_id', $userId)->value('manager_user_id');
+            if ($managerId && DB::table('user_roles')->where('user_id', $managerId)->where('role', 'admin')->exists()) {
+                return [$managerId];
+            }
+        }
+
+        return DB::table('user_roles')->where('role', 'superadmin')->pluck('user_id')->all();
+    }
+
     public function notifyUsers(iterable $userIds, ?string $actorId, string $type, string $message, ?string $taskId = null, ?string $companyDocumentId = null, ?string $companyMessageId = null): void
     {
         $now = now();
