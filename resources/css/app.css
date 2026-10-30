@@ -1677,6 +1677,48 @@ html[data-event-theme]:not([data-event-theme="standard"]) .btn-primary:hover {
     to { transform: scale(1.045); }
 }
 
+/* Event palettes use solid working surfaces, not photographic overlays. */
+html[data-event-theme="halloween"] { --event-canvas: #191320; --event-panel: #30233c; --event-text: #fff4df; --event-muted: #d4bddf; --event-accent: #ff952d; --event-secondary: #b5e35b; }
+html[data-event-theme="natale"] { --event-canvas: #102b27; --event-panel: #1c433b; --event-text: #fff8e9; --event-muted: #bcd8cc; --event-accent: #f0c76a; --event-secondary: #ff787d; }
+html[data-event-theme="pasqua"] { --event-canvas: #e3f1dc; --event-panel: #fff9e9; --event-text: #233c32; --event-muted: #587064; --event-accent: #9952a0; --event-secondary: #dd674f; }
+html[data-event-theme="estate"] { --event-canvas: #d6f2f0; --event-panel: #fff9e9; --event-text: #153e46; --event-muted: #4e7275; --event-accent: #007f87; --event-secondary: #e65d46; }
+html[data-event-theme]:not([data-event-theme="standard"]) body { background: var(--event-canvas); color: var(--event-text); }
+html[data-event-theme]:not([data-event-theme="standard"]) body::before { display: none; }
+html[data-event-theme]:not([data-event-theme="standard"]) .surface,
+html[data-event-theme]:not([data-event-theme="standard"]) .desktop-sidebar,
+html[data-event-theme]:not([data-event-theme="standard"]) .desktop-shell > nav,
+html[data-event-theme]:not([data-event-theme="standard"]) .desktop-shell > header {
+    background: var(--event-panel) !important;
+    border-color: color-mix(in srgb, var(--event-accent) 40%, transparent) !important;
+    color: var(--event-text);
+    backdrop-filter: none;
+}
+html[data-event-theme]:not([data-event-theme="standard"]) .surface :is(h1,h2,h3,h4,.section-title,[class*="text-gray-9"],[class*="text-gray-8"]),
+html[data-event-theme]:not([data-event-theme="standard"]) .desktop-sidebar :is(a,button,[class*="text-gray-9"]),
+html[data-event-theme]:not([data-event-theme="standard"]) .desktop-shell > header :is(h1,h2,h3) { color: var(--event-text); }
+html[data-event-theme]:not([data-event-theme="standard"]) .surface :is([class*="text-gray-5"],[class*="text-gray-6"],[class*="text-gray-4"]) { color: var(--event-muted); }
+html[data-event-theme]:not([data-event-theme="standard"]) .desktop-sidebar .nav-link-active {
+    background: var(--event-accent) !important;
+    color: var(--event-canvas) !important;
+    box-shadow: none;
+}
+html[data-event-theme]:not([data-event-theme="standard"]) .desktop-sidebar .nav-link-active svg { color: inherit; }
+html[data-event-theme]:not([data-event-theme="standard"]) .section-icon {
+    background: var(--event-accent);
+    color: var(--event-canvas);
+    box-shadow: none;
+}
+html[data-event-theme]:not([data-event-theme="standard"]) .btn-primary { background: var(--event-accent); color: var(--event-canvas); box-shadow: none; }
+html[data-event-theme]:not([data-event-theme="standard"]) .btn-primary:hover { background: var(--event-secondary); }
+.event-atmosphere { height: 80px; background: var(--event-canvas); border-bottom: 3px solid var(--event-accent); }
+.event-atmosphere::before { display: none; }
+.event-atmosphere::after { background: none; }
+.event-atmosphere-name { color: var(--event-accent); font-size: 24px; }
+.event-atmosphere-crest { border-radius: 8px; background: var(--event-accent); color: var(--event-canvas); border: none; box-shadow: none; animation: event-symbol-rock 4s ease-in-out infinite; }
+.event-atmosphere-motif { z-index: 0; color: var(--event-secondary); opacity: 0.8; }
+.event-atmosphere-content { position: relative; z-index: 1; }
+@keyframes event-symbol-rock { 0%,100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg) translateY(-3px); } }
+
 @media (prefers-reduced-motion: reduce) {
     html[data-event-theme]:not([data-event-theme="standard"]) body::before,
     .event-atmosphere::before,
