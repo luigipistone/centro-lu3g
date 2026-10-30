@@ -1678,7 +1678,7 @@ html[data-event-theme]:not([data-event-theme="standard"]) .btn-primary:hover {
 }
 
 /* Event palettes use solid working surfaces, not photographic overlays. */
-html[data-event-theme="halloween"] { --event-canvas: #191320; --event-panel: #30233c; --event-text: #fff4df; --event-muted: #d4bddf; --event-accent: #ff952d; --event-secondary: #b5e35b; }
+html[data-event-theme="halloween"] { --event-canvas: #171918; --event-panel: #f48232; --event-text: #21170f; --event-muted: #57321c; --event-accent: #242824; --event-secondary: #e1edb7; --season-ink: 110 5% 14%; --season-contrast: 110 5% 10%; }
 html[data-event-theme="natale"] { --event-canvas: #102b27; --event-panel: #1c433b; --event-text: #fff8e9; --event-muted: #bcd8cc; --event-accent: #f0c76a; --event-secondary: #ff787d; }
 html[data-event-theme="pasqua"] { --event-canvas: #e3f1dc; --event-panel: #fff9e9; --event-text: #233c32; --event-muted: #587064; --event-accent: #9952a0; --event-secondary: #dd674f; }
 html[data-event-theme="estate"] { --event-canvas: #d6f2f0; --event-panel: #fff9e9; --event-text: #153e46; --event-muted: #4e7275; --event-accent: #007f87; --event-secondary: #e65d46; }
@@ -1718,6 +1718,65 @@ html[data-event-theme]:not([data-event-theme="standard"]) .btn-primary:hover { b
 .event-atmosphere-motif { z-index: 0; color: var(--event-secondary); opacity: 0.8; }
 .event-atmosphere-content { position: relative; z-index: 1; }
 @keyframes event-symbol-rock { 0%,100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg) translateY(-3px); } }
+
+html[data-event-theme="halloween"] .desktop-sidebar,
+html[data-event-theme="halloween"] .desktop-shell > nav,
+html[data-event-theme="halloween"] .desktop-shell > header {
+    background: #202420 !important;
+    --event-text: #fff4e9;
+}
+html[data-event-theme="halloween"] .desktop-sidebar .nav-link-active {
+    background: #f48232 !important;
+    color: #21170f !important;
+}
+html[data-event-theme="halloween"] .surface {
+    box-shadow: inset 0 1px #ffb979, 0 12px 32px #00000018;
+    border-color: #e46b21 !important;
+    background-image: linear-gradient(125deg, transparent 65%, #ffb16b55) !important;
+}
+html[data-event-theme="halloween"] .section-title {
+    position: relative;
+}
+html[data-event-theme="halloween"] .section-title::after {
+    content: '';
+    width: 32px;
+    height: 3px;
+    margin-left: auto;
+    flex: none;
+    border-radius: 2px;
+    background: #292c22;
+    box-shadow: 9px -6px 0 -1px #292c22;
+    animation: halloween-detail 5s ease-in-out infinite;
+    pointer-events: none;
+}
+html[data-event-theme="halloween"] .section-icon {
+    background: #262a24;
+    color: #ffac60;
+    box-shadow: inset 0 0 0 1px #ffffff12;
+}
+html[data-event-theme="halloween"] .btn-primary {
+    background: #252a23;
+    color: #fff5e9;
+    box-shadow: inset 0 1px #ffffff20;
+}
+html[data-event-theme="halloween"] .btn-primary:hover {
+    background: #3a4430;
+    color: #fff5e9;
+}
+html[data-event-theme="halloween"] .surface :is(input,textarea,select) {
+    background: #fff4e7 !important;
+    color: #272017 !important;
+    border-color: #bd5b23 !important;
+}
+html[data-event-theme="halloween"] .surface :is(input,textarea)::placeholder { color: #776451; }
+@keyframes halloween-detail {
+    0%, 75%, 100% { transform: translateX(0); opacity: 0.8; }
+    82% { transform: translateX(-5px); opacity: 1; }
+    90% { transform: translateX(-2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+    html[data-event-theme="halloween"] .section-title::after { animation: none; }
+}
 
 @media (prefers-reduced-motion: reduce) {
     html[data-event-theme]:not([data-event-theme="standard"]) body::before,

@@ -10,8 +10,6 @@ import { Link, router, usePage } from '@inertiajs/vue3';
 import {
     Bell,
     ExternalLink,
-    Flower2,
-    Ghost,
     Bookmark,
     Briefcase,
     Calendar,
@@ -27,7 +25,6 @@ import {
     Megaphone,
     Search,
     Settings,
-    Snowflake,
     Moon,
     PackageOpen,
     Boxes,
@@ -97,13 +94,6 @@ const latestUnreadNotification = computed(() => latestNotifications.value.find((
 const notificationBadgeCount = computed(() => page.props.notifications?.unread || 0);
 const notificationStorageKey = computed(() => `centro:last-browser-notification:${page.props.auth?.user?.id || 'guest'}`);
 const themeStorageKey = 'centro:theme';
-const eventTheme = computed(() => page.props.eventTheme || 'standard');
-const eventScene = computed(() => ({
-    halloween: { label: 'Halloween', icon: Ghost },
-    natale: { label: 'Natale', icon: Snowflake },
-    pasqua: { label: 'Pasqua', icon: Flower2 },
-    estate: { label: 'Estate', icon: Sun },
-}[eventTheme.value] || null));
 watch(() => page.props.eventTheme, (theme) => {
     document.documentElement.dataset.eventTheme = theme || 'standard';
 });
@@ -692,16 +682,6 @@ const groups = computed(() => {
                     </div>
                 </div>
             </nav>
-
-            <div v-if="eventScene" :class="['event-atmosphere', `event-atmosphere--${eventTheme}`]" aria-hidden="true">
-                <div class="event-atmosphere-content">
-                    <span class="event-atmosphere-crest"><component :is="eventScene.icon" :size="24" :stroke-width="1.6" /></span>
-                    <span class="event-atmosphere-name">{{ eventScene.label }}</span>
-                    <span class="event-atmosphere-divider"></span>
-                    <span class="event-atmosphere-brand">Il Centro</span>
-                </div>
-                <component v-for="index in 8" :key="index" :is="eventScene.icon" class="event-atmosphere-motif" :style="{ left: `${index * 12}%`, top: `${8 + index * 9}%`, width: `${16 + index * 2}px`, height: `${16 + index * 2}px`, animationDuration: `${8 + index * 0.8}s`, animationDelay: `${-index}s` }" :stroke-width="1.2" />
-            </div>
 
             <header class="relative z-[2000] overflow-visible border-b border-white/70 bg-white/72 backdrop-blur-xl" v-if="$slots.header">
                 <div class="relative z-[2001] min-w-0 overflow-visible px-4 py-6 sm:px-6 lg:px-8">
