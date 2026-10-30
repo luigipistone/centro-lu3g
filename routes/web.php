@@ -280,6 +280,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/users/{id}/physical', [CentroPageController::class, 'physicallyDeleteUser'])->name('users.physical-destroy');
     Route::patch('/users/{id}/status', [CentroPageController::class, 'updateUserStatus'])->name('users.status.update');
     Route::get('/settings', [CentroPageController::class, 'index'])->defaults('section', 'settings')->name('settings.index');
+    Route::put('/settings/event-theme', [CentroPageController::class, 'updateEventTheme'])->name('settings.event-theme.update');
     Route::post('/settings/organization-options', [CentroPageController::class, 'storeOrganizationOption'])->name('settings.organization-options.store');
     Route::put('/settings/organization-options/{id}', [CentroPageController::class, 'updateOrganizationOption'])->name('settings.organization-options.update');
     Route::delete('/settings/organization-options/{id}', [CentroPageController::class, 'destroyOrganizationOption'])->name('settings.organization-options.destroy');

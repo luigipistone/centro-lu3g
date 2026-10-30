@@ -94,6 +94,9 @@ const latestUnreadNotification = computed(() => latestNotifications.value.find((
 const notificationBadgeCount = computed(() => page.props.notifications?.unread || 0);
 const notificationStorageKey = computed(() => `centro:last-browser-notification:${page.props.auth?.user?.id || 'guest'}`);
 const themeStorageKey = 'centro:theme';
+watch(() => page.props.eventTheme, (theme) => {
+    document.documentElement.dataset.eventTheme = theme || 'standard';
+});
 const currentRole = computed(() => page.props.auth?.user?.role || 'guest');
 const isSuperadmin = computed(() => currentRole.value === 'superadmin');
 const permissions = computed(() => page.props.auth?.user?.permissions || []);
@@ -277,6 +280,7 @@ watch(latestUnreadNotification, (notification) => {
 });
 
 onMounted(() => {
+    document.documentElement.dataset.eventTheme = page.props.eventTheme || 'standard';
     const storedSidebarWidth = window.localStorage.getItem(sidebarStorageKey.value);
     const savedSidebarWidth = Number(storedSidebarWidth);
     if (storedSidebarWidth !== null && storedSidebarWidth !== '' && Number.isFinite(savedSidebarWidth)) {
@@ -364,7 +368,7 @@ const groups = computed(() => {
 </script>
 
 <template>
-    <div class="min-h-screen bg-[hsl(var(--background))]">
+    <div class="app-shell min-h-screen bg-[hsl(var(--background))]">
         <aside
             class="desktop-sidebar fixed inset-y-0 left-0 z-30 hidden flex-col border-r border-white/60 bg-white/62 shadow-[20px_0_55px_rgba(28,42,73,0.08)] backdrop-blur-2xl lg:flex"
             :class="{ 'is-collapsed': sidebarCollapsed, 'is-resizing': sidebarResizing }"

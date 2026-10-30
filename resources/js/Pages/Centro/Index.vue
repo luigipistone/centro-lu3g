@@ -67,6 +67,7 @@ import {
     UserPlus,
     UserRound,
     Users,
+    WandSparkles,
     X,
 } from '@lucide/vue';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
@@ -361,6 +362,24 @@ const taskSearchSelectQueries = ref({
 const taskDescriptionEditor = ref(null);
 const requestedSettingsTab = new URLSearchParams(window.location.search).get('tab');
 const settingsTab = ref(['log', 'sezioni'].includes(requestedSettingsTab) || (['github', 'airmail'].includes(requestedSettingsTab) && isSuperadmin.value) ? requestedSettingsTab : 'personalizzazione');
+const eventThemeOptions = [
+    { id: 'standard', label: 'Standard' },
+    { id: 'halloween', label: 'Halloween' },
+    { id: 'natale', label: 'Natale' },
+    { id: 'pasqua', label: 'Pasqua' },
+    { id: 'estate', label: 'Estate' },
+];
+const selectedEventTheme = ref(page.props.eventTheme || 'standard');
+const eventThemeSaving = ref(false);
+watch(() => page.props.eventTheme, (theme) => { selectedEventTheme.value = theme || 'standard'; });
+
+function saveEventTheme() {
+    eventThemeSaving.value = true;
+    router.put(route('settings.event-theme.update'), { theme: selectedEventTheme.value }, {
+        preserveScroll: true,
+        onFinish: () => { eventThemeSaving.value = false; },
+    });
+}
 const organizationDrafts = ref({ department: '', office: '' });
 const organizationEditingId = ref(null);
 const organizationEditingName = ref('');
@@ -5995,6 +6014,26 @@ function calendarDayStyle(sectionMonth, cell) {
                 </div>
 
                 <section v-if="settingsTab === 'personalizzazione'" class="grid gap-6 lg:grid-cols-[1fr_320px]">
+                    <section v-if="isSuperadmin" class="app-card lg:col-span-2">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <h3 class="section-title"><span class="section-icon"><WandSparkles class="h-4 w-4" :stroke-width="1.7" /></span>Tema evento</h3>
+                            <button type="button" class="btn btn-primary" :disabled="eventThemeSaving || selectedEventTheme === (page.props.eventTheme || 'standard')" @click="saveEventTheme">
+                                <Save class="h-4 w-4" :stroke-width="1.7" />{{ selectedEventTheme === 'standard' ? 'Ripristina standard' : 'Applica tema' }}
+                            </button>
+                        </div>
+                        <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5" role="radiogroup" aria-label="Tema della piattaforma">
+                            <button
+                                v-for="theme in eventThemeOptions" :key="theme.id" type="button" role="radio"
+                                :aria-checked="selectedEventTheme === theme.id" :aria-label="theme.label"
+                                :class="['event-theme-choice', selectedEventTheme === theme.id ? 'is-selected' : '']"
+                                :style="theme.id === 'standard' ? {} : { backgroundImage: `url(/images/event-themes/${theme.id}.webp)` }"
+                                @click="selectedEventTheme = theme.id"
+                            >
+                                <span>{{ theme.label }}</span>
+                                <Check v-if="selectedEventTheme === theme.id" class="h-4 w-4" :stroke-width="2" />
+                            </button>
+                        </div>
+                    </section>
                     <div class="grid gap-6 md:grid-cols-2 lg:col-span-2">
                         <section v-for="group in [{ type: 'office', title: 'Sedi di lavoro', singular: 'sede' }, { type: 'department', title: 'Reparti', singular: 'reparto' }]" :key="group.type" class="app-card">
                             <h3 class="section-title"><span class="section-icon"><Building2 v-if="group.type === 'office'" class="h-4 w-4" :stroke-width="1.7" /><Users v-else class="h-4 w-4" :stroke-width="1.7" /></span>{{ group.title }}</h3>

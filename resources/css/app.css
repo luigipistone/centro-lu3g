@@ -1385,3 +1385,149 @@ html.dark .completion-snowflake {
         transform: translate3d(2%, -1%, 0);
     }
 }
+
+/* Seasonal scenes stay behind working surfaces; standard never acquires these rules. */
+.event-theme-choice {
+    position: relative;
+    display: flex;
+    min-height: 104px;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 8px;
+    overflow: hidden;
+    border: 2px solid transparent;
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    background-color: hsl(218 32% 94%);
+    background-position: center;
+    background-size: cover;
+    color: #fff;
+    text-align: left;
+    transition: border-color 180ms ease, transform 180ms ease;
+}
+
+.event-theme-choice:first-child {
+    background: linear-gradient(135deg, #f4f8ff, #dbeafe);
+    color: #172033;
+}
+
+.event-theme-choice:not(:first-child)::before {
+    position: absolute;
+    inset: 35% 0 0;
+    background: linear-gradient(transparent, rgb(10 20 32 / 0.78));
+    content: '';
+}
+
+.event-theme-choice > * {
+    position: relative;
+}
+
+.event-theme-choice.is-selected {
+    border-color: hsl(var(--primary-app));
+    box-shadow: 0 0 0 2px hsl(var(--primary-app) / 0.16);
+}
+
+.event-theme-choice:hover {
+    transform: translateY(-2px);
+}
+
+html[data-event-theme="halloween"] {
+    --primary-app: 22 89% 46%;
+    --primary-app-dark: 18 90% 37%;
+    --primary-app-soft: 28 100% 95%;
+    --season-bg: 31 42% 95%;
+    --season-surface: 33 68% 98%;
+    --season-image: url('/images/event-themes/halloween.webp');
+}
+
+html[data-event-theme="natale"] {
+    --primary-app: 151 64% 34%;
+    --primary-app-dark: 151 67% 27%;
+    --primary-app-soft: 151 38% 94%;
+    --season-bg: 152 27% 95%;
+    --season-surface: 152 39% 98%;
+    --season-image: url('/images/event-themes/natale.webp');
+}
+
+html[data-event-theme="pasqua"] {
+    --primary-app: 159 52% 37%;
+    --primary-app-dark: 159 55% 29%;
+    --primary-app-soft: 151 40% 95%;
+    --season-bg: 80 32% 96%;
+    --season-surface: 65 45% 99%;
+    --season-image: url('/images/event-themes/pasqua.webp');
+}
+
+html[data-event-theme="estate"] {
+    --primary-app: 197 85% 41%;
+    --primary-app-dark: 197 85% 34%;
+    --primary-app-soft: 190 85% 94%;
+    --season-bg: 191 47% 96%;
+    --season-surface: 190 72% 99%;
+    --season-image: url('/images/event-themes/estate.webp');
+}
+
+html.dark[data-event-theme]:not([data-event-theme="standard"]) {
+    --season-bg: 222 27% 9%;
+    --season-surface: 222 25% 14%;
+    --primary-app-soft: 220 30% 18%;
+}
+
+html[data-event-theme]:not([data-event-theme="standard"]) body {
+    background: hsl(var(--season-bg));
+}
+
+html[data-event-theme]:not([data-event-theme="standard"]) body::before {
+    position: fixed;
+    z-index: 0;
+    inset: -3%;
+    background-image: linear-gradient(hsl(var(--season-bg) / 0.56), hsl(var(--season-bg) / 0.76)), var(--season-image);
+    background-position: center;
+    background-size: cover;
+    content: '';
+    pointer-events: none;
+    animation: event-scene-breathe 28s ease-in-out infinite alternate;
+}
+
+html.dark[data-event-theme]:not([data-event-theme="standard"]) body::before {
+    background-image: linear-gradient(hsl(var(--season-bg) / 0.68), hsl(var(--season-bg) / 0.78)), var(--season-image);
+}
+
+html[data-event-theme]:not([data-event-theme="standard"]) .app-shell {
+    position: relative;
+    z-index: 1;
+    background: transparent !important;
+}
+
+html[data-event-theme]:not([data-event-theme="standard"]) .desktop-sidebar,
+html[data-event-theme]:not([data-event-theme="standard"]) .desktop-shell > nav {
+    background: hsl(var(--season-surface) / 0.86) !important;
+    border-color: hsl(var(--primary-app) / 0.12) !important;
+}
+
+html[data-event-theme]:not([data-event-theme="standard"]) .surface {
+    border-color: hsl(var(--primary-app) / 0.12);
+    box-shadow: var(--shadow-soft), 0 0 0 1px hsl(var(--season-surface) / 0.4);
+}
+
+html[data-event-theme]:not([data-event-theme="standard"]) .btn-primary {
+    background: linear-gradient(180deg, hsl(var(--primary-app) / 0.9), hsl(var(--primary-app-dark)));
+}
+
+html[data-event-theme]:not([data-event-theme="standard"]) .btn-primary:hover {
+    background: linear-gradient(180deg, hsl(var(--primary-app)), hsl(var(--primary-app-dark)));
+}
+
+@keyframes event-scene-breathe {
+    from { transform: scale(1); }
+    to { transform: scale(1.045); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html[data-event-theme]:not([data-event-theme="standard"]) body::before {
+        animation: none;
+    }
+    .event-theme-choice {
+        transition: none;
+    }
+}

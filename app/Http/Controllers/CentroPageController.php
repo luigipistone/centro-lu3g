@@ -7,6 +7,7 @@ use App\Services\AccountArchiveService;
 use App\Services\AttendanceService;
 use App\Services\CentroBackupService;
 use App\Services\CentroNotificationService;
+use App\Services\EventThemeService;
 use App\Services\ClientCsvImportService;
 use App\Services\RolePermissionService;
 use App\Services\PayslipRecognitionService;
@@ -171,6 +172,19 @@ class CentroPageController extends Controller
         ]);
 
         return redirect()->route('settings.index', ['tab' => 'sezioni'])->with('status', 'Disponibilità della sezione aggiornata.');
+    }
+
+    public function updateEventTheme(Request $request, EventThemeService $themes): RedirectResponse
+    {
+        $this->ensureSuperadmin($request);
+        $data = $request->validate(['theme' => ['required', Rule::in(EventThemeService::THEMES)]]);
+        $before = $themes->current();
+        $themes->set($data['theme']);
+        $request->attributes->set('audit_subject_id', 'event_theme');
+        $request->attributes->set('audit_state_before', ['theme' => $before]);
+        $request->attributes->set('audit_state_after', ['theme' => $data['theme']]);
+
+        return redirect()->route('settings.index', ['tab' => 'personalizzazione'])->with('status', 'Tema aggiornato.');
     }
 
     public function dashboard(Request $request): Response

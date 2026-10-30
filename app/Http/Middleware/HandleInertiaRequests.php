@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Services\RolePermissionService;
 use App\Services\SectionAvailabilityService;
+use App\Services\EventThemeService;
 use App\Services\NotificationDestination;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -59,6 +60,7 @@ class HandleInertiaRequests extends Middleware
             ],
             'notifications' => fn () => $user ? $this->notificationPayload($user->id, $role) : ['active' => 0, 'unread' => 0, 'latest' => []],
             'sectionVisibility' => fn () => $user ? app(SectionAvailabilityService::class)->statuses() : [],
+            'eventTheme' => fn () => $user ? app(EventThemeService::class)->current() : 'standard',
             'push' => [
                 'vapidPublicKey' => config('services.webpush.public_key'),
             ],
