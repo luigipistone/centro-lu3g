@@ -1437,6 +1437,11 @@ html[data-event-theme="halloween"] {
     --primary-app-soft: 28 100% 95%;
     --season-bg: 31 42% 95%;
     --season-surface: 33 68% 98%;
+    --season-ink: 263 31% 17%;
+    --season-glow: 35 100% 61%;
+    --season-contrast: 263 34% 12%;
+    --glass: 34 55% 98%;
+    --muted: 29 45% 94%;
     --season-image: url('/images/event-themes/halloween.webp');
 }
 
@@ -1446,6 +1451,11 @@ html[data-event-theme="natale"] {
     --primary-app-soft: 151 38% 94%;
     --season-bg: 152 27% 95%;
     --season-surface: 152 39% 98%;
+    --season-ink: 155 42% 13%;
+    --season-glow: 39 92% 68%;
+    --season-contrast: 156 45% 10%;
+    --glass: 151 36% 98%;
+    --muted: 150 26% 94%;
     --season-image: url('/images/event-themes/natale.webp');
 }
 
@@ -1455,6 +1465,11 @@ html[data-event-theme="pasqua"] {
     --primary-app-soft: 151 40% 95%;
     --season-bg: 80 32% 96%;
     --season-surface: 65 45% 99%;
+    --season-ink: 164 31% 17%;
+    --season-glow: 340 74% 78%;
+    --season-contrast: 163 38% 13%;
+    --glass: 72 55% 99%;
+    --muted: 78 30% 95%;
     --season-image: url('/images/event-themes/pasqua.webp');
 }
 
@@ -1464,6 +1479,11 @@ html[data-event-theme="estate"] {
     --primary-app-soft: 190 85% 94%;
     --season-bg: 191 47% 96%;
     --season-surface: 190 72% 99%;
+    --season-ink: 200 49% 13%;
+    --season-glow: 40 100% 66%;
+    --season-contrast: 202 58% 12%;
+    --glass: 187 58% 99%;
+    --muted: 185 42% 94%;
     --season-image: url('/images/event-themes/estate.webp');
 }
 
@@ -1471,6 +1491,8 @@ html.dark[data-event-theme]:not([data-event-theme="standard"]) {
     --season-bg: 222 27% 9%;
     --season-surface: 222 25% 14%;
     --primary-app-soft: 220 30% 18%;
+    --glass: 222 24% 15%;
+    --muted: 222 23% 19%;
 }
 
 html[data-event-theme]:not([data-event-theme="standard"]) body {
@@ -1481,7 +1503,7 @@ html[data-event-theme]:not([data-event-theme="standard"]) body::before {
     position: fixed;
     z-index: 0;
     inset: -3%;
-    background-image: linear-gradient(hsl(var(--season-bg) / 0.56), hsl(var(--season-bg) / 0.76)), var(--season-image);
+    background-image: linear-gradient(hsl(var(--season-bg) / 0.22), hsl(var(--season-bg) / 0.48)), var(--season-image);
     background-position: center;
     background-size: cover;
     content: '';
@@ -1490,7 +1512,7 @@ html[data-event-theme]:not([data-event-theme="standard"]) body::before {
 }
 
 html.dark[data-event-theme]:not([data-event-theme="standard"]) body::before {
-    background-image: linear-gradient(hsl(var(--season-bg) / 0.68), hsl(var(--season-bg) / 0.78)), var(--season-image);
+    background-image: linear-gradient(hsl(var(--season-bg) / 0.48), hsl(var(--season-bg) / 0.62)), var(--season-image);
 }
 
 html[data-event-theme]:not([data-event-theme="standard"]) .app-shell {
@@ -1501,13 +1523,145 @@ html[data-event-theme]:not([data-event-theme="standard"]) .app-shell {
 
 html[data-event-theme]:not([data-event-theme="standard"]) .desktop-sidebar,
 html[data-event-theme]:not([data-event-theme="standard"]) .desktop-shell > nav {
-    background: hsl(var(--season-surface) / 0.86) !important;
+    background: hsl(var(--season-surface) / 0.9) !important;
     border-color: hsl(var(--primary-app) / 0.12) !important;
 }
 
+html[data-event-theme]:not([data-event-theme="standard"]) .desktop-sidebar {
+    background-image: linear-gradient(hsl(var(--season-surface) / 0.76), hsl(var(--season-surface) / 0.97) 210px), var(--season-image) !important;
+    background-repeat: no-repeat !important;
+    background-position: center top !important;
+    background-size: 100% 230px, auto 230px !important;
+    border-right: 3px solid hsl(var(--primary-app) / 0.48) !important;
+}
+
+html[data-event-theme]:not([data-event-theme="standard"]) .desktop-sidebar .brand-mark,
+html[data-event-theme]:not([data-event-theme="standard"]) nav .brand-mark {
+    background: hsl(var(--season-glow) / 0.35);
+    box-shadow: 0 0 0 2px hsl(var(--primary-app) / 0.25), 0 10px 30px hsl(var(--primary-app) / 0.22);
+}
+
+html[data-event-theme]:not([data-event-theme="standard"]) .desktop-sidebar .nav-link-active {
+    border-color: hsl(var(--primary-app) / 0.35);
+    background: linear-gradient(90deg, hsl(var(--primary-app) / 0.22), hsl(var(--season-surface) / 0.9));
+    box-shadow: inset 3px 0 hsl(var(--primary-app)), 0 8px 20px hsl(var(--primary-app) / 0.12);
+}
+
+html[data-event-theme]:not([data-event-theme="standard"]) .desktop-sidebar .nav-link-active svg {
+    color: hsl(var(--primary-app));
+}
+
+html[data-event-theme]:not([data-event-theme="standard"]) .desktop-shell > header {
+    border-bottom: 2px solid hsl(var(--primary-app) / 0.4) !important;
+    background: hsl(var(--season-surface) / 0.92) !important;
+}
+
 html[data-event-theme]:not([data-event-theme="standard"]) .surface {
-    border-color: hsl(var(--primary-app) / 0.12);
-    box-shadow: var(--shadow-soft), 0 0 0 1px hsl(var(--season-surface) / 0.4);
+    border-color: hsl(var(--primary-app) / 0.19);
+    box-shadow: var(--shadow-soft), 0 0 0 1px hsl(var(--season-glow) / 0.08);
+}
+
+.event-atmosphere {
+    position: relative;
+    display: flex;
+    height: 104px;
+    align-items: center;
+    overflow: hidden;
+    isolation: isolate;
+    background: hsl(var(--season-ink));
+    color: #fff;
+}
+
+.event-atmosphere::before {
+    position: absolute;
+    z-index: -2;
+    inset: -12%;
+    background: var(--season-image) center / cover no-repeat;
+    content: '';
+    animation: event-scene-breathe 28s ease-in-out infinite alternate;
+}
+
+.event-atmosphere::after {
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    background: linear-gradient(90deg, hsl(var(--season-contrast) / 0.95), hsl(var(--season-contrast) / 0.62) 42%, hsl(var(--season-contrast) / 0.12) 100%);
+    content: '';
+}
+
+.event-atmosphere-content {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+    padding: 0 clamp(18px, 3vw, 48px);
+    text-shadow: 0 2px 10px hsl(var(--season-contrast) / 0.5);
+}
+
+.event-atmosphere-crest {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    flex: none;
+    place-items: center;
+    border: 1px solid hsl(var(--season-glow) / 0.7);
+    border-radius: 50%;
+    background: hsl(var(--season-glow) / 0.16);
+    color: hsl(var(--season-glow));
+    box-shadow: 0 0 24px hsl(var(--season-glow) / 0.2);
+    animation: event-crest-pulse 5s ease-in-out infinite;
+}
+
+.event-atmosphere-name {
+    font-size: clamp(18px, 2vw, 25px);
+    font-weight: 750;
+    line-height: 1.1;
+}
+
+.event-atmosphere-divider {
+    width: 1px;
+    height: 24px;
+    background: hsl(var(--season-glow) / 0.65);
+}
+
+.event-atmosphere-brand {
+    font-size: 14px;
+    font-weight: 600;
+    opacity: 0.86;
+}
+
+.event-atmosphere-motif {
+    position: absolute;
+    z-index: -1;
+    color: hsl(var(--season-glow) / 0.8);
+    opacity: 0.68;
+    animation: event-motif-drift 10s ease-in-out infinite alternate;
+}
+
+.event-atmosphere--natale .event-atmosphere-motif {
+    animation-name: event-motif-snow;
+}
+
+@keyframes event-motif-drift {
+    from { transform: translate3d(-12px, 8px, 0) rotate(-12deg); opacity: 0.28; }
+    to { transform: translate3d(16px, -12px, 0) rotate(15deg); opacity: 0.8; }
+}
+
+@keyframes event-motif-snow {
+    from { transform: translate3d(-8px, -26px, 0) rotate(0); opacity: 0.15; }
+    to { transform: translate3d(16px, 30px, 0) rotate(90deg); opacity: 0.8; }
+}
+
+@keyframes event-crest-pulse {
+    50% { box-shadow: 0 0 36px hsl(var(--season-glow) / 0.5); }
+}
+
+@media (max-width: 640px) {
+    .event-atmosphere { height: 72px; }
+    .event-atmosphere-content { gap: 10px; }
+    .event-atmosphere-crest { width: 36px; height: 36px; }
+    .event-atmosphere-crest svg { width: 19px; height: 19px; }
+    .event-atmosphere-brand { font-size: 12px; }
 }
 
 html[data-event-theme]:not([data-event-theme="standard"]) .btn-primary {
@@ -1524,7 +1678,10 @@ html[data-event-theme]:not([data-event-theme="standard"]) .btn-primary:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    html[data-event-theme]:not([data-event-theme="standard"]) body::before {
+    html[data-event-theme]:not([data-event-theme="standard"]) body::before,
+    .event-atmosphere::before,
+    .event-atmosphere-crest,
+    .event-atmosphere-motif {
         animation: none;
     }
     .event-theme-choice {
