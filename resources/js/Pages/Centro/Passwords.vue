@@ -1428,12 +1428,12 @@ if (props.selectedGroup) {
         </div>
 
         <div v-if="revealItem" class="fixed inset-0 z-[5200] grid h-dvh w-dvw place-items-center bg-gray-950/20 px-4 backdrop-blur-[2px]" @click.self="revealItem = null">
-            <section class="password-dialog-panel max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-[var(--radius)] bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.24)]">
+            <section role="dialog" aria-modal="true" aria-labelledby="password-reveal-title" class="password-dialog-panel max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-[var(--radius)] bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.24)]">
                 <div class="flex items-center justify-between gap-3">
-                    <h3 class="text-base font-semibold text-gray-900">{{ revealMode === 'copy-password' ? 'Copia password' : 'Dettaglio password' }}</h3>
-                    <button type="button" class="icon-btn" @click="revealItem = null"><X class="h-4 w-4" /></button>
+                    <h3 id="password-reveal-title" class="text-base font-semibold text-gray-900">{{ revealMode === 'copy-password' ? 'Copia password' : 'Dettaglio password' }}</h3>
+                    <button type="button" class="icon-btn" aria-label="Chiudi dettagli password" @click="revealItem = null"><X class="h-4 w-4" /></button>
                 </div>
-                <div class="mt-4 rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/80 p-3">
+                <div class="password-reveal-summary mt-4 rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/80 p-3">
                     <p class="truncate text-sm font-semibold text-gray-900">{{ revealItem.title || revealItem.url || 'Password' }}</p>
                     <p v-if="revealItem.vault_name || revealItem.client_name" class="mt-1 text-xs text-gray-500">
                         <span v-if="revealItem.vault_name">{{ revealItem.vault_name }}</span>

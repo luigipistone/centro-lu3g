@@ -1,7 +1,7 @@
 @font-face {
     font-family: 'Centro Halloween';
-    src: url('/fonts/grenze-variable.ttf') format('truetype');
-    font-weight: 100 900;
+    src: url('/fonts/creepster-regular.ttf') format('truetype');
+    font-weight: 400;
     font-style: normal;
     font-display: swap;
 }
@@ -237,30 +237,55 @@ html[data-event-theme="halloween"] #app [data-season-accent] :is(.text-gray-950,
 /* Expressive headings; operational text and numeric displays keep their own roles. */
 html[data-event-theme="halloween"] #app :is(.desktop-shell > header h1,.desktop-shell > header h2,.season-widget-title,.section-title,.surface h3,.app-card h3,.tool-card-title) {
     font-family: 'Centro Halloween', Georgia, serif;
-    font-weight: 650;
+    font-weight: 400;
     font-synthesis: none;
     text-transform: none;
     letter-spacing: 0;
-    line-height: 1.12;
+    line-height: 1.2;
     text-wrap: balance;
 }
 html[data-event-theme="halloween"] #app .desktop-shell > header :is(h1,h2) {
-    font-size: 42px;
+    font-size: 38px;
     overflow-wrap: anywhere;
 }
-html[data-event-theme="halloween"] #app :is(.section-title,.surface h3,.app-card h3) { font-size: 24px; }
-html[data-event-theme="halloween"] #app .tool-card-title { font-size: 25px; }
+html[data-event-theme="halloween"] #app :is(.section-title,.surface h3,.app-card h3) { font-size: 22px; }
+html[data-event-theme="halloween"] #app .tool-card-title { font-size: 23px; }
 html[data-event-theme="halloween"] #app .season-widget-title {
-    font-size: 24px;
+    font-size: 22px;
     white-space: normal;
     overflow: visible;
     text-overflow: clip;
     overflow-wrap: anywhere;
     text-wrap: pretty;
 }
-html[data-event-theme="halloween"] #app [data-widget-type="clock_date"] .season-widget-title { font-size: 21px; }
+html[data-event-theme="halloween"] #app [data-widget-type="clock_date"] .season-widget-title { font-size: 19px; }
 html[data-event-theme="halloween"] #app :is(.widget-value,.widget-clock-face strong) { font-variant-numeric: tabular-nums; }
 @media (max-width: 639px) {
-    html[data-event-theme="halloween"] #app .desktop-shell > header :is(h1,h2) { font-size: 34px; }
-    html[data-event-theme="halloween"] #app :is(.section-title,.surface h3,.app-card h3,.tool-card-title) { font-size: 23px; }
+    html[data-event-theme="halloween"] #app .desktop-shell > header :is(h1,h2) { font-size: 32px; }
+    html[data-event-theme="halloween"] #app :is(.section-title,.surface h3,.app-card h3,.tool-card-title) { font-size: 22px; }
+}
+
+html[data-event-theme="halloween"] .password-dialog-panel {
+    background: #25282c !important;
+    color: #f5f1e9;
+    border: 1px solid #55504b;
+}
+html[data-event-theme="halloween"] .password-dialog-panel :is(.password-reveal-summary,.password-reveal-row) {
+    background: #1e2023 !important;
+    border-color: #55504b !important;
+}
+html[data-event-theme="halloween"] .password-dialog-panel .password-reveal-row:is(:hover,:focus-visible):not(:disabled) {
+    background: #3b2e25 !important;
+    border-color: #ff975a !important;
+}
+html[data-event-theme="halloween"] .password-dialog-panel h3 {
+    font-family: 'Centro Halloween', sans-serif;
+    font-weight: 400;
+    font-size: 24px;
+    line-height: 1.2;
+}
+html[data-event-theme="halloween"] .password-dialog-panel .field-copy-button { color: #ff975a; }
+html[data-event-theme="halloween"] .password-reveal-row:focus-visible .field-copy-button { opacity: 1; }
+@media (hover: none) {
+    html[data-event-theme="halloween"] .password-dialog-panel .field-copy-button { opacity: 1; }
 }
