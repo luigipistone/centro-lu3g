@@ -1,4 +1,11 @@
 @font-face {
+    font-family: 'Centro Halloween';
+    src: url('/fonts/grenze-variable.ttf') format('truetype');
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
     font-family: 'Centro Display';
     src: url('/fonts/barlow-condensed-bold.ttf') format('truetype');
     font-weight: 700;
@@ -225,4 +232,35 @@ html[data-event-theme="halloween"] #app .toolbar :is(.text-gray-950,.text-gray-9
 html[data-event-theme="halloween"] #app [data-season-accent] :is(.text-gray-950,.text-gray-900,.text-gray-800,.text-gray-700,.text-gray-600,.text-gray-500,.text-gray-400,.icon-btn,.widget-value,.widget-clock-face strong,.widget-clock-face span) { color: #25170d !important; }
 @media (max-width: 639px) {
     html[data-event-theme="halloween"] #app .desktop-shell > header :is(h1,h2) { font-size: 30px; }
+}
+
+/* Expressive headings; operational text and numeric displays keep their own roles. */
+html[data-event-theme="halloween"] #app :is(.desktop-shell > header h1,.desktop-shell > header h2,.season-widget-title,.section-title,.surface h3,.app-card h3,.tool-card-title) {
+    font-family: 'Centro Halloween', Georgia, serif;
+    font-weight: 650;
+    font-synthesis: none;
+    text-transform: none;
+    letter-spacing: 0;
+    line-height: 1.12;
+    text-wrap: balance;
+}
+html[data-event-theme="halloween"] #app .desktop-shell > header :is(h1,h2) {
+    font-size: 42px;
+    overflow-wrap: anywhere;
+}
+html[data-event-theme="halloween"] #app :is(.section-title,.surface h3,.app-card h3) { font-size: 24px; }
+html[data-event-theme="halloween"] #app .tool-card-title { font-size: 25px; }
+html[data-event-theme="halloween"] #app .season-widget-title {
+    font-size: 24px;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+    text-wrap: pretty;
+}
+html[data-event-theme="halloween"] #app [data-widget-type="clock_date"] .season-widget-title { font-size: 21px; }
+html[data-event-theme="halloween"] #app :is(.widget-value,.widget-clock-face strong) { font-variant-numeric: tabular-nums; }
+@media (max-width: 639px) {
+    html[data-event-theme="halloween"] #app .desktop-shell > header :is(h1,h2) { font-size: 34px; }
+    html[data-event-theme="halloween"] #app :is(.section-title,.surface h3,.app-card h3,.tool-card-title) { font-size: 23px; }
 }

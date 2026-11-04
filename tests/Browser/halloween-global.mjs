@@ -22,6 +22,9 @@ try {
         for (const route of ['/dashboard','/clients','/projects','/tools','/settings','/documents','/passwords','/favorites','/tasks']) {
             await page.goto(`http://127.0.0.1:8017${route}`);
             await page.waitForTimeout(1100);
+            await page.evaluate(() => document.fonts.ready);
+            assert(await page.evaluate(() => document.fonts.check('650 24px "Centro Halloween"')), 'Seasonal heading font loaded');
+            assert(await page.locator('.desktop-shell > header h2').first().evaluate(el => getComputedStyle(el).fontFamily.includes('Centro Halloween')), 'Page title uses themed typography');
             assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${route} overflow at ${width}`);
             assert.equal(await page.locator('.season-atmosphere').evaluate(el => getComputedStyle(el).pointerEvents), 'none');
             assert.equal(await page.locator('.season-atmosphere').evaluate(el => getComputedStyle(el).zIndex), '7900');
