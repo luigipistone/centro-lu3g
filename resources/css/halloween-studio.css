@@ -14,7 +14,7 @@ html[data-event-theme="halloween"] {
     --season-sidebar: #191b1e;
     --season-sidebar-ink: #e7e5e0;
 }
-html[data-event-theme="halloween"] #app .app-shell:has(.season-dashboard-title) {
+html[data-event-theme="halloween"] #app .app-shell {
     background: #1e2023 !important;
 }
 html[data-event-theme="halloween"] #app .desktop-sidebar {
@@ -22,7 +22,7 @@ html[data-event-theme="halloween"] #app .desktop-sidebar {
     border-right: 1px solid #34363a;
     box-shadow: none;
 }
-html[data-event-theme="halloween"] #app .desktop-shell > header:has(.season-dashboard-title) {
+html[data-event-theme="halloween"] #app .desktop-shell > header {
     background: #1e2023 !important;
     border-color: #3b3b3c !important;
     backdrop-filter: none;
@@ -36,28 +36,28 @@ html[data-event-theme="halloween"] #app .season-dashboard-title {
     letter-spacing: 0;
     color: #f7f4ee !important;
 }
-html[data-event-theme="halloween"] #app header:has(.season-dashboard-title) p { color: #b6b5b2 !important; }
-html[data-event-theme="halloween"] #app header:has(.season-dashboard-title) .btn-outline {
+html[data-event-theme="halloween"] #app header p { color: #b6b5b2 !important; }
+html[data-event-theme="halloween"] #app header .btn-outline {
     background: #ff7b32 !important;
     color: #21160e !important;
     border-color: #ff965a !important;
     box-shadow: inset 0 1px #ffad79;
 }
-html[data-event-theme="halloween"] #app .app-shell:has(.season-dashboard-title) .toolbar {
+html[data-event-theme="halloween"] #app .app-shell .toolbar {
     background: #292b2e !important;
     border-color: #393c3f !important;
     color: #c9c8c3 !important;
     box-shadow: none;
 }
-html[data-event-theme="halloween"] #app .app-shell:has(.season-dashboard-title) .toolbar :is(.text-gray-500,.text-gray-600,.text-gray-700) { color: #c9c8c3 !important; }
-html[data-event-theme="halloween"] #app .app-shell:has(.season-dashboard-title) .toolbar svg { color: #ff9250; }
+html[data-event-theme="halloween"] #app .app-shell .toolbar :is(.text-gray-500,.text-gray-600,.text-gray-700) { color: #c9c8c3 !important; }
+html[data-event-theme="halloween"] #app .app-shell .toolbar svg { color: #ff9250; }
 html[data-event-theme="halloween"] #app .widget-card:not([data-widget-type="weather"]):not([data-widget-type="notes"]) {
     background: #25282c !important;
     border: 1px solid #454343 !important;
     box-shadow: inset 0 1px #ffffff08, 0 8px 16px #00000014;
     --season-widget-ink: #f5f1e9;
 }
-html[data-event-theme="halloween"] #app .widget-card[data-widget-type="my_tasks"]:not([data-widget-type="weather"]):not([data-widget-type="notes"]) {
+html[data-event-theme="halloween"] #app .widget-card[data-season-accent]:not([data-widget-type="weather"]):not([data-widget-type="notes"]) {
     background: #ff7b32 !important;
     border-color: #ff9d65 !important;
     --season-widget-ink: #25170d;
@@ -72,7 +72,7 @@ html[data-event-theme="halloween"] #app .season-widget-title {
 }
 html[data-event-theme="halloween"] #app .widget-heading-copy { position: relative; z-index: 3; }
 html[data-event-theme="halloween"] #app .widget-heading-copy > .text-xs { margin-top: 5px; color: #bdbab4 !important; }
-html[data-event-theme="halloween"] #app [data-widget-type="my_tasks"] .widget-heading-copy > .text-xs { color: #653014 !important; }
+html[data-event-theme="halloween"] #app [data-season-accent] .widget-heading-copy > .text-xs { color: #653014 !important; }
 html[data-event-theme="halloween"] #app .widget-card .metric-icon {
     border: 0;
     background: #343232 !important;
@@ -81,7 +81,7 @@ html[data-event-theme="halloween"] #app .widget-card .metric-icon {
     border-radius: 10px;
     box-shadow: none;
 }
-html[data-event-theme="halloween"] #app [data-widget-type="my_tasks"] .metric-icon { background: #e76b26 !important; color: #25170d !important; }
+html[data-event-theme="halloween"] #app [data-season-accent] .metric-icon { background: #e76b26 !important; color: #25170d !important; }
 html[data-event-theme="halloween"] #app .widget-controls { opacity: .65; transition: opacity 160ms; }
 html[data-event-theme="halloween"] #app .widget-card:is(:hover,:focus-within) .widget-controls { opacity: 1; }
 html[data-event-theme="halloween"] #app .widget-value { font-family: 'Centro Display', sans-serif; font-size: 40px; line-height: .9; font-weight: 700; }
@@ -117,15 +117,15 @@ html[data-event-theme="halloween"] #app .widget-data-list a {
     border-radius: 0; border-bottom: 1px solid #ffffff16; min-height: 58px;
     background: transparent !important; box-shadow: none;
 }
-html[data-event-theme="halloween"] #app [data-widget-type="my_tasks"] .widget-data-list a { border-bottom-color: #7d361b33; }
-html[data-event-theme="halloween"] #app [data-widget-type="my_tasks"] .widget-data-list a:hover { background: #ff9a57 !important; box-shadow: none; }
+html[data-event-theme="halloween"] #app [data-season-accent] .widget-data-list a { border-bottom-color: #7d361b33; }
+html[data-event-theme="halloween"] #app [data-season-accent] .widget-data-list a:hover { background: #ff9a57 !important; box-shadow: none; }
 html[data-event-theme="halloween"] #app [data-widget-type="quick_links"] .season-corner { width: 110px; height: 92px; opacity: .38; z-index: 0; }
-html[data-event-theme="halloween"] #app [data-widget-type="my_tasks"] .season-corner { width: 220px; height: 184px; opacity: .24; z-index: 0; }
+html[data-event-theme="halloween"] #app [data-season-accent] .season-corner { width: 220px; height: 184px; opacity: .24; z-index: 0; }
 html[data-event-theme="halloween"] #app [data-widget-type="quick_links"] a {
     background: #303236 !important; border-color: #484441 !important; box-shadow: none;
 }
 html[data-event-theme="halloween"] #app [data-widget-type="quick_links"] a:hover { background: #40362e !important; border-color: #ff914d !important; }
-html[data-event-theme="halloween"] #app .app-shell:has(.season-dashboard-title) .nav-link-active {
+html[data-event-theme="halloween"] #app .app-shell .nav-link-active {
     background: #ff7b32 !important; color: #25170d !important; box-shadow: none;
 }
 html[data-event-theme="halloween"] #app .app-popover {
@@ -150,4 +150,79 @@ html[data-event-theme="halloween"] #app .app-popover :is(.text-gray-500,.text-gr
 }
 @media (prefers-reduced-motion: reduce) {
     html[data-event-theme="halloween"] #app [data-widget-type="clock_date"] .season-object { transition: none; transform: none; }
+}
+
+/* Shared page surfaces, including teleported forms and menus. */
+:root[data-event-theme="halloween"][data-event-theme] {
+    color-scheme: dark;
+    --background: 210 8% 12%;
+    --foreground: 40 20% 94%;
+    --card: 214 9% 16%;
+    --glass: 214 9% 16%;
+    --muted: 210 7% 20%;
+    --muted-foreground: 35 8% 73%;
+    --border-soft: 25 6% 28%;
+    --primary-app: 22 100% 60%;
+    --primary-app-dark: 22 90% 52%;
+    --primary-app-soft: 22 25% 21%;
+    --season-canvas: #1e2023;
+    --season-working: #25282c;
+    --season-working-border: #454343;
+    color: #f5f1e9;
+}
+html[data-event-theme="halloween"] #app .desktop-shell > header :is(h1,h2),
+html[data-event-theme="halloween"] :is(.section-title,.surface h3,.app-card h3) {
+    font-family: 'Centro Display', sans-serif;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0;
+}
+html[data-event-theme="halloween"] #app .desktop-shell > header :is(h1,h2) { font-size: 36px; line-height: 1.1; color: #f5f1e9; }
+html[data-event-theme="halloween"] :is(.surface,.app-card,.toolbar,.app-popover,.field-dropdown-menu,.form-control) {
+    color: #f5f1e9;
+    border-color: #454343 !important;
+}
+html[data-event-theme="halloween"] #app :is(.surface,.app-card):not(.widget-card) {
+    background: #25282c !important;
+    border-color: #454343 !important;
+    box-shadow: inset 0 1px #ffffff08, 0 8px 16px #00000014;
+}
+html[data-event-theme="halloween"] .section-title { color: #f5f1e9 !important; font-size: 22px; }
+html[data-event-theme="halloween"] .section-title > span { background: #403027 !important; color: #ff975a !important; box-shadow: none !important; }
+html[data-event-theme="halloween"] #app .web-repositories-card.surface {
+    background: #ff7b32 !important; color: #25170d !important;
+}
+html[data-event-theme="halloween"] #app .web-repositories-card.surface :is(span,svg,p) { color: #25170d !important; }
+html[data-event-theme="halloween"] :is(.app-popover,.field-dropdown-menu,[role="dialog"]) {
+    background: #25282c !important;
+    color: #f5f1e9;
+}
+html[data-event-theme="halloween"] :is(.text-gray-950,.text-gray-900,.text-gray-800,.text-gray-700):not(.widget-card *, .task-type-card *, .project-preview-card *) { color: #f5f1e9 !important; }
+html[data-event-theme="halloween"] :is(.text-gray-600,.text-gray-500,.text-gray-400):not(.widget-card *, .task-type-card *, .project-preview-card *) { color: #bdbab4 !important; }
+html[data-event-theme="halloween"] :is(.bg-white,.bg-white\/80,.bg-white\/60,.bg-gray-50,.bg-gray-100):not(.widget-card *, .task-type-card *, .project-preview-card *, .metric-icon) {
+    background: #292b2e !important;
+    border-color: #454343 !important;
+}
+html[data-event-theme="halloween"] :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),textarea,select,.form-control,[contenteditable="true"]) {
+    background: #202225 !important;
+    color: #f5f1e9 !important;
+    border-color: #55504b !important;
+    caret-color: #ff975a;
+}
+html[data-event-theme="halloween"] :is(input,textarea)::placeholder { color: #a9a6a1; }
+html[data-event-theme="halloween"] :is(.btn-outline,.btn-ghost,.icon-btn):not(.widget-card *) {
+    background: #303236 !important; color: #eee8df !important; border-color: #55504b !important; box-shadow: none;
+}
+html[data-event-theme="halloween"] :is(.btn-primary,.settings-tab-active) {
+    background: #ff7b32 !important; color: #25170d !important; border-color: #ff975a !important;
+}
+html[data-event-theme="halloween"] :is(.btn-primary,.settings-tab-active) :is(span,svg) { color: inherit !important; }
+html[data-event-theme="halloween"] .metric-icon:not(.widget-card *) { background: #403027 !important; color: #ff975a !important; box-shadow: none; }
+html[data-event-theme="halloween"] #app .toolbar {
+    background: #ff7b32 !important; color: #25170d !important; border-color: #ff975a !important;
+}
+html[data-event-theme="halloween"] #app .toolbar :is(.text-gray-950,.text-gray-900,.text-gray-800,.text-gray-700,.text-gray-600,.text-gray-500,.text-gray-400) { color: #25170d !important; }
+html[data-event-theme="halloween"] #app [data-season-accent] :is(.text-gray-950,.text-gray-900,.text-gray-800,.text-gray-700,.text-gray-600,.text-gray-500,.text-gray-400,.icon-btn,.widget-value,.widget-clock-face strong,.widget-clock-face span) { color: #25170d !important; }
+@media (max-width: 639px) {
+    html[data-event-theme="halloween"] #app .desktop-shell > header :is(h1,h2) { font-size: 30px; }
 }

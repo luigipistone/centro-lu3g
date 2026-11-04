@@ -27,15 +27,6 @@ function draw() {
         c.setTransform(ratio, 0, 0, ratio, 0, 0); c.clearRect(0, 0, w, h);
         if (props.mode === 'atmosphere' && !media?.matches && !paused.value) {
             c.save();
-            if (theme.value === 'halloween') {
-                // Flights pass behind the working surfaces rather than across text or controls.
-                c.beginPath(); c.rect(0, 0, w, h);
-                document.querySelectorAll('.widget-card,.desktop-sidebar').forEach(card => {
-                    const r = card.getBoundingClientRect();
-                    if (r.bottom > 0 && r.top < h) c.rect(r.left + 5, r.top + 5, Math.max(0, r.width - 10), Math.max(0, r.height - 10));
-                });
-                c.clip('evenodd');
-            }
             drawSeasonAtmosphere(c, theme.value, time, w, h); c.restore();
         }
         else if (effectStart !== null) drawSeasonEffect(c, theme.value, (time - effectStart) / 1500, w, h);
@@ -110,5 +101,5 @@ onUnmounted(() => {
 .season-object canvas { width: 100%; height: 100%; object-fit: contain; }
 .season-corner { position: absolute; width: 85px; height: 70px; right: 0; bottom: 0; opacity: .7; pointer-events: none; }
 .season-fullscreen { position: fixed; inset: 0; width: 100vw; height: 100dvh; z-index: 7900; pointer-events: none; }
-.season-atmosphere { position: fixed; inset: 0; width: 100vw; height: 100dvh; z-index: 25; pointer-events: none; }
+.season-atmosphere { position: fixed; inset: 0; width: 100vw; height: 100dvh; z-index: 7900; pointer-events: none; }
 </style>

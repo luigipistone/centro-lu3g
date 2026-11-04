@@ -265,6 +265,12 @@ function normalizeWidgets(source = []) {
 const widgets = ref(normalizeWidgets(props.dashboardWidgets ?? []));
 
 const visibleWidgets = computed(() => widgets.value.filter((widget) => widget.visible).sort((a, b) => a.position - b.position));
+const seasonalAccentWidget = computed(() => {
+    const candidates = visibleWidgets.value.filter(widget => !['weather', 'notes'].includes(widget.widget_type));
+    return candidates.find(widget => widget.widget_type === 'my_tasks')?.widget_type
+        || candidates.find(widget => metaFor(widget).kind === 'list')?.widget_type
+        || candidates[0]?.widget_type;
+});
 const hiddenWidgets = computed(() => widgets.value.filter((widget) => !widget.visible).sort((a, b) => a.position - b.position));
 const filteredPasswordItems = computed(() => {
     const q = passwordWidgetSearch.value.trim().toLowerCase();
@@ -944,6 +950,7 @@ watch(
                         :key="widget.widget_type"
                         :data-widget-type="widget.widget_type"
                         :data-widget-kind="metaFor(widget).kind"
+                        :data-season-accent="widget.widget_type === seasonalAccentWidget ? '' : null"
                         :class="[
                             'app-card widget-card group relative flex min-h-[154px] flex-col overflow-hidden transition lg:h-full',
                             colSpanClass(widget),
