@@ -18,16 +18,20 @@ try {
         // Regression: no "my_tasks" widget in this user's configuration.
         await window.axios.patch('/dashboard/widgets', { widgets: ['clock_date','stat_clients','quick_links'].map((widget_type, position) => ({ widget_type, position, visible: true, col_span: 1 })) });
     });
-    for (const width of [1440, 390]) {
+    for (const width of [1920, 1440, 390]) {
         await page.evaluate(width => localStorage.setItem('centro:theme', width === 1440 ? 'light' : 'dark'), width);
         await page.setViewportSize({ width, height: 1000 });
         for (const route of ['/dashboard','/clients','/projects','/tools','/settings','/documents','/passwords','/favorites','/tasks']) {
             await page.goto(`http://127.0.0.1:8017${route}`);
             await page.waitForTimeout(1100);
             await page.evaluate(() => document.fonts.ready);
+            assert.equal(await page.getByRole('button', { name: /modalità dark/ }).count(), 0, 'Appearance toggle hidden for seasonal themes');
+            assert.equal(await page.evaluate(() => document.documentElement.classList.contains('dark')), false, 'Seasonal palette independent of saved appearance');
             assert(await page.evaluate(() => document.fonts.check('400 24px "Centro Halloween"')), 'Seasonal heading font loaded');
             assert(await page.locator('.desktop-shell > header h2').first().evaluate(el => getComputedStyle(el).fontFamily.includes('Centro Halloween')), 'Page title uses themed typography');
             assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${route} overflow at ${width}`);
+            const clipped = await page.locator('.desktop-shell > header h2,.tool-card-title,.section-title').evaluateAll(elements => elements.filter(el => el.getClientRects().length && (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1)).map(el => el.textContent));
+            assert.deepEqual(clipped, [], `${route} clipped headings at ${width}`);
             assert.equal(await page.locator('.season-atmosphere').evaluate(el => getComputedStyle(el).pointerEvents), 'none');
             assert.equal(await page.locator('.season-atmosphere').evaluate(el => getComputedStyle(el).zIndex), '7900');
             if (route === '/dashboard') {
@@ -55,6 +59,18 @@ try {
                 await page.getByRole('button', { name: 'Chiudi dettagli password' }).click();
             }
         }
+    }
+    // Switching an event off restores the saved preference without overwriting it.
+    for (const theme of ['natale','pasqua','estate','standard','halloween']) {
+        await page.evaluate(async theme => {
+            localStorage.setItem('centro:theme', 'dark');
+            await window.axios.put('/settings/event-theme', { theme }, { headers: { 'X-Inertia': 'true', 'X-Inertia-Version': JSON.parse(document.getElementById('app').dataset.page).version } });
+        }, theme);
+        await page.goto('http://127.0.0.1:8017/dashboard');
+        await page.waitForTimeout(300);
+        assert.equal(await page.evaluate(() => localStorage.getItem('centro:theme')), 'dark');
+        assert.equal(await page.evaluate(() => document.documentElement.classList.contains('dark')), theme === 'standard');
+        assert.equal(await page.getByRole('button', { name: /modalità dark/ }).count(), theme === 'standard' ? 1 : 0);
     }
     assert.deepEqual(errors, []);
     console.log('PASS: nine sections desktop/mobile, accent without my_tasks, surface/title contrast, foreground nonblocking atmosphere');

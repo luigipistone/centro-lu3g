@@ -96,8 +96,10 @@ const latestUnreadNotification = computed(() => latestNotifications.value.find((
 const notificationBadgeCount = computed(() => page.props.notifications?.unread || 0);
 const notificationStorageKey = computed(() => `centro:last-browser-notification:${page.props.auth?.user?.id || 'guest'}`);
 const themeStorageKey = 'centro:theme';
+const seasonalThemeActive = computed(() => isSeasonalTheme(page.props.eventTheme));
 watch(() => page.props.eventTheme, (theme) => {
     document.documentElement.dataset.eventTheme = theme || 'standard';
+    initializeTheme();
 });
 const currentRole = computed(() => page.props.auth?.user?.role || 'guest');
 const isSuperadmin = computed(() => currentRole.value === 'superadmin');
@@ -152,19 +154,25 @@ function completionParticleStyle(index, kind) {
     return { '--i': index };
 }
 
-function applyTheme(enabled) {
+function applyTheme(enabled, persist = true) {
     darkMode.value = enabled;
     document.documentElement.classList.toggle('dark', enabled);
-    window.localStorage.setItem(themeStorageKey, enabled ? 'dark' : 'light');
+    if (persist) window.localStorage.setItem(themeStorageKey, enabled ? 'dark' : 'light');
 }
 
 function initializeTheme() {
+    // Event palettes own their appearance; retain the user's standard-theme preference.
+    if (seasonalThemeActive.value) {
+        applyTheme(false, false);
+        return;
+    }
     const savedTheme = window.localStorage.getItem(themeStorageKey);
     const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
-    applyTheme(savedTheme ? savedTheme === 'dark' : prefersDark);
+    applyTheme(savedTheme ? savedTheme === 'dark' : prefersDark, false);
 }
 
 function toggleDarkMode() {
+    if (seasonalThemeActive.value) return;
     applyTheme(!darkMode.value);
 }
 
@@ -390,6 +398,7 @@ const groups = computed(() => {
                 </Link>
                 <div :class="['flex items-center', sidebarCollapsed ? 'gap-0' : 'gap-1']">
                     <button
+                        v-if="!seasonalThemeActive"
                         type="button"
                         :class="['inline-flex items-center justify-center rounded-2xl text-gray-500 transition hover:bg-white/70 hover:text-[hsl(var(--primary-app))] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]', sidebarCollapsed ? 'h-8 w-8' : 'h-9 w-9']"
                         :aria-label="darkMode ? 'Disattiva modalità dark' : 'Attiva modalità dark'"
@@ -549,6 +558,7 @@ const groups = computed(() => {
 
                         <div class="flex items-center gap-2">
                             <button
+                                v-if="!seasonalThemeActive"
                                 type="button"
                                 class="inline-flex h-10 w-10 items-center justify-center rounded-2xl text-gray-500 transition hover:bg-white/70 hover:text-[hsl(var(--primary-app))]"
                                 :aria-label="darkMode ? 'Disattiva modalità dark' : 'Attiva modalità dark'"

@@ -200,6 +200,7 @@ html[data-event-theme="halloween"] #app .web-repositories-card.surface {
     background: #ff7b32 !important; color: #25170d !important;
 }
 html[data-event-theme="halloween"] #app .web-repositories-card.surface :is(span,svg,p) { color: #25170d !important; }
+html[data-event-theme="halloween"] #app .web-repositories-card.surface .tool-card-icon svg { color: #ff975a !important; }
 html[data-event-theme="halloween"] :is(.app-popover,.field-dropdown-menu,[role="dialog"]) {
     background: #25282c !important;
     color: #f5f1e9;
@@ -274,11 +275,13 @@ html[data-event-theme="halloween"] .password-dialog-panel .password-reveal-row:i
     background: #3b2e25 !important;
     border-color: #ff975a !important;
 }
-html[data-event-theme="halloween"] .password-dialog-panel h3 {
+html[data-event-theme="halloween"] :is(.password-dialog-panel,.password-drawer-panel) h3 {
     font-family: 'Centro Halloween', sans-serif;
     font-weight: 400;
     font-size: 24px;
     line-height: 1.2;
+    overflow-wrap: anywhere;
+    min-width: 0;
 }
 html[data-event-theme="halloween"] .password-dialog-panel .field-copy-button { color: #ff975a; }
 html[data-event-theme="halloween"] .password-reveal-row:focus-visible .field-copy-button { opacity: 1; }

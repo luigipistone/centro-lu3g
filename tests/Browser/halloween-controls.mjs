@@ -90,6 +90,11 @@ try {
         await page.evaluate(() => document.getElementById('theme-matrix').remove());
         assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     }
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.goto('http://127.0.0.1:8017/tools');
+    const repoIcon = page.locator('.web-repositories-card .tool-card-icon svg');
+    await contrast(repoIcon, 3);
+    await page.screenshot({ path: '/tmp/halloween-controls/tools-final-1920.png' });
     assert.deepEqual(errors, []);
     console.log('PASS: real password drawer/generator/select/delete; semantic color matrix >=4.5 contrast; light/dark, desktop/mobile. No records saved.');
 } finally { await browser.close(); }

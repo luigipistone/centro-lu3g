@@ -19,7 +19,7 @@ defineProps({ showWebRepositories: Boolean });
             <div class="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
                 <div class="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <Link v-if="showWebRepositories" :href="route('tools.web-repositories')" class="web-repositories-card surface group flex min-h-[166px] flex-col justify-between p-5 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(12,83,110,0.22)]">
-                        <span class="flex h-11 w-11 items-center justify-center rounded-[var(--radius-sm)] bg-white/20 text-white"><GitBranch class="h-6 w-6" :stroke-width="1.7" /></span>
+                        <span class="tool-card-icon flex h-11 w-11 items-center justify-center rounded-[var(--radius-sm)] bg-white/20 text-white"><GitBranch class="h-6 w-6" :stroke-width="1.7" /></span>
                         <span class="flex items-end justify-between gap-3"><span class="min-w-0"><span class="tool-card-title block text-base font-semibold text-white">Repository Web</span><span class="mt-1 block text-sm text-white/85">Progetti GitHub del team Web.</span></span><ArrowRight class="h-4 w-4 shrink-0 text-white/80 transition group-hover:translate-x-0.5 group-hover:text-white" :stroke-width="1.7" /></span>
                     </Link>
                     <Link :href="route('tools.airmail')" class="surface group flex min-h-[166px] flex-col justify-between p-5 transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(28,42,73,0.10)]">
