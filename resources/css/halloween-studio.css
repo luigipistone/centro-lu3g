@@ -1,0 +1,153 @@
+@font-face {
+    font-family: 'Centro Display';
+    src: url('/fonts/barlow-condensed-bold.ttf') format('truetype');
+    font-weight: 700;
+    font-display: swap;
+}
+
+/* Theme overrides preserve the structural grid and saved widget positions. */
+html[data-event-theme="halloween"] {
+    --season-highlight: #ff7b32;
+    --season-highlight-ink: #25170d;
+    --season-deep: #25282c;
+    --season-deep-ink: #f7f4ee;
+    --season-sidebar: #191b1e;
+    --season-sidebar-ink: #e7e5e0;
+}
+html[data-event-theme="halloween"] #app .app-shell:has(.season-dashboard-title) {
+    background: #1e2023 !important;
+}
+html[data-event-theme="halloween"] #app .desktop-sidebar {
+    background: #191b1e !important;
+    border-right: 1px solid #34363a;
+    box-shadow: none;
+}
+html[data-event-theme="halloween"] #app .desktop-shell > header:has(.season-dashboard-title) {
+    background: #1e2023 !important;
+    border-color: #3b3b3c !important;
+    backdrop-filter: none;
+}
+html[data-event-theme="halloween"] #app .season-dashboard-title {
+    font-family: 'Centro Display', sans-serif;
+    font-size: 44px;
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: 0;
+    color: #f7f4ee !important;
+}
+html[data-event-theme="halloween"] #app header:has(.season-dashboard-title) p { color: #b6b5b2 !important; }
+html[data-event-theme="halloween"] #app header:has(.season-dashboard-title) .btn-outline {
+    background: #ff7b32 !important;
+    color: #21160e !important;
+    border-color: #ff965a !important;
+    box-shadow: inset 0 1px #ffad79;
+}
+html[data-event-theme="halloween"] #app .app-shell:has(.season-dashboard-title) .toolbar {
+    background: #292b2e !important;
+    border-color: #393c3f !important;
+    color: #c9c8c3 !important;
+    box-shadow: none;
+}
+html[data-event-theme="halloween"] #app .app-shell:has(.season-dashboard-title) .toolbar :is(.text-gray-500,.text-gray-600,.text-gray-700) { color: #c9c8c3 !important; }
+html[data-event-theme="halloween"] #app .app-shell:has(.season-dashboard-title) .toolbar svg { color: #ff9250; }
+html[data-event-theme="halloween"] #app .widget-card:not([data-widget-type="weather"]):not([data-widget-type="notes"]) {
+    background: #25282c !important;
+    border: 1px solid #454343 !important;
+    box-shadow: inset 0 1px #ffffff08, 0 8px 16px #00000014;
+    --season-widget-ink: #f5f1e9;
+}
+html[data-event-theme="halloween"] #app .widget-card[data-widget-type="my_tasks"]:not([data-widget-type="weather"]):not([data-widget-type="notes"]) {
+    background: #ff7b32 !important;
+    border-color: #ff9d65 !important;
+    --season-widget-ink: #25170d;
+}
+html[data-event-theme="halloween"] #app .season-widget-title {
+    font-family: 'Centro Display', sans-serif;
+    font-weight: 700;
+    font-size: 23px;
+    line-height: 1.08;
+    letter-spacing: 0;
+    text-transform: uppercase;
+}
+html[data-event-theme="halloween"] #app .widget-heading-copy { position: relative; z-index: 3; }
+html[data-event-theme="halloween"] #app .widget-heading-copy > .text-xs { margin-top: 5px; color: #bdbab4 !important; }
+html[data-event-theme="halloween"] #app [data-widget-type="my_tasks"] .widget-heading-copy > .text-xs { color: #653014 !important; }
+html[data-event-theme="halloween"] #app .widget-card .metric-icon {
+    border: 0;
+    background: #343232 !important;
+    color: #ff914d !important;
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    box-shadow: none;
+}
+html[data-event-theme="halloween"] #app [data-widget-type="my_tasks"] .metric-icon { background: #e76b26 !important; color: #25170d !important; }
+html[data-event-theme="halloween"] #app .widget-controls { opacity: .65; transition: opacity 160ms; }
+html[data-event-theme="halloween"] #app .widget-card:is(:hover,:focus-within) .widget-controls { opacity: 1; }
+html[data-event-theme="halloween"] #app .widget-value { font-family: 'Centro Display', sans-serif; font-size: 40px; line-height: .9; font-weight: 700; }
+html[data-event-theme="halloween"] #app [data-widget-kind="stat"] .widget-heading { position: static; }
+html[data-event-theme="halloween"] #app [data-widget-kind="stat"] .widget-value {
+    position: absolute; right: 20px; bottom: 16px;
+    font-size: 64px; color: #ff975a !important;
+}
+html[data-event-theme="halloween"] #app [data-widget-type="stat_clients"] .widget-value { color: #f4eee5 !important; }
+html[data-event-theme="halloween"] #app [data-widget-type="clock_date"] { isolation: isolate; }
+html[data-event-theme="halloween"] #app [data-widget-type="clock_date"] .widget-heading { position: static; padding-right: 0; margin-top: 32px; }
+html[data-event-theme="halloween"] #app [data-widget-type="clock_date"] .widget-heading-copy { max-width: 125px; }
+html[data-event-theme="halloween"] #app [data-widget-type="clock_date"] .season-widget-title { font-size: 20px; }
+html[data-event-theme="halloween"] #app [data-widget-type="clock_date"] .widget-heading-copy > .text-xs { display: none; }
+html[data-event-theme="halloween"] #app [data-widget-type="clock_date"] .season-object {
+    position: absolute; right: -30px; bottom: -12px; z-index: 1;
+    width: 170px; height: 160px;
+    transform-origin: 50% 95%;
+    transition: transform 600ms cubic-bezier(.2,.8,.2,1);
+}
+html[data-event-theme="halloween"] #app [data-widget-type="clock_date"] .season-object:hover { transform: rotate(-3deg) scale(1.025); }
+html[data-event-theme="halloween"] #app .widget-clock-face {
+    position: relative; z-index: 2;
+    flex-direction: column; justify-content: flex-end; align-items: flex-start;
+    gap: 8px; width: 58%; padding-right: 0; pointer-events: none;
+}
+html[data-event-theme="halloween"] #app .widget-clock-face strong {
+    font-family: 'Centro Display', sans-serif; font-size: 44px; font-weight: 700; color: #ff9859 !important;
+}
+html[data-event-theme="halloween"] #app .widget-clock-face span { max-width: none; text-align: left; font-size: 11px; color: #c5c1bb !important; }
+html[data-event-theme="halloween"] #app .widget-data-list { position: relative; z-index: 2; margin-top: 6px; }
+html[data-event-theme="halloween"] #app .widget-data-list a {
+    border-radius: 0; border-bottom: 1px solid #ffffff16; min-height: 58px;
+    background: transparent !important; box-shadow: none;
+}
+html[data-event-theme="halloween"] #app [data-widget-type="my_tasks"] .widget-data-list a { border-bottom-color: #7d361b33; }
+html[data-event-theme="halloween"] #app [data-widget-type="my_tasks"] .widget-data-list a:hover { background: #ff9a57 !important; box-shadow: none; }
+html[data-event-theme="halloween"] #app [data-widget-type="quick_links"] .season-corner { width: 110px; height: 92px; opacity: .38; z-index: 0; }
+html[data-event-theme="halloween"] #app [data-widget-type="my_tasks"] .season-corner { width: 220px; height: 184px; opacity: .24; z-index: 0; }
+html[data-event-theme="halloween"] #app [data-widget-type="quick_links"] a {
+    background: #303236 !important; border-color: #484441 !important; box-shadow: none;
+}
+html[data-event-theme="halloween"] #app [data-widget-type="quick_links"] a:hover { background: #40362e !important; border-color: #ff914d !important; }
+html[data-event-theme="halloween"] #app .app-shell:has(.season-dashboard-title) .nav-link-active {
+    background: #ff7b32 !important; color: #25170d !important; box-shadow: none;
+}
+html[data-event-theme="halloween"] #app .app-popover {
+    background: #282a2d !important; border: 1px solid #56504b !important;
+    backdrop-filter: none; box-shadow: 0 16px 40px #0007;
+}
+html[data-event-theme="halloween"] #app .app-popover button { border-radius: 8px; }
+html[data-event-theme="halloween"] #app .app-popover button:hover {
+    background: #43362c !important; box-shadow: none; transform: none;
+}
+html[data-event-theme="halloween"] #app .app-popover :is(.text-gray-900,.text-gray-700) { color: #f5f1e9 !important; }
+html[data-event-theme="halloween"] #app .app-popover :is(.text-gray-500,.text-gray-400) { color: #bdbab4 !important; }
+@container (min-width: 340px) {
+    html[data-event-theme="halloween"] #app [data-widget-type="clock_date"] .season-object { width: 220px; height: 202px; right: -24px; bottom: -22px; }
+    html[data-event-theme="halloween"] #app [data-widget-type="clock_date"] .widget-heading-copy { max-width: 160px; }
+    html[data-event-theme="halloween"] #app .season-widget-title { font-size: 26px; }
+}
+@media (max-width: 639px) {
+    html[data-event-theme="halloween"] #app .season-dashboard-title { font-size: 36px; }
+    html[data-event-theme="halloween"] #app [data-widget-type="clock_date"] { min-height: 210px; }
+    html[data-event-theme="halloween"] #app .widget-data-list a { min-height: 58px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    html[data-event-theme="halloween"] #app [data-widget-type="clock_date"] .season-object { transition: none; transform: none; }
+}

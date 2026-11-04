@@ -12,6 +12,7 @@ const active = computed(() => isSeasonalTheme(theme.value));
 const canvas = ref(null);
 const paused = ref(false);
 let media, observer, frame = 0, time = 0, last = 0, effectStart = null, visible = true;
+let pumpkinImage;
 const key = () => `centro:season-motion:${page.props.auth?.user?.id || 'guest'}`;
 function readPreference() { try { paused.value = localStorage.getItem(key()) === 'off'; } catch { paused.value = false; } restart(); }
 function toggle() { paused.value = !paused.value; try { localStorage.setItem(key(), paused.value ? 'off' : 'on'); } catch { /* Private mode may disable storage. */ } window.dispatchEvent(new Event('centro:season-motion')); }
@@ -24,10 +25,33 @@ function draw() {
         const ratio = Math.min(window.devicePixelRatio || 1, 2), w = window.innerWidth, h = window.innerHeight;
         if (el.width !== Math.round(w * ratio) || el.height !== Math.round(h * ratio)) { el.width = Math.round(w * ratio); el.height = Math.round(h * ratio); }
         c.setTransform(ratio, 0, 0, ratio, 0, 0); c.clearRect(0, 0, w, h);
-        if (props.mode === 'atmosphere' && !media?.matches && !paused.value) drawSeasonAtmosphere(c, theme.value, time, w, h);
+        if (props.mode === 'atmosphere' && !media?.matches && !paused.value) {
+            c.save();
+            if (theme.value === 'halloween') {
+                // Flights pass behind the working surfaces rather than across text or controls.
+                c.beginPath(); c.rect(0, 0, w, h);
+                document.querySelectorAll('.widget-card,.desktop-sidebar').forEach(card => {
+                    const r = card.getBoundingClientRect();
+                    if (r.bottom > 0 && r.top < h) c.rect(r.left + 5, r.top + 5, Math.max(0, r.width - 10), Math.max(0, r.height - 10));
+                });
+                c.clip('evenodd');
+            }
+            drawSeasonAtmosphere(c, theme.value, time, w, h); c.restore();
+        }
         else if (effectStart !== null) drawSeasonEffect(c, theme.value, (time - effectStart) / 1500, w, h);
     } else {
-        c.clearRect(0, 0, 480, 400); c.save(); c.scale(2, 2);
+        c.clearRect(0, 0, 480, 400);
+        if (props.mode === 'object' && theme.value === 'halloween' && pumpkinImage?.complete && pumpkinImage.naturalWidth) {
+            c.save();
+            c.translate(240, 390); c.rotate(Math.sin(time / 2500) * .012); c.translate(-240, -390);
+            c.drawImage(pumpkinImage, 40, 0, 400, 400);
+            // Candle variation stays inside the carved face, not over the entire object.
+            c.save(); c.beginPath(); c.ellipse(240, 265, 125, 90, 0, 0, Math.PI * 2); c.clip();
+            c.globalAlpha = .08 + Math.sin(time / 340) * .035 + Math.sin(time / 130) * .015;
+            c.globalCompositeOperation = 'screen'; c.drawImage(pumpkinImage, 40, 0, 400, 400);
+            c.restore(); c.restore(); return;
+        }
+        c.save(); c.scale(2, 2);
         if (props.mode === 'corner') drawSeasonCorner(c, theme.value, time);
         else drawSeasonObject(c, theme.value, time);
         c.restore();
@@ -48,6 +72,10 @@ function restart() {
 watch(theme, () => { time = 0; effectStart = null; restart(); }, { flush: 'post' });
 watch(() => page.props.auth?.user?.id, readPreference);
 onMounted(() => {
+    if (props.mode === 'object') {
+        pumpkinImage = new Image(); pumpkinImage.onload = restart;
+        pumpkinImage.src = '/images/event-themes/halloween-pumpkin-studio.png';
+    }
     media = matchMedia('(prefers-reduced-motion: reduce)');
     media.addEventListener('change', restart);
     document.addEventListener('visibilitychange', restart);
@@ -58,6 +86,7 @@ onMounted(() => {
     readPreference();
 });
 onUnmounted(() => {
+    if (pumpkinImage) pumpkinImage.onload = null;
     cancelAnimationFrame(frame); observer?.disconnect(); media?.removeEventListener('change', restart);
     document.removeEventListener('visibilitychange', restart); window.removeEventListener('centro:season-motion', readPreference);
     window.removeEventListener('storage', readPreference); window.removeEventListener('centro:season-celebrate', startEffect);

@@ -943,6 +943,7 @@ watch(
                         v-for="widget in visibleWidgets"
                         :key="widget.widget_type"
                         :data-widget-type="widget.widget_type"
+                        :data-widget-kind="metaFor(widget).kind"
                         :class="[
                             'app-card widget-card group relative flex min-h-[154px] flex-col overflow-hidden transition lg:h-full',
                             colSpanClass(widget),
@@ -950,7 +951,7 @@ watch(
                             draggingType === widget.widget_type ? 'widget-card-drag-source' : '',
                         ]"
                     >
-                        <SeasonalArtwork v-if="widget.widget_type === 'quick_links'" :key="page.props.eventTheme" mode="corner" />
+                        <SeasonalArtwork v-if="widget.widget_type === 'quick_links' || (widget.widget_type === 'my_tasks' && page.props.eventTheme === 'halloween')" :key="page.props.eventTheme" mode="corner" />
                         <div
                             v-if="metaFor(widget).kind === 'weather' && weatherData"
                             class="pointer-events-none absolute inset-0 z-0"
@@ -967,7 +968,7 @@ watch(
                             <span class="sr-only">Ridimensiona</span>
                         </button>
 
-                        <div class="absolute left-4 right-5 top-4 z-10 flex items-center justify-between gap-2">
+                        <div class="widget-controls absolute left-4 right-5 top-4 z-10 flex items-center justify-between gap-2">
                             <button
                                 type="button"
                                 class="icon-btn h-7 w-7 touch-none cursor-grab active:cursor-grabbing"
@@ -992,21 +993,21 @@ watch(
                             </div>
                         </div>
 
-                        <div class="relative z-10 mt-10 flex items-start justify-between gap-4 rounded-2xl px-1 pb-3 pr-4">
+                        <div class="widget-heading relative z-10 mt-10 flex items-start justify-between gap-4 rounded-2xl px-1 pb-3 pr-4">
                             <span class="flex min-w-0 items-start gap-3">
                                 <span :class="['metric-icon', metaFor(widget).iconClass]">
                                     <component :is="metaFor(widget).icon" class="h-5 w-5" :stroke-width="1.7" />
                                 </span>
-                                <span class="min-w-0 pt-0.5">
+                                <span class="widget-heading-copy min-w-0 pt-0.5">
                                     <span :class="['season-widget-title block text-sm font-semibold', metaFor(widget).kind === 'clock' ? 'whitespace-normal break-words' : 'truncate', metaFor(widget).kind === 'weather' && weatherData ? 'text-white' : 'text-gray-900']">{{ metaFor(widget).label }}</span>
                                     <span :class="['block truncate text-xs', metaFor(widget).kind === 'weather' && weatherData ? 'text-white/85' : 'text-gray-500']">{{ metaFor(widget).description }}</span>
                                 </span>
                             </span>
-                            <span v-if="showsWidgetNumber(widget)" class="shrink-0 text-3xl font-bold leading-none text-gray-950">{{ widgetNumber(widget) }}</span>
+                            <span v-if="showsWidgetNumber(widget)" class="widget-value shrink-0 text-3xl font-bold leading-none text-gray-950">{{ widgetNumber(widget) }}</span>
                             <SeasonalArtwork v-if="metaFor(widget).kind === 'clock'" :key="page.props.eventTheme" />
                         </div>
 
-                        <div v-if="metaFor(widget).kind === 'clock'" class="flex flex-1 items-end justify-between gap-3 pr-4">
+                        <div v-if="metaFor(widget).kind === 'clock'" class="widget-clock-face flex flex-1 items-end justify-between gap-3 pr-4">
                             <strong class="text-3xl font-semibold leading-none text-gray-950">{{ clockTime }}</strong>
                             <span class="max-w-[55%] text-right text-xs font-medium capitalize leading-4 text-gray-500">{{ clockDate }}</span>
                         </div>
@@ -1042,7 +1043,7 @@ watch(
                             <span :class="['max-w-[48%] truncate text-right text-xs font-semibold', weatherData ? 'text-white' : 'text-gray-600']">{{ weatherSettings.city }}</span>
                         </div>
 
-                        <div v-if="metaFor(widget).kind === 'list'" class="flex flex-1 flex-col pr-3">
+                        <div v-if="metaFor(widget).kind === 'list'" class="widget-data-list flex flex-1 flex-col pr-3">
                             <div class="space-y-1">
                                 <Link
                                     v-for="item in metaFor(widget).items()"

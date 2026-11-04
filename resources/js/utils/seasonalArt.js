@@ -56,10 +56,19 @@ export function drawSeasonCorner(c, theme, time) {
     c.save();
     const colors = palettes[theme];
     if (theme === 'halloween') {
-        c.strokeStyle = '#bda080'; c.lineWidth = 1;
+        c.strokeStyle = '#e0c9a7'; c.lineWidth = .7;
+        const angles = [0, .18, .41, .66, .94, 1.23, Math.PI / 2];
         const point = (r, a) => [240 - Math.cos(a) * r, 200 - Math.sin(a) * r];
-        for (let j = 0; j <= 6; j++) { c.beginPath(); c.moveTo(240, 200); c.lineTo(...point(180, j * Math.PI / 12)); c.stroke(); }
-        for (let r = 25; r < 180; r += 27) for (let j = 0; j < 6; j++) { c.beginPath(); c.moveTo(...point(r, j * Math.PI / 12)); c.quadraticCurveTo(...point(r - 9 + Math.sin(time / 1000) * 3, (j + .5) * Math.PI / 12), ...point(r, (j + 1) * Math.PI / 12)); c.stroke(); }
+        for (const a of angles) { c.beginPath(); c.moveTo(240, 200); c.lineTo(...point(230, a)); c.stroke(); }
+        for (let ring = 1; ring < 8; ring++) {
+            const r = 22 + ring * 27;
+            for (let j = 0; j < angles.length - 1; j++) {
+                const a = angles[j], b = angles[j + 1];
+                const tension = Math.sin(time / 1700 + ring * .4 + j * .5) * 3;
+                c.beginPath(); c.moveTo(...point(r, a));
+                c.quadraticCurveTo(...point(r - 12 + tension, (a + b) / 2), ...point(r + Math.sin(j * 2) * 3, b)); c.stroke();
+            }
+        }
     } else if (theme === 'natale') {
         c.strokeStyle = colors[1]; c.lineWidth = 2; c.beginPath(); c.moveTo(10, 180); c.quadraticCurveTo(180, 220, 225, 20); c.stroke();
         for (let i = 0; i < 9; i++) { const x = 45 + i * 20, y = 185 - i * i * 1.8; c.globalAlpha = .65 + Math.sin(time / 900 + i) * .3; ellipse(c, x, y, 4, 6, i % 2 ? colors[0] : colors[2]); }

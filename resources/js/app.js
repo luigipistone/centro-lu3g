@@ -1,4 +1,5 @@
 import '../css/app.css';
+import '../css/halloween-studio.css';
 import './bootstrap';
 
 import { createInertiaApp } from '@inertiajs/vue3';
