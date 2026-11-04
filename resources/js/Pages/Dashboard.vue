@@ -890,7 +890,7 @@ watch(
         <template #header>
             <div class="flex flex-wrap items-center justify-between gap-4">
                 <div class="flex flex-col gap-1">
-                    <h2 class="text-xl font-semibold leading-tight text-gray-800">Dashboard</h2>
+                    <h2 class="season-dashboard-title text-xl font-semibold leading-tight text-gray-800">Dashboard</h2>
                     <p class="text-sm text-gray-500">Bentornato, {{ page.props.auth?.user?.email }}</p>
                 </div>
 
@@ -998,7 +998,7 @@ watch(
                                     <component :is="metaFor(widget).icon" class="h-5 w-5" :stroke-width="1.7" />
                                 </span>
                                 <span class="min-w-0 pt-0.5">
-                                    <span :class="['block text-sm font-semibold', metaFor(widget).kind === 'clock' ? 'whitespace-normal break-words' : 'truncate', metaFor(widget).kind === 'weather' && weatherData ? 'text-white' : 'text-gray-900']">{{ metaFor(widget).label }}</span>
+                                    <span :class="['season-widget-title block text-sm font-semibold', metaFor(widget).kind === 'clock' ? 'whitespace-normal break-words' : 'truncate', metaFor(widget).kind === 'weather' && weatherData ? 'text-white' : 'text-gray-900']">{{ metaFor(widget).label }}</span>
                                     <span :class="['block truncate text-xs', metaFor(widget).kind === 'weather' && weatherData ? 'text-white/85' : 'text-gray-500']">{{ metaFor(widget).description }}</span>
                                 </span>
                             </span>

@@ -704,6 +704,7 @@ const groups = computed(() => {
 
         <Teleport to="body">
             <SeasonalArtwork :key="`effect-${page.props.eventTheme}`" mode="effect" />
+            <SeasonalArtwork :key="`atmosphere-${page.props.eventTheme}`" mode="atmosphere" />
             <div v-if="completionEffect" :class="['completion-effect', `completion-effect-${completionEffect}`]" aria-hidden="true">
                 <template v-if="completionEffect === 'balloons'">
                     <span v-for="index in 18" :key="`balloon-${index}`" class="completion-balloon" :style="{ '--i': index }"></span>

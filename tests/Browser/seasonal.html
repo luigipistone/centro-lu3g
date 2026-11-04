@@ -16,5 +16,6 @@ createApp({ render: () => h('div', { class: 'app-shell p-5' }, [
     ]),
     h('section', { class: 'surface p-5 mt-4' }, [h('h2', { class: 'text-gray-900 dark:text-gray-100' }, 'Contenuti'), h('input', { placeholder: 'Nome', class: 'form-control' }), h('button', { class: 'btn btn-primary' }, 'Salva')]),
     h(SeasonalArtwork, { key: page.props.eventTheme, mode: 'effect' }),
+    h(SeasonalArtwork, { key: `atmosphere-${page.props.eventTheme}`, mode: 'atmosphere' }),
 ]) }).mount('#test');
 </script></body></html>

@@ -1541,3 +1541,80 @@ html[data-event-theme]:not([data-event-theme="standard"]) [data-widget-type="qui
 .event-theme-choice[data-season-choice="estate"] { background: #ffca50; color: #493112; }
 .event-theme-choice[data-season-choice]::before { display: none; }
 @media (prefers-reduced-motion: reduce) { .event-theme-choice { transition: none; } }
+
+@font-face {
+    font-family: 'Centro Seasonal';
+    src: url('/fonts/amatic-sc-bold.ttf') format('truetype');
+    font-weight: 700;
+    font-display: swap;
+}
+html[data-event-theme="halloween"] {
+    --season-deep: #20292d;
+    --season-deep-ink: #fff6e9;
+    --season-sidebar: #182125;
+    --season-sidebar-ink: #fff6e9;
+}
+html[data-event-theme]:not([data-event-theme="standard"]) .season-widget-title {
+    font-family: 'Centro Seasonal', sans-serif;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: 0;
+}
+html[data-event-theme]:not([data-event-theme="standard"]) .season-dashboard-title {
+    font-family: 'Centro Seasonal', sans-serif;
+    font-size: 40px;
+    line-height: 1.1;
+    font-weight: 700;
+}
+/* Only read-only dashboard cards get the full seasonal surface treatment. */
+html[data-event-theme]:not([data-event-theme="standard"]) .widget-card:not([data-widget-type="weather"]):not([data-widget-type="notes"]) {
+    background: var(--season-deep) !important;
+    --season-widget-ink: var(--season-deep-ink);
+    color: var(--season-widget-ink);
+    border-color: color-mix(in srgb, var(--season-deep) 65%, var(--season-highlight)) !important;
+}
+html[data-event-theme]:not([data-event-theme="standard"]) .widget-card[data-widget-type="my_tasks"]:not([data-widget-type="weather"]):not([data-widget-type="notes"]) {
+    background: var(--season-highlight) !important;
+    --season-widget-ink: var(--season-highlight-ink);
+}
+html[data-event-theme]:not([data-event-theme="standard"]) .widget-card:not([data-widget-type="weather"]):not([data-widget-type="notes"]) :is(.text-gray-950,.text-gray-900,.text-gray-800,.text-gray-700,.text-gray-600,.text-gray-500,.text-gray-400,.icon-btn) {
+    color: var(--season-widget-ink) !important;
+}
+html[data-event-theme]:not([data-event-theme="standard"]) .widget-card:not([data-widget-type="weather"]):not([data-widget-type="notes"]) .metric-icon {
+    background: color-mix(in srgb, var(--season-widget-ink) 10%, transparent) !important;
+    color: var(--season-widget-ink) !important;
+    box-shadow: none;
+}
+html[data-event-theme]:not([data-event-theme="standard"]) .widget-card:not([data-widget-type="weather"]):not([data-widget-type="notes"]) :is(.bg-white,.bg-white\/80,.bg-gray-50) {
+    background: color-mix(in srgb, var(--season-widget-ink) 7%, transparent) !important;
+}
+html[data-event-theme]:not([data-event-theme="standard"]) .widget-card:not([data-widget-type="weather"]):not([data-widget-type="notes"]) a:hover {
+    background: color-mix(in srgb, var(--season-widget-ink) 12%, transparent) !important;
+}
+html[data-event-theme="halloween"] .app-shell:has(.season-dashboard-title) {
+    background: linear-gradient(145deg, #a54d14, #74320f) !important;
+}
+html[data-event-theme="natale"] .app-shell:has(.season-dashboard-title) {
+    background: linear-gradient(145deg, #285643, #122e27) !important;
+}
+html[data-event-theme="pasqua"] .app-shell:has(.season-dashboard-title) {
+    background: linear-gradient(145deg, #f5d7e4, #e2edcf) !important;
+}
+html[data-event-theme="estate"] .app-shell:has(.season-dashboard-title) {
+    background: linear-gradient(145deg, #b6ecea, #fff0b4) !important;
+}
+html[data-event-theme]:not([data-event-theme="standard"]) .desktop-shell > header:has(.season-dashboard-title) {
+    background: var(--season-deep) !important;
+    border-color: color-mix(in srgb, var(--season-deep-ink) 15%, transparent) !important;
+}
+html[data-event-theme]:not([data-event-theme="standard"]) header:has(.season-dashboard-title) :is(.season-dashboard-title,p,.icon-btn) {
+    color: var(--season-deep-ink) !important;
+}
+html[data-event-theme]:not([data-event-theme="standard"]) .widget-card { container-type: inline-size; }
+html[data-event-theme]:not([data-event-theme="standard"]) [data-widget-type="clock_date"] .metric-icon { display: none; }
+html[data-event-theme]:not([data-event-theme="standard"]) [data-widget-type="clock_date"] .season-object { width: 48px; height: 42px; }
+@container (min-width: 400px) {
+    html[data-event-theme]:not([data-event-theme="standard"]) .season-widget-title { font-size: 32px; }
+    html[data-event-theme]:not([data-event-theme="standard"]) [data-widget-type="clock_date"] .season-object { width: 96px; height: 80px; }
+}

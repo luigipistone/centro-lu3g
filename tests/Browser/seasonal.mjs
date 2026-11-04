@@ -9,7 +9,7 @@ const server = await createServer({ configFile: false, root, plugins: [vue()], r
 let browser;
 try {
     await server.listen(); browser = await chromium.launch({ headless: true });
-    const page = await browser.newPage({ viewport: { width: 1024, height: 800 } });
+    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.goto(`${server.resolvedUrls.local[0]}tests/Browser/seasonal.html`);
     await page.waitForSelector('.season-object');
@@ -22,6 +22,7 @@ try {
         await page.locator('.season-object').click(); await page.waitForTimeout(300);
         assert(await nonblank('.season-fullscreen'), `${theme} fullscreen`);
         await page.waitForTimeout(1600); assert(!(await nonblank('.season-fullscreen')), 'Effect clears');
+        assert(await nonblank('.season-atmosphere'), `${theme} ambient animation`);
         await page.screenshot({ path: `/tmp/centro-season-${theme}.png` });
         await page.evaluate(() => document.documentElement.classList.add('dark'));
         await page.waitForTimeout(250);
@@ -32,12 +33,14 @@ try {
     await page.getByRole('button', { name: 'Pausa animazioni stagionali' }).click();
     await page.locator('.season-object').click(); await page.waitForTimeout(100);
     assert(!(await nonblank('.season-fullscreen')), 'Pause suppresses effects');
+    assert(!(await nonblank('.season-atmosphere')), 'Pause suppresses atmosphere');
     await page.reload(); await page.waitForSelector('.season-object');
     assert.equal(await page.getByRole('button', { name: 'Attiva animazioni stagionali' }).count(), 1);
     await page.getByRole('button', { name: 'Attiva animazioni stagionali' }).click();
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.locator('.season-object').click(); await page.waitForTimeout(100);
     assert(!(await nonblank('.season-fullscreen')), 'Reduced motion suppresses effects');
+    assert(!(await nonblank('.season-atmosphere')), 'Reduced motion suppresses atmosphere');
     await page.setViewportSize({ width: 320, height: 700 });
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile fits');
     await page.evaluate(() => window.setSeason('standard')); await page.waitForTimeout(100);
