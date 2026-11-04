@@ -3,6 +3,25 @@ function curve(points, u) {
     return [0, 1].map(k => v ** 3 * points[0][k] + 3 * v * v * u * points[1][k] + 3 * v * u * u * points[2][k] + u ** 3 * points[3][k]);
 }
 
+const flightsByCanvas = new WeakMap();
+
+export function createBatFlights(random = Math.random) {
+    const between = (min, max) => min + random() * (max - min);
+    const edgePoint = edge => {
+        const position = between(.12, .88);
+        return [[-.1, position], [position, -.1], [1.1, position], [position, 1.1]][edge];
+    };
+    return Array.from({ length: random() < .5 ? 2 : 3 }, () => {
+        const entry = Math.floor(random() * 4);
+        const exit = (entry + (random() < .7 ? 2 : random() < .5 ? 1 : 3)) % 4;
+        return {
+            points: [edgePoint(entry), [between(.15, .85), between(.1, .9)], [between(.15, .85), between(.1, .9)], edgePoint(exit)],
+            delay: between(0, .65), duration: between(9, 13),
+            size: between(.55, .8), phase: between(0, Math.PI * 2), wingSpeed: between(29, 38),
+        };
+    });
+}
+
 function bat(c, x, y, phase, angle, size, bank, glide) {
     c.save(); c.translate(x, y); c.rotate(angle + Math.PI / 2); c.scale(size, size);
     const stroke = glide ? .12 : Math.sin(phase), fold = glide ? 0 : Math.max(0, Math.cos(phase + .6));
@@ -24,18 +43,20 @@ export function drawSeasonAtmosphere(c, theme, milliseconds, w, h) {
     const t = milliseconds / 1000;
     c.save();
     if (theme === 'halloween') {
-        const cycle = Math.floor(t / 17), age = t % 17, u = (age - 1) / 7.5;
-        if (u >= 0 && u <= 1) {
-            const upper = Math.min(180, h * .2), lower = Math.min(460, h * .5);
-            const routes = [
-                [[w + 60, lower], [w * .75, lower * .85], [w * .38, upper], [-60, 35]],
-                [[w * .3, -60], [w * .38, upper], [w * .8, upper * 1.5], [w + 60, lower]],
-                [[-60, upper], [w * .22, upper + 95], [w * .58, upper * .7], [w * .72, -60]],
-                [[w + 60, 45], [w * .73, upper * 1.4], [w * .32, upper * .4], [-60, lower]],
-                [[w * .82, -60], [w * .68, upper * .8], [w * .2, lower * .65], [-60, lower]],
-            ];
-            const points = routes[cycle % routes.length], p = curve(points, u), a = curve(points, Math.max(0, u - .008)), b = curve(points, Math.min(1, u + .008));
-            bat(c, ...p, age * (34 + cycle % 3), Math.atan2(b[1] - a[1], b[0] - a[0]), .7 + Math.sin(u * 6) * .08, Math.sin(age * 1.2) * .65, Math.sin(age * 1.8) > .4);
+        let flock = flightsByCanvas.get(c);
+        // Randomness is sampled only between flights, never during a frame or resume.
+        if (!flock || t < flock.lastTime || t > flock.ends) {
+            const flights = createBatFlights();
+            flock = { flights, start: t, ends: t + Math.max(...flights.map(f => f.delay + f.duration)) + 1 + Math.random() * 2 };
+            flightsByCanvas.set(c, flock);
+        }
+        flock.lastTime = t;
+        for (const flight of flock.flights) {
+            const age = t - flock.start - flight.delay, u = age / flight.duration;
+            if (u < 0 || u > 1) continue;
+            const points = flight.points.map(([x, y]) => [x * w, y * h]);
+            const p = curve(points, u), a = curve(points, Math.max(0, u - .008)), b = curve(points, Math.min(1, u + .008));
+            bat(c, ...p, age * flight.wingSpeed + flight.phase, Math.atan2(b[1] - a[1], b[0] - a[0]), flight.size + Math.sin(u * 6) * .06, Math.sin(age * 1.2 + flight.phase) * .65, Math.sin(age * 1.8 + flight.phase) > .4);
         }
     } else if (theme === 'natale') {
         c.strokeStyle = '#315b47'; c.lineWidth = 1.5;
