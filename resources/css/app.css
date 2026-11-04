@@ -1431,361 +1431,113 @@ html.dark .completion-snowflake {
     transform: translateY(-2px);
 }
 
+/* Seasonal palettes are scoped; standard and semantic status colors stay untouched. */
 html[data-event-theme="halloween"] {
-    --primary-app: 22 89% 46%;
-    --primary-app-dark: 18 90% 37%;
-    --primary-app-soft: 28 100% 95%;
-    --season-bg: 31 42% 95%;
-    --season-surface: 33 68% 98%;
-    --season-ink: 263 31% 17%;
-    --season-glow: 35 100% 61%;
-    --season-contrast: 263 34% 12%;
-    --glass: 34 55% 98%;
-    --muted: 29 45% 94%;
-    --season-image: url('/images/event-themes/halloween.webp');
+    --primary-app: 23 86% 40%; --primary-app-dark: 21 89% 32%; --primary-app-soft: 25 100% 95%;
+    --season-highlight: #ff792d; --season-highlight-ink: #291b12;
+    --season-deep: #241f1b; --season-deep-ink: #fff1e1;
+    --season-sidebar: #211e1b; --season-sidebar-ink: #f5e8db;
 }
-
 html[data-event-theme="natale"] {
-    --primary-app: 151 64% 34%;
-    --primary-app-dark: 151 67% 27%;
-    --primary-app-soft: 151 38% 94%;
-    --season-bg: 152 27% 95%;
-    --season-surface: 152 39% 98%;
-    --season-ink: 155 42% 13%;
-    --season-glow: 39 92% 68%;
-    --season-contrast: 156 45% 10%;
-    --glass: 151 36% 98%;
-    --muted: 150 26% 94%;
-    --season-image: url('/images/event-themes/natale.webp');
+    --primary-app: 350 65% 39%; --primary-app-dark: 350 68% 30%; --primary-app-soft: 350 50% 96%;
+    --season-highlight: #a52636; --season-highlight-ink: #fff5eb;
+    --season-deep: #174638; --season-deep-ink: #fff4d7;
+    --season-sidebar: #143a30; --season-sidebar-ink: #f3efdf;
 }
-
 html[data-event-theme="pasqua"] {
-    --primary-app: 159 52% 37%;
-    --primary-app-dark: 159 55% 29%;
-    --primary-app-soft: 151 40% 95%;
-    --season-bg: 80 32% 96%;
-    --season-surface: 65 45% 99%;
-    --season-ink: 164 31% 17%;
-    --season-glow: 340 74% 78%;
-    --season-contrast: 163 38% 13%;
-    --glass: 72 55% 99%;
-    --muted: 78 30% 95%;
-    --season-image: url('/images/event-themes/pasqua.webp');
+    --primary-app: 337 53% 39%; --primary-app-dark: 337 56% 30%; --primary-app-soft: 337 60% 96%;
+    --season-highlight: #f1b2cb; --season-highlight-ink: #482435;
+    --season-deep: #d6e9cb; --season-deep-ink: #243c2c;
+    --season-sidebar: #304b3b; --season-sidebar-ink: #f6f5e5;
 }
-
 html[data-event-theme="estate"] {
-    --primary-app: 197 85% 41%;
-    --primary-app-dark: 197 85% 34%;
-    --primary-app-soft: 190 85% 94%;
-    --season-bg: 191 47% 96%;
-    --season-surface: 190 72% 99%;
-    --season-ink: 200 49% 13%;
-    --season-glow: 40 100% 66%;
-    --season-contrast: 202 58% 12%;
-    --glass: 187 58% 99%;
-    --muted: 185 42% 94%;
-    --season-image: url('/images/event-themes/estate.webp');
+    --primary-app: 191 90% 30%; --primary-app-dark: 191 90% 23%; --primary-app-soft: 185 70% 94%;
+    --season-highlight: #ffca50; --season-highlight-ink: #493112;
+    --season-deep: #087e93; --season-deep-ink: #effeff;
+    --season-sidebar: #164850; --season-sidebar-ink: #ebfcfa;
 }
-
+html[data-event-theme]:not([data-event-theme="standard"]) {
+    --season-working: #ffffff;
+    --season-working-border: #e3e5e2;
+    --season-canvas: #f2f3f0;
+}
 html.dark[data-event-theme]:not([data-event-theme="standard"]) {
-    --season-bg: 222 27% 9%;
-    --season-surface: 222 25% 14%;
-    --primary-app-soft: 220 30% 18%;
-    --glass: 222 24% 15%;
-    --muted: 222 23% 19%;
+    --season-working: #222629;
+    --season-working-border: #3b4144;
+    --season-canvas: #16191b;
+    --primary-app-soft: 25 12% 20%;
 }
-
-html[data-event-theme]:not([data-event-theme="standard"]) body {
-    background: hsl(var(--season-bg));
-}
-
-html[data-event-theme]:not([data-event-theme="standard"]) body::before {
-    position: fixed;
-    z-index: 0;
-    inset: -3%;
-    background-image: linear-gradient(hsl(var(--season-bg) / 0.22), hsl(var(--season-bg) / 0.48)), var(--season-image);
-    background-position: center;
-    background-size: cover;
-    content: '';
-    pointer-events: none;
-    animation: event-scene-breathe 28s ease-in-out infinite alternate;
-}
-
-html.dark[data-event-theme]:not([data-event-theme="standard"]) body::before {
-    background-image: linear-gradient(hsl(var(--season-bg) / 0.48), hsl(var(--season-bg) / 0.62)), var(--season-image);
-}
-
+html[data-event-theme]:not([data-event-theme="standard"]) body,
 html[data-event-theme]:not([data-event-theme="standard"]) .app-shell {
-    position: relative;
-    z-index: 1;
-    background: transparent !important;
+    background: var(--season-canvas) !important;
 }
-
-html[data-event-theme]:not([data-event-theme="standard"]) .desktop-sidebar,
-html[data-event-theme]:not([data-event-theme="standard"]) .desktop-shell > nav {
-    background: hsl(var(--season-surface) / 0.9) !important;
-    border-color: hsl(var(--primary-app) / 0.12) !important;
-}
-
-html[data-event-theme]:not([data-event-theme="standard"]) .desktop-sidebar {
-    background-image: linear-gradient(hsl(var(--season-surface) / 0.76), hsl(var(--season-surface) / 0.97) 210px), var(--season-image) !important;
-    background-repeat: no-repeat !important;
-    background-position: center top !important;
-    background-size: 100% 230px, auto 230px !important;
-    border-right: 3px solid hsl(var(--primary-app) / 0.48) !important;
-}
-
-html[data-event-theme]:not([data-event-theme="standard"]) .desktop-sidebar .brand-mark,
-html[data-event-theme]:not([data-event-theme="standard"]) nav .brand-mark {
-    background: hsl(var(--season-glow) / 0.35);
-    box-shadow: 0 0 0 2px hsl(var(--primary-app) / 0.25), 0 10px 30px hsl(var(--primary-app) / 0.22);
-}
-
-html[data-event-theme]:not([data-event-theme="standard"]) .desktop-sidebar .nav-link-active {
-    border-color: hsl(var(--primary-app) / 0.35);
-    background: linear-gradient(90deg, hsl(var(--primary-app) / 0.22), hsl(var(--season-surface) / 0.9));
-    box-shadow: inset 3px 0 hsl(var(--primary-app)), 0 8px 20px hsl(var(--primary-app) / 0.12);
-}
-
-html[data-event-theme]:not([data-event-theme="standard"]) .desktop-sidebar .nav-link-active svg {
-    color: hsl(var(--primary-app));
-}
-
-html[data-event-theme]:not([data-event-theme="standard"]) .desktop-shell > header {
-    border-bottom: 2px solid hsl(var(--primary-app) / 0.4) !important;
-    background: hsl(var(--season-surface) / 0.92) !important;
-}
-
-html[data-event-theme]:not([data-event-theme="standard"]) .surface {
-    border-color: hsl(var(--primary-app) / 0.19);
-    box-shadow: var(--shadow-soft), 0 0 0 1px hsl(var(--season-glow) / 0.08);
-}
-
-.event-atmosphere {
-    position: relative;
-    display: flex;
-    height: 104px;
-    align-items: center;
-    overflow: hidden;
-    isolation: isolate;
-    background: hsl(var(--season-ink));
-    color: #fff;
-}
-
-.event-atmosphere::before {
-    position: absolute;
-    z-index: -2;
-    inset: -12%;
-    background: var(--season-image) center / cover no-repeat;
-    content: '';
-    animation: event-scene-breathe 28s ease-in-out infinite alternate;
-}
-
-.event-atmosphere::after {
-    position: absolute;
-    z-index: -1;
-    inset: 0;
-    background: linear-gradient(90deg, hsl(var(--season-contrast) / 0.95), hsl(var(--season-contrast) / 0.62) 42%, hsl(var(--season-contrast) / 0.12) 100%);
-    content: '';
-}
-
-.event-atmosphere-content {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    min-width: 0;
-    padding: 0 clamp(18px, 3vw, 48px);
-    text-shadow: 0 2px 10px hsl(var(--season-contrast) / 0.5);
-}
-
-.event-atmosphere-crest {
-    display: grid;
-    width: 44px;
-    height: 44px;
-    flex: none;
-    place-items: center;
-    border: 1px solid hsl(var(--season-glow) / 0.7);
-    border-radius: 50%;
-    background: hsl(var(--season-glow) / 0.16);
-    color: hsl(var(--season-glow));
-    box-shadow: 0 0 24px hsl(var(--season-glow) / 0.2);
-    animation: event-crest-pulse 5s ease-in-out infinite;
-}
-
-.event-atmosphere-name {
-    font-size: clamp(18px, 2vw, 25px);
-    font-weight: 750;
-    line-height: 1.1;
-}
-
-.event-atmosphere-divider {
-    width: 1px;
-    height: 24px;
-    background: hsl(var(--season-glow) / 0.65);
-}
-
-.event-atmosphere-brand {
-    font-size: 14px;
-    font-weight: 600;
-    opacity: 0.86;
-}
-
-.event-atmosphere-motif {
-    position: absolute;
-    z-index: -1;
-    color: hsl(var(--season-glow) / 0.8);
-    opacity: 0.68;
-    animation: event-motif-drift 10s ease-in-out infinite alternate;
-}
-
-.event-atmosphere--natale .event-atmosphere-motif {
-    animation-name: event-motif-snow;
-}
-
-@keyframes event-motif-drift {
-    from { transform: translate3d(-12px, 8px, 0) rotate(-12deg); opacity: 0.28; }
-    to { transform: translate3d(16px, -12px, 0) rotate(15deg); opacity: 0.8; }
-}
-
-@keyframes event-motif-snow {
-    from { transform: translate3d(-8px, -26px, 0) rotate(0); opacity: 0.15; }
-    to { transform: translate3d(16px, 30px, 0) rotate(90deg); opacity: 0.8; }
-}
-
-@keyframes event-crest-pulse {
-    50% { box-shadow: 0 0 36px hsl(var(--season-glow) / 0.5); }
-}
-
-@media (max-width: 640px) {
-    .event-atmosphere { height: 72px; }
-    .event-atmosphere-content { gap: 10px; }
-    .event-atmosphere-crest { width: 36px; height: 36px; }
-    .event-atmosphere-crest svg { width: 19px; height: 19px; }
-    .event-atmosphere-brand { font-size: 12px; }
-}
-
-html[data-event-theme]:not([data-event-theme="standard"]) .btn-primary {
-    background: linear-gradient(180deg, hsl(var(--primary-app) / 0.9), hsl(var(--primary-app-dark)));
-}
-
-html[data-event-theme]:not([data-event-theme="standard"]) .btn-primary:hover {
-    background: linear-gradient(180deg, hsl(var(--primary-app)), hsl(var(--primary-app-dark)));
-}
-
-@keyframes event-scene-breathe {
-    from { transform: scale(1); }
-    to { transform: scale(1.045); }
-}
-
-/* Event palettes use solid working surfaces, not photographic overlays. */
-html[data-event-theme="halloween"] { --event-canvas: #171918; --event-panel: #f48232; --event-text: #21170f; --event-muted: #57321c; --event-accent: #242824; --event-secondary: #e1edb7; --season-ink: 110 5% 14%; --season-contrast: 110 5% 10%; }
-html[data-event-theme="natale"] { --event-canvas: #102b27; --event-panel: #1c433b; --event-text: #fff8e9; --event-muted: #bcd8cc; --event-accent: #f0c76a; --event-secondary: #ff787d; }
-html[data-event-theme="pasqua"] { --event-canvas: #e3f1dc; --event-panel: #fff9e9; --event-text: #233c32; --event-muted: #587064; --event-accent: #9952a0; --event-secondary: #dd674f; }
-html[data-event-theme="estate"] { --event-canvas: #d6f2f0; --event-panel: #fff9e9; --event-text: #153e46; --event-muted: #4e7275; --event-accent: #007f87; --event-secondary: #e65d46; }
-html[data-event-theme]:not([data-event-theme="standard"]) body { background: var(--event-canvas); color: var(--event-text); }
-html[data-event-theme]:not([data-event-theme="standard"]) body::before { display: none; }
-html[data-event-theme]:not([data-event-theme="standard"]) .surface,
-html[data-event-theme]:not([data-event-theme="standard"]) .desktop-sidebar,
-html[data-event-theme]:not([data-event-theme="standard"]) .desktop-shell > nav,
-html[data-event-theme]:not([data-event-theme="standard"]) .desktop-shell > header {
-    background: var(--event-panel) !important;
-    border-color: color-mix(in srgb, var(--event-accent) 40%, transparent) !important;
-    color: var(--event-text);
+html[data-event-theme]:not([data-event-theme="standard"]) :is(.surface,.app-card,.toolbar) {
+    background: var(--season-working) !important;
+    border-color: var(--season-working-border) !important;
     backdrop-filter: none;
 }
-html[data-event-theme]:not([data-event-theme="standard"]) .surface :is(h1,h2,h3,h4,.section-title,[class*="text-gray-9"],[class*="text-gray-8"]),
-html[data-event-theme]:not([data-event-theme="standard"]) .desktop-sidebar :is(a,button,[class*="text-gray-9"]),
-html[data-event-theme]:not([data-event-theme="standard"]) .desktop-shell > header :is(h1,h2,h3) { color: var(--event-text); }
-html[data-event-theme]:not([data-event-theme="standard"]) .surface :is([class*="text-gray-5"],[class*="text-gray-6"],[class*="text-gray-4"]) { color: var(--event-muted); }
+html[data-event-theme]:not([data-event-theme="standard"]) .desktop-shell > header {
+    background: var(--season-working) !important;
+    border-color: var(--season-working-border) !important;
+}
+html[data-event-theme]:not([data-event-theme="standard"]) .desktop-sidebar {
+    background: var(--season-sidebar) !important;
+    color: var(--season-sidebar-ink) !important;
+    border-color: transparent;
+    --sidebar-fg: 30 40% 91%;
+}
+html[data-event-theme]:not([data-event-theme="standard"]) .desktop-sidebar :is(a,button,.text-gray-950,.text-gray-900,.text-gray-700,.text-gray-600,.text-gray-500,.text-gray-400) {
+    color: var(--season-sidebar-ink) !important;
+}
 html[data-event-theme]:not([data-event-theme="standard"]) .desktop-sidebar .nav-link-active {
-    background: var(--event-accent) !important;
-    color: var(--event-canvas) !important;
+    background: var(--season-highlight) !important;
+    color: var(--season-highlight-ink) !important;
+    border-color: transparent;
     box-shadow: none;
 }
 html[data-event-theme]:not([data-event-theme="standard"]) .desktop-sidebar .nav-link-active svg { color: inherit; }
-html[data-event-theme]:not([data-event-theme="standard"]) .section-icon {
-    background: var(--event-accent);
-    color: var(--event-canvas);
+html[data-event-theme]:not([data-event-theme="standard"]) .brand-mark {
+    background: var(--season-highlight); color: var(--season-highlight-ink); box-shadow: none;
+}
+html[data-event-theme]:not([data-event-theme="standard"]) .btn-primary {
+    background: hsl(var(--primary-app)); color: #fff;
+}
+html[data-event-theme]:not([data-event-theme="standard"]) .btn-primary:hover { background: hsl(var(--primary-app-dark)); }
+html.dark[data-event-theme]:not([data-event-theme="standard"]) .metric-icon {
+    color: color-mix(in srgb, var(--season-highlight) 55%, white) !important;
+    background: #303639;
+}
+/* Only designated widgets receive full-color surfaces, never forms, tables or dialogs. */
+html[data-event-theme]:not([data-event-theme="standard"]) [data-widget-type="clock_date"] {
+    background: var(--season-highlight) !important; --season-widget-ink: var(--season-highlight-ink);
+}
+html[data-event-theme]:not([data-event-theme="standard"]) [data-widget-type="quick_links"] {
+    background: var(--season-deep) !important; --season-widget-ink: var(--season-deep-ink);
+}
+html[data-event-theme]:not([data-event-theme="standard"]) :is([data-widget-type="clock_date"],[data-widget-type="quick_links"]) {
+    color: var(--season-widget-ink) !important;
+    border-color: transparent;
+}
+html[data-event-theme]:not([data-event-theme="standard"]) :is([data-widget-type="clock_date"],[data-widget-type="quick_links"]) :is(.text-gray-950,.text-gray-900,.text-gray-500,.icon-btn) {
+    color: var(--season-widget-ink) !important;
+}
+html[data-event-theme]:not([data-event-theme="standard"]) :is([data-widget-type="clock_date"],[data-widget-type="quick_links"]) .metric-icon {
+    color: var(--season-widget-ink) !important;
+    background: transparent;
     box-shadow: none;
+    border: 1px solid currentColor;
 }
-html[data-event-theme]:not([data-event-theme="standard"]) .btn-primary { background: var(--event-accent); color: var(--event-canvas); box-shadow: none; }
-html[data-event-theme]:not([data-event-theme="standard"]) .btn-primary:hover { background: var(--event-secondary); }
-.event-atmosphere { height: 80px; background: var(--event-canvas); border-bottom: 3px solid var(--event-accent); }
-.event-atmosphere::before { display: none; }
-.event-atmosphere::after { background: none; }
-.event-atmosphere-name { color: var(--event-accent); font-size: 24px; }
-.event-atmosphere-crest { border-radius: 8px; background: var(--event-accent); color: var(--event-canvas); border: none; box-shadow: none; animation: event-symbol-rock 4s ease-in-out infinite; }
-.event-atmosphere-motif { z-index: 0; color: var(--event-secondary); opacity: 0.8; }
-.event-atmosphere-content { position: relative; z-index: 1; }
-@keyframes event-symbol-rock { 0%,100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg) translateY(-3px); } }
-
-html[data-event-theme="halloween"] .desktop-sidebar,
-html[data-event-theme="halloween"] .desktop-shell > nav,
-html[data-event-theme="halloween"] .desktop-shell > header {
-    background: #202420 !important;
-    --event-text: #fff4e9;
+html[data-event-theme]:not([data-event-theme="standard"]) [data-widget-type="quick_links"] a {
+    color: var(--season-widget-ink) !important;
+    background: color-mix(in srgb, var(--season-deep) 85%, white) !important;
+    border-color: color-mix(in srgb, var(--season-deep) 70%, white);
 }
-html[data-event-theme="halloween"] .desktop-sidebar .nav-link-active {
-    background: #f48232 !important;
-    color: #21170f !important;
+html[data-event-theme]:not([data-event-theme="standard"]) [data-widget-type="quick_links"] a:hover {
+    background: color-mix(in srgb, var(--season-deep) 70%, white) !important;
 }
-html[data-event-theme="halloween"] .surface {
-    box-shadow: inset 0 1px #ffb979, 0 12px 32px #00000018;
-    border-color: #e46b21 !important;
-    background-image: linear-gradient(125deg, transparent 65%, #ffb16b55) !important;
-}
-html[data-event-theme="halloween"] .section-title {
-    position: relative;
-}
-html[data-event-theme="halloween"] .section-title::after {
-    content: '';
-    width: 32px;
-    height: 3px;
-    margin-left: auto;
-    flex: none;
-    border-radius: 2px;
-    background: #292c22;
-    box-shadow: 9px -6px 0 -1px #292c22;
-    animation: halloween-detail 5s ease-in-out infinite;
-    pointer-events: none;
-}
-html[data-event-theme="halloween"] .section-icon {
-    background: #262a24;
-    color: #ffac60;
-    box-shadow: inset 0 0 0 1px #ffffff12;
-}
-html[data-event-theme="halloween"] .btn-primary {
-    background: #252a23;
-    color: #fff5e9;
-    box-shadow: inset 0 1px #ffffff20;
-}
-html[data-event-theme="halloween"] .btn-primary:hover {
-    background: #3a4430;
-    color: #fff5e9;
-}
-html[data-event-theme="halloween"] .surface :is(input,textarea,select) {
-    background: #fff4e7 !important;
-    color: #272017 !important;
-    border-color: #bd5b23 !important;
-}
-html[data-event-theme="halloween"] .surface :is(input,textarea)::placeholder { color: #776451; }
-@keyframes halloween-detail {
-    0%, 75%, 100% { transform: translateX(0); opacity: 0.8; }
-    82% { transform: translateX(-5px); opacity: 1; }
-    90% { transform: translateX(-2px); }
-}
-@media (prefers-reduced-motion: reduce) {
-    html[data-event-theme="halloween"] .section-title::after { animation: none; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    html[data-event-theme]:not([data-event-theme="standard"]) body::before,
-    .event-atmosphere::before,
-    .event-atmosphere-crest,
-    .event-atmosphere-motif {
-        animation: none;
-    }
-    .event-theme-choice {
-        transition: none;
-    }
-}
+.event-theme-choice[data-season-choice="halloween"] { background: #ff792d; color: #291b12; }
+.event-theme-choice[data-season-choice="natale"] { background: #174638; color: #fff4d7; }
+.event-theme-choice[data-season-choice="pasqua"] { background: #f1b2cb; color: #482435; }
+.event-theme-choice[data-season-choice="estate"] { background: #ffca50; color: #493112; }
+.event-theme-choice[data-season-choice]::before { display: none; }
+@media (prefers-reduced-motion: reduce) { .event-theme-choice { transition: none; } }

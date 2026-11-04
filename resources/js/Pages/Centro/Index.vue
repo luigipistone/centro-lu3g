@@ -6026,7 +6026,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                 v-for="theme in eventThemeOptions" :key="theme.id" type="button" role="radio"
                                 :aria-checked="selectedEventTheme === theme.id" :aria-label="theme.label"
                                 :class="['event-theme-choice', selectedEventTheme === theme.id ? 'is-selected' : '']"
-                                :style="theme.id === 'standard' ? {} : { backgroundImage: `url(/images/event-themes/${theme.id}.webp)` }"
+                                :data-season-choice="theme.id"
                                 @click="selectedEventTheme = theme.id"
                             >
                                 <span>{{ theme.label }}</span>

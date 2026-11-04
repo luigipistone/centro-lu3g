@@ -2,6 +2,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
+import SeasonalArtwork from '@/Components/SeasonalArtwork.vue';
 import { APP_TIME_ZONE } from '@/utils/formatters';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
@@ -894,6 +895,7 @@ watch(
                 </div>
 
                 <div ref="widgetMenu" class="relative flex items-center gap-2">
+                    <SeasonalArtwork mode="control" />
                     <span v-if="saving" class="text-xs font-medium text-gray-400">Salvataggio...</span>
                     <button type="button" class="btn btn-outline" @click="toggleWidgetMenu">
                         <Plus class="h-4 w-4" :stroke-width="1.8" />
@@ -948,6 +950,7 @@ watch(
                             draggingType === widget.widget_type ? 'widget-card-drag-source' : '',
                         ]"
                     >
+                        <SeasonalArtwork v-if="widget.widget_type === 'quick_links'" :key="page.props.eventTheme" mode="corner" />
                         <div
                             v-if="metaFor(widget).kind === 'weather' && weatherData"
                             class="pointer-events-none absolute inset-0 z-0"
@@ -995,11 +998,12 @@ watch(
                                     <component :is="metaFor(widget).icon" class="h-5 w-5" :stroke-width="1.7" />
                                 </span>
                                 <span class="min-w-0 pt-0.5">
-                                    <span :class="['block truncate text-sm font-semibold', metaFor(widget).kind === 'weather' && weatherData ? 'text-white' : 'text-gray-900']">{{ metaFor(widget).label }}</span>
+                                    <span :class="['block text-sm font-semibold', metaFor(widget).kind === 'clock' ? 'whitespace-normal break-words' : 'truncate', metaFor(widget).kind === 'weather' && weatherData ? 'text-white' : 'text-gray-900']">{{ metaFor(widget).label }}</span>
                                     <span :class="['block truncate text-xs', metaFor(widget).kind === 'weather' && weatherData ? 'text-white/85' : 'text-gray-500']">{{ metaFor(widget).description }}</span>
                                 </span>
                             </span>
                             <span v-if="showsWidgetNumber(widget)" class="shrink-0 text-3xl font-bold leading-none text-gray-950">{{ widgetNumber(widget) }}</span>
+                            <SeasonalArtwork v-if="metaFor(widget).kind === 'clock'" :key="page.props.eventTheme" />
                         </div>
 
                         <div v-if="metaFor(widget).kind === 'clock'" class="flex flex-1 items-end justify-between gap-3 pr-4">

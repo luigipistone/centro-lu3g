@@ -5,6 +5,8 @@ import DropdownLink from '@/Components/DropdownLink.vue';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
+import SeasonalArtwork from '@/Components/SeasonalArtwork.vue';
+import { isSeasonalTheme } from '@/utils/seasonalArt';
 import { browserNotificationSupport, enableCentroBrowserNotifications, ensureCentroPushSubscription, showCentroBrowserNotification } from '@/utils/browserNotifications';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import {
@@ -181,6 +183,11 @@ function closeLayoutFloatingUi() {
 }
 
 function playCompletionEffect(event = null) {
+    if (isSeasonalTheme(page.props.eventTheme)) {
+        completionEffect.value = null;
+        window.dispatchEvent(new Event('centro:season-celebrate'));
+        return;
+    }
     const effect = event?.detail?.effect || page.props.auth?.user?.completion_effect || 'balloons';
     completionEffect.value = effect;
     window.clearTimeout(completionEffectTimer);
@@ -696,6 +703,7 @@ const groups = computed(() => {
         </div>
 
         <Teleport to="body">
+            <SeasonalArtwork :key="`effect-${page.props.eventTheme}`" mode="effect" />
             <div v-if="completionEffect" :class="['completion-effect', `completion-effect-${completionEffect}`]" aria-hidden="true">
                 <template v-if="completionEffect === 'balloons'">
                     <span v-for="index in 18" :key="`balloon-${index}`" class="completion-balloon" :style="{ '--i': index }"></span>
