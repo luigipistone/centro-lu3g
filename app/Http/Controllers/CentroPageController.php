@@ -696,6 +696,7 @@ class CentroPageController extends Controller
         } else {
             $rows = DB::table($config['table'])
                 ->when($section === 'clients', fn ($query) => $query->where('clients.active', ! (bool) $request->route('archive')))
+                ->when($section === 'projects', fn ($query) => $query->where('projects.status', $request->route('archive') ? '=' : '!=', 'archived'))
                 ->when($config['table'] === 'projects', fn ($query) => $query->leftJoin('clients', 'clients.id', '=', 'projects.client_id')->select('projects.*', 'clients.name as client_name'))
                 ->when($config['table'] === 'projects' && $this->isGuest($request), fn ($query) => $query
                     ->join('project_followers', 'project_followers.project_id', '=', 'projects.id')
@@ -907,6 +908,7 @@ class CentroPageController extends Controller
                 ? DB::table('profiles as p')->join('users as u', 'u.id', '=', 'p.manager_user_id')->distinct()->orderBy('u.name')->get(['u.id', 'u.name']) : [],
             'clientStats' => $section === 'clients' ? $this->clientStats() : null,
             'clientArchive' => $section === 'clients' && (bool) $request->route('archive'),
+            'projectArchive' => $section === 'projects' && (bool) $request->route('archive'),
             'organizationOptions' => $section === 'settings' ? DB::table('employee_organization_options')->orderBy('name')->get() : [],
             'emailSettings' => $section === 'settings' ? $this->emailSettingsForView() : null,
             'figmaSettings' => $section === 'settings' ? $this->figmaSettingsForView() : null,

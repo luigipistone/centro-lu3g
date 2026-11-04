@@ -79,6 +79,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/clients/{clientId}/services/{serviceId}', [CentroPageController::class, 'detachClientService'])->name('clients.services.detach');
     Route::delete('/clients/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'clients')->name('clients.destroy');
     Route::get('/projects', [CentroPageController::class, 'index'])->defaults('section', 'projects')->name('projects.index');
+    Route::get('/projects/archive', [CentroPageController::class, 'index'])->defaults('section', 'projects')->defaults('archive', true)->name('projects.archive');
     Route::post('/projects', [CentroPageController::class, 'store'])->defaults('section', 'projects')->name('projects.store');
     Route::get('/project-templates', [CentroPageController::class, 'projectTemplates'])->name('project-templates.index');
     Route::get('/project-templates/create', [CentroPageController::class, 'createProjectTemplate'])->name('project-templates.create');

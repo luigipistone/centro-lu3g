@@ -935,6 +935,7 @@ function normalizeHexColor(value, fallback = '#2563eb') {
 }
 
 function backHref() {
+    if (props.section === 'projects' && props.record.status === 'archived') return route('projects.archive');
     if (props.section === 'clients' && !clientActive.value) return route('clients.archive');
     if (props.section === 'tasks' && props.related?.parentTask) {
         return route('tasks.show', props.related.parentTask.id);
@@ -944,6 +945,7 @@ function backHref() {
 }
 
 function backLabel() {
+    if (props.section === 'projects' && props.record.status === 'archived') return 'Torna all’archivio progetti';
     if (props.section === 'clients' && !clientActive.value) return 'Torna all’archivio clienti';
     if (props.section === 'tasks' && props.related?.parentTask) {
         return `Torna a ${props.related.parentTask.title || 'task genitore'}`;

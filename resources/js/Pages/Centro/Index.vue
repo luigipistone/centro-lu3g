@@ -89,6 +89,7 @@ const props = defineProps({
     projectTemplates: Array,
     clientStats: Object,
     clientArchive: Boolean,
+    projectArchive: Boolean,
     organizationOptions: Array,
     emailSettings: Object,
     figmaSettings: Object,
@@ -336,6 +337,7 @@ const clientService = ref('all');
 const clientSort = ref(['name_asc', 'name_desc'].includes(new URLSearchParams(window.location.search).get('sort')) ? new URLSearchParams(window.location.search).get('sort') : 'created_desc');
 const projectSearch = ref('');
 const projectStatus = ref('all');
+watch(() => props.projectArchive, () => { projectStatus.value = 'all'; });
 const projectSort = ref(['name_asc', 'name_desc', 'created_asc', 'created_desc'].includes(new URLSearchParams(window.location.search).get('sort')) ? new URLSearchParams(window.location.search).get('sort') : 'created_desc');
 const projectUserIds = ref([]);
 
@@ -346,7 +348,7 @@ watch(clientSort, (sort) => {
 
 watch(projectSort, (sort) => {
     if (props.section !== 'projects') return;
-    router.get(route('projects.index'), { sort }, { only: ['rows'], preserveState: true, preserveScroll: true, replace: true });
+    router.get(route(props.projectArchive ? 'projects.archive' : 'projects.index'), { sort }, { only: ['rows'], preserveState: true, preserveScroll: true, replace: true });
 });
 const projectPeopleMenu = ref(null);
 const projectPeopleMenuOpen = ref(false);
@@ -438,7 +440,6 @@ const projectStatusOptions = [
     { value: 'active', label: 'Attivi' },
     { value: 'completed', label: 'Completati' },
     { value: 'on_hold', label: 'In pausa' },
-    { value: 'archived', label: 'Archiviati' },
 ];
 const taskStatusOptions = [
     { value: 'all', label: 'Tutti gli stati' },
@@ -3863,7 +3864,7 @@ function calendarDayStyle(sectionMonth, cell) {
 </script>
 
 <template>
-    <Head :title="clientArchive ? 'Archivio clienti' : title" />
+    <Head :title="projectArchive ? 'Archivio progetti' : clientArchive ? 'Archivio clienti' : title" />
 
     <AuthenticatedLayout>
         <template #header>
@@ -3872,8 +3873,11 @@ function calendarDayStyle(sectionMonth, cell) {
                     <ChevronLeft class="h-4 w-4" :stroke-width="1.7" />
                     Torna ai clienti
                 </Link>
-                <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ clientArchive ? 'Archivio clienti' : title }}</h2>
-                <p v-if="!clientArchive" class="text-sm text-gray-500">{{ description }}</p>
+                <Link v-if="projectArchive" :href="route('projects.index')" class="inline-flex w-fit items-center gap-1 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]">
+                    <ChevronLeft class="h-4 w-4" :stroke-width="1.7" />Torna ai progetti
+                </Link>
+                <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ projectArchive ? 'Archivio progetti' : clientArchive ? 'Archivio clienti' : title }}</h2>
+                <p v-if="!clientArchive && !projectArchive" class="text-sm text-gray-500">{{ description }}</p>
             </div>
         </template>
 
@@ -5166,7 +5170,7 @@ function calendarDayStyle(sectionMonth, cell) {
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(220px,0.82fr)_165px_195px_215px_auto_auto]">
                     <ClearableSearchInput v-model="projectSearch" class="sm:col-span-2 xl:col-span-1" input-class="mt-0" placeholder="Cerca per progetto, cliente o descrizione..." />
-                    <AppSelect v-model="projectStatus" :options="projectStatusOptions" />
+                    <AppSelect v-model="projectStatus" :options="projectArchive ? [{ value: 'all', label: 'Archiviati' }] : projectStatusOptions" :disabled="projectArchive" />
                     <AppSelect v-model="projectSort" :options="[{ value: 'created_desc', label: 'Più recenti' }, { value: 'created_asc', label: 'Meno recenti' }, { value: 'name_asc', label: 'Nome A-Z' }, { value: 'name_desc', label: 'Nome Z-A' }]" aria-label="Ordina progetti" />
                     <div ref="projectPeopleMenu" class="relative z-30">
                         <button
@@ -5222,10 +5226,13 @@ function calendarDayStyle(sectionMonth, cell) {
                         <CopyPlus class="h-4 w-4" :stroke-width="1.7" />
                         Modelli
                     </Link>
-                    <button v-if="canCreate" type="button" class="btn btn-primary" @click="openCreate()">
+                    <div class="flex items-center gap-2">
+                    <Link v-if="!projectArchive" :href="route('projects.archive')" class="btn btn-outline" title="Archivio progetti" aria-label="Archivio progetti"><Archive class="h-4 w-4" :stroke-width="1.7" /></Link>
+                    <button v-if="canCreate && !projectArchive" type="button" class="btn btn-primary" @click="openCreate()">
                         <Plus class="h-4 w-4" :stroke-width="1.7" />
                         Nuovo Progetto
                     </button>
+                    </div>
                 </div>
 
                 <section class="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -5278,7 +5285,7 @@ function calendarDayStyle(sectionMonth, cell) {
                     </article>
 
                     <div v-if="!projectRows.length" class="content-card rounded-md border border-dashed border-gray-300 bg-white px-5 py-12 text-center text-sm text-gray-500 sm:col-span-2 lg:col-span-4">
-                        Nessun progetto trovato.
+                        {{ projectArchive ? 'Nessun progetto archiviato trovato.' : 'Nessun progetto trovato.' }}
                     </div>
                 </section>
             </div>
