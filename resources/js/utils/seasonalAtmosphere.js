@@ -70,7 +70,7 @@ export function drawSeasonAtmosphere(c, theme, milliseconds, w, h) {
             drawChristmasBulb(c, x, y, i, milliseconds, w < 600 ? .75 : .9);
         }
         c.shadowBlur = 0;
-        for (let i = 0; i < (w < 600 ? 20 : 54); i++) {
+        for (let i = 0; i < (w < 600 ? 24 : 65); i++) {
             const depth = (i % 5) / 4;
             const x = ((i * 131.7 + Math.sin(t * (.17 + depth * .12) + i) * (18 + depth * 30) + t * 5) % w + w) % w;
             const y = (i * 73 + t * (10 + depth * 18)) % (h + 20) - 10;
