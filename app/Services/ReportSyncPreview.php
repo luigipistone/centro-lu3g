@@ -14,10 +14,11 @@ class ReportSyncPreview
             throw new RuntimeException('Configura il token nelle impostazioni LU3G Report.');
         }
         $clients = $ids = $cursors = [];
+        $status = config('report_sync.status', 'active');
         $snapshot = null;
         $cursor = null;
         for ($page = 0; $page < config('report_sync.max_pages', 200); $page++) {
-            $query = ['status' => 'all', 'limit' => config('report_sync.page_size', 100)];
+            $query = ['status' => $status, 'limit' => config('report_sync.page_size', 100)];
             if ($cursor !== null) {
                 $query['cursor'] = $cursor;
             }
@@ -31,7 +32,7 @@ class ReportSyncPreview
             $total = data_get($data, 'page.totalClients');
             if (data_get($data, 'resource') !== 'clients.services'
                 || data_get($data, 'schemaVersion') !== 1
-                || data_get($data, 'scope.status') !== 'all'
+                || data_get($data, 'scope.status') !== $status
                 || ! is_int($total) || $total < 0
                 || ! is_array($data['clients'] ?? null)
                 || data_get($data, 'page.returned') !== count($data['clients'])

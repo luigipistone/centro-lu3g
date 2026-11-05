@@ -73,7 +73,7 @@ async function load() {
                 <p v-else-if="tokenMessage || configured" role="status" class="mt-2 text-sm text-emerald-600">{{ tokenMessage || 'Token configurato.' }}</p>
             </form>
             <div class="flex flex-wrap items-center justify-between gap-3">
-                <p class="text-sm text-gray-500">Anteprima · Nessuna modifica ai clienti</p>
+                <p class="text-sm text-gray-500">Anteprima · Solo clienti attivi · Nessuna modifica ai clienti</p>
                 <button class="btn btn-primary" :disabled="loading || saving || !configured" @click="load"><RefreshCw class="h-4 w-4" :class="{ 'animate-spin': loading }" />{{ loading ? 'Lettura in corso...' : 'Aggiorna anteprima' }}</button>
             </div>
             <p v-if="!configured" class="surface p-5 text-sm text-gray-700">Connessione non configurata.</p>

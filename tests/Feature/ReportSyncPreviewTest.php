@@ -33,9 +33,35 @@ class ReportSyncPreviewTest extends TestCase
         config(['report_sync.token' => 'test-only']);
         Http::preventStrayRequests();
         Http::fake(['*' => Http::response(['resource' => 'clients.services', 'schemaVersion' => 1,
-            'scope' => ['status' => 'all', 'activityYear' => 2026], 'snapshotVersion' => 'v1',
+            'scope' => ['status' => 'active', 'activityYear' => 2026], 'snapshotVersion' => 'v1',
             'page' => ['totalClients' => 1, 'returned' => 0, 'nextCursor' => null], 'clients' => []])]);
         $this->expectExceptionMessage('Elenco Report incompleto.');
+        (new ReportSyncPreview)->fetch();
+    }
+
+    public function test_endpoint_receives_active_filter_on_every_page(): void
+    {
+        config(['report_sync.token' => 'test-only']);
+        Http::preventStrayRequests();
+        $page = ['resource' => 'clients.services', 'schemaVersion' => 1,
+            'scope' => ['status' => 'active', 'activityYear' => 2026], 'snapshotVersion' => 'v1'];
+        Http::fake(['*' => Http::sequence()
+            ->push($page + ['page' => ['totalClients' => 2, 'returned' => 1, 'nextCursor' => 'next'], 'clients' => [['id' => 'one']]])
+            ->push($page + ['page' => ['totalClients' => 2, 'returned' => 1, 'nextCursor' => null], 'clients' => [['id' => 'two']]])]);
+        $this->assertCount(2, (new ReportSyncPreview)->fetch());
+        Http::assertSentCount(2);
+        Http::assertNotSent(fn ($request) => $request['status'] !== 'active');
+        Http::assertSent(fn ($request) => ($request['cursor'] ?? null) === 'next');
+    }
+
+    public function test_response_with_different_scope_is_rejected(): void
+    {
+        config(['report_sync.token' => 'test-only']);
+        Http::preventStrayRequests();
+        Http::fake(['*' => Http::response(['resource' => 'clients.services', 'schemaVersion' => 1,
+            'scope' => ['status' => 'all'], 'snapshotVersion' => 'v1',
+            'page' => ['totalClients' => 0, 'returned' => 0, 'nextCursor' => null], 'clients' => []])]);
+        $this->expectExceptionMessage('Risposta Report non valida.');
         (new ReportSyncPreview)->fetch();
     }
 }
