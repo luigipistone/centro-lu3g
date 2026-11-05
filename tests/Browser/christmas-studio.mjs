@@ -66,7 +66,7 @@ try {
                 await page.getByRole('button',{name:'Notifiche',exact:true}).click();
                 assert(await page.locator('.notification-switch-track').count()>0);
                 const colors = await page.locator('.notification-switch-track').evaluateAll(els=>els.map(el=>getComputedStyle(el).backgroundColor));
-                assert(colors.every(c=>['rgb(182, 22, 54)','rgb(197, 181, 187)'].includes(c)),JSON.stringify(colors));
+                assert(colors.every(c=>['rgb(182, 22, 54)','rgb(125, 87, 99)'].includes(c)),JSON.stringify(colors));
             }
             if (route === 'passwords') {
                 await page.locator('.app-shell').evaluate(el=>{
@@ -75,6 +75,12 @@ try {
                 });
                 await page.locator('.password-drawer-panel').waitFor();
             }
+            const lightPanels = await page.locator('.surface,.app-card,.toolbar,.password-drawer-panel,.form-control,[contenteditable="true"]').evaluateAll(els=>els.filter(el=>{
+                if(!el.getClientRects().length) return false;
+                const c=getComputedStyle(el).backgroundColor.match(/[\d.]+/g)?.map(Number);
+                return c && (c[3]??1)>.5 && c.slice(0,3).every(v=>v>180);
+            }).map(el=>el.className));
+            assert.deepEqual(lightPanels,[],`${route}: light panels in Christmas theme`);
             await page.screenshot({ path: `/tmp/christmas-review/${route}-${width}.png`, fullPage: true, animations: 'disabled' });
             if (width >= 1024) {
                 const geometry = await page.evaluate(() => ['.desktop-shell','.desktop-shell > header','.desktop-sidebar','.app-shell'].map(s=>{const e=document.querySelector(s),c=getComputedStyle(e);return {s,rect:e.getBoundingClientRect().toJSON(),padding:c.paddingLeft,margin:c.marginLeft,transform:c.transform,scroll:e.scrollLeft};}));

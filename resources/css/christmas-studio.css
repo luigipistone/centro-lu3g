@@ -1,16 +1,16 @@
-/* Ruby shell, snowy working surfaces. Seasonal decoration never changes layout. */
+/* Ruby shell and burgundy working surfaces. Seasonal decoration never changes layout. */
 html[data-event-theme="natale"][data-event-theme] {
-    color-scheme: light;
+    color-scheme: dark;
     --background: 347 71% 15%;
-    --foreground: 345 30% 15%;
-    --card: 340 100% 99%;
-    --glass: 340 100% 99%;
-    --muted: 345 30% 94%;
-    --muted-foreground: 345 15% 36%;
-    --border-soft: 345 25% 83%;
+    --foreground: 345 100% 97%;
+    --card: 345 55% 20%;
+    --glass: 345 55% 20%;
+    --muted: 345 40% 24%;
+    --muted-foreground: 345 35% 80%;
+    --border-soft: 345 30% 37%;
     --primary-app: 348 78% 40%;
     --primary-app-dark: 348 80% 32%;
-    --primary-app-soft: 348 65% 95%;
+    --primary-app-soft: 348 45% 24%;
     --season-highlight: #b61636;
     --season-highlight-ink: #ffffff;
     --season-deep: #681126;
@@ -18,10 +18,10 @@ html[data-event-theme="natale"][data-event-theme] {
     --season-sidebar: #290710;
     --season-sidebar-ink: #fff0f3;
     --season-canvas: #400b17;
-    --season-working: #fffafb;
-    --season-working-border: #e5cdd3;
+    --season-working: #501728;
+    --season-working-border: #874052;
     --christmas-title-ink: #fff5f7;
-    color: #321b22;
+    color: #fff5f7;
 }
 html[data-event-theme="natale"] #app .app-shell { background: #400b17 !important; }
 html[data-event-theme="natale"] #app .desktop-sidebar { background: #290710 !important; border-right: 1px solid #6a2837; }
@@ -54,13 +54,13 @@ html[data-event-theme="natale"] #app .widget-card[data-season-accent]:not([data-
     background: #b61636 !important;
     border-color: #e77b8e !important;
 }
-html[data-event-theme="natale"] #app .widget-card[data-widget-type="notes"] { background: #fffafb !important; border-color: #e5cdd3 !important; }
-html[data-event-theme="natale"] #app [data-widget-type="notes"] :is(.season-widget-title,.text-gray-800,.text-gray-900) { color: #681126 !important; }
-html[data-event-theme="natale"] #app [data-widget-type="notes"] :is(.text-gray-500,.icon-btn) { color: #76505a !important; }
-html[data-event-theme="natale"] #app .notes-editor-toolbar { background: #f5e4e9 !important; border-color: #d9acb8 !important; }
-html[data-event-theme="natale"] #app .notes-editor-toolbar button { color: #681126 !important; }
+html[data-event-theme="natale"] #app .widget-card[data-widget-type="notes"] { background: #501728 !important; border-color: #874052 !important; }
+html[data-event-theme="natale"] #app [data-widget-type="notes"] :is(.season-widget-title,.text-gray-800,.text-gray-900) { color: #fff5f7 !important; }
+html[data-event-theme="natale"] #app [data-widget-type="notes"] :is(.text-gray-500,.icon-btn) { color: #e5bdc8 !important; }
+html[data-event-theme="natale"] #app .notes-editor-toolbar { background: #642337 !important; border-color: #874052 !important; }
+html[data-event-theme="natale"] #app .notes-editor-toolbar button { color: #fff5f7 !important; }
 html[data-event-theme="natale"] #app .widget-card .metric-icon { background: #ffffff12 !important; color: #ffe1a5 !important; box-shadow: none; }
-html[data-event-theme="natale"] #app [data-widget-type="notes"] .metric-icon { background: #f5e4e9 !important; color: #9c1834 !important; }
+html[data-event-theme="natale"] #app [data-widget-type="notes"] .metric-icon { background: #642337 !important; color: #ffe1a5 !important; }
 html[data-event-theme="natale"] #app [data-widget-kind="stat"] .widget-value { position: absolute; right: 20px; bottom: 16px; font: 700 56px/1 'Centro Display',sans-serif; }
 html[data-event-theme="natale"] #app [data-widget-type="clock_date"] .widget-heading { position: static; }
 html[data-event-theme="natale"] #app [data-widget-type="clock_date"] .season-object { position: absolute; right: -12px; bottom: -5px; width: 130px; height: 145px; }
@@ -70,55 +70,79 @@ html[data-event-theme="natale"] #app .widget-clock-face span { max-width: none; 
 html[data-event-theme="natale"] #app .season-corner { width: 135px; height: 112px; opacity: .65; z-index: 0; }
 html[data-event-theme="natale"] #app .widget-data-list { position: relative; z-index: 1; }
 html[data-event-theme="natale"] #app [data-widget-type="quick_links"] a { background: #ffffff10 !important; border-color: #b85c70 !important; }
-html[data-event-theme="natale"] #app .toolbar { color: #55303c; box-shadow: none; }
-html[data-event-theme="natale"] #app :is(.surface,.app-card):not(.widget-card) { background: #fffafb !important; border-color: #e5cdd3 !important; box-shadow: 0 8px 24px #21050d20; }
+html[data-event-theme="natale"] #app .toolbar { color: #f1d5dd; box-shadow: none; }
+html[data-event-theme="natale"] #app :is(.surface,.app-card):not(.widget-card) { background: #501728 !important; border-color: #874052 !important; box-shadow: 0 8px 24px #21050d20; }
 html[data-event-theme="natale"] #app .web-repositories-card.surface { background: #b61636 !important; color: #fff !important; }
 html[data-event-theme="natale"] #app .web-repositories-card.surface :is(span,svg,p) { color: #fff !important; }
-html[data-event-theme="natale"] :is(.app-popover,.field-dropdown-menu,[role="dialog"],.password-dialog-panel,.password-drawer-panel) { background: #fffafb !important; color: #321b22; border-color: #e5cdd3 !important; }
-html[data-event-theme="natale"] :is(.form-control,textarea,select,[contenteditable="true"],input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"])) { background: #fffafb !important; color: #321b22 !important; border-color: #c9a5af !important; caret-color: #b61636; }
-html[data-event-theme="natale"] .wysiwyg-content { background: #fffafb !important; color: #321b22 !important; }
+html[data-event-theme="natale"] :is(.app-popover,.field-dropdown-menu,[role="dialog"],.password-dialog-panel,.password-drawer-panel) { background: #501728 !important; color: #fff5f7; border-color: #874052 !important; }
+html[data-event-theme="natale"] :is(.form-control,textarea,select,[contenteditable="true"],input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"])) { background: #501728 !important; color: #fff5f7 !important; border-color: #985367 !important; caret-color: #b61636; }
+html[data-event-theme="natale"] .wysiwyg-content { background: #501728 !important; color: #fff5f7 !important; }
 html[data-event-theme="natale"] :is(.wysiwyg-content,[data-widget-type="notes"] [contenteditable]) :is(p,span,div,font,h1,h2,h3,h4,li,td,th,strong,em,b,i,blockquote,pre,code) { color: inherit !important; background: transparent !important; }
-html[data-event-theme="natale"] .wysiwyg-content a { color: #a51230 !important; }
-html[data-event-theme="natale"] :is(input,textarea)::placeholder { color: #80616b !important; }
+html[data-event-theme="natale"] .wysiwyg-content a { color: #ffb3c4 !important; }
+html[data-event-theme="natale"] :is(input,textarea)::placeholder { color: #d4a7b5 !important; }
 html[data-event-theme="natale"] :is(.btn-primary,.settings-tab-active) { background: #b61636 !important; color: #fff !important; border-color: #b61636 !important; box-shadow: 0 4px 12px #6b0d2426; }
 html[data-event-theme="natale"] :is(.btn-primary,.settings-tab-active) :is(span,svg) { color: inherit !important; }
 html[data-event-theme="natale"] .btn-primary:hover { background: #92102c !important; }
-html[data-event-theme="natale"] :is(.btn-outline,.btn-ghost,.icon-btn):not(.widget-card *, .desktop-sidebar *) { background: #fff2f5 !important; color: #7f1731 !important; border-color: #d7aab6 !important; box-shadow: none; }
-html[data-event-theme="natale"] :is(.btn-outline,.btn-ghost,.icon-btn):hover:not(.widget-card *, .desktop-sidebar *) { background: #f5dce3 !important; }
+html[data-event-theme="natale"] :is(.btn-outline,.btn-ghost,.icon-btn):not(.widget-card *, .desktop-sidebar *) { background: #642337 !important; color: #fff5f7 !important; border-color: #985367 !important; box-shadow: none; }
+html[data-event-theme="natale"] :is(.btn-outline,.btn-ghost,.icon-btn):hover:not(.widget-card *, .desktop-sidebar *) { background: #7b2c44 !important; }
 html[data-event-theme="natale"] #app .desktop-shell > header .icon-btn { background: #8c263c !important; color: #fff5f7 !important; border-color: #bc6579 !important; }
 html[data-event-theme="natale"] .brand-mark { background: #b61636 !important; }
 html[data-event-theme="natale"] .brand-mark .brand-logo-image { filter: brightness(0) invert(1); }
-html[data-event-theme="natale"] :is(.metric-icon,.section-title > span):not(.widget-card *) { background: #f6dfe6 !important; color: #a51230 !important; box-shadow: none; }
-html[data-event-theme="natale"] :is([class*="ring-indigo-"],[class*="ring-blue-"],[class*="ring-sky-"],[class*="ring-cyan-"]) { --tw-ring-color: #b61636 !important; --tw-ring-offset-color: #fffafb !important; }
-html[data-event-theme="natale"] :is(.text-indigo-500,.text-indigo-600,.text-indigo-700,.text-indigo-800,.text-blue-500,.text-blue-600,.text-blue-700,.text-blue-800,.text-sky-600,.text-sky-700,.text-cyan-600):not(.widget-card *) { color: #a51230 !important; }
-html[data-event-theme="natale"] :is(.bg-indigo-50,.bg-indigo-100,.bg-blue-50,.bg-blue-100,.bg-sky-50,[class*="bg-indigo-50/"],[class*="bg-blue-50/"]):not(.widget-card *) { background: #f8e2e8 !important; }
+html[data-event-theme="natale"] :is(.metric-icon,.section-title > span):not(.widget-card *) { background: #642337 !important; color: #ffb3c4 !important; box-shadow: none; }
+html[data-event-theme="natale"] :is([class*="ring-indigo-"],[class*="ring-blue-"],[class*="ring-sky-"],[class*="ring-cyan-"]) { --tw-ring-color: #b61636 !important; --tw-ring-offset-color: #501728 !important; }
+html[data-event-theme="natale"] :is(.text-indigo-500,.text-indigo-600,.text-indigo-700,.text-indigo-800,.text-blue-500,.text-blue-600,.text-blue-700,.text-blue-800,.text-sky-600,.text-sky-700,.text-cyan-600):not(.widget-card *) { color: #ffb3c4 !important; }
+html[data-event-theme="natale"] :is(.bg-indigo-50,.bg-indigo-100,.bg-blue-50,.bg-blue-100,.bg-sky-50,[class*="bg-indigo-50/"],[class*="bg-blue-50/"]):not(.widget-card *) { background: #642337 !important; }
 html[data-event-theme="natale"] :is(.bg-blue-600,.bg-indigo-600,.bg-indigo-500,.bg-blue-500) { background: #b61636 !important; color: #fff !important; }
 html[data-event-theme="natale"] :is(.border-blue-600,.border-indigo-500,.border-blue-500,.border-indigo-200,.border-blue-200) { border-color: #b61636 !important; }
 html[data-event-theme="natale"] :is(button,a,input,textarea,select,[tabindex]):focus-visible { outline: 2px solid #bd2444; outline-offset: 3px; }
 html[data-event-theme="natale"] .person-picker:not(.person-picker-selected) { --tw-ring-color: #b616363d !important; box-shadow: 0 0 0 1px var(--tw-ring-color) !important; }
 html[data-event-theme="natale"] .person-picker:not(.person-picker-selected):hover { --tw-ring-color: #b6163680 !important; }
-html[data-event-theme="natale"] .person-picker.person-picker-selected { box-shadow: 0 0 0 2px #fffafb,0 0 0 5px #b61636 !important; }
+html[data-event-theme="natale"] .person-picker.person-picker-selected { box-shadow: 0 0 0 2px #501728,0 0 0 5px #b61636 !important; }
 html[data-event-theme="natale"] .person-picker:focus-visible { outline-offset: 7px; }
-html[data-event-theme="natale"] .notification-switch-track { background: #c5b5bb !important; }
+html[data-event-theme="natale"] .notification-switch-track { background: #7d5763 !important; }
 html[data-event-theme="natale"] input:checked + .notification-switch-track { background: #b61636 !important; }
 html[data-event-theme="natale"] .notification-switch-track > span { background: #fff !important; }
 html[data-event-theme="natale"] input:is([type="checkbox"],[type="radio"]) { accent-color: #b61636; }
-html[data-event-theme="natale"] #app .related-project-card { background: #f6dfe6 !important; color: #681126 !important; border-color: #d7aab6 !important; }
-html[data-event-theme="natale"] #app .related-project-card > span { color: #681126 !important; }
-html[data-event-theme="natale"] #app .task-tone-project { --task-bg: #f8e0e6; --task-ink: #75152d; --task-border: #cb7186; }
-html[data-event-theme="natale"] #app .task-tone-ongoing { --task-bg: #fff0cd; --task-ink: #694a13; --task-border: #b69246; }
-html[data-event-theme="natale"] #app .task-tone-meeting { --task-bg: #ebe2ed; --task-ink: #58345f; --task-border: #a080a8; }
+html[data-event-theme="natale"] #app .related-project-card { background: #642337 !important; color: #fff5f7 !important; border-color: #985367 !important; }
+html[data-event-theme="natale"] #app .related-project-card > span { color: #fff5f7 !important; }
+html[data-event-theme="natale"] #app .task-tone-project { --task-bg: #681126; --task-ink: #ffe7ee; --task-border: #cb7186; }
+html[data-event-theme="natale"] #app .task-tone-ongoing { --task-bg: #51401f; --task-ink: #ffe1a5; --task-border: #b69246; }
+html[data-event-theme="natale"] #app .task-tone-meeting { --task-bg: #443047; --task-ink: #f0d9f5; --task-border: #a080a8; }
 html[data-event-theme="natale"] #app .task-tone { background: var(--task-bg) !important; color: var(--task-ink) !important; border-color: var(--task-border) !important; }
 html[data-event-theme="natale"] #app .task-tone :is(h4,.text-gray-900,.text-gray-800,.text-gray-600,.text-gray-500) { color: var(--task-ink) !important; }
 html[data-event-theme="natale"] #app .btn .document-tab-count { background: #681126 !important; color: #fff !important; }
-html[data-event-theme="natale"] .password-reveal-row { background: #fff2f5 !important; border-color: #d7aab6 !important; }
-html[data-event-theme="natale"] .password-reveal-row:hover { background: #f5dce3 !important; }
-html[data-event-theme="natale"] .field-dropdown-option:hover { background: #f8e2e8 !important; }
+html[data-event-theme="natale"] .password-reveal-row { background: #642337 !important; border-color: #985367 !important; }
+html[data-event-theme="natale"] .password-reveal-row:hover { background: #7b2c44 !important; }
+html[data-event-theme="natale"] .field-dropdown-option:hover { background: #642337 !important; }
 html[data-event-theme="natale"] .event-theme-choice[data-season-choice="natale"],
 .event-theme-choice[data-season-choice="natale"] { background: #b61636 !important; color: #fff !important; }
+/* Standard neutral surfaces must not fall back to the light appearance. */
+html[data-event-theme="natale"] [class~="text-[hsl(var(--primary-app))]"]:not(.btn-primary,.btn-primary *) { color: #ffb3c4 !important; }
+html[data-event-theme="natale"] [class~="bg-[hsl(var(--primary-app)/0.10)]"] { background: #642337 !important; }
+html[data-event-theme="natale"][data-event-theme] :is(.bg-white,[class^="bg-white/"],[class*=" bg-white/"],.bg-gray-50,.bg-gray-100,[class^="bg-gray-50/"],[class*=" bg-gray-50/"]):not(.notification-switch-track *,[style*="background"],.project-preview-card,.project-preview-card *) {
+    background: #501728 !important;
+    border-color: #874052 !important;
+}
+html[data-event-theme="natale"][data-event-theme] :is(.text-gray-950,.text-gray-900,.text-gray-800,.text-gray-700):not([style*="background"],.project-preview-card *, .task-tone *) { color: #fff5f7 !important; }
+html[data-event-theme="natale"][data-event-theme] :is(.text-gray-600,.text-gray-500,.text-gray-400):not([style*="background"],.project-preview-card *, .task-tone *) { color: #e5bdc8 !important; }
+html[data-event-theme="natale"][data-event-theme] :is([class*="hover:bg-white"],[class*="hover:bg-gray-50"],[class*="hover:bg-gray-100"]):hover:not([style*="background"],.project-preview-card *) { background: #7b2c44 !important; }
+html[data-event-theme="natale"] :is(.password-reveal-summary,.password-drawer-panel header,.password-drawer-panel footer) { background: #501728 !important; color: #fff5f7; }
+html[data-event-theme="natale"] :is(.border-gray-100,.border-gray-200,[class*="border-white/"]) { border-color: #874052 !important; }
+/* Status notices keep their semantic colors, without pale panels. */
+html[data-event-theme="natale"] :is(.bg-red-50,.bg-red-100) { background: #702032 !important; }
+html[data-event-theme="natale"] :is(.text-red-500,.text-red-600,.text-red-700,.text-red-800) { color: #ffb5c3 !important; }
+html[data-event-theme="natale"] :is(.bg-amber-50,.bg-amber-100,.bg-yellow-50,.bg-yellow-100) { background: #51401f !important; }
+html[data-event-theme="natale"] :is(.text-amber-600,.text-amber-700,.text-amber-800,.text-yellow-700) { color: #ffe1a5 !important; }
+html[data-event-theme="natale"] :is(.bg-emerald-50,.bg-emerald-100,.bg-green-50,.bg-green-100) { background: #243e33 !important; }
+html[data-event-theme="natale"] :is(.text-emerald-600,.text-emerald-700,.text-green-600,.text-green-700) { color: #a8e7c5 !important; }
 /* Titles follow their nearest surface, including unframed section headings. */
+html[data-event-theme="natale"][data-event-theme] :is(.form-control,textarea,select,.wysiwyg-content,[contenteditable="true"],input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"])) {
+    background: #34101c !important;
+    color: #fff5f7 !important;
+    caret-color: #ffb3c4;
+}
 html[data-event-theme="natale"] :is(.surface,.app-card,.toolbar,.app-popover,.field-dropdown-menu,[role="dialog"],.password-dialog-panel,.password-drawer-panel,.wysiwyg-content,[contenteditable="true"],.bg-white,.bg-gray-50,.bg-gray-100,[class*="bg-white/"]) {
-    --christmas-title-ink: #321b22;
+    --christmas-title-ink: #fff5f7;
 }
 html[data-event-theme="natale"] :is(.desktop-shell > header,.desktop-sidebar,.web-repositories-card.surface,.widget-card:not([data-widget-type="weather"]):not([data-widget-type="notes"])) {
     --christmas-title-ink: #fff5f7;
