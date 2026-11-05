@@ -1,0 +1,165 @@
+/* Botanical surfaces, berry accents and spring blossom details. Seasonal decoration never changes layout. */
+html[data-event-theme="pasqua"][data-event-theme] {
+    color-scheme: dark;
+    --background: 157 48% 12%;
+    --foreground: 90 40% 96%;
+    --card: 158 35% 21%;
+    --glass: 158 35% 21%;
+    --muted: 158 30% 25%;
+    --muted-foreground: 130 22% 80%;
+    --border-soft: 150 20% 39%;
+    --primary-app: 334 54% 43%;
+    --primary-app-dark: 334 60% 34%;
+    --primary-app-soft: 334 30% 26%;
+    --season-highlight: #a83265;
+    --season-highlight-ink: #ffffff;
+    --season-deep: #173e32;
+    --season-deep-ink: #f5f8ee;
+    --season-sidebar: #0d211b;
+    --season-sidebar-ink: #edf5df;
+    --season-canvas: #102d24;
+    --season-working: #23483b;
+    --season-working-border: #527969;
+    --easter-title-ink: #f5f8ee;
+    color: #f5f8ee;
+}
+html[data-event-theme="pasqua"] #app .app-shell { background: #102d24 !important; }
+html[data-event-theme="pasqua"] #app .desktop-sidebar { background: #0d211b !important; border-right: 1px solid #365d4c; }
+html[data-event-theme="pasqua"] #app .desktop-shell > header {
+    background: #173e32 !important;
+    border-color: #527969 !important;
+    color: #f5f8ee;
+}
+html[data-event-theme="pasqua"] #app .desktop-shell > header :is(h1,h2,p,.icon-btn,.text-gray-500,.text-gray-800) { color: #f5f8ee !important; }
+html[data-event-theme="pasqua"] #app :is(.desktop-shell > header h1,.desktop-shell > header h2,.section-title,.surface h3,.tool-card-title,.season-widget-title) {
+    font-family: 'Centro Display', sans-serif;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1.15;
+    text-transform: none;
+}
+html[data-event-theme="pasqua"] #app .desktop-shell > header :is(h1,h2) { font-size: 36px; overflow-wrap: anywhere; }
+html[data-event-theme="pasqua"] #app :is(.section-title,.surface h3,.tool-card-title) { font-size: 23px; }
+html[data-event-theme="pasqua"] #app .season-widget-title { font-size: 20px; white-space: normal; overflow-wrap: normal; }
+html[data-event-theme="pasqua"] #app .widget-heading { gap: 8px; padding-right: 0; }
+html[data-event-theme="pasqua"] #app .widget-heading > span:first-child { gap: 8px; }
+html[data-event-theme="pasqua"] #app .widget-heading .metric-icon { flex-shrink: 0; width: 32px; height: 32px; border: 1px solid #e5b98266; border-radius: 8px; }
+html[data-event-theme="pasqua"] #app .widget-card:not([data-widget-type="weather"]):not([data-widget-type="notes"]) {
+    background: #173e32 !important;
+    border: 1px solid #648573 !important;
+    --season-widget-ink: #f5f8ee;
+    box-shadow: inset 0 1px #ffffff16, 0 8px 24px #061b1230;
+}
+html[data-event-theme="pasqua"] #app .widget-card[data-season-accent]:not([data-widget-type="weather"]):not([data-widget-type="notes"]) {
+    background: #a83265 !important;
+    border-color: #e89cbf !important;
+}
+html[data-event-theme="pasqua"] #app .widget-card[data-widget-type="notes"] { background: #23483b !important; border-color: #527969 !important; }
+html[data-event-theme="pasqua"] #app [data-widget-type="notes"] :is(.season-widget-title,.text-gray-800,.text-gray-900) { color: #f5f8ee !important; }
+html[data-event-theme="pasqua"] #app [data-widget-type="notes"] :is(.text-gray-500,.icon-btn) { color: #c2d8c5 !important; }
+html[data-event-theme="pasqua"] #app .notes-editor-toolbar { background: #315746 !important; border-color: #527969 !important; }
+html[data-event-theme="pasqua"] #app .notes-editor-toolbar button { color: #f5f8ee !important; }
+html[data-event-theme="pasqua"] #app .widget-card .metric-icon { background: #ffffff12 !important; color: #f5df90 !important; box-shadow: none; }
+html[data-event-theme="pasqua"] #app [data-widget-type="notes"] .metric-icon { background: #315746 !important; color: #f5df90 !important; }
+html[data-event-theme="pasqua"] #app [data-widget-kind="stat"] .widget-value { position: absolute; right: 20px; bottom: 16px; font: 700 56px/1 'Centro Display',sans-serif; }
+html[data-event-theme="pasqua"] #app [data-widget-type="clock_date"] .widget-heading { position: static; }
+html[data-event-theme="pasqua"] #app [data-widget-type="clock_date"] .season-object { position: absolute; right: -12px; bottom: -5px; width: 130px; height: 145px; }
+html[data-event-theme="pasqua"] #app .widget-clock-face { position: relative; z-index: 2; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 7px; width: 60%; padding: 0; pointer-events: none; }
+html[data-event-theme="pasqua"] #app .widget-clock-face strong { font: 700 40px/1 'Centro Display',sans-serif; color: #f5df90 !important; }
+html[data-event-theme="pasqua"] #app .widget-clock-face span { max-width: none; text-align: left; font-size: 11px; }
+html[data-event-theme="pasqua"] #app .season-corner { width: 135px; height: 112px; opacity: .65; z-index: 0; }
+html[data-event-theme="pasqua"] #app .widget-data-list { position: relative; z-index: 1; }
+html[data-event-theme="pasqua"] #app [data-widget-type="quick_links"] a { background: #ffffff10 !important; border-color: #648573 !important; }
+html[data-event-theme="pasqua"] #app .toolbar { color: #d4e5d3; box-shadow: none; }
+html[data-event-theme="pasqua"] #app :is(.surface,.app-card):not(.widget-card) { background: #23483b !important; border-color: #527969 !important; box-shadow: 0 8px 24px #061b1220; }
+html[data-event-theme="pasqua"] #app .web-repositories-card.surface { background: #a83265 !important; color: #fff !important; }
+html[data-event-theme="pasqua"] #app .web-repositories-card.surface :is(span,svg,p) { color: #fff !important; }
+html[data-event-theme="pasqua"] :is(.app-popover,.field-dropdown-menu,[role="dialog"],.password-dialog-panel,.password-drawer-panel) { background: #23483b !important; color: #f5f8ee; border-color: #527969 !important; }
+html[data-event-theme="pasqua"] :is(.form-control,textarea,select,[contenteditable="true"],input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"])) { background: #23483b !important; color: #f5f8ee !important; border-color: #6b927d !important; caret-color: #a83265; }
+html[data-event-theme="pasqua"] .wysiwyg-content { background: #23483b !important; color: #f5f8ee !important; }
+html[data-event-theme="pasqua"] :is(.wysiwyg-content,[data-widget-type="notes"] [contenteditable]) :is(p,span,div,font,h1,h2,h3,h4,li,td,th,strong,em,b,i,blockquote,pre,code) { color: inherit !important; background: transparent !important; }
+html[data-event-theme="pasqua"] .wysiwyg-content a { color: #f6bdd7 !important; }
+html[data-event-theme="pasqua"] :is(input,textarea)::placeholder { color: #b4cdbb !important; }
+html[data-event-theme="pasqua"] :is(.btn-primary,.settings-tab-active) { background: #a83265 !important; color: #fff !important; border-color: #a83265 !important; box-shadow: 0 4px 12px #142c2226; }
+html[data-event-theme="pasqua"] :is(.btn-primary,.settings-tab-active) :is(span,svg) { color: inherit !important; }
+html[data-event-theme="pasqua"] .btn-primary:hover { background: #87214f !important; }
+html[data-event-theme="pasqua"] :is(.btn-outline,.btn-ghost,.icon-btn):not(.widget-card *, .desktop-sidebar *) { background: #315746 !important; color: #f5f8ee !important; border-color: #6b927d !important; box-shadow: none; }
+html[data-event-theme="pasqua"] :is(.btn-outline,.btn-ghost,.icon-btn):hover:not(.widget-card *, .desktop-sidebar *) { background: #416b56 !important; }
+html[data-event-theme="pasqua"] #app .desktop-shell > header .icon-btn { background: #315746 !important; color: #f5f8ee !important; border-color: #6b927d !important; }
+html[data-event-theme="pasqua"] .brand-mark { background: #a83265 !important; }
+html[data-event-theme="pasqua"] .brand-mark .brand-logo-image { filter: brightness(0) invert(1); }
+html[data-event-theme="pasqua"] :is(.metric-icon,.section-title > span):not(.widget-card *) { background: #315746 !important; color: #f6bdd7 !important; box-shadow: none; }
+html[data-event-theme="pasqua"] :is([class*="ring-indigo-"],[class*="ring-blue-"],[class*="ring-sky-"],[class*="ring-cyan-"]) { --tw-ring-color: #a83265 !important; --tw-ring-offset-color: #23483b !important; }
+html[data-event-theme="pasqua"] :is(.text-indigo-500,.text-indigo-600,.text-indigo-700,.text-indigo-800,.text-blue-500,.text-blue-600,.text-blue-700,.text-blue-800,.text-sky-600,.text-sky-700,.text-cyan-600):not(.widget-card *) { color: #f6bdd7 !important; }
+html[data-event-theme="pasqua"] :is(.bg-indigo-50,.bg-indigo-100,.bg-blue-50,.bg-blue-100,.bg-sky-50,[class*="bg-indigo-50/"],[class*="bg-blue-50/"]):not(.widget-card *) { background: #315746 !important; }
+html[data-event-theme="pasqua"] :is(.bg-blue-600,.bg-indigo-600,.bg-indigo-500,.bg-blue-500) { background: #a83265 !important; color: #fff !important; }
+html[data-event-theme="pasqua"] :is(.border-blue-600,.border-indigo-500,.border-blue-500,.border-indigo-200,.border-blue-200) { border-color: #a83265 !important; }
+html[data-event-theme="pasqua"] :is(button,a,input,textarea,select,[tabindex]):focus-visible { outline: 2px solid #e99cbd; outline-offset: 3px; }
+html[data-event-theme="pasqua"] .person-picker:not(.person-picker-selected) { --tw-ring-color: #a832653d !important; box-shadow: 0 0 0 1px var(--tw-ring-color) !important; }
+html[data-event-theme="pasqua"] .person-picker:not(.person-picker-selected):hover { --tw-ring-color: #a8326580 !important; }
+html[data-event-theme="pasqua"] .person-picker.person-picker-selected { box-shadow: 0 0 0 2px #23483b,0 0 0 5px #a83265 !important; }
+html[data-event-theme="pasqua"] .person-picker:focus-visible { outline-offset: 7px; }
+html[data-event-theme="pasqua"] .notification-switch-track { background: #536d60 !important; }
+html[data-event-theme="pasqua"] input:checked + .notification-switch-track { background: #a83265 !important; }
+html[data-event-theme="pasqua"] .notification-switch-track > span { background: #fff !important; }
+html[data-event-theme="pasqua"] input:is([type="checkbox"],[type="radio"]) { accent-color: #a83265; }
+html[data-event-theme="pasqua"] #app .related-project-card { background: #315746 !important; color: #f5f8ee !important; border-color: #6b927d !important; }
+html[data-event-theme="pasqua"] #app .related-project-card > span { color: #f5f8ee !important; }
+html[data-event-theme="pasqua"] #app .task-tone-project { --task-bg: #173e32; --task-ink: #dcefdc; --task-border: #7dab8c; }
+html[data-event-theme="pasqua"] #app .task-tone-ongoing { --task-bg: #51401f; --task-ink: #f5df90; --task-border: #b69246; }
+html[data-event-theme="pasqua"] #app .task-tone-meeting { --task-bg: #443047; --task-ink: #f0d9f5; --task-border: #a080a8; }
+html[data-event-theme="pasqua"] #app .task-tone { background: var(--task-bg) !important; color: var(--task-ink) !important; border-color: var(--task-border) !important; }
+html[data-event-theme="pasqua"] #app .task-tone :is(h4,.text-gray-900,.text-gray-800,.text-gray-600,.text-gray-500) { color: var(--task-ink) !important; }
+html[data-event-theme="pasqua"] #app .btn .document-tab-count { background: #173e32 !important; color: #fff !important; }
+html[data-event-theme="pasqua"] .password-reveal-row { background: #315746 !important; border-color: #6b927d !important; }
+html[data-event-theme="pasqua"] .password-reveal-row:hover { background: #416b56 !important; }
+html[data-event-theme="pasqua"] .field-dropdown-option:hover { background: #315746 !important; }
+html[data-event-theme="pasqua"] .event-theme-choice[data-season-choice="pasqua"],
+.event-theme-choice[data-season-choice="pasqua"] { background: #a83265 !important; color: #fff !important; }
+/* Standard neutral surfaces must not fall back to the light appearance. */
+html[data-event-theme="pasqua"] [class~="text-[hsl(var(--primary-app))]"]:not(.btn-primary,.btn-primary *) { color: #f6bdd7 !important; }
+html[data-event-theme="pasqua"] [class~="bg-[hsl(var(--primary-app)/0.10)]"] { background: #315746 !important; }
+html[data-event-theme="pasqua"][data-event-theme] :is(.bg-white,[class^="bg-white/"],[class*=" bg-white/"],.bg-gray-50,.bg-gray-100,[class^="bg-gray-50/"],[class*=" bg-gray-50/"]):not(.notification-switch-track *,[style*="background"],.project-preview-card,.project-preview-card *) {
+    background: #23483b !important;
+    border-color: #527969 !important;
+}
+html[data-event-theme="pasqua"][data-event-theme] :is(.text-gray-950,.text-gray-900,.text-gray-800,.text-gray-700):not([style*="background"],.project-preview-card *, .task-tone *) { color: #f5f8ee !important; }
+html[data-event-theme="pasqua"][data-event-theme] :is(.text-gray-600,.text-gray-500,.text-gray-400):not([style*="background"],.project-preview-card *, .task-tone *) { color: #c2d8c5 !important; }
+html[data-event-theme="pasqua"][data-event-theme] :is([class*="hover:bg-white"],[class*="hover:bg-gray-50"],[class*="hover:bg-gray-100"]):hover:not([style*="background"],.project-preview-card *) { background: #416b56 !important; }
+html[data-event-theme="pasqua"] :is(.password-reveal-summary,.password-drawer-panel header,.password-drawer-panel footer) { background: #23483b !important; color: #f5f8ee; }
+html[data-event-theme="pasqua"] :is(.border-gray-100,.border-gray-200,[class*="border-white/"]) { border-color: #527969 !important; }
+/* Status notices keep their semantic colors, without pale panels. */
+html[data-event-theme="pasqua"] :is(.bg-red-50,.bg-red-100) { background: #702032 !important; }
+html[data-event-theme="pasqua"] :is(.text-red-500,.text-red-600,.text-red-700,.text-red-800) { color: #ffb5c3 !important; }
+html[data-event-theme="pasqua"] :is(.bg-amber-50,.bg-amber-100,.bg-yellow-50,.bg-yellow-100) { background: #51401f !important; }
+html[data-event-theme="pasqua"] :is(.text-amber-600,.text-amber-700,.text-amber-800,.text-yellow-700) { color: #f5df90 !important; }
+html[data-event-theme="pasqua"] :is(.bg-emerald-50,.bg-emerald-100,.bg-green-50,.bg-green-100) { background: #243e33 !important; }
+html[data-event-theme="pasqua"] :is(.text-emerald-600,.text-emerald-700,.text-green-600,.text-green-700) { color: #a8e7c5 !important; }
+/* Titles follow their nearest surface, including unframed section headings. */
+html[data-event-theme="pasqua"][data-event-theme] :is(.form-control,textarea,select,.wysiwyg-content,[contenteditable="true"],input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"])) {
+    background: #163528 !important;
+    color: #f5f8ee !important;
+    caret-color: #f6bdd7;
+}
+html[data-event-theme="pasqua"] :is(.surface,.app-card,.toolbar,.app-popover,.field-dropdown-menu,[role="dialog"],.password-dialog-panel,.password-drawer-panel,.wysiwyg-content,[contenteditable="true"],.bg-white,.bg-gray-50,.bg-gray-100,[class*="bg-white/"]) {
+    --easter-title-ink: #f5f8ee;
+}
+html[data-event-theme="pasqua"] :is(.desktop-shell > header,.desktop-sidebar,.web-repositories-card.surface,.widget-card:not([data-widget-type="weather"]):not([data-widget-type="notes"])) {
+    --easter-title-ink: #f5f8ee;
+}
+html[data-event-theme="pasqua"] .task-tone { --easter-title-ink: var(--task-ink); }
+html[data-event-theme="pasqua"] #app :is(h1,h2,h3,h4,h5,h6,.section-title,.tool-card-title,.season-widget-title):not(.wysiwyg-content *,[contenteditable="true"] *) {
+    color: var(--easter-title-ink) !important;
+}
+html[data-event-theme="pasqua"] #app :is(h1,h2,h3,h4,.section-title) + p:not(.wysiwyg-content *,[contenteditable="true"] *) {
+    color: var(--easter-title-ink) !important;
+}
+@media (max-width: 639px) {
+    html[data-event-theme="pasqua"] #app .desktop-shell > header :is(h1,h2) { font-size: 30px; }
+    html[data-event-theme="pasqua"] #app [data-widget-type="clock_date"] { min-height: 190px; }
+}
+
+html[data-event-theme="pasqua"] #app .desktop-shell > header :is(h1,h2) { font-family: 'Centro Seasonal',sans-serif; font-size: 42px; line-height: 1.05; }
+html[data-event-theme="pasqua"] #app .season-corner { width: 150px; height: 125px; opacity: .85; }
+html[data-event-theme="pasqua"] #app [data-widget-type="clock_date"] .season-object { width: 150px; height: 155px; right: -8px; }
+@media(max-width:639px) { html[data-event-theme="pasqua"] #app .desktop-shell > header :is(h1,h2) { font-size: 36px; } }

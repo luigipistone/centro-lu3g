@@ -74,7 +74,7 @@ try {
         assert.equal(await fixture.locator('.btn-primary').evaluate(el => getComputedStyle(el).backgroundImage),'none');
         await fixture.locator('.btn-primary').hover();
         await contrast(fixture.locator('.btn-primary'));
-        assert.equal(await fixture.locator('.ring-2').evaluate(el => getComputedStyle(el).getPropertyValue('--tw-ring-color').trim()),theme === 'natale' ? '#b61636' : '#ff975a');
+        assert.equal(await fixture.locator('.ring-2').evaluate(el => getComputedStyle(el).getPropertyValue('--tw-ring-color').trim()),theme === 'natale' ? '#b61636' : theme === 'pasqua' ? '#a83265' : '#ff975a');
         await page.screenshot({ path: `/tmp/${theme}-content/shared-${width}.png` });
     }
     assert.deepEqual(errors,[]);

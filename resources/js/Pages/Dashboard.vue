@@ -958,7 +958,7 @@ watch(
                             draggingType === widget.widget_type ? 'widget-card-drag-source' : '',
                         ]"
                     >
-                        <SeasonalArtwork v-if="widget.widget_type === 'quick_links' || (widget.widget_type === 'my_tasks' && page.props.eventTheme === 'halloween')" :key="page.props.eventTheme" mode="corner" />
+                        <SeasonalArtwork v-if="widget.widget_type === 'quick_links' || (widget.widget_type === 'my_tasks' && ['halloween', 'pasqua'].includes(page.props.eventTheme))" :key="page.props.eventTheme" mode="corner" />
                         <div
                             v-if="metaFor(widget).kind === 'weather' && weatherData"
                             class="pointer-events-none absolute inset-0 z-0"

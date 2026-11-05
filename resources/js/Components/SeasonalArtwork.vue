@@ -5,6 +5,7 @@ import { Pause, Play } from '@lucide/vue';
 import { drawSeasonObject, drawSeasonCorner, drawSeasonEffect, isSeasonalTheme } from '@/utils/seasonalArt';
 import { drawSeasonAtmosphere } from '@/utils/seasonalAtmosphere';
 import { christmasEffectDuration, createChristmasStars } from '@/utils/christmasMotion';
+import { easterEffectDuration, createEasterPetals } from '@/utils/easterMotion';
 
 const props = defineProps({ mode: { type: String, default: 'object' } });
 const page = usePage();
@@ -15,12 +16,12 @@ const paused = ref(false);
 let media, observer, frame = 0, time = 0, last = 0, effectStart = null, visible = true;
 let pumpkinImage;
 let effectStars = [];
-const effectDuration = () => theme.value === 'natale' ? christmasEffectDuration : 1500;
+const effectDuration = () => theme.value === 'natale' ? christmasEffectDuration : theme.value === 'pasqua' ? easterEffectDuration : 1500;
 const key = () => `centro:season-motion:${page.props.auth?.user?.id || 'guest'}`;
 function readPreference() { try { paused.value = localStorage.getItem(key()) === 'off'; } catch { paused.value = false; } restart(); }
 function toggle() { paused.value = !paused.value; try { localStorage.setItem(key(), paused.value ? 'off' : 'on'); } catch { /* Private mode may disable storage. */ } window.dispatchEvent(new Event('centro:season-motion')); }
 function celebrate() { window.dispatchEvent(new Event('centro:season-celebrate')); }
-function startEffect() { if (!active.value || paused.value || media?.matches || document.hidden) return; effectStars = theme.value === 'natale' ? createChristmasStars() : []; effectStart = time; restart(); }
+function startEffect() { if (!active.value || paused.value || media?.matches || document.hidden) return; effectStars = theme.value === 'natale' ? createChristmasStars() : theme.value === 'pasqua' ? createEasterPetals() : []; effectStart = time; restart(); }
 function draw() {
     const el = canvas.value, c = el?.getContext('2d');
     if (!c) return;
