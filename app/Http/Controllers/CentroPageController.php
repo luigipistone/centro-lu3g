@@ -8800,11 +8800,12 @@ class CentroPageController extends Controller
         DB::table('clients')->where('id', $clientId)->exists() || abort(404);
         DB::table('services')->where('id', $serviceId)->exists() || abort(404);
 
-        DB::table('client_services')->insertOrIgnore([
+        DB::table('client_services')->upsert([[
             'id' => (string) str()->uuid(),
             'client_id' => $clientId,
             'service_id' => $serviceId,
-        ]);
+            'manual_association' => true,
+        ]], ['client_id', 'service_id'], ['manual_association']);
 
         return back()->with('status', 'Servizio collegato.');
     }
@@ -8816,6 +8817,11 @@ class CentroPageController extends Controller
         DB::table('client_services')
             ->where('client_id', $clientId)
             ->where('service_id', $serviceId)
+            ->update(['manual_association' => false]);
+        DB::table('client_services')
+            ->where('client_id', $clientId)
+            ->where('service_id', $serviceId)
+            ->where('report_association', false)
             ->delete();
 
         return back()->with('status', 'Servizio scollegato.');

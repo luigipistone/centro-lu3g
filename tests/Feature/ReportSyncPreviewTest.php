@@ -33,7 +33,7 @@ class ReportSyncPreviewTest extends TestCase
         config(['report_sync.token' => 'test-only']);
         Http::preventStrayRequests();
         Http::fake(['*' => Http::response(['resource' => 'clients.services', 'schemaVersion' => 1,
-            'scope' => ['status' => 'active', 'activityYear' => 2026], 'snapshotVersion' => 'v1',
+            'scope' => ['status' => 'all', 'activityYear' => 2026], 'snapshotVersion' => 'v1',
             'page' => ['totalClients' => 1, 'returned' => 0, 'nextCursor' => null], 'clients' => []])]);
         $this->expectExceptionMessage('Elenco Report incompleto.');
         (new ReportSyncPreview)->fetch();
@@ -41,7 +41,7 @@ class ReportSyncPreviewTest extends TestCase
 
     public function test_endpoint_receives_active_filter_on_every_page(): void
     {
-        config(['report_sync.token' => 'test-only']);
+        config(['report_sync.token' => 'test-only', 'report_sync.status' => 'active']);
         Http::preventStrayRequests();
         $page = ['resource' => 'clients.services', 'schemaVersion' => 1,
             'scope' => ['status' => 'active', 'activityYear' => 2026], 'snapshotVersion' => 'v1'];
@@ -59,7 +59,7 @@ class ReportSyncPreviewTest extends TestCase
         config(['report_sync.token' => 'test-only']);
         Http::preventStrayRequests();
         Http::fake(['*' => Http::response(['resource' => 'clients.services', 'schemaVersion' => 1,
-            'scope' => ['status' => 'all'], 'snapshotVersion' => 'v1',
+            'scope' => ['status' => 'active'], 'snapshotVersion' => 'v1',
             'page' => ['totalClients' => 0, 'returned' => 0, 'nextCursor' => null], 'clients' => []])]);
         $this->expectExceptionMessage('Risposta Report non valida.');
         (new ReportSyncPreview)->fetch();
