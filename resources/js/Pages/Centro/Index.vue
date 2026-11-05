@@ -6023,6 +6023,7 @@ function calendarDayStyle(sectionMonth, cell) {
                         <component :is="tab[2]" class="h-4 w-4" :stroke-width="1.7" />
                         {{ tab[1] }}
                     </button>
+                    <Link v-if="isSuperadmin" :href="route('settings.report.index')" class="settings-tab flex-none whitespace-nowrap"><RefreshCw class="h-4 w-4" :stroke-width="1.7" />LU3G Report</Link>
                 </div>
 
                 <section v-if="settingsTab === 'personalizzazione'" class="grid gap-6 lg:grid-cols-[1fr_320px]">

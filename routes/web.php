@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AiAgencyController;
+use App\Http\Controllers\ReportSyncController;
 use App\Http\Controllers\AirmailController;
 use App\Http\Controllers\CentroPageController;
 use App\Http\Controllers\FigmaIntegrationController;
@@ -281,6 +282,8 @@ Route::middleware('auth')->group(function () {
     Route::delete('/users/{id}/physical', [CentroPageController::class, 'physicallyDeleteUser'])->name('users.physical-destroy');
     Route::patch('/users/{id}/status', [CentroPageController::class, 'updateUserStatus'])->name('users.status.update');
     Route::get('/settings', [CentroPageController::class, 'index'])->defaults('section', 'settings')->name('settings.index');
+    Route::get('/settings/report', [ReportSyncController::class, 'index'])->name('settings.report.index');
+    Route::post('/settings/report/preview', [ReportSyncController::class, 'preview'])->middleware('throttle:3,1')->name('settings.report.preview');
     Route::put('/settings/event-theme', [CentroPageController::class, 'updateEventTheme'])->name('settings.event-theme.update');
     Route::post('/settings/organization-options', [CentroPageController::class, 'storeOrganizationOption'])->name('settings.organization-options.store');
     Route::put('/settings/organization-options/{id}', [CentroPageController::class, 'updateOrganizationOption'])->name('settings.organization-options.update');
