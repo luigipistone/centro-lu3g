@@ -2816,6 +2816,7 @@ class CentroPageController extends Controller
         ]);
         $vaultId = $payload['password_vault_id'];
         $allowedVault = DB::table('password_vaults')->where('id', $vaultId);
+        $allowedVault->whereIn('id', $this->visiblePasswordVaultIds($request));
         if ($this->currentUserRole($request) !== 'superadmin') {
             $allowedVault->where('visibility', 'personal')->where('created_by', $request->user()->id);
         }
@@ -6096,9 +6097,7 @@ class CentroPageController extends Controller
     private function passwordVaultRows(Request $request)
     {
         $query = DB::table('password_vaults')->orderBy('name');
-        if ($this->currentUserRole($request) !== 'superadmin') {
-            $query->whereIn('id', $this->visiblePasswordVaultIds($request));
-        }
+        $query->whereIn('id', $this->visiblePasswordVaultIds($request));
 
         $vaults = $query->get();
         $userShares = DB::table('password_vault_user')
@@ -6243,6 +6242,12 @@ class CentroPageController extends Controller
     private function passwordItemsQuery(Request $request)
     {
         $query = DB::table('password_items');
+        $query->whereNotExists(function ($vault) use ($request) {
+            $vault->selectRaw('1')->from('password_vaults as private_vault')
+                ->whereColumn('private_vault.id', 'password_items.password_vault_id')
+                ->where('private_vault.visibility', 'personal')
+                ->where(fn ($owner) => $owner->whereNull('private_vault.created_by')->orWhere('private_vault.created_by', '!=', $request->user()->id));
+        });
         if ($this->currentUserRole($request) === 'superadmin') {
             return $query;
         }
@@ -6267,12 +6272,15 @@ class CentroPageController extends Controller
     private function visiblePasswordVaultIds(Request $request): Collection
     {
         if ($this->currentUserRole($request) === 'superadmin') {
-            return DB::table('password_vaults')->pluck('id');
+            return DB::table('password_vaults')
+                ->where(fn ($q) => $q->where('visibility', 'shared')->orWhere('created_by', $request->user()->id))
+                ->pluck('id');
         }
 
         $groupIds = DB::table('password_group_user')->where('user_id', $request->user()->id)->pluck('password_group_id');
 
         return DB::table('password_vaults')
+            ->where(fn ($q) => $q->where('visibility', 'shared')->orWhere('created_by', $request->user()->id))
             ->whereRaw('LOWER(name) != ?', ['amministrazione'])
             ->where(function ($query) use ($request, $groupIds) {
                 $query->where('created_by', $request->user()->id)
@@ -6291,6 +6299,9 @@ class CentroPageController extends Controller
 
     private function canEditPasswordVault(Request $request, object $vault): bool
     {
+        if (($vault->visibility ?? 'personal') !== 'shared' && $vault->created_by !== $request->user()->id) {
+            return false;
+        }
         if ($this->isAdministrationVault($vault) && $this->currentUserRole($request) !== 'superadmin') {
             return false;
         }
@@ -6454,6 +6465,9 @@ class CentroPageController extends Controller
         $vault = $item->password_vault_id
             ? DB::table('password_vaults')->where('id', $item->password_vault_id)->first()
             : null;
+        if ($vault && ($vault->visibility ?? 'personal') !== 'shared' && $vault->created_by !== $request->user()->id) {
+            return false;
+        }
         if ($vault && $this->isAdministrationVault($vault) && $this->currentUserRole($request) !== 'superadmin') {
             return false;
         }
@@ -6474,6 +6488,9 @@ class CentroPageController extends Controller
         $vault = $item->password_vault_id
             ? DB::table('password_vaults')->where('id', $item->password_vault_id)->first()
             : null;
+        if ($vault && ($vault->visibility ?? 'personal') !== 'shared' && $vault->created_by !== $request->user()->id) {
+            return false;
+        }
         if ($vault && $this->isAdministrationVault($vault) && $this->currentUserRole($request) !== 'superadmin') {
             return false;
         }
@@ -6540,6 +6557,7 @@ class CentroPageController extends Controller
         }
         if (! blank($payload['password_vault_id'] ?? null)) {
             $vault = DB::table('password_vaults')->where('id', $payload['password_vault_id'])->first();
+            abort_if($vault && ($vault->visibility ?? 'personal') !== 'shared' && $vault->created_by !== $request->user()->id, 403);
             abort_if($vault && $this->isAdministrationVault($vault) && $this->currentUserRole($request) !== 'superadmin', 403);
         }
 
@@ -9418,6 +9436,9 @@ class CentroPageController extends Controller
         $vault = $item->password_vault_id
             ? DB::table('password_vaults')->where('id', $item->password_vault_id)->first(['name', 'visibility', 'created_by'])
             : null;
+        if ($vault && $vault->visibility === 'personal') {
+            return collect([$vault->created_by])->filter();
+        }
         if ($vault && mb_strtolower($vault->name) === 'amministrazione') {
             return DB::table('user_roles')->where('role', 'superadmin')->pluck('user_id');
         }

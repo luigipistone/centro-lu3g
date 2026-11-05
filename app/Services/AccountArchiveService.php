@@ -26,8 +26,11 @@ class AccountArchiveService
                 ->orWhereIn('id', DB::table('company_document_user')->where('user_id', $userId)->select('company_document_id')))
             ->orderBy('title')->get(['id', 'title']);
         $passwords = DB::table('password_items')
-            ->whereIn('id', DB::table('password_item_user')->where('user_id', $userId)->select('password_item_id'))
-            ->orWhereIn('password_vault_id', DB::table('password_vault_user')->where('user_id', $userId)->select('password_vault_id'))
+            ->where(fn ($query) => $query
+                ->whereIn('id', DB::table('password_item_user')->where('user_id', $userId)->select('password_item_id'))
+                ->orWhereIn('password_vault_id', DB::table('password_vault_user')->where('user_id', $userId)->select('password_vault_id')))
+            ->where(fn ($query) => $query->whereNull('password_vault_id')
+                ->orWhereNotIn('password_vault_id', DB::table('password_vaults')->where('visibility', 'personal')->select('id')))
             ->orderBy('title')->get(['id', 'title']);
         $requests = DB::table('absence_requests')->where('user_id', $userId)->latest('start_date')->get(['id', 'type', 'start_date']);
         $messages = DB::table('company_messages')

@@ -28,6 +28,7 @@ class FavoriteController extends Controller
     {
         $userId = $request->user()->id;
         $query = DB::table('favorite_folders as f');
+        $query->where(fn ($q) => $q->where('f.visibility', 'shared')->orWhere('f.created_by', $userId));
         if (! $this->isSuperadmin($request)) {
             $query->where(function ($q) use ($userId, $request) {
                 $q->where('f.created_by', $userId)
@@ -51,6 +52,9 @@ class FavoriteController extends Controller
 
     private function canWrite(Request $request, object $folder): bool
     {
+        if ($folder->visibility !== 'shared' && $folder->created_by !== $request->user()->id) {
+            return false;
+        }
         return $this->isSuperadmin($request)
             || $folder->created_by === $request->user()->id
             || ($this->canManage($request) && $folder->visibility === 'shared');
