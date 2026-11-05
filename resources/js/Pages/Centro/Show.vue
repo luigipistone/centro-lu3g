@@ -3380,6 +3380,7 @@ function projectTaskTypeButtonClass(type) {
 
 function personAvatarClass(selected) {
     return [
+        selected ? 'person-picker person-picker-selected' : 'person-picker',
         'group/person relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300',
         selected
             ? 'bg-indigo-50 ring-2 ring-indigo-500 ring-offset-2 ring-offset-white'

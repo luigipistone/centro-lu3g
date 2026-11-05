@@ -490,3 +490,20 @@ html[data-event-theme="halloween"][data-event-theme] #app .btn .document-tab-cou
     color: #ffe2cd !important;
     box-shadow: inset 0 0 0 1px #80614a;
 }
+
+/* Quiet unselected avatars, unmistakable selection; keyboard focus stays separate. */
+html[data-event-theme="halloween"][data-event-theme] .person-picker:not(.person-picker-selected) {
+    --tw-ring-color: rgb(255 151 90 / 24%) !important;
+    box-shadow: 0 0 0 1px var(--tw-ring-color) !important;
+}
+html[data-event-theme="halloween"][data-event-theme] .person-picker:not(.person-picker-selected):hover {
+    --tw-ring-color: rgb(255 151 90 / 50%) !important;
+}
+html[data-event-theme="halloween"][data-event-theme] .person-picker.person-picker-selected {
+    --tw-ring-color: #ff975a !important;
+    box-shadow: 0 0 0 2px #25282c, 0 0 0 5px var(--tw-ring-color) !important;
+}
+html[data-event-theme="halloween"][data-event-theme] .person-picker:focus-visible {
+    outline: 2px solid #ffb17d;
+    outline-offset: 7px;
+}
