@@ -3790,10 +3790,10 @@ function calendarTaskBarStyle(sectionMonth, cell, task) {
 
 function taskTypeClass(type) {
     return {
-        meeting: 'border-violet-200 bg-violet-50 text-violet-800',
-        ongoing: 'border-amber-200 bg-amber-50 text-amber-800',
-        project: 'border-blue-200 bg-blue-50 text-blue-800',
-        task: 'border-blue-200 bg-blue-50 text-blue-800',
+        meeting: 'task-tone task-tone-meeting border-violet-200 bg-violet-50 text-violet-800',
+        ongoing: 'task-tone task-tone-ongoing border-amber-200 bg-amber-50 text-amber-800',
+        project: 'task-tone task-tone-project border-blue-200 bg-blue-50 text-blue-800',
+        task: 'task-tone task-tone-project border-blue-200 bg-blue-50 text-blue-800',
     }[type || 'task'] || 'border-gray-200 bg-gray-50 text-gray-800';
 }
 
@@ -5828,8 +5828,8 @@ function calendarDayStyle(sectionMonth, cell) {
                     <AppSelect v-model="taskPriority" :options="taskPriorityOptions" />
                     <AppSelect v-model="taskType" :options="taskTypeOptions" />
                     <button v-if="canCreate" type="button" class="btn btn-primary" @click="openCreate({ task_type: 'project' })"><Briefcase class="h-4 w-4" :stroke-width="1.7" />Task</button>
-                    <button v-if="canCreate" type="button" class="btn border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100" @click="openCreate({ task_type: 'ongoing' })"><RefreshCw class="h-4 w-4" :stroke-width="1.7" />Continuativa</button>
-                    <button v-if="canCreate" type="button" class="btn border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100" @click="openCreate({ task_type: 'meeting', due_time: '09:00' })"><CalendarClock class="h-4 w-4" :stroke-width="1.7" />Meeting</button>
+                    <button v-if="canCreate" type="button" class="btn task-tone task-tone-ongoing border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100" @click="openCreate({ task_type: 'ongoing' })"><RefreshCw class="h-4 w-4" :stroke-width="1.7" />Continuativa</button>
+                    <button v-if="canCreate" type="button" class="btn task-tone task-tone-meeting border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100" @click="openCreate({ task_type: 'meeting', due_time: '09:00' })"><CalendarClock class="h-4 w-4" :stroke-width="1.7" />Meeting</button>
                 </div>
 
                 <div class="grid gap-4">

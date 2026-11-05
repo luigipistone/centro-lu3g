@@ -248,14 +248,14 @@ html[data-event-theme="halloween"] #app .desktop-shell > header :is(h1,h2) {
 html[data-event-theme="halloween"] #app :is(.section-title,.surface h3,.app-card h3) { font-size: 22px; }
 html[data-event-theme="halloween"] #app .tool-card-title { font-size: 23px; }
 html[data-event-theme="halloween"] #app .season-widget-title {
-    font-size: 22px;
+    font-size: 18px;
     white-space: normal;
     overflow: visible;
     text-overflow: clip;
-    overflow-wrap: anywhere;
+    overflow-wrap: normal;
     text-wrap: pretty;
 }
-html[data-event-theme="halloween"] #app [data-widget-type="clock_date"] .season-widget-title { font-size: 19px; }
+html[data-event-theme="halloween"] #app [data-widget-type="clock_date"] .season-widget-title { font-size: 18px; }
 html[data-event-theme="halloween"] #app :is(.widget-value,.widget-clock-face strong) { font-variant-numeric: tabular-nums; }
 @media (max-width: 639px) {
     html[data-event-theme="halloween"] #app .desktop-shell > header :is(h1,h2) { font-size: 32px; }
@@ -410,4 +410,83 @@ html[data-event-theme="halloween"][data-event-theme] input:is([type="checkbox"],
 }
 html[data-event-theme="halloween"][data-event-theme] :is(input,textarea)::placeholder {
     color: #a9a6a1 !important;
+}
+
+/* Explicit semantic surfaces also cover inline project colors and task variants. */
+html[data-event-theme="halloween"][data-event-theme] #app .related-project-card {
+    background: #332c27 !important;
+    color: #f5f1e9 !important;
+    border-color: #8b5738 !important;
+}
+html[data-event-theme="halloween"][data-event-theme] #app .related-project-card > span { color: #f5f1e9 !important; }
+html[data-event-theme="halloween"][data-event-theme] #app .related-project-card > .text-xs { color: #d7c4b7 !important; }
+html[data-event-theme="halloween"][data-event-theme] #app .task-tone-project { --task-surface: #443024; --task-ink: #ffe2cd; --task-edge: #d7814d; }
+html[data-event-theme="halloween"][data-event-theme] #app .task-tone-ongoing { --task-surface: #3b361f; --task-ink: #ffedaf; --task-edge: #bca04c; }
+html[data-event-theme="halloween"][data-event-theme] #app .task-tone-meeting { --task-surface: #442b2d; --task-ink: #ffd9d5; --task-edge: #c97870; }
+html[data-event-theme="halloween"][data-event-theme] #app .task-tone {
+    background: var(--task-surface) !important;
+    color: var(--task-ink) !important;
+    border-color: var(--task-edge) !important;
+}
+html[data-event-theme="halloween"][data-event-theme] #app .task-tone :is(h4,.text-gray-900,.text-gray-800,.text-gray-700,.text-gray-600,.text-gray-500,.text-gray-400) {
+    color: var(--task-ink) !important;
+}
+html[data-event-theme="halloween"][data-event-theme] #app .task-tone .bg-gray-100 { background: #25282c !important; }
+html[data-event-theme="halloween"][data-event-theme] #app .widget-card[data-widget-type="notes"] {
+    background: #25282c !important;
+    border-color: #454343 !important;
+}
+html[data-event-theme="halloween"][data-event-theme] #app [data-widget-type="notes"] :is(.season-widget-title,.text-gray-900,.text-gray-700) { color: #f5f1e9 !important; }
+html[data-event-theme="halloween"][data-event-theme] #app [data-widget-type="notes"] :is(.text-gray-500,.icon-btn) { color: #d0c5b9 !important; }
+html[data-event-theme="halloween"][data-event-theme] #app .notes-editor-toolbar { background: #34302c !important; border-color: #635044 !important; box-shadow: none; }
+html[data-event-theme="halloween"][data-event-theme] #app .notes-editor-toolbar button { color: #ffe2cd !important; }
+html[data-event-theme="halloween"][data-event-theme] #app .notes-editor-toolbar button:hover { background: #59402d !important; }
+html[data-event-theme="halloween"] #app .widget-heading { gap: 8px; padding-right: 0; }
+html[data-event-theme="halloween"] #app .widget-heading > span:first-child { gap: 8px; }
+html[data-event-theme="halloween"] #app .widget-heading .metric-icon {
+    flex-shrink: 0;
+    border: 1px solid #ad663a;
+    border-radius: 12px 5px 12px 5px;
+    box-shadow: inset 0 0 10px #ff7b321a;
+}
+html[data-event-theme="halloween"] #app .widget-heading .metric-icon svg { filter: drop-shadow(0 0 3px #ff7b3240); }
+html[data-event-theme="halloween"] #app [data-season-accent] .widget-heading .metric-icon { border-color: #653014; box-shadow: none; }
+
+/* Brand controls must not inherit the default blue gradient or selection rings. */
+html[data-event-theme="halloween"][data-event-theme] :is(.btn-primary,.settings-tab-active) {
+    background: #ff7b32 !important;
+    color: #25170d !important;
+    border-color: #ff975a !important;
+    box-shadow: 0 4px 12px #0003, inset 0 1px #ffb47f !important;
+}
+html[data-event-theme="halloween"][data-event-theme] .btn-primary:hover { background: #ff975a !important; }
+html[data-event-theme="halloween"][data-event-theme] :is([class*="ring-indigo-"],[class*="ring-blue-"],[class*="ring-sky-"],[class*="ring-cyan-"]) {
+    --tw-ring-color: #ff975a !important;
+    --tw-ring-offset-color: #25282c !important;
+}
+html[data-event-theme="halloween"][data-event-theme] :is(.border-blue-600,.border-indigo-500,.border-blue-500,.border-sky-500) { border-color: #ff975a !important; }
+html[data-event-theme="halloween"][data-event-theme] :is(.bg-blue-600,.bg-blue-500,.bg-indigo-600,.bg-indigo-500,.bg-sky-600,.bg-cyan-600) {
+    background: #ff7b32 !important;
+    color: #25170d !important;
+}
+html[data-event-theme="halloween"][data-event-theme] :is(.text-blue-500,.text-blue-600,.text-blue-700,.text-blue-800,.text-blue-900,.text-sky-500,.text-sky-600,.text-sky-700,.text-cyan-600) { color: #ffb17d !important; }
+html[data-event-theme="halloween"][data-event-theme] :is(.bg-blue-50,.bg-blue-100,.bg-sky-50,.bg-sky-100,.bg-cyan-50) {
+    background: #403027 !important;
+    color: #ffdbbe !important;
+    border-color: #8b5738 !important;
+}
+html[data-event-theme="halloween"][data-event-theme] .wysiwyg-content {
+    background: #202225 !important;
+    color: #f5f1e9 !important;
+}
+/* Pasted HTML can contain inline foregrounds and white fills. Keep formatting, not incompatible colors. */
+html[data-event-theme="halloween"][data-event-theme] :is(.wysiwyg-content,[data-widget-type="notes"] [contenteditable]) :is(p,span,div,font,h1,h2,h3,h4,h5,h6,li,td,th,strong,em,b,i,blockquote,pre,code) {
+    color: inherit !important;
+    background: transparent !important;
+}
+html[data-event-theme="halloween"][data-event-theme] .wysiwyg-content a { color: #ffb17d !important; }
+html[data-event-theme="halloween"][data-event-theme] #app .btn .document-tab-count {
+    background: #25282c !important;
+    color: #ffe2cd !important;
+    box-shadow: inset 0 0 0 1px #80614a;
 }

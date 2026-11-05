@@ -5753,6 +5753,7 @@ onUnmounted(() => {
                                 :style="name === 'projects' ? relatedProjectStyle(item) : undefined"
                                 :class="[
                                     'group/item block rounded-md border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm transition duration-200',
+                                    name === 'projects' ? 'related-project-card' : '',
                                     canOpenRelatedItem(name) ? 'hover:-translate-y-0.5 hover:border-indigo-100 hover:bg-white hover:shadow-[0_12px_28px_rgba(28,42,73,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200' : '',
                                 ]"
                             >

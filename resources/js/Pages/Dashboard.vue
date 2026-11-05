@@ -1141,7 +1141,7 @@ watch(
                         </div>
 
                         <div v-if="metaFor(widget).kind === 'note'" class="flex flex-1 flex-col gap-3 pr-3">
-                            <div class="flex flex-wrap items-center gap-1 rounded-2xl border border-gray-100 bg-white/90 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">
+                            <div class="notes-editor-toolbar flex flex-wrap items-center gap-1 rounded-2xl border border-gray-100 bg-white/90 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">
                                 <button
                                     v-for="[command, icon, label] in noteToolbar"
                                     :key="command"

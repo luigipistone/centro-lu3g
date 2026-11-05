@@ -488,7 +488,7 @@ function deleteLabel(type) {
                         >
                             <FileText class="h-4 w-4" :stroke-width="1.7" />
                             I miei documenti
-                            <span class="rounded-full bg-white/20 px-2 py-0.5 text-xs">{{ visibleDocuments.length }}</span>
+                            <span class="document-tab-count rounded-full bg-white/20 px-2 py-0.5 text-xs">{{ visibleDocuments.length }}</span>
                         </Link>
                         <Link v-if="canViewMessages"
                             :href="route('documents.messages')"
@@ -496,7 +496,7 @@ function deleteLabel(type) {
                         >
                             <MessageSquare class="h-4 w-4" :stroke-width="1.7" />
                             Tutti i messaggi
-                            <span class="rounded-full bg-white/20 px-2 py-0.5 text-xs">{{ visibleMessages.length }}</span>
+                            <span class="document-tab-count rounded-full bg-white/20 px-2 py-0.5 text-xs">{{ visibleMessages.length }}</span>
                         </Link>
                         <Link v-if="canViewGroups"
                             :href="route('documents.groups')"
@@ -504,7 +504,7 @@ function deleteLabel(type) {
                         >
                             <Users class="h-4 w-4" :stroke-width="1.7" />
                             Gruppi
-                            <span class="rounded-full bg-white/20 px-2 py-0.5 text-xs">{{ groups.length }}</span>
+                            <span class="document-tab-count rounded-full bg-white/20 px-2 py-0.5 text-xs">{{ groups.length }}</span>
                         </Link>
                     </div>
                     <div v-if="activeAdminSection === 'documents'" class="flex items-center gap-2">
