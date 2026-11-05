@@ -91,6 +91,10 @@ try {
                 return c && (c[3]??1)>.5 && c.slice(0,3).every(v=>v>180);
             }).map(el=>el.className));
             assert.deepEqual(lightPanels,[],`${route}: light panels in ${theme} theme`);
+            const expectedFont = theme === 'pasqua' ? 'Centro Easter' : 'Centro Christmas';
+            const incorrectFonts = await page.locator('.desktop-shell > header h1,.desktop-shell > header h2,.season-widget-title,.section-title,.surface h3,.app-card h3,.tool-card-title,.password-dialog-panel h3,.password-drawer-panel h3').evaluateAll((els,font)=>els.filter(el=>el.getClientRects().length && !getComputedStyle(el).fontFamily.includes(font)).map(el=>el.textContent),expectedFont);
+            assert.deepEqual(incorrectFonts,[],`${route}: seasonal heading fonts at ${width}`);
+            assert(await page.evaluate(font=>document.fonts.check(`18px "${font}"`),expectedFont),'Seasonal font loaded');
             await page.screenshot({ path: `${output}/${route}-${width}.png`, fullPage: true, animations: 'disabled' });
             if (width >= 1024) {
                 const geometry = await page.evaluate(() => ['.desktop-shell','.desktop-shell > header','.desktop-sidebar','.app-shell'].map(s=>{const e=document.querySelector(s),c=getComputedStyle(e);return {s,rect:e.getBoundingClientRect().toJSON(),padding:c.paddingLeft,margin:c.marginLeft,transform:c.transform,scroll:e.scrollLeft};}));

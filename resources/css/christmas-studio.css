@@ -31,16 +31,27 @@ html[data-event-theme="natale"] #app .desktop-shell > header {
     color: #fff5f7;
 }
 html[data-event-theme="natale"] #app .desktop-shell > header :is(h1,h2,p,.icon-btn,.text-gray-500,.text-gray-800) { color: #fff5f7 !important; }
-html[data-event-theme="natale"] #app :is(.desktop-shell > header h1,.desktop-shell > header h2,.section-title,.surface h3,.tool-card-title,.season-widget-title) {
-    font-family: 'Centro Display', sans-serif;
-    font-weight: 700;
+@font-face {
+    font-family: 'Centro Christmas';
+    src: url('/fonts/berkshire-swash-regular.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+html[data-event-theme="natale"] #app :is(.desktop-shell > header h1,.desktop-shell > header h2,.section-title,.surface h3,.app-card h3,.tool-card-title,.season-widget-title),
+html[data-event-theme="natale"] :is(.password-dialog-panel,.password-drawer-panel) h3 {
+    font-family: 'Centro Christmas', Georgia, serif;
+    font-weight: 400;
+    font-synthesis: none;
+    text-wrap: balance;
     letter-spacing: 0;
-    line-height: 1.15;
+    line-height: 1.25;
     text-transform: none;
 }
 html[data-event-theme="natale"] #app .desktop-shell > header :is(h1,h2) { font-size: 36px; overflow-wrap: anywhere; }
-html[data-event-theme="natale"] #app :is(.section-title,.surface h3,.tool-card-title) { font-size: 23px; }
-html[data-event-theme="natale"] #app .season-widget-title { font-size: 20px; white-space: normal; overflow-wrap: normal; }
+html[data-event-theme="natale"] #app :is(.section-title,.surface h3,.app-card h3,.tool-card-title) { font-size: 22px; }
+html[data-event-theme="natale"] #app .season-widget-title { font-size: 18px; white-space: normal; overflow-wrap: normal; overflow: visible; text-overflow: clip; text-wrap: pretty; }
+html[data-event-theme="natale"] :is(.password-dialog-panel,.password-drawer-panel) h3 { font-size: 24px; overflow-wrap: anywhere; min-width: 0; }
 html[data-event-theme="natale"] #app .widget-heading { gap: 8px; padding-right: 0; }
 html[data-event-theme="natale"] #app .widget-heading > span:first-child { gap: 8px; }
 html[data-event-theme="natale"] #app .widget-heading .metric-icon { flex-shrink: 0; width: 32px; height: 32px; border: 1px solid #e5b98266; border-radius: 8px; }

@@ -31,16 +31,27 @@ html[data-event-theme="pasqua"] #app .desktop-shell > header {
     color: #f5f8ee;
 }
 html[data-event-theme="pasqua"] #app .desktop-shell > header :is(h1,h2,p,.icon-btn,.text-gray-500,.text-gray-800) { color: #f5f8ee !important; }
-html[data-event-theme="pasqua"] #app :is(.desktop-shell > header h1,.desktop-shell > header h2,.section-title,.surface h3,.tool-card-title,.season-widget-title) {
-    font-family: 'Centro Display', sans-serif;
-    font-weight: 700;
+@font-face {
+    font-family: 'Centro Easter';
+    src: url('/fonts/kurale-regular.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+html[data-event-theme="pasqua"] #app :is(.desktop-shell > header h1,.desktop-shell > header h2,.section-title,.surface h3,.app-card h3,.tool-card-title,.season-widget-title),
+html[data-event-theme="pasqua"] :is(.password-dialog-panel,.password-drawer-panel) h3 {
+    font-family: 'Centro Easter', Georgia, serif;
+    font-weight: 400;
+    font-synthesis: none;
+    text-wrap: balance;
     letter-spacing: 0;
-    line-height: 1.15;
+    line-height: 1.25;
     text-transform: none;
 }
 html[data-event-theme="pasqua"] #app .desktop-shell > header :is(h1,h2) { font-size: 36px; overflow-wrap: anywhere; }
-html[data-event-theme="pasqua"] #app :is(.section-title,.surface h3,.tool-card-title) { font-size: 23px; }
-html[data-event-theme="pasqua"] #app .season-widget-title { font-size: 20px; white-space: normal; overflow-wrap: normal; }
+html[data-event-theme="pasqua"] #app :is(.section-title,.surface h3,.app-card h3,.tool-card-title) { font-size: 22px; }
+html[data-event-theme="pasqua"] #app .season-widget-title { font-size: 18px; white-space: normal; overflow-wrap: normal; overflow: visible; text-overflow: clip; text-wrap: pretty; }
+html[data-event-theme="pasqua"] :is(.password-dialog-panel,.password-drawer-panel) h3 { font-size: 24px; overflow-wrap: anywhere; min-width: 0; }
 html[data-event-theme="pasqua"] #app .widget-heading { gap: 8px; padding-right: 0; }
 html[data-event-theme="pasqua"] #app .widget-heading > span:first-child { gap: 8px; }
 html[data-event-theme="pasqua"] #app .widget-heading .metric-icon { flex-shrink: 0; width: 32px; height: 32px; border: 1px solid #e5b98266; border-radius: 8px; }
@@ -159,7 +170,5 @@ html[data-event-theme="pasqua"] #app :is(h1,h2,h3,h4,.section-title) + p:not(.wy
     html[data-event-theme="pasqua"] #app [data-widget-type="clock_date"] { min-height: 190px; }
 }
 
-html[data-event-theme="pasqua"] #app .desktop-shell > header :is(h1,h2) { font-family: 'Centro Seasonal',sans-serif; font-size: 42px; line-height: 1.05; }
 html[data-event-theme="pasqua"] #app .season-corner { width: 150px; height: 125px; opacity: .85; }
 html[data-event-theme="pasqua"] #app [data-widget-type="clock_date"] .season-object { width: 150px; height: 155px; right: -8px; }
-@media(max-width:639px) { html[data-event-theme="pasqua"] #app .desktop-shell > header :is(h1,h2) { font-size: 36px; } }
