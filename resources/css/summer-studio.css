@@ -1,0 +1,175 @@
+/* Marine surfaces, coral accents and sunlit details. Seasonal decoration never changes layout. */
+html[data-event-theme="estate"][data-event-theme] {
+    color-scheme: dark;
+    --background: 192 65% 14%;
+    --foreground: 174 56% 96%;
+    --card: 191 54% 21%;
+    --glass: 191 54% 21%;
+    --muted: 190 43% 28%;
+    --muted-foreground: 186 33% 82%;
+    --border-soft: 190 24% 42%;
+    --primary-app: 3 54% 46%;
+    --primary-app-dark: 3 55% 37%;
+    --primary-app-soft: 13 38% 28%;
+    --season-highlight: #b63e37;
+    --season-highlight-ink: #ffffff;
+    --season-deep: #123f49;
+    --season-deep-ink: #f1fbfa;
+    --season-sidebar: #09272f;
+    --season-sidebar-ink: #e4f8f6;
+    --season-canvas: #0c3039;
+    --season-working: #194954;
+    --season-working-border: #527e86;
+    --summer-title-ink: #f1fbfa;
+    color: #f1fbfa;
+}
+html[data-event-theme="estate"] #app .app-shell { background: #0c3039 !important; }
+html[data-event-theme="estate"] #app .desktop-sidebar { background: #09272f !important; border-right: 1px solid #35616a; }
+html[data-event-theme="estate"] #app .desktop-shell > header {
+    background: #123f49 !important;
+    border-color: #527e86 !important;
+    color: #f1fbfa;
+}
+html[data-event-theme="estate"] #app .desktop-shell > header :is(h1,h2,p,.icon-btn,.text-gray-500,.text-gray-800) { color: #f1fbfa !important; }
+@font-face {
+    font-family: 'Centro Summer';
+    src: url('/fonts/baloo2-variable.ttf') format('truetype');
+    font-weight: 400 800;
+    font-style: normal;
+    font-display: swap;
+}
+html[data-event-theme="estate"] #app :is(.desktop-shell > header h1,.desktop-shell > header h2,.section-title,.surface h3,.app-card h3,.tool-card-title,.season-widget-title),
+html[data-event-theme="estate"] :is(.password-dialog-panel,.password-drawer-panel) h3 {
+    font-family: 'Centro Summer', sans-serif;
+    font-weight: 600;
+    font-synthesis: none;
+    text-wrap: balance;
+    letter-spacing: 0;
+    line-height: 1.25;
+    text-transform: none;
+}
+html[data-event-theme="estate"] #app .desktop-shell > header :is(h1,h2) { font-size: 36px; overflow-wrap: anywhere; }
+html[data-event-theme="estate"] #app :is(.section-title,.surface h3,.app-card h3,.tool-card-title) { font-size: 22px; }
+html[data-event-theme="estate"] #app .season-widget-title { font-size: 18px; white-space: normal; overflow-wrap: normal; overflow: visible; text-overflow: clip; text-wrap: pretty; }
+html[data-event-theme="estate"] :is(.password-dialog-panel,.password-drawer-panel) h3 { font-size: 24px; overflow-wrap: anywhere; min-width: 0; }
+html[data-event-theme="estate"] #app .widget-heading { gap: 8px; padding-right: 0; }
+html[data-event-theme="estate"] #app .widget-heading > span:first-child { gap: 8px; }
+html[data-event-theme="estate"] #app .widget-heading .metric-icon { flex-shrink: 0; width: 32px; height: 32px; border: 1px solid #e5b98266; border-radius: 8px; }
+html[data-event-theme="estate"] #app .widget-card:not([data-widget-type="weather"]):not([data-widget-type="notes"]) {
+    background: #123f49 !important;
+    border: 1px solid #648b93 !important;
+    --season-widget-ink: #f1fbfa;
+    box-shadow: inset 0 1px #ffffff16, 0 8px 24px #05252d30;
+}
+html[data-event-theme="estate"] #app .widget-card[data-season-accent]:not([data-widget-type="weather"]):not([data-widget-type="notes"]) {
+    background: #b63e37 !important;
+    border-color: #f5a294 !important;
+}
+html[data-event-theme="estate"] #app .widget-card[data-widget-type="notes"] { background: #194954 !important; border-color: #527e86 !important; }
+html[data-event-theme="estate"] #app [data-widget-type="notes"] :is(.season-widget-title,.text-gray-800,.text-gray-900) { color: #f1fbfa !important; }
+html[data-event-theme="estate"] #app [data-widget-type="notes"] :is(.text-gray-500,.icon-btn) { color: #c3dfe2 !important; }
+html[data-event-theme="estate"] #app .notes-editor-toolbar { background: #285b65 !important; border-color: #527e86 !important; }
+html[data-event-theme="estate"] #app .notes-editor-toolbar button { color: #f1fbfa !important; }
+html[data-event-theme="estate"] #app .widget-card .metric-icon { background: #ffffff12 !important; color: #ffe18b !important; box-shadow: none; }
+html[data-event-theme="estate"] #app [data-widget-type="notes"] .metric-icon { background: #285b65 !important; color: #ffe18b !important; }
+html[data-event-theme="estate"] #app [data-widget-kind="stat"] .widget-value { position: absolute; right: 20px; bottom: 16px; font: 700 56px/1 'Centro Display',sans-serif; }
+html[data-event-theme="estate"] #app [data-widget-type="clock_date"] .widget-heading { position: static; }
+html[data-event-theme="estate"] #app [data-widget-type="clock_date"] .season-object { position: absolute; right: -12px; bottom: -5px; width: 130px; height: 145px; }
+html[data-event-theme="estate"] #app .widget-clock-face { position: relative; z-index: 2; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 7px; width: 60%; padding: 0; pointer-events: none; }
+html[data-event-theme="estate"] #app .widget-clock-face strong { font: 700 40px/1 'Centro Display',sans-serif; color: #ffe18b !important; }
+html[data-event-theme="estate"] #app .widget-clock-face span { max-width: none; text-align: left; font-size: 11px; }
+html[data-event-theme="estate"] #app .season-corner { width: 135px; height: 112px; opacity: .65; z-index: 0; }
+html[data-event-theme="estate"] #app .widget-data-list { position: relative; z-index: 1; }
+html[data-event-theme="estate"] #app [data-widget-type="quick_links"] a { background: #ffffff10 !important; border-color: #648b93 !important; }
+html[data-event-theme="estate"] #app .toolbar { color: #cce9eb; box-shadow: none; }
+html[data-event-theme="estate"] #app :is(.surface,.app-card):not(.widget-card) { background: #194954 !important; border-color: #527e86 !important; box-shadow: 0 8px 24px #05252d20; }
+html[data-event-theme="estate"] #app .web-repositories-card.surface { background: #b63e37 !important; color: #fff !important; }
+html[data-event-theme="estate"] #app .web-repositories-card.surface :is(span,svg,p) { color: #fff !important; }
+html[data-event-theme="estate"] :is(.app-popover,.field-dropdown-menu,[role="dialog"],.password-dialog-panel,.password-drawer-panel) { background: #194954 !important; color: #f1fbfa; border-color: #527e86 !important; }
+html[data-event-theme="estate"] :is(.form-control,textarea,select,[contenteditable="true"],input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"])) { background: #194954 !important; color: #f1fbfa !important; border-color: #729aa1 !important; caret-color: #b63e37; }
+html[data-event-theme="estate"] .wysiwyg-content { background: #194954 !important; color: #f1fbfa !important; }
+html[data-event-theme="estate"] :is(.wysiwyg-content,[data-widget-type="notes"] [contenteditable]) :is(p,span,div,font,h1,h2,h3,h4,li,td,th,strong,em,b,i,blockquote,pre,code) { color: inherit !important; background: transparent !important; }
+html[data-event-theme="estate"] .wysiwyg-content a { color: #ffc2a9 !important; }
+html[data-event-theme="estate"] :is(input,textarea)::placeholder { color: #b7d8dc !important; }
+html[data-event-theme="estate"] :is(.btn-primary,.settings-tab-active) { background: #b63e37 !important; color: #fff !important; border-color: #b63e37 !important; box-shadow: 0 4px 12px #12343c26; }
+html[data-event-theme="estate"] :is(.btn-primary,.settings-tab-active) :is(span,svg) { color: inherit !important; }
+html[data-event-theme="estate"] .btn-primary:hover { background: #94302b !important; }
+html[data-event-theme="estate"] :is(.btn-outline,.btn-ghost,.icon-btn):not(.widget-card *, .desktop-sidebar *) { background: #285b65 !important; color: #f1fbfa !important; border-color: #729aa1 !important; box-shadow: none; }
+html[data-event-theme="estate"] :is(.btn-outline,.btn-ghost,.icon-btn):hover:not(.widget-card *, .desktop-sidebar *) { background: #376e79 !important; }
+html[data-event-theme="estate"] #app .desktop-shell > header .icon-btn { background: #285b65 !important; color: #f1fbfa !important; border-color: #729aa1 !important; }
+html[data-event-theme="estate"] .brand-mark { background: #b63e37 !important; }
+html[data-event-theme="estate"] .brand-mark .brand-logo-image { filter: brightness(0) invert(1); }
+html[data-event-theme="estate"] :is(.metric-icon,.section-title > span):not(.widget-card *) { background: #285b65 !important; color: #ffc2a9 !important; box-shadow: none; }
+html[data-event-theme="estate"] :is([class*="ring-indigo-"],[class*="ring-blue-"],[class*="ring-sky-"],[class*="ring-cyan-"]) { --tw-ring-color: #b63e37 !important; --tw-ring-offset-color: #194954 !important; }
+html[data-event-theme="estate"] :is(.text-indigo-500,.text-indigo-600,.text-indigo-700,.text-indigo-800,.text-blue-500,.text-blue-600,.text-blue-700,.text-blue-800,.text-sky-600,.text-sky-700,.text-cyan-600):not(.widget-card *) { color: #ffc2a9 !important; }
+html[data-event-theme="estate"] :is(.bg-indigo-50,.bg-indigo-100,.bg-blue-50,.bg-blue-100,.bg-sky-50,[class*="bg-indigo-50/"],[class*="bg-blue-50/"]):not(.widget-card *) { background: #285b65 !important; }
+html[data-event-theme="estate"] :is(.bg-blue-600,.bg-indigo-600,.bg-indigo-500,.bg-blue-500) { background: #b63e37 !important; color: #fff !important; }
+html[data-event-theme="estate"] :is(.border-blue-600,.border-indigo-500,.border-blue-500,.border-indigo-200,.border-blue-200) { border-color: #b63e37 !important; }
+html[data-event-theme="estate"] :is(button,a,input,textarea,select,[tabindex]):focus-visible { outline: 2px solid #ffd293; outline-offset: 3px; }
+html[data-event-theme="estate"] .person-picker:not(.person-picker-selected) { --tw-ring-color: #b63e373d !important; box-shadow: 0 0 0 1px var(--tw-ring-color) !important; }
+html[data-event-theme="estate"] .person-picker:not(.person-picker-selected):hover { --tw-ring-color: #b63e3780 !important; }
+html[data-event-theme="estate"] .person-picker.person-picker-selected { box-shadow: 0 0 0 2px #194954,0 0 0 5px #b63e37 !important; }
+html[data-event-theme="estate"] .person-picker:focus-visible { outline-offset: 7px; }
+html[data-event-theme="estate"] .notification-switch-track { background: #55747b !important; }
+html[data-event-theme="estate"] input:checked + .notification-switch-track { background: #b63e37 !important; }
+html[data-event-theme="estate"] .notification-switch-track > span { background: #fff !important; }
+html[data-event-theme="estate"] input:is([type="checkbox"],[type="radio"]) { accent-color: #b63e37; }
+html[data-event-theme="estate"] #app .related-project-card { background: #285b65 !important; color: #f1fbfa !important; border-color: #729aa1 !important; }
+html[data-event-theme="estate"] #app .related-project-card > span { color: #f1fbfa !important; }
+html[data-event-theme="estate"] #app .task-tone-project { --task-bg: #123f49; --task-ink: #ccf5f4; --task-border: #65bcbf; }
+html[data-event-theme="estate"] #app .task-tone-ongoing { --task-bg: #51401f; --task-ink: #ffe18b; --task-border: #b69246; }
+html[data-event-theme="estate"] #app .task-tone-meeting { --task-bg: #63342c; --task-ink: #ffe0ce; --task-border: #cd8d72; }
+html[data-event-theme="estate"] #app .task-tone { background: var(--task-bg) !important; color: var(--task-ink) !important; border-color: var(--task-border) !important; }
+html[data-event-theme="estate"] #app .task-tone :is(h4,.text-gray-900,.text-gray-800,.text-gray-600,.text-gray-500) { color: var(--task-ink) !important; }
+html[data-event-theme="estate"] #app .btn .document-tab-count { background: #123f49 !important; color: #fff !important; }
+html[data-event-theme="estate"] .password-reveal-row { background: #285b65 !important; border-color: #729aa1 !important; }
+html[data-event-theme="estate"] .password-reveal-row:hover { background: #376e79 !important; }
+html[data-event-theme="estate"] .field-dropdown-option:hover { background: #285b65 !important; }
+html[data-event-theme="estate"] .event-theme-choice[data-season-choice="estate"],
+.event-theme-choice[data-season-choice="estate"] { background: #b63e37 !important; color: #fff !important; }
+/* Standard neutral surfaces must not fall back to the light appearance. */
+html[data-event-theme="estate"] [class~="text-[hsl(var(--primary-app))]"]:not(.btn-primary,.btn-primary *) { color: #ffc2a9 !important; }
+html[data-event-theme="estate"] [class~="bg-[hsl(var(--primary-app)/0.10)]"] { background: #285b65 !important; }
+html[data-event-theme="estate"][data-event-theme] :is(.bg-white,[class^="bg-white/"],[class*=" bg-white/"],.bg-gray-50,.bg-gray-100,[class^="bg-gray-50/"],[class*=" bg-gray-50/"]):not(.notification-switch-track *,[style*="background"],.project-preview-card,.project-preview-card *) {
+    background: #194954 !important;
+    border-color: #527e86 !important;
+}
+html[data-event-theme="estate"][data-event-theme] :is(.text-gray-950,.text-gray-900,.text-gray-800,.text-gray-700):not([style*="background"],.project-preview-card *, .task-tone *) { color: #f1fbfa !important; }
+html[data-event-theme="estate"][data-event-theme] :is(.text-gray-600,.text-gray-500,.text-gray-400):not([style*="background"],.project-preview-card *, .task-tone *) { color: #c3dfe2 !important; }
+html[data-event-theme="estate"][data-event-theme] :is([class*="hover:bg-white"],[class*="hover:bg-gray-50"],[class*="hover:bg-gray-100"]):hover:not([style*="background"],.project-preview-card *) { background: #376e79 !important; }
+html[data-event-theme="estate"] :is(.password-reveal-summary,.password-drawer-panel header,.password-drawer-panel footer) { background: #194954 !important; color: #f1fbfa; }
+html[data-event-theme="estate"] :is(.border-gray-100,.border-gray-200,[class*="border-white/"]) { border-color: #527e86 !important; }
+/* Status notices keep their semantic colors, without pale panels. */
+html[data-event-theme="estate"] :is(.bg-red-50,.bg-red-100) { background: #702032 !important; }
+html[data-event-theme="estate"] :is(.text-red-500,.text-red-600,.text-red-700,.text-red-800) { color: #ffb5c3 !important; }
+html[data-event-theme="estate"] :is(.bg-amber-50,.bg-amber-100,.bg-yellow-50,.bg-yellow-100) { background: #51401f !important; }
+html[data-event-theme="estate"] :is(.text-amber-600,.text-amber-700,.text-amber-800,.text-yellow-700) { color: #ffe18b !important; }
+html[data-event-theme="estate"] :is(.bg-emerald-50,.bg-emerald-100,.bg-green-50,.bg-green-100) { background: #243e33 !important; }
+html[data-event-theme="estate"] :is(.text-emerald-600,.text-emerald-700,.text-green-600,.text-green-700) { color: #a8e7c5 !important; }
+/* Titles follow their nearest surface, including unframed section headings. */
+html[data-event-theme="estate"][data-event-theme] :is(.form-control,textarea,select,.wysiwyg-content,[contenteditable="true"],input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"])) {
+    background: #103740 !important;
+    color: #f1fbfa !important;
+    caret-color: #ffc2a9;
+}
+html[data-event-theme="estate"] :is(.surface,.app-card,.toolbar,.app-popover,.field-dropdown-menu,[role="dialog"],.password-dialog-panel,.password-drawer-panel,.wysiwyg-content,[contenteditable="true"],.bg-white,.bg-gray-50,.bg-gray-100,[class*="bg-white/"]) {
+    --summer-title-ink: #f1fbfa;
+}
+html[data-event-theme="estate"] :is(.desktop-shell > header,.desktop-sidebar,.web-repositories-card.surface,.widget-card:not([data-widget-type="weather"]):not([data-widget-type="notes"])) {
+    --summer-title-ink: #f1fbfa;
+}
+html[data-event-theme="estate"] .task-tone { --summer-title-ink: var(--task-ink); }
+html[data-event-theme="estate"] #app :is(h1,h2,h3,h4,h5,h6,.section-title,.tool-card-title,.season-widget-title):not(.wysiwyg-content *,[contenteditable="true"] *) {
+    color: var(--summer-title-ink) !important;
+}
+html[data-event-theme="estate"] #app :is(h1,h2,h3,h4,.section-title) + p:not(.wysiwyg-content *,[contenteditable="true"] *) {
+    color: var(--summer-title-ink) !important;
+}
+@media (max-width: 639px) {
+    html[data-event-theme="estate"] #app .desktop-shell > header :is(h1,h2) { font-size: 30px; }
+    html[data-event-theme="estate"] #app [data-widget-type="clock_date"] { min-height: 190px; }
+}
+
+html[data-event-theme="estate"] #app .season-corner { width: 150px; height: 125px; opacity: .85; }
+html[data-event-theme="estate"] #app [data-widget-type="clock_date"] .season-object { width: 150px; height: 155px; right: -8px; }
+html[data-event-theme="estate"]:has([role="dialog"],.password-drawer-panel,.password-dialog-panel) :is(.season-atmosphere,.season-fullscreen) { visibility: hidden; }

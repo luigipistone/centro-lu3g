@@ -1,5 +1,6 @@
 import { drawChristmasBulb, christmasWireHeight } from './christmasMotion';
 import { drawEasterBreeze } from './easterMotion';
+import { drawSummerAtmosphere } from './summerMotion';
 
 function curve(points, u) {
     const v = 1 - u;
@@ -81,9 +82,7 @@ export function drawSeasonAtmosphere(c, theme, milliseconds, w, h) {
     } else if (theme === 'pasqua') {
         drawEasterBreeze(c, milliseconds, w, h);
     } else if (theme === 'estate') {
-        c.translate(w - 58, 58); c.rotate(t / 25); c.strokeStyle = '#edae21'; c.lineWidth = 2; c.globalAlpha = .65;
-        for (let i = 0; i < 12; i++) { c.rotate(Math.PI / 6); c.beginPath(); c.moveTo(0, 28); c.lineTo(0, 36); c.stroke(); }
-        c.fillStyle = '#ffcc49'; c.beginPath(); c.arc(0, 0, 20, 0, Math.PI * 2); c.fill();
+        drawSummerAtmosphere(c, milliseconds, w, h);
     }
     c.restore();
 }

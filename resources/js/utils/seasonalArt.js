@@ -1,5 +1,6 @@
 import { drawChristmasBulb, drawChristmasStars } from './christmasMotion';
 import { drawEasterBranch, drawEasterEffect } from './easterMotion';
+import { drawSummerSun, drawSummerCorner, drawSummerEffect } from './summerMotion';
 
 export const seasonalThemes = ['halloween', 'natale', 'pasqua', 'estate'];
 export const isSeasonalTheme = (theme) => seasonalThemes.includes(theme);
@@ -58,10 +59,7 @@ export function drawSeasonObject(c, theme, time) {
         }
         ellipse(c,-21,-34,5,13,'#ffffff55');c.restore();
     } else if (theme === 'estate') {
-        c.save(); c.rotate(time / 18000); c.strokeStyle = '#e59009'; c.lineWidth = 4; c.lineCap = 'round';
-        for (let i = 0; i < 12; i++) { c.rotate(Math.PI / 6); c.beginPath(); c.moveTo(0, -52); c.lineTo(0, -66); c.stroke(); } c.restore();
-        ellipse(c, 0, 0, 38, 38, '#ffc33f');
-        for (let j = 0; j < 3; j++) { c.beginPath(); c.moveTo(-90, 47 + j * 13); for (let x = -90; x <= 90; x++) c.lineTo(x, 47 + j * 13 + Math.sin(x / 27 + time / 1400 + j) * 5); c.strokeStyle = ['#036e83', '#009db5', '#54ccce'][j]; c.lineWidth = 5; c.stroke(); }
+        drawSummerSun(c, time);
     }
     c.restore();
 }
@@ -89,7 +87,7 @@ export function drawSeasonCorner(c, theme, time) {
     } else if (theme === 'pasqua') {
         drawEasterBranch(c,time);
     } else {
-        for (let j = 0; j < 3; j++) { c.beginPath(); for (let x = 0; x <= 240; x++) c.lineTo(x, 168 + j * 12 + Math.sin(x / 25 + time / 1400) * 6); c.strokeStyle = colors[j]; c.lineWidth = 3; c.stroke(); }
+        drawSummerCorner(c, time);
     }
     c.restore();
 }
@@ -102,6 +100,8 @@ export function drawSeasonEffect(c, theme, progress, width, height, stars = []) 
         drawChristmasStars(c, progress, width, height, stars);
     } else if (theme === 'pasqua') {
         drawEasterEffect(c,progress,width,height,stars);
+    } else if (theme === 'estate') {
+        drawSummerEffect(c,progress,width,height,stars);
     } else if (theme === 'halloween') {
         const radius = Math.sin(progress * Math.PI) * Math.min(width * .5, 420);
         c.globalAlpha = Math.sin(progress * Math.PI) * .6; c.strokeStyle = '#d66e29'; c.lineWidth = 1;

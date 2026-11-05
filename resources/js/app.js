@@ -2,6 +2,7 @@ import '../css/app.css';
 import '../css/halloween-studio.css';
 import '../css/christmas-studio.css';
 import '../css/easter-studio.css';
+import '../css/summer-studio.css';
 import './bootstrap';
 
 import { createInertiaApp } from '@inertiajs/vue3';

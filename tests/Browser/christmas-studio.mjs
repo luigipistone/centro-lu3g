@@ -5,7 +5,7 @@ const browser = await chromium.launch();
 const page = await browser.newPage();
 const errors = [];
 const theme = process.env.SEASON_QA_THEME || 'natale';
-const output = theme === 'pasqua' ? '/tmp/easter-review' : '/tmp/christmas-review';
+const output = { pasqua: '/tmp/easter-review', estate: '/tmp/summer-review', natale: '/tmp/christmas-review' }[theme];
 page.on('pageerror', error => errors.push(error.message));
 await mkdir(output, { recursive: true });
 try {
@@ -75,7 +75,7 @@ try {
                 await page.getByRole('button',{name:'Notifiche',exact:true}).click();
                 assert(await page.locator('.notification-switch-track').count()>0);
                 const colors = await page.locator('.notification-switch-track').evaluateAll(els=>els.map(el=>getComputedStyle(el).backgroundColor));
-                const switchColors = theme === 'pasqua' ? ['rgb(168, 50, 101)','rgb(83, 109, 96)'] : ['rgb(182, 22, 54)','rgb(125, 87, 99)'];
+                const switchColors = { pasqua: ['rgb(168, 50, 101)','rgb(83, 109, 96)'], estate: ['rgb(182, 62, 55)','rgb(85, 116, 123)'], natale: ['rgb(182, 22, 54)','rgb(125, 87, 99)'] }[theme];
                 assert(colors.every(c=>switchColors.includes(c)),JSON.stringify(colors));
             }
             if (route === 'passwords') {
@@ -84,6 +84,7 @@ try {
                     c.setupState.openCreateItem();
                 });
                 await page.locator('.password-drawer-panel').waitFor();
+                if (theme === 'estate') assert.equal(await page.locator('.season-atmosphere').evaluate(el=>getComputedStyle(el).visibility),'hidden','Waves must not overlay dialog controls');
             }
             const lightPanels = await page.locator('.surface,.app-card,.toolbar,.password-drawer-panel,.form-control,[contenteditable="true"]').evaluateAll(els=>els.filter(el=>{
                 if(!el.getClientRects().length) return false;
@@ -91,7 +92,7 @@ try {
                 return c && (c[3]??1)>.5 && c.slice(0,3).every(v=>v>180);
             }).map(el=>el.className));
             assert.deepEqual(lightPanels,[],`${route}: light panels in ${theme} theme`);
-            const expectedFont = theme === 'pasqua' ? 'Centro Easter' : 'Centro Christmas';
+            const expectedFont = { pasqua: 'Centro Easter', estate: 'Centro Summer', natale: 'Centro Christmas' }[theme];
             const incorrectFonts = await page.locator('.desktop-shell > header h1,.desktop-shell > header h2,.season-widget-title,.section-title,.surface h3,.app-card h3,.tool-card-title,.password-dialog-panel h3,.password-drawer-panel h3').evaluateAll((els,font)=>els.filter(el=>el.getClientRects().length && !getComputedStyle(el).fontFamily.includes(font)).map(el=>el.textContent),expectedFont);
             assert.deepEqual(incorrectFonts,[],`${route}: seasonal heading fonts at ${width}`);
             assert(await page.evaluate(font=>document.fonts.check(`18px "${font}"`),expectedFont),'Seasonal font loaded');
