@@ -9,9 +9,9 @@ class ReportSyncPreview
 {
     public function fetch(): array
     {
-        $token = config('report_sync.token');
+        $token = app(ReportSettings::class)->token();
         if (! $token) {
-            throw new RuntimeException('Configura CENTRO_READ_TOKEN sul server.');
+            throw new RuntimeException('Configura il token nelle impostazioni LU3G Report.');
         }
         $clients = $ids = $cursors = [];
         $snapshot = null;

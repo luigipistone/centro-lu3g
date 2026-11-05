@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Services\ReportSyncPreview;
+use App\Services\ReportSettings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
 use Throwable;
 
@@ -21,7 +23,20 @@ class ReportSyncController extends Controller
     {
         $this->authorizeSuperadmin($request);
 
-        return Inertia::render('Centro/ReportSync', ['configured' => filled(config('report_sync.token'))]);
+        return Inertia::render('Centro/ReportSync', ['configured' => app(ReportSettings::class)->configured()]);
+    }
+
+    public function update(Request $request, ReportSettings $settings)
+    {
+        $this->authorizeSuperadmin($request);
+        $validator = Validator::make($request->only('token'), ['token' => ['required', 'string', 'max:4000', 'regex:/^\S+$/']]);
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422)
+                ->header('Cache-Control', 'private, no-store');
+        }
+        $settings->save($validator->validated()['token']);
+
+        return response()->json(['configured' => true])->header('Cache-Control', 'private, no-store');
     }
 
     public function preview(Request $request, ReportSyncPreview $preview)

@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Services\ReportSyncPreview;
+use App\Services\ReportSettings;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -28,6 +30,7 @@ class ReportSyncAccessTest extends TestCase
         foreach (['admin', 'editor', 'guest'] as $role) {
             $this->actingAs($this->actor($role))->get(route('settings.report.index'))->assertForbidden();
             $this->postJson(route('settings.report.preview'))->assertForbidden();
+            $this->putJson(route('settings.report.update'), ['token' => 'secret'])->assertForbidden();
         }
         $this->actingAs($this->actor('superadmin'))->get(route('settings.report.index'))
             ->assertInertia(fn (Assert $page) => $page->component('Centro/ReportSync')->where('configured', false));
@@ -54,5 +57,26 @@ class ReportSyncAccessTest extends TestCase
         });
         $this->actingAs($this->actor('superadmin'))->postJson(route('settings.report.preview'))
             ->assertStatus(422)->assertDontSee('secret-token');
+    }
+
+    public function test_token_is_encrypted_replaceable_and_never_returned(): void
+    {
+        config(['report_sync.token' => 'environment-fallback']);
+        $this->actingAs($this->actor('superadmin'));
+        $this->putJson(route('settings.report.update'), ['token' => 'test-secret'])
+            ->assertOk()->assertDontSee('test-secret');
+        $encrypted = DB::table('report_settings')->value('encrypted_token');
+        $this->assertNotSame('test-secret', $encrypted);
+        $this->assertSame('test-secret', Crypt::decryptString($encrypted));
+        $this->assertSame('test-secret', app(ReportSettings::class)->token());
+        $this->putJson(route('settings.report.update'), ['token' => 'replacement'])->assertOk();
+        $this->assertDatabaseCount('report_settings', 1);
+        $this->assertSame('replacement', app(ReportSettings::class)->token());
+        $invalid = $this->putJson(route('settings.report.update'), ['token' => '']);
+        $this->assertSame(422, $invalid->getStatusCode(), $invalid->getContent());
+        $this->assertSame('replacement', app(ReportSettings::class)->token());
+        $this->assertDatabaseCount('report_client_links', 0);
+        $this->get(route('settings.report.index'))->assertDontSee('replacement')
+            ->assertInertia(fn (Assert $page) => $page->where('configured', true));
     }
 }
