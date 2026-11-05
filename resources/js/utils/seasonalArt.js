@@ -3,7 +3,7 @@ export const isSeasonalTheme = (theme) => seasonalThemes.includes(theme);
 
 const palettes = {
     halloween: ['#ff792d', '#2b211b', '#ffd398'],
-    natale: ['#b52b36', '#174e3e', '#f4d58b'],
+    natale: ['#ce294b', '#a07849', '#ffe1a5'],
     pasqua: ['#dc7194', '#71a78a', '#f1d579'],
     estate: ['#008eaa', '#ffbd3b', '#ff7155'],
 };
@@ -31,12 +31,18 @@ export function drawSeasonObject(c, theme, time) {
     } else if (theme === 'natale') {
         c.strokeStyle = '#d1ae60'; c.lineWidth = 2; c.beginPath(); c.moveTo(0, -115); c.lineTo(0, -52); c.stroke();
         c.fillStyle = '#cba75a'; c.fillRect(-12, -55, 24, 13);
-        const fill = c.createLinearGradient(-48, -30, 48, 48);
-        fill.addColorStop(0, '#7f1226'); fill.addColorStop(.4, '#e65460'); fill.addColorStop(1, '#a51c31');
+        const fill = c.createRadialGradient(-20, -20, 3, 0, 5, 59);
+        fill.addColorStop(0, '#ff9caa'); fill.addColorStop(.25, '#ed4462'); fill.addColorStop(.65, '#b61636'); fill.addColorStop(1, '#610c21');
         ellipse(c, 0, 5, 48, 51, fill);
         c.strokeStyle = '#ffe3a1'; c.lineWidth = 3;
         for (const y of [-10, 6, 22]) { c.beginPath(); c.moveTo(-43, y); c.quadraticCurveTo(0, y + 26, 43, y); c.stroke(); }
-        ellipse(c, -19, -18, 8, 13, '#ffffff44');
+        ellipse(c, -19, -18, 5, 10, '#ffffff66');
+        c.strokeStyle = '#fff0cd'; c.lineWidth = 1;
+        for (let i = 0; i < 5; i++) {
+            c.save(); c.translate(-28 + i * 14, 28 - Math.sin(i) * 12); c.rotate(time / 7000 + i);
+            c.globalAlpha = .6 + .3 * Math.sin(time / 1300 + i);
+            c.beginPath(); c.moveTo(-3, 0); c.lineTo(3, 0); c.moveTo(0, -3); c.lineTo(0, 3); c.stroke(); c.restore();
+        }
     } else if (theme === 'pasqua') {
         c.save(); c.rotate(-.17); c.beginPath(); c.moveTo(0, -67); c.bezierCurveTo(48, -65, 76, 65, 0, 65); c.bezierCurveTo(-76, 65, -48, -65, 0, -67); c.closePath();
         const fill = c.createLinearGradient(-45, 0, 45, 0); fill.addColorStop(0, '#c9537c'); fill.addColorStop(.45, '#f9aec3'); fill.addColorStop(1, '#dc7898'); c.fillStyle = fill; c.fill(); c.clip();

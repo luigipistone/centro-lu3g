@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const theme = process.env.SEASON_QA_THEME || 'halloween';
 const browser = await chromium.launch();
 const page = await browser.newPage();
 const errors = [];
 page.on('pageerror', error => errors.push(error.message));
-await mkdir('/tmp/halloween-content', { recursive: true });
+await mkdir(`/tmp/${theme}-content`, { recursive: true });
 async function contrast(locator) {
     for (const result of await locator.evaluateAll(elements => elements.filter(el => el.getClientRects().length).map(el => {
         const lum = color => color.match(/[\d.]+/g).slice(0,3).map(Number).map(v => v / 255 <= .04045 ? v / 3294.6 : ((v / 255 + .055) / 1.055) ** 2.4).reduce((a,v,i) => a + v * [.2126,.7152,.0722][i],0);
@@ -21,10 +22,10 @@ try {
     await page.locator('#password').fill(process.env.SEASON_QA_PASSWORD);
     await page.getByRole('button', { name: 'Accedi', exact: true }).click();
     await page.waitForURL('**/dashboard');
-    await page.evaluate(async () => {
-        await window.axios.put('/settings/event-theme', { theme: 'halloween', scope: 'personal' }, { headers: { 'X-Inertia': 'true', 'X-Inertia-Version': JSON.parse(document.getElementById('app').dataset.page).version } });
+    await page.evaluate(async theme => {
+        await window.axios.put('/settings/event-theme', { theme, scope: 'personal' }, { headers: { 'X-Inertia': 'true', 'X-Inertia-Version': JSON.parse(document.getElementById('app').dataset.page).version } });
         await window.axios.patch('/dashboard/widgets', { widgets: ['notes','password_search','my_tasks','clock_date'].map((widget_type,position) => ({ widget_type, position, visible: true, col_span: 1 })) });
-    });
+    }, theme);
     for (const width of [1920,1440,390]) {
         await page.setViewportSize({ width, height: 1000 });
         await page.goto('http://127.0.0.1:8017/dashboard');
@@ -33,7 +34,7 @@ try {
         await contrast(page.locator('[data-widget-type="notes"] .season-widget-title'));
         const password = page.locator('[data-widget-type="password_search"] .season-widget-title');
         assert(await password.evaluate(el => el.getBoundingClientRect().height < 30 && el.scrollWidth <= el.clientWidth + 1), `Password heading wraps at ${width}`);
-        await page.screenshot({ path: `/tmp/halloween-content/dashboard-${width}.png` });
+        await page.screenshot({ path: `/tmp/${theme}-content/dashboard-${width}.png` });
         for (const route of ['tasks','calendar']) {
             await page.goto(`http://127.0.0.1:8017/${route}`);
             await page.waitForTimeout(1200);
@@ -52,7 +53,7 @@ try {
             await contrast(page.locator('.task-tone .text-gray-500'));
             const colors = await page.locator('.task-tone:not(button)').evaluateAll(els => els.map(el => getComputedStyle(el).backgroundColor));
             assert.equal(new Set(colors).size,3);
-            await page.screenshot({ path: `/tmp/halloween-content/${route}-${width}.png` });
+            await page.screenshot({ path: `/tmp/${theme}-content/${route}-${width}.png` });
         }
         await page.goto('http://127.0.0.1:8017/documents');
         await page.waitForTimeout(1200);
@@ -73,8 +74,8 @@ try {
         assert.equal(await fixture.locator('.btn-primary').evaluate(el => getComputedStyle(el).backgroundImage),'none');
         await fixture.locator('.btn-primary').hover();
         await contrast(fixture.locator('.btn-primary'));
-        assert.equal(await fixture.locator('.ring-2').evaluate(el => getComputedStyle(el).getPropertyValue('--tw-ring-color').trim()),'#ff975a');
-        await page.screenshot({ path: `/tmp/halloween-content/shared-${width}.png` });
+        assert.equal(await fixture.locator('.ring-2').evaluate(el => getComputedStyle(el).getPropertyValue('--tw-ring-color').trim()),theme === 'natale' ? '#b61636' : '#ff975a');
+        await page.screenshot({ path: `/tmp/${theme}-content/shared-${width}.png` });
     }
     assert.deepEqual(errors,[]);
     console.log('PASS: populated tasks/calendar, notes/password widgets, document counters, project/editor/button/selection contrast at 1920/1440/390');

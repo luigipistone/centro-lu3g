@@ -59,7 +59,7 @@ export function drawSeasonAtmosphere(c, theme, milliseconds, w, h) {
             bat(c, ...p, age * flight.wingSpeed + flight.phase, Math.atan2(b[1] - a[1], b[0] - a[0]), flight.size + Math.sin(u * 6) * .06, Math.sin(age * 1.2 + flight.phase) * .65, Math.sin(age * 1.8 + flight.phase) > .4);
         }
     } else if (theme === 'natale') {
-        c.strokeStyle = '#315b47'; c.lineWidth = 1.5;
+        c.strokeStyle = '#b58a55'; c.lineWidth = 1.2;
         c.beginPath(); c.moveTo(0, 8);
         for (let x = 0; x <= w; x += 4) c.lineTo(x, 8 + 13 * Math.sin(Math.PI * (x % 180) / 180));
         c.stroke();
@@ -70,11 +70,12 @@ export function drawSeasonAtmosphere(c, theme, milliseconds, w, h) {
             c.beginPath(); c.ellipse(x, y + 5, 2.5, 4, -.2, 0, Math.PI * 2); c.fill();
         }
         c.shadowBlur = 0;
-        for (let i = 0; i < (w < 600 ? 16 : 38); i++) {
-            const x = ((i * 131.7 + Math.sin(t * .35 + i) * 22) % w + w) % w;
-            const y = (i * 73 + t * (13 + i % 7)) % (h + 20) - 10;
-            c.globalAlpha = .25 + (i % 4) * .12; c.fillStyle = '#fff8eb';
-            c.beginPath(); c.arc(x, y, 1 + i % 3 * .6, 0, Math.PI * 2); c.fill();
+        for (let i = 0; i < (w < 600 ? 20 : 54); i++) {
+            const depth = (i % 5) / 4;
+            const x = ((i * 131.7 + Math.sin(t * (.17 + depth * .12) + i) * (18 + depth * 30) + t * 5) % w + w) % w;
+            const y = (i * 73 + t * (10 + depth * 18)) % (h + 20) - 10;
+            c.globalAlpha = .2 + depth * .45; c.fillStyle = '#fff8eb';
+            c.beginPath(); c.arc(x, y, .8 + depth * 1.8, 0, Math.PI * 2); c.fill();
         }
     } else if (theme === 'pasqua') {
         for (let i = 0; i < 12; i++) {
