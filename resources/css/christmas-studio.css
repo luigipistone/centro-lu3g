@@ -33,15 +33,17 @@ html[data-event-theme="natale"] #app .desktop-shell > header {
 html[data-event-theme="natale"] #app .desktop-shell > header :is(h1,h2,p,.icon-btn,.text-gray-500,.text-gray-800) { color: #fff5f7 !important; }
 @font-face {
     font-family: 'Centro Christmas';
-    src: url('/fonts/berkshire-swash-regular.ttf') format('truetype');
-    font-weight: 400;
+    src: url('/fonts/fraunces-variable.ttf') format('truetype');
+    font-weight: 100 900;
     font-style: normal;
     font-display: swap;
 }
 html[data-event-theme="natale"] #app :is(.desktop-shell > header h1,.desktop-shell > header h2,.section-title,.surface h3,.app-card h3,.tool-card-title,.season-widget-title),
 html[data-event-theme="natale"] :is(.password-dialog-panel,.password-drawer-panel) h3 {
     font-family: 'Centro Christmas', Georgia, serif;
-    font-weight: 400;
+    font-weight: 600;
+    font-optical-sizing: auto;
+    font-variation-settings: 'SOFT' 20, 'WONK' 0;
     font-synthesis: none;
     text-wrap: balance;
     letter-spacing: 0;
