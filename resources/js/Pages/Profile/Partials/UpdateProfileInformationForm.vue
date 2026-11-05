@@ -320,11 +320,11 @@ onUnmounted(() => {
                             <input
                                 v-model="form.notification_preferences[index][channel]"
                                 type="checkbox"
-                                class="sr-only"
+                                class="peer sr-only"
                             />
                             <span
-                                class="relative h-6 w-11 rounded-full transition"
-                                :class="form.notification_preferences[index][channel] ? 'bg-[var(--brand-primary,#3b82f6)]' : 'bg-gray-200'"
+                                class="notification-switch-track relative h-6 w-11 rounded-full transition peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[hsl(var(--primary-app))]"
+                                :class="form.notification_preferences[index][channel] ? 'bg-[hsl(var(--primary-app))]' : 'bg-gray-200'"
                             >
                                 <span
                                     class="absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow-sm transition"

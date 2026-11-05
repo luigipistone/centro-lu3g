@@ -507,3 +507,22 @@ html[data-event-theme="halloween"][data-event-theme] .person-picker:focus-visibl
     outline: 2px solid #ffb17d;
     outline-offset: 7px;
 }
+
+html[data-event-theme="halloween"] .brand-mark .brand-logo-image {
+    filter: brightness(0);
+    opacity: .88;
+}
+html[data-event-theme="halloween"][data-event-theme] .notification-switch-track {
+    background: #55504b !important;
+    box-shadow: inset 0 0 0 1px #81756b;
+}
+html[data-event-theme="halloween"][data-event-theme] input:checked + .notification-switch-track {
+    background: #ff7b32 !important;
+    box-shadow: inset 0 0 0 1px #ff975a;
+}
+html[data-event-theme="halloween"][data-event-theme] .notification-switch-track > span {
+    background: #f5f1e9 !important;
+}
+html[data-event-theme="halloween"][data-event-theme] input:checked + .notification-switch-track > span {
+    background: #25170d !important;
+}
