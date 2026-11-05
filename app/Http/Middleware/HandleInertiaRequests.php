@@ -60,7 +60,11 @@ class HandleInertiaRequests extends Middleware
             ],
             'notifications' => fn () => $user ? $this->notificationPayload($user->id, $role) : ['active' => 0, 'unread' => 0, 'latest' => []],
             'sectionVisibility' => fn () => $user ? app(SectionAvailabilityService::class)->statuses() : [],
-            'eventTheme' => fn () => $user ? app(EventThemeService::class)->current() : 'standard',
+            'eventTheme' => fn () => app(EventThemeService::class)->forUser($user?->id),
+            'eventThemeSettings' => fn () => $role === 'superadmin' ? [
+                'global' => app(EventThemeService::class)->current(),
+                'personal' => app(EventThemeService::class)->personal($user->id),
+            ] : null,
             'push' => [
                 'vapidPublicKey' => config('services.webpush.public_key'),
             ],

@@ -372,12 +372,16 @@ const eventThemeOptions = [
     { id: 'estate', label: 'Estate' },
 ];
 const selectedEventTheme = ref(page.props.eventTheme || 'standard');
+const eventThemeScope = ref('personal');
+const savedEventTheme = computed(() => eventThemeScope.value === 'personal' ? page.props.eventThemeSettings?.personal : page.props.eventThemeSettings?.global);
 const eventThemeSaving = ref(false);
-watch(() => page.props.eventTheme, (theme) => { selectedEventTheme.value = theme || 'standard'; });
+watch([eventThemeScope, () => page.props.eventThemeSettings], () => {
+    selectedEventTheme.value = savedEventTheme.value ?? page.props.eventThemeSettings?.global ?? 'standard';
+});
 
-function saveEventTheme() {
+function saveEventTheme(scope = eventThemeScope.value) {
     eventThemeSaving.value = true;
-    router.put(route('settings.event-theme.update'), { theme: selectedEventTheme.value }, {
+    router.put(route('settings.event-theme.update'), { theme: selectedEventTheme.value, scope }, {
         preserveScroll: true,
         onFinish: () => { eventThemeSaving.value = false; },
     });
@@ -6024,9 +6028,16 @@ function calendarDayStyle(sectionMonth, cell) {
                     <section v-if="isSuperadmin" class="app-card lg:col-span-2">
                         <div class="flex flex-wrap items-center justify-between gap-3">
                             <h3 class="section-title"><span class="section-icon"><WandSparkles class="h-4 w-4" :stroke-width="1.7" /></span>Tema evento</h3>
-                            <button type="button" class="btn btn-primary" :disabled="eventThemeSaving || selectedEventTheme === (page.props.eventTheme || 'standard')" @click="saveEventTheme">
+                            <button type="button" class="btn btn-primary" :disabled="eventThemeSaving || selectedEventTheme === savedEventTheme" @click="saveEventTheme()">
                                 <Save class="h-4 w-4" :stroke-width="1.7" />{{ selectedEventTheme === 'standard' ? 'Ripristina standard' : 'Applica tema' }}
                             </button>
+                        </div>
+                        <div class="mt-4 flex flex-wrap items-center gap-3">
+                            <div class="flex gap-1 rounded-[var(--radius-sm)] bg-gray-100 p-1" role="group" aria-label="Visibilità del tema">
+                                <button v-for="option in [{ value: 'personal', label: 'Solo per me' }, { value: 'global', label: 'Tutti gli utenti' }]" :key="option.value" type="button" :aria-pressed="eventThemeScope === option.value" :disabled="eventThemeSaving" :class="['settings-tab', eventThemeScope === option.value ? 'settings-tab-active' : '']" @click="eventThemeScope = option.value">{{ option.label }}</button>
+                            </div>
+                            <button v-if="page.props.eventThemeSettings?.personal !== null && page.props.eventThemeSettings?.personal !== undefined" type="button" class="btn btn-outline" :disabled="eventThemeSaving" @click="saveEventTheme('inherit')">Usa tema globale</button>
+                            <span class="text-sm text-gray-500">Globale: {{ eventThemeOptions.find(theme => theme.id === page.props.eventThemeSettings?.global)?.label }}</span>
                         </div>
                         <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5" role="radiogroup" aria-label="Tema della piattaforma">
                             <button

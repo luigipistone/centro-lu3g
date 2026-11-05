@@ -177,14 +177,22 @@ class CentroPageController extends Controller
     public function updateEventTheme(Request $request, EventThemeService $themes): RedirectResponse
     {
         $this->ensureSuperadmin($request);
-        $data = $request->validate(['theme' => ['required', Rule::in(EventThemeService::THEMES)]]);
-        $before = $themes->current();
-        $themes->set($data['theme']);
+        $data = $request->validate([
+            'theme' => ['required', Rule::in(EventThemeService::THEMES)],
+            'scope' => ['sometimes', Rule::in(['personal', 'global', 'inherit'])],
+        ]);
+        $scope = $data['scope'] ?? 'global';
+        $before = $scope === 'global' ? $themes->current() : $themes->personal($request->user()->id);
+        if ($scope === 'global') {
+            $themes->set($data['theme']);
+        } else {
+            $themes->setPersonal($request->user()->id, $scope === 'inherit' ? null : $data['theme']);
+        }
         $request->attributes->set('audit_subject_id', 'event_theme');
-        $request->attributes->set('audit_state_before', ['theme' => $before]);
-        $request->attributes->set('audit_state_after', ['theme' => $data['theme']]);
+        $request->attributes->set('audit_state_before', ['theme' => $before, 'scope' => $scope]);
+        $request->attributes->set('audit_state_after', ['theme' => $scope === 'inherit' ? null : $data['theme'], 'scope' => $scope]);
 
-        return redirect()->route('settings.index', ['tab' => 'personalizzazione'])->with('status', 'Tema aggiornato.');
+        return redirect()->route('settings.index', ['tab' => 'personalizzazione'])->with('status', $scope === 'personal' ? 'Tema applicato solo al tuo account.' : ($scope === 'inherit' ? 'Ripristinato il tema globale sul tuo account.' : 'Tema globale aggiornato.'));
     }
 
     public function dashboard(Request $request): Response
