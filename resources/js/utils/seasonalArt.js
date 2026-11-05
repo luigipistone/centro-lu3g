@@ -1,3 +1,5 @@
+import { drawChristmasBulb, drawChristmasStars } from './christmasMotion';
+
 export const seasonalThemes = ['halloween', 'natale', 'pasqua', 'estate'];
 export const isSeasonalTheme = (theme) => seasonalThemes.includes(theme);
 
@@ -77,7 +79,7 @@ export function drawSeasonCorner(c, theme, time) {
         }
     } else if (theme === 'natale') {
         c.strokeStyle = colors[1]; c.lineWidth = 2; c.beginPath(); c.moveTo(10, 180); c.quadraticCurveTo(180, 220, 225, 20); c.stroke();
-        for (let i = 0; i < 9; i++) { const x = 45 + i * 20, y = 185 - i * i * 1.8; c.globalAlpha = .65 + Math.sin(time / 900 + i) * .3; ellipse(c, x, y, 4, 6, i % 2 ? colors[0] : colors[2]); }
+        for (let i = 0; i < 9; i++) { const x = 45 + i * 20, y = 185 - i * i * 1.8; drawChristmasBulb(c, x, y, i, time); }
     } else if (theme === 'pasqua') {
         for (let i = 0; i < 4; i++) { c.save(); c.translate(95 + i * 36, 180 - i * 22); c.rotate(Math.sin(time / 1800 + i) * .08); for (let j = 0; j < 5; j++) { c.rotate(Math.PI * 2 / 5); ellipse(c, 0, -8, 5, 9, i % 2 ? colors[0] : colors[1]); } ellipse(c, 0, 0, 4, 4, colors[2]); c.restore(); }
     } else {
@@ -86,11 +88,13 @@ export function drawSeasonCorner(c, theme, time) {
     c.restore();
 }
 
-export function drawSeasonEffect(c, theme, progress, width, height) {
+export function drawSeasonEffect(c, theme, progress, width, height, stars = []) {
     const colors = palettes[theme];
     if (!colors || progress <= 0 || progress >= 1) return;
     c.save();
-    if (theme === 'halloween') {
+    if (theme === 'natale') {
+        drawChristmasStars(c, progress, width, height, stars);
+    } else if (theme === 'halloween') {
         const radius = Math.sin(progress * Math.PI) * Math.min(width * .5, 420);
         c.globalAlpha = Math.sin(progress * Math.PI) * .6; c.strokeStyle = '#d66e29'; c.lineWidth = 1;
         for (const flip of [false, true]) { c.save(); if (flip) { c.translate(width, height); c.rotate(Math.PI); }
@@ -101,8 +105,7 @@ export function drawSeasonEffect(c, theme, progress, width, height) {
         }
     } else {
         for (let i = 0; i < 40; i++) { const p = Math.max(0, Math.min(1, (progress - i % 4 * .025) / .9)); c.save(); c.translate(width * i / 39 + Math.sin(p * 6 + i) * 30, -30 + p * (height + 60)); c.rotate(i + p * 4); c.globalAlpha = Math.sin(p * Math.PI) * .8;
-            if (theme === 'natale') { c.strokeStyle = i % 3 ? '#c09850' : '#c4d8d3'; c.lineWidth = 2; for (let j = 0; j < 3; j++) { c.rotate(Math.PI / 3); c.beginPath(); c.moveTo(0, -7); c.lineTo(0, 7); c.stroke(); } }
-            else if (theme === 'pasqua') ellipse(c, 0, 0, 5, 10, colors[i % 3]);
+            if (theme === 'pasqua') ellipse(c, 0, 0, 5, 10, colors[i % 3]);
             else { c.fillStyle = colors[i % 3]; c.fillRect(-3, -7, 6, 14); }
             c.restore();
         }

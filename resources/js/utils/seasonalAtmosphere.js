@@ -1,3 +1,5 @@
+import { drawChristmasBulb } from './christmasMotion';
+
 function curve(points, u) {
     const v = 1 - u;
     return [0, 1].map(k => v ** 3 * points[0][k] + 3 * v * v * u * points[1][k] + 3 * v * u * u * points[2][k] + u ** 3 * points[3][k]);
@@ -59,15 +61,13 @@ export function drawSeasonAtmosphere(c, theme, milliseconds, w, h) {
             bat(c, ...p, age * flight.wingSpeed + flight.phase, Math.atan2(b[1] - a[1], b[0] - a[0]), flight.size + Math.sin(u * 6) * .06, Math.sin(age * 1.2 + flight.phase) * .65, Math.sin(age * 1.8 + flight.phase) > .4);
         }
     } else if (theme === 'natale') {
-        c.strokeStyle = '#b58a55'; c.lineWidth = 1.2;
-        c.beginPath(); c.moveTo(0, 8);
-        for (let x = 0; x <= w; x += 4) c.lineTo(x, 8 + 13 * Math.sin(Math.PI * (x % 180) / 180));
+        c.strokeStyle = '#958570'; c.lineWidth = 1.5;
+        c.beginPath(); c.moveTo(0, 2);
+        for (let x = 0; x <= w; x += 4) c.lineTo(x, 2 + 5 * Math.sin(Math.PI * (x % 180) / 180));
         c.stroke();
-        for (let x = 25, i = 0; x < w; x += 60, i++) {
-            const y = 8 + 13 * Math.sin(Math.PI * (x % 180) / 180);
-            c.globalAlpha = .75 + .2 * Math.sin(t * 1.4 + i * .7);
-            c.fillStyle = i % 3 ? '#ffe2a0' : '#eb6d60'; c.shadowColor = c.fillStyle; c.shadowBlur = 9;
-            c.beginPath(); c.ellipse(x, y + 5, 2.5, 4, -.2, 0, Math.PI * 2); c.fill();
+        for (let x = 25, i = 0; x < w; x += 64, i++) {
+            const y = 2 + 5 * Math.sin(Math.PI * (x % 180) / 180);
+            drawChristmasBulb(c, x, y, i, milliseconds, w < 600 ? .75 : .9);
         }
         c.shadowBlur = 0;
         for (let i = 0; i < (w < 600 ? 20 : 54); i++) {

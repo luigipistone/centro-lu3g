@@ -61,6 +61,13 @@ try {
                 await page.getByRole('button',{name:'Pausa animazioni stagionali'}).click();
                 const paused = await pixels(); await page.waitForTimeout(200); assert.deepEqual(await pixels(),paused);
                 await page.getByRole('button',{name:'Attiva animazioni stagionali'}).click();
+                if (width === 1920) {
+                    await page.getByRole('button',{name:'Anima il tema stagionale'}).click();
+                    await page.waitForTimeout(2500);
+                    assert(await page.locator('.season-fullscreen').evaluate(el=>el.getContext('2d').getImageData(0,0,el.width,el.height).data.some(v=>v!==0)), 'Stars must still be falling after 2.5 seconds');
+                    await page.screenshot({path:'/tmp/christmas-review/stars.png',animations:'disabled'});
+                    await page.waitForFunction(()=>{const el=document.querySelector('.season-fullscreen');return !el.getContext('2d').getImageData(0,0,el.width,el.height).data.some(v=>v!==0);},null,{timeout:15000});
+                }
             }
             if (route === 'profile') {
                 await page.getByRole('button',{name:'Notifiche',exact:true}).click();

@@ -4,6 +4,7 @@ import { usePage } from '@inertiajs/vue3';
 import { Pause, Play } from '@lucide/vue';
 import { drawSeasonObject, drawSeasonCorner, drawSeasonEffect, isSeasonalTheme } from '@/utils/seasonalArt';
 import { drawSeasonAtmosphere } from '@/utils/seasonalAtmosphere';
+import { christmasEffectDuration, createChristmasStars } from '@/utils/christmasMotion';
 
 const props = defineProps({ mode: { type: String, default: 'object' } });
 const page = usePage();
@@ -13,11 +14,13 @@ const canvas = ref(null);
 const paused = ref(false);
 let media, observer, frame = 0, time = 0, last = 0, effectStart = null, visible = true;
 let pumpkinImage;
+let effectStars = [];
+const effectDuration = () => theme.value === 'natale' ? christmasEffectDuration : 1500;
 const key = () => `centro:season-motion:${page.props.auth?.user?.id || 'guest'}`;
 function readPreference() { try { paused.value = localStorage.getItem(key()) === 'off'; } catch { paused.value = false; } restart(); }
 function toggle() { paused.value = !paused.value; try { localStorage.setItem(key(), paused.value ? 'off' : 'on'); } catch { /* Private mode may disable storage. */ } window.dispatchEvent(new Event('centro:season-motion')); }
 function celebrate() { window.dispatchEvent(new Event('centro:season-celebrate')); }
-function startEffect() { if (!active.value || paused.value || media?.matches || document.hidden) return; effectStart = time; restart(); }
+function startEffect() { if (!active.value || paused.value || media?.matches || document.hidden) return; effectStars = theme.value === 'natale' ? createChristmasStars() : []; effectStart = time; restart(); }
 function draw() {
     const el = canvas.value, c = el?.getContext('2d');
     if (!c) return;
@@ -29,7 +32,7 @@ function draw() {
             c.save();
             drawSeasonAtmosphere(c, theme.value, time, w, h); c.restore();
         }
-        else if (effectStart !== null) drawSeasonEffect(c, theme.value, (time - effectStart) / 1500, w, h);
+        else if (effectStart !== null) drawSeasonEffect(c, theme.value, (time - effectStart) / effectDuration(), w, h, effectStars);
     } else {
         c.clearRect(0, 0, 480, 400);
         if (props.mode === 'object' && theme.value === 'halloween' && pumpkinImage?.complete && pumpkinImage.naturalWidth) {
@@ -50,7 +53,7 @@ function draw() {
 }
 function tick(now) {
     frame = 0;
-    if (now - last >= 33) { time += Math.min(now - last, 50); last = now; if (effectStart !== null && time - effectStart >= 1500) effectStart = null; draw(); }
+    if (now - last >= 33) { time += Math.min(now - last, 50); last = now; if (effectStart !== null && time - effectStart >= effectDuration()) effectStart = null; draw(); }
     if (!paused.value && !media?.matches && visible && !document.hidden && (props.mode !== 'effect' || effectStart !== null)) frame = requestAnimationFrame(tick);
 }
 function restart() {
