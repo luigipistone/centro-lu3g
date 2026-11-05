@@ -21,15 +21,51 @@ function wave(c, time, width, y, amplitude, phase, color) {
 
 export function drawSummerAtmosphere(c, time, w, h) {
     c.save();
-    c.lineWidth = 1.5;
-    wave(c, time, w, h - 10, 5, 0, '#008b9565');
-    wave(c, time, w, h - 22, 7, 1.8, '#dca91b70');
-    // Reflections stay at the edge, never across working text.
-    for (let i = 0; i < 7; i++) {
-        const x = w * (.12 + i * .13), y = h - 35 + Math.sin(time / 2000 + i) * 8;
-        c.globalAlpha = .12 + .18 * (1 + Math.sin(time / 1600 + i * 2)) / 2;
-        c.strokeStyle = '#a97b00'; c.lineWidth = 2;
-        c.beginPath(); c.moveTo(x - 6, y); c.lineTo(x + 6, y); c.stroke();
+    const t = time / 1000;
+    const depth = w < 600 ? 23 : 31;
+    // Different frequencies move continuously: no repeated rows or per-frame randomness.
+    const shoreline = (x, layer) => h - depth + layer * 8
+        + Math.sin(x * .009 - t * .48 + layer * 1.7) * 3.5
+        + Math.sin(x * .023 + t * .31 + layer) * 1.8
+        + Math.sin(x * .051 - t * .19) * .7
+        + Math.sin(t * .67 + layer * .9) * 3;
+    for (let layer = 0; layer < 3; layer++) {
+        const water = c.createLinearGradient(0, h - depth - 9, 0, h);
+        water.addColorStop(0, '#a5e9de08');
+        water.addColorStop(.35, ['#72d9cc45', '#32b8bc40', '#198eaa32'][layer]);
+        water.addColorStop(1, ['#2ba9b561', '#159bb25c', '#087d9b4a'][layer]);
+        c.beginPath();
+        c.moveTo(0, shoreline(0, layer));
+        for (let x = 4; x <= w + 4; x += 4) c.lineTo(x, shoreline(x, layer));
+        c.lineTo(w, h); c.lineTo(0, h); c.closePath();
+        c.fillStyle = water; c.fill();
+
+        // Soft foam follows the advancing crest, with uneven gaps and a fading wake.
+        c.lineCap = 'round';
+        for (let x = 0; x < w; x += 9) {
+            const strength = .5 + .5 * Math.sin(x * .043 + layer * 3 + t * .22);
+            if (strength < .25) continue;
+            c.strokeStyle = `rgba(246,255,250,${(.18 + strength * .48) * (1 - layer * .18)})`;
+            c.lineWidth = .6 + strength * 1.4;
+            c.beginPath(); c.moveTo(x, shoreline(x, layer) + .7);
+            c.quadraticCurveTo(x + 4, shoreline(x + 4, layer), x + 5 + strength * 5, shoreline(x + 8, layer) + .5);
+            c.stroke();
+            if (layer === 0 && strength > .65) {
+                c.fillStyle = `rgba(255,255,250,${strength * .35})`;
+                c.beginPath();
+                c.ellipse(x + 3, shoreline(x, layer) + 3 + strength * 3, 1.6, .65, 0, 0, Math.PI * 2);
+                c.fill();
+            }
+        }
+    }
+    // Short, irregular glints suggest moving water rather than a geometric outline.
+    c.lineWidth = .7;
+    for (let i = 0; i < Math.ceil(w / 22); i++) {
+        const x = (i * 47.3 + Math.sin(t * .4 + i) * 5) % w;
+        const y = h - 2 - (i % 4) * 3;
+        const shimmer = Math.max(0, Math.sin(t * .8 + i * 2.4));
+        c.strokeStyle = `rgba(233,255,242,${shimmer * .25})`;
+        c.beginPath(); c.moveTo(x, y); c.lineTo(x + 3 + shimmer * 5, y - .5); c.stroke();
     }
     c.restore();
 }
