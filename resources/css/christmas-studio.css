@@ -20,6 +20,7 @@ html[data-event-theme="natale"][data-event-theme] {
     --season-canvas: #400b17;
     --season-working: #fffafb;
     --season-working-border: #e5cdd3;
+    --christmas-title-ink: #fff5f7;
     color: #321b22;
 }
 html[data-event-theme="natale"] #app .app-shell { background: #400b17 !important; }
@@ -115,6 +116,20 @@ html[data-event-theme="natale"] .password-reveal-row:hover { background: #f5dce3
 html[data-event-theme="natale"] .field-dropdown-option:hover { background: #f8e2e8 !important; }
 html[data-event-theme="natale"] .event-theme-choice[data-season-choice="natale"],
 .event-theme-choice[data-season-choice="natale"] { background: #b61636 !important; color: #fff !important; }
+/* Titles follow their nearest surface, including unframed section headings. */
+html[data-event-theme="natale"] :is(.surface,.app-card,.toolbar,.app-popover,.field-dropdown-menu,[role="dialog"],.password-dialog-panel,.password-drawer-panel,.wysiwyg-content,[contenteditable="true"],.bg-white,.bg-gray-50,.bg-gray-100,[class*="bg-white/"]) {
+    --christmas-title-ink: #321b22;
+}
+html[data-event-theme="natale"] :is(.desktop-shell > header,.desktop-sidebar,.web-repositories-card.surface,.widget-card:not([data-widget-type="weather"]):not([data-widget-type="notes"])) {
+    --christmas-title-ink: #fff5f7;
+}
+html[data-event-theme="natale"] .task-tone { --christmas-title-ink: var(--task-ink); }
+html[data-event-theme="natale"] #app :is(h1,h2,h3,h4,h5,h6,.section-title,.tool-card-title,.season-widget-title):not(.wysiwyg-content *,[contenteditable="true"] *) {
+    color: var(--christmas-title-ink) !important;
+}
+html[data-event-theme="natale"] #app :is(h1,h2,h3,h4,.section-title) + p:not(.wysiwyg-content *,[contenteditable="true"] *) {
+    color: var(--christmas-title-ink) !important;
+}
 @media (max-width: 639px) {
     html[data-event-theme="natale"] #app .desktop-shell > header :is(h1,h2) { font-size: 30px; }
     html[data-event-theme="natale"] #app [data-widget-type="clock_date"] { min-height: 190px; }

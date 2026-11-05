@@ -33,6 +33,19 @@ try {
             assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${route}: ${width} overflow`);
             const headings = await page.locator('.season-widget-title,.tool-card-title,.desktop-shell > header h2').evaluateAll(els => els.filter(el => el.getClientRects().length && el.scrollWidth > el.clientWidth + 1).map(el=>el.textContent));
             assert.deepEqual(headings,[],`${route} clipped headings at ${width}`);
+            const unreadableTitles = await page.locator('h1,h2,h3,h4,h5,h6,.section-title,.tool-card-title,.season-widget-title').evaluateAll(els => {
+                const rgb = value => (value.match(/[\d.]+/g) || []).map(Number);
+                const luminance = color => color.slice(0,3).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
+                return els.filter(el=>el.getClientRects().length && el.textContent.trim()).flatMap(el=>{
+                    let bg=[255,255,255]; const parents=[];
+                    for(let p=el;p;p=p.parentElement) parents.unshift(p);
+                    for(const p of parents) { const c=rgb(getComputedStyle(p).backgroundColor); const a=c[3]??1; bg=bg.map((v,i)=>v*(1-a)+c[i]*a); }
+                    const fg=rgb(getComputedStyle(el).color), a=luminance(fg), b=luminance(bg);
+                    const contrast=(Math.max(a,b)+.05)/(Math.min(a,b)+.05);
+                    return contrast<4.5?[{title:el.textContent.trim(),contrast,bg,fg}]:[];
+                });
+            });
+            assert.deepEqual(unreadableTitles,[],`${route}: low-contrast titles at ${width}`);
             assert.equal(await page.locator('.brand-mark img').first().evaluate(el=>getComputedStyle(el).filter),'brightness(0) invert(1)');
             if (route === 'dashboard') {
                 const atmosphere = page.locator('.season-atmosphere');
