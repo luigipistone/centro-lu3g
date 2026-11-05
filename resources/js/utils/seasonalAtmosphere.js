@@ -1,4 +1,4 @@
-import { drawChristmasBulb } from './christmasMotion';
+import { drawChristmasBulb, christmasWireHeight } from './christmasMotion';
 
 function curve(points, u) {
     const v = 1 - u;
@@ -63,10 +63,10 @@ export function drawSeasonAtmosphere(c, theme, milliseconds, w, h) {
     } else if (theme === 'natale') {
         c.strokeStyle = '#958570'; c.lineWidth = 1.5;
         c.beginPath(); c.moveTo(0, 2);
-        for (let x = 0; x <= w; x += 4) c.lineTo(x, 2 + 5 * Math.sin(Math.PI * (x % 180) / 180));
+        for (let x = 0; x <= w; x += 4) c.lineTo(x, christmasWireHeight(x, w));
         c.stroke();
         for (let x = 25, i = 0; x < w; x += 64, i++) {
-            const y = 2 + 5 * Math.sin(Math.PI * (x % 180) / 180);
+            const y = christmasWireHeight(x, w);
             drawChristmasBulb(c, x, y, i, milliseconds, w < 600 ? .75 : .9);
         }
         c.shadowBlur = 0;

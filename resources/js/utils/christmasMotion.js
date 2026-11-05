@@ -1,12 +1,23 @@
 export const christmasEffectDuration = 8500;
 export const christmasBulbColors = ['#ff454f', '#31b7ff', '#ffcf32', '#43d77d', '#ed65ed'];
 
+export function christmasWireHeight(x, width) {
+    const span = width < 600 ? 196 : 256;
+    const u = (x % span) / span;
+    return 2 + (width < 600 ? 14 : 22) * 4 * u * (1 - u);
+}
+
+export function christmasBulbIntensity(index, time) {
+    return .5 + .5 * Math.cos(time * Math.PI * 2 / 4000 + (index % 2) * Math.PI);
+}
+
 export function drawChristmasBulb(c, x, y, index, time, scale = 1) {
     c.save(); c.translate(x, y); c.rotate(Math.sin(index * 2.3) * .35); c.scale(scale, scale);
     c.fillStyle = '#6c7471'; c.fillRect(-3, -2, 6, 5);
-    c.globalAlpha *= .8 + .2 * Math.sin(time * .0012 + index * 1.7);
+    const intensity = christmasBulbIntensity(index, time);
+    c.globalAlpha *= .35 + .65 * intensity;
     c.fillStyle = christmasBulbColors[index % christmasBulbColors.length];
-    c.shadowColor = c.fillStyle; c.shadowBlur = 11;
+    c.shadowColor = c.fillStyle; c.shadowBlur = 2 + 16 * intensity;
     c.beginPath(); c.moveTo(-3, 3); c.bezierCurveTo(-9, 8, -6, 15, 0, 19);
     c.bezierCurveTo(6, 15, 9, 8, 3, 3); c.closePath(); c.fill();
     c.shadowBlur = 0; c.strokeStyle = '#ffffffb0'; c.lineWidth = 1.2;
