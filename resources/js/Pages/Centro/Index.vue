@@ -345,7 +345,7 @@ function toggleTaskUserFilter(event) {
 function toggleTaskFilterUser(id) {
     taskUserIds.value = taskUserIds.value.includes(id) ? taskUserIds.value.filter((value) => value !== id) : [...taskUserIds.value, id];
 }
-const taskPeriod = ref('all');
+const taskPeriod = ref('week');
 const taskStatus = ref('all');
 const taskPriority = ref('all');
 const taskType = ref('all');
