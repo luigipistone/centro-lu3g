@@ -14,6 +14,25 @@ class ClientHierarchyTest extends TestCase
 {
     use RefreshDatabase, ActsAsWorkflowAdmin;
 
+    public function test_selectors_exclude_archived_clients_and_their_children(): void
+    {
+        $active = (string) Str::uuid();
+        $archived = (string) Str::uuid();
+        $child = (string) Str::uuid();
+        DB::table('clients')->insert([
+            ['id' => $active, 'name' => 'Active', 'active' => true],
+            ['id' => $archived, 'name' => 'Archived', 'active' => false],
+        ]);
+        DB::table('clients')->insert(['id' => $child, 'name' => 'Child', 'active' => true, 'parent_client_id' => $archived]);
+        $this->actingAsWorkflowAdmin(User::factory()->create());
+        foreach (['tasks', 'calendar', 'projects'] as $section) {
+            $this->get("/{$section}")->assertInertia(fn (Assert $page) => $page
+                ->has('clients', 1)->where('clients.0.id', $active));
+        }
+        $this->assertDatabaseHas('clients', ['id' => $archived]);
+        $this->assertDatabaseHas('clients', ['id' => $child]);
+    }
+
     public function test_subclients_can_be_managed_and_selected_without_polluting_client_lists(): void
     {
         $user = User::factory()->create();

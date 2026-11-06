@@ -969,11 +969,11 @@ class CentroPageController extends Controller
                     })
                 : [],
             'clients' => $this->isGuest($request)
-                ? DB::table('clients')
+                ? $this->selectableClients()
                     ->whereIn('id', $this->visibleClientIdsForUser($request->user()->id))
                     ->orderBy('name')
                     ->get(['id', 'name'])
-                : DB::table('clients')->when(!in_array($section, ['tasks', 'calendar'], true), fn ($query) => $query->whereNull('parent_client_id'))->orderBy('name')->get(['id', 'name', 'parent_client_id']),
+                : $this->selectableClients()->when(!in_array($section, ['tasks', 'calendar'], true), fn ($query) => $query->whereNull('parent_client_id'))->orderBy('name')->get(['id', 'name', 'parent_client_id']),
             'projects' => DB::table('projects')
                 ->when($this->isGuest($request), fn ($query) => $query
                     ->join('project_followers', 'project_followers.project_id', '=', 'projects.id')
@@ -2591,8 +2591,8 @@ class CentroPageController extends Controller
             'items' => $needsItems ? $this->passwordItemRows($request) : [],
             'users' => $needsUsers ? $this->userOptions() : [],
             'clients' => ! $needsItems ? [] : ($this->isGuest($request)
-                ? DB::table('clients')->whereIn('id', $this->visibleClientIdsForUser($request->user()->id))->orderBy('name')->get(['id', 'name'])
-                : DB::table('clients')->whereNull('parent_client_id')->orderBy('name')->get(['id', 'name'])),
+                ? $this->selectableClients()->whereIn('id', $this->visibleClientIdsForUser($request->user()->id))->orderBy('name')->get(['id', 'name'])
+                : $this->selectableClients()->whereNull('parent_client_id')->orderBy('name')->get(['id', 'name'])),
             'credentialCategories' => $this->passwordCredentialCategories(),
             'passwordCategoryFields' => $needsItems ? DB::table('password_category_fields')->orderBy('label')->get(['id', 'category', 'label']) : [],
             'selectedVault' => $selectedVault,
@@ -3205,13 +3205,13 @@ class CentroPageController extends Controller
                 'files' => $this->projectFiles($id, 'file'),
                 'client' => $record->client_id ? DB::table('clients')->where('id', $record->client_id)->first() : null,
                 'projectClients' => $this->isGuest($request)
-                    ? DB::table('clients')->where('id', $record->client_id)->get(['id', 'name'])
-                    : DB::table('clients')->whereNull('parent_client_id')->orderBy('name')->get(['id', 'name']),
+                    ? $this->selectableClients()->where('id', $record->client_id)->get(['id', 'name'])
+                    : $this->selectableClients()->whereNull('parent_client_id')->orderBy('name')->get(['id', 'name']),
                 'projectUsers' => $this->isGuest($request) ? $this->userOptionsForProject($id) : $this->userOptions(),
                 'users' => $this->isGuest($request) ? $this->userOptionsForProject($id) : $this->userOptions(),
                 'taskClients' => $this->isGuest($request)
-                    ? DB::table('clients')->where('id', $record->client_id)->get(['id', 'name'])
-                    : DB::table('clients')->orderBy('name')->get(['id', 'name', 'parent_client_id']),
+                    ? $this->selectableClients()->where('id', $record->client_id)->get(['id', 'name'])
+                    : $this->selectableClients()->orderBy('name')->get(['id', 'name', 'parent_client_id']),
                 'taskProjects' => $this->isGuest($request)
                     ? DB::table('projects')->where('id', $id)->get(['id', 'name'])
                     : DB::table('projects')->orderBy('name')->get(['id', 'name']),
@@ -3254,8 +3254,8 @@ class CentroPageController extends Controller
                     ])->contains($user->id))->values()
                     : $this->userOptions(),
                 'taskClients' => $this->isGuest($request)
-                    ? DB::table('clients')->where('id', $record->client_id)->get(['id', 'name'])
-                    : DB::table('clients')->orderBy('name')->get(['id', 'name', 'parent_client_id']),
+                    ? $this->selectableClients()->where('id', $record->client_id)->get(['id', 'name'])
+                    : $this->selectableClients()->orderBy('name')->get(['id', 'name', 'parent_client_id']),
                 'taskProjects' => $this->isGuest($request)
                     ? $this->visibleProjectOptionsForUser($request->user()->id)
                     : DB::table('projects')->orderBy('name')->get(['id', 'name']),
@@ -8750,6 +8750,13 @@ class CentroPageController extends Controller
                 ]);
             }
         });
+    }
+
+    private function selectableClients(): \Illuminate\Database\Query\Builder
+    {
+        return DB::table('clients')->where('active', true)
+            ->where(fn ($query) => $query->whereNull('parent_client_id')
+                ->orWhereIn('parent_client_id', DB::table('clients as parent')->where('parent.active', true)->select('parent.id')));
     }
 
     public function storeSubclient(Request $request, string $id): RedirectResponse
