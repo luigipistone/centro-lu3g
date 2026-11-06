@@ -452,7 +452,7 @@ function relatedProjectMetaStyle(project) {
 
 function relatedTasksSorted() {
     return (props.related.tasks || [])
-        .filter((task) => task.status !== 'done' && !task.parent_task_id)
+        .filter((task) => !task.parent_task_id)
         .sort((first, second) => {
             const firstDate = first.due_date || '9999-12-31';
             const secondDate = second.due_date || '9999-12-31';
@@ -463,11 +463,11 @@ function relatedTasksSorted() {
 function relatedItemsFor(name) {
     if (name !== 'tasks') return props.related[name] || [];
 
-    return relatedTasksSorted().slice(0, clientRelatedTasksExpanded.value ? 6 : 3);
+    return clientRelatedTasksExpanded.value ? relatedTasksSorted() : relatedTasksSorted().slice(0, 3);
 }
 
 function hiddenRelatedTaskCount() {
-    return Math.max(relatedTasksSorted().slice(0, 6).length - relatedItemsFor('tasks').length, 0);
+    return Math.max(relatedTasksSorted().length - relatedItemsFor('tasks').length, 0);
 }
 
 function userKpiClass(tone) {

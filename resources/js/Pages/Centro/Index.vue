@@ -330,6 +330,7 @@ const calendarCommentAutosaveSequences = {};
 let calendarBodyOverflow = '';
 const taskWeekStart = ref(startOfWeek(new Date()));
 const taskSearch = ref('');
+const taskPeriod = ref('all');
 const taskStatus = ref('all');
 const taskPriority = ref('all');
 const taskType = ref('all');
@@ -2384,8 +2385,10 @@ const taskRows = computed(() => props.rows.filter((row) => {
     if (row.parent_task_id !== null && row.parent_task_id !== undefined && row.parent_task_id !== '') return false;
 
     const dueDate = parseDateOnly(row.due_date);
-    const matchesWeek = dueDate && dueDate >= taskWeekStart.value && dueDate <= taskWeekEnd.value;
+    const startDate = parseDateOnly(row.start_date) || dueDate;
+    const matchesWeek = dueDate && startDate <= taskWeekEnd.value && dueDate >= taskWeekStart.value;
     const search = taskSearch.value.trim().toLowerCase();
+    const matchesPeriod = taskPeriod.value === 'all' || Boolean(search) || matchesWeek;
     const matchesSearch = !search
         || (row.title || '').toLowerCase().includes(search)
         || (row.client_name || '').toLowerCase().includes(search)
@@ -2395,7 +2398,7 @@ const taskRows = computed(() => props.rows.filter((row) => {
     const matchesPriority = taskPriority.value === 'all' || row.priority === taskPriority.value;
     const matchesType = taskType.value === 'all' || (row.task_type || 'task') === taskType.value;
 
-    return matchesWeek && matchesSearch && matchesStatus && matchesPriority && matchesType;
+    return matchesPeriod && matchesSearch && matchesStatus && matchesPriority && matchesType;
 }));
 
 function tasksByStatus(status) {
@@ -5857,16 +5860,17 @@ function calendarDayStyle(sectionMonth, cell) {
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
                 <div class="surface flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Vista settimanale</p>
-                        <h2 class="text-lg font-bold text-gray-950">{{ taskWeekLabel }}</h2>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Task</p>
+                        <h2 class="text-lg font-bold text-gray-950">{{ taskPeriod === 'all' || taskSearch.trim() ? 'Tutti i periodi' : taskWeekLabel }}</h2>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <button type="button" class="icon-btn" @click="changeTaskWeek(-1)">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <AppSelect v-model="taskPeriod" :options="[{ value: 'all', label: 'Tutti i periodi' }, { value: 'week', label: 'Settimana selezionata' }]" aria-label="Periodo delle task" />
+                        <button v-if="taskPeriod === 'week' && !taskSearch.trim()" type="button" class="icon-btn" @click="changeTaskWeek(-1)">
                             <span class="sr-only">Settimana precedente</span>
                             <ChevronLeft class="h-4 w-4" :stroke-width="1.7" />
                         </button>
-                        <button type="button" class="btn btn-outline" @click="resetTaskWeek">Oggi</button>
-                        <button type="button" class="icon-btn" @click="changeTaskWeek(1)">
+                        <button v-if="taskPeriod === 'week' && !taskSearch.trim()" type="button" class="btn btn-outline" @click="resetTaskWeek">Oggi</button>
+                        <button v-if="taskPeriod === 'week' && !taskSearch.trim()" type="button" class="icon-btn" @click="changeTaskWeek(1)">
                             <span class="sr-only">Settimana successiva</span>
                             <ChevronRight class="h-4 w-4" :stroke-width="1.7" />
                         </button>

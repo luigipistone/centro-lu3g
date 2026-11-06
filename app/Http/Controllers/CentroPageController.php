@@ -763,7 +763,7 @@ class CentroPageController extends Controller
                         ->orderBy($config['table'].'.id');
                 })
                 ->when(! in_array($section, ['clients', 'projects'], true), fn ($query) => $query->latest($config['table'].'.created_at'))
-                ->limit($limit)
+                ->when(!in_array($section, ['tasks', 'calendar'], true), fn ($query) => $query->limit($limit))
                 ->get();
         }
 
@@ -3187,7 +3187,6 @@ class CentroPageController extends Controller
                     ->where('client_id', $id)
                     ->where(fn ($query) => $query->whereNull('parent_task_id')->orWhereRaw("TRIM(parent_task_id) = ''"))
                     ->latest()
-                    ->limit(20)
                     ->get(),
                 'contacts' => DB::table('client_contacts')->where('client_id', $id)->latest()->get(),
                 'clientServices' => DB::table('client_services')->where('client_id', $id)->pluck('service_id'),

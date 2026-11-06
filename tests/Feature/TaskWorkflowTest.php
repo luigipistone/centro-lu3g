@@ -15,6 +15,39 @@ class TaskWorkflowTest extends TestCase
     use ActsAsWorkflowAdmin;
     use RefreshDatabase;
 
+    public function test_task_and_calendar_lists_are_not_truncated(): void
+    {
+        $user = User::factory()->create();
+        $projectId = $this->project($user);
+        $clientId = (string) Str::uuid();
+        DB::table('clients')->insert(['id' => $clientId, 'name' => 'Cliente test', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('tasks')->insert(collect(range(1, 125))->map(fn ($number) => [
+            'id' => (string) Str::uuid(),
+            'title' => "Task {$number}",
+            'project_id' => $projectId,
+            'client_id' => $clientId,
+            'task_type' => 'project',
+            'status' => 'todo',
+            'priority' => 'medium',
+            'due_date' => '2026-12-01',
+            'created_by' => $user->id,
+            'created_at' => now()->subDays($number),
+            'updated_at' => now(),
+        ])->all());
+
+        foreach (['tasks', 'calendar'] as $section) {
+            $this->actingAsWorkflowAdmin($user)->get("/{$section}")
+                ->assertOk()->assertInertia(fn (Assert $page) => $page
+                    ->component('Centro/Index')
+                    ->has('rows', 125)
+                );
+        }
+        $this->actingAsWorkflowAdmin($user)->get("/clients/{$clientId}")
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+                ->component('Centro/Show')->has('related.tasks', 125)
+            );
+    }
+
     public function test_project_task_subtasks_load_without_queries_per_task(): void
     {
         $user = User::factory()->create();
