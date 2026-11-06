@@ -290,7 +290,7 @@ const absenceDrafts = ref({});
 const absenceAutosaveTimers = {};
 const currentCalendarDate = ref(new Date());
 const calendarType = ref('all');
-const calendarUserIds = ref([]);
+const calendarUserIds = ref(page.props.auth?.user?.id ? [page.props.auth.user.id] : []);
 const calendarPeopleMenu = ref(null);
 const calendarPeopleMenuOpen = ref(false);
 const calendarPeopleMenuStyle = ref({});
@@ -333,7 +333,7 @@ const calendarCommentAutosaveSequences = {};
 let calendarBodyOverflow = '';
 const taskWeekStart = ref(startOfWeek(new Date()));
 const taskSearch = ref('');
-const taskUserIds = ref([]);
+const taskUserIds = ref(page.props.auth?.user?.id ? [page.props.auth.user.id] : []);
 const taskUserFilterOpen = ref(false);
 const taskUserFilterStyle = ref({});
 function toggleTaskUserFilter(event) {
