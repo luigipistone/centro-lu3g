@@ -8377,6 +8377,38 @@ class CentroPageController extends Controller
     }
 
 
+    public function taskMentionUsers(Request $request, string $id)
+    {
+        $this->ensureGuestCanEditTask($request, $id);
+        abort_unless(DB::table('tasks')->where('id', $id)->exists(), 404);
+        return response()->json($this->userOptions()->filter(fn ($user) => $user->id !== $request->user()->id
+            && $this->isTaskParticipant($id, $user->id))->values());
+    }
+
+    private function commentMentionIds(string $content): Collection
+    {
+        if (! str_contains($content, 'data-mention-user')) return collect();
+        $document = new \DOMDocument();
+        $previous = libxml_use_internal_errors(true);
+        try {
+            $document->loadHTML('<?xml encoding="UTF-8">'.$content);
+            return collect(iterator_to_array((new \DOMXPath($document))->query('//*[@data-mention-user]')))
+                ->map(fn ($node) => $node->getAttribute('data-mention-user'))->filter()->unique()->values();
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
+    }
+
+    private function notifyCommentPeople(Request $request, string $taskId, string $content, string $type, string $message, string $previous = ''): void
+    {
+        $mentioned = $this->commentMentionIds($content)->diff($this->commentMentionIds($previous))
+            ->filter(fn ($id) => $id !== $request->user()->id && $this->isTaskParticipant($taskId, $id));
+        $this->notifyUsers($this->taskNotificationUserIds($taskId)->diff($mentioned)->reject(fn ($id) => $id === $request->user()->id), $request->user()->id, $type, $message, $taskId);
+        $title = DB::table('tasks')->where('id', $taskId)->value('title');
+        $this->notifyUsers($mentioned, $request->user()->id, 'task_mention', $request->user()->name.' ti ha menzionato in un commento alla task "'.$title.'".', $taskId);
+    }
+
     public function storeTaskComment(Request $request, string $id): RedirectResponse
     {
         $this->ensureGuestCanEditTask($request, $id);
@@ -8399,9 +8431,10 @@ class CentroPageController extends Controller
 
         $this->recordTaskActivity($id, $request->user()->id, 'comment_created', 'content', null, $payload['content']);
 
-        $this->notifyTaskPeople(
+        $this->notifyCommentPeople(
+            $request,
             $id,
-            $request->user()->id,
+            $payload['content'],
             'task_comment',
             $request->user()->name.' ha commentato il task "'.$task->title.'".',
         );
@@ -8444,7 +8477,7 @@ class CentroPageController extends Controller
         ]);
 
         if ($comment->content !== $payload['content']) {
-            $this->notifyTaskPeople($taskId, $request->user()->id, 'task_comment_updated', $request->user()->name.' ha modificato un commento in una task che ti riguarda.');
+            $this->notifyCommentPeople($request, $taskId, $payload['content'], 'task_comment_updated', $request->user()->name.' ha modificato un commento in una task che ti riguarda.', $comment->content);
         }
 
         return back()->with('status', 'Commento aggiornato.');

@@ -9,6 +9,7 @@ import AppSelect from '@/Components/AppSelect.vue';
 import AppTimeInput from '@/Components/AppTimeInput.vue';
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
+import TaskMentions from '@/Components/TaskMentions.vue';
 import { addDays, daysBetween, movedTaskDates } from '@/utils/calendarTaskDates';
 import {
     ROLE_LABELS,
@@ -3931,6 +3932,7 @@ function calendarDayStyle(sectionMonth, cell) {
 </script>
 
 <template>
+    <TaskMentions :task-id="calendarTaskPanelOpen ? calendarTaskPanel?.id : null" />
     <Head :title="projectArchive ? 'Archivio progetti' : clientArchive ? 'Archivio clienti' : title" />
 
     <AuthenticatedLayout>

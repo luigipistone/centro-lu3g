@@ -114,6 +114,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/tasks/{id}/snapshot', [CentroPageController::class, 'taskSnapshot'])->name('tasks.snapshot');
     Route::get('/tasks/{id}', [CentroPageController::class, 'show'])->defaults('section', 'tasks')->name('tasks.show');
     Route::put('/tasks/{id}', [CentroPageController::class, 'update'])->defaults('section', 'tasks')->name('tasks.update');
+    Route::get('/tasks/{id}/mention-users', [CentroPageController::class, 'taskMentionUsers'])->name('tasks.mention-users');
     Route::post('/tasks/{id}/comments', [CentroPageController::class, 'storeTaskComment'])->name('tasks.comments.store');
     Route::put('/tasks/{taskId}/comments/{commentId}', [CentroPageController::class, 'updateTaskComment'])->name('tasks.comments.update');
     Route::delete('/tasks/{taskId}/comments/{commentId}', [CentroPageController::class, 'destroyTaskComment'])->name('tasks.comments.destroy');

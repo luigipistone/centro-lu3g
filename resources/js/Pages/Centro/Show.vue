@@ -9,6 +9,7 @@ import AppTimeInput from '@/Components/AppTimeInput.vue';
 import DocumentPdfDropzone from '@/Components/DocumentPdfDropzone.vue';
 import DossierAssignedDocuments from '@/Components/DossierAssignedDocuments.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
+import TaskMentions from '@/Components/TaskMentions.vue';
 import {
     activityText as formatActivityText,
     dateIt,
@@ -3708,6 +3709,7 @@ onUnmounted(() => {
 </script>
 
 <template>
+    <TaskMentions :task-id="section === 'tasks' ? record.id : null" />
     <Head :title="section === 'users' ? userForm.name : (record.name || record.title || title)" />
 
     <AuthenticatedLayout>
