@@ -78,7 +78,11 @@ const selectedLabel = computed(() => {
 const canSearch = computed(() => props.searchable || normalizedOptions.value.length >= props.searchThreshold);
 const filteredOptions = computed(() => {
     const needle = query.value.trim().toLowerCase();
-    if (needle) return normalizedOptions.value.filter((option) => String(option.label).toLowerCase().includes(needle));
+    if (needle) return normalizedTree.value.flatMap((option) => {
+        const parentMatches = String(option.label).toLowerCase().includes(needle);
+        const children = parentMatches ? option.children : option.children.filter((child) => String(child.label).toLowerCase().includes(needle));
+        return parentMatches || children.length ? [option, ...children] : [];
+    });
 
     return normalizedTree.value.flatMap((option) => [
         option,
@@ -94,6 +98,8 @@ function toggle() {
     open.value = nextOpen;
     if (open.value) {
         query.value = '';
+        const selectedParent = normalizedOptions.value.find((option) => String(option.value) === String(props.modelValue))?.parentValue;
+        if (selectedParent != null && !expandedGroups.value.includes(selectedParent)) expandedGroups.value.push(selectedParent);
         updateMenuPosition();
     }
 }

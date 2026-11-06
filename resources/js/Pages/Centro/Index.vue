@@ -332,7 +332,18 @@ const calendarCommentAutosaveSequences = {};
 let calendarBodyOverflow = '';
 const taskWeekStart = ref(startOfWeek(new Date()));
 const taskSearch = ref('');
-const taskUser = ref('');
+const taskUserIds = ref([]);
+const taskUserFilterOpen = ref(false);
+const taskUserFilterStyle = ref({});
+function toggleTaskUserFilter(event) {
+    const nextOpen = !taskUserFilterOpen.value;
+    if (nextOpen) requestFloatingUiClose();
+    taskUserFilterStyle.value = dropdownMenuStyleFromEvent(event, 320);
+    taskUserFilterOpen.value = nextOpen;
+}
+function toggleTaskFilterUser(id) {
+    taskUserIds.value = taskUserIds.value.includes(id) ? taskUserIds.value.filter((value) => value !== id) : [...taskUserIds.value, id];
+}
 const taskPeriod = ref('all');
 const taskStatus = ref('all');
 const taskPriority = ref('all');
@@ -446,21 +457,21 @@ const projectStatusOptions = [
     { value: 'on_hold', label: 'In pausa' },
 ];
 const taskStatusOptions = [
-    { value: 'all', label: 'Tutti gli stati' },
+    { value: 'all', label: 'Stati' },
     { value: 'todo', label: 'Da fare' },
     { value: 'in_progress', label: 'In corso' },
     { value: 'in_review', label: 'Review' },
     { value: 'done', label: 'Fatte' },
 ];
 const taskPriorityOptions = [
-    { value: 'all', label: 'Tutte priorità' },
+    { value: 'all', label: 'Priorità' },
     { value: 'urgent', label: 'Urgente' },
     { value: 'high', label: 'Alta' },
     { value: 'medium', label: 'Media' },
     { value: 'low', label: 'Bassa' },
 ];
 const taskTypeOptions = [
-    { value: 'all', label: 'Tutti i tipi' },
+    { value: 'all', label: 'Tipi' },
     { value: 'task', label: 'Task' },
     { value: 'project', label: 'Progetto' },
     { value: 'ongoing', label: 'Continuativa' },
@@ -1298,6 +1309,7 @@ function requestFloatingUiClose() {
 }
 
 function closeCentroIndexFloatingUi() {
+    taskUserFilterOpen.value = false;
     calendarCreateDate.value = null;
     calendarTaskActionMenuOpen.value = false;
     calendarSubtaskCreateAssigneeMenuOpen.value = false;
@@ -2400,7 +2412,7 @@ const taskRows = computed(() => props.rows.filter((row) => {
     const matchesPriority = taskPriority.value === 'all' || row.priority === taskPriority.value;
     const matchesType = taskType.value === 'all' || (row.task_type || 'task') === taskType.value;
 
-    const matchesUser = !taskUser.value || (row.assignee_ids || []).includes(taskUser.value);
+    const matchesUser = !taskUserIds.value.length || (row.assignee_ids || []).some((id) => taskUserIds.value.includes(id));
     return matchesPeriod && matchesSearch && matchesStatus && matchesPriority && matchesType && matchesUser;
 }));
 
@@ -5886,7 +5898,24 @@ function calendarDayStyle(sectionMonth, cell) {
                     <AppSelect v-model="taskStatus" :options="taskStatusOptions" />
                     <AppSelect v-model="taskPriority" :options="taskPriorityOptions" />
                     <AppSelect v-model="taskType" :options="taskTypeOptions" />
-                    <AppSelect v-model="taskUser" :options="namedOptions(users, { value: '', label: 'Tutti gli utenti' })" searchable aria-label="Filtra per assegnatario" />
+                    <div class="min-w-0">
+                        <button type="button" class="form-control mt-0 flex items-center justify-between gap-2 text-left" :aria-expanded="taskUserFilterOpen" @click.stop="toggleTaskUserFilter($event)">
+                            <span class="truncate">Utenti{{ taskUserIds.length ? ` (${taskUserIds.length})` : '' }}</span>
+                            <ChevronDown class="h-4 w-4 shrink-0 text-gray-400" />
+                        </button>
+                        <Teleport to="body">
+                            <div v-if="taskUserFilterOpen" class="fixed inset-0 z-[7600] bg-transparent" @click.self="taskUserFilterOpen = false" @keydown.esc="taskUserFilterOpen = false">
+                                <div class="app-popover field-dropdown-menu fixed w-80 max-w-[calc(100vw-2rem)] p-3" :style="taskUserFilterStyle" @click.stop>
+                                    <div class="people-avatar-picker max-h-64">
+                                        <button v-for="user in users" :key="`task-filter-${user.id}`" type="button" :class="personAvatarClass(taskUserIds.includes(user.id))" :aria-pressed="taskUserIds.includes(user.id)" :aria-label="user.name || user.email" :title="user.name || user.email" @click="toggleTaskFilterUser(user.id)">
+                                            <UserAvatar :user="user" size="md" />
+                                        </button>
+                                    </div>
+                                    <button v-if="taskUserIds.length" type="button" class="mt-2 text-xs font-semibold text-indigo-600" @click="taskUserIds = []">Azzera filtro</button>
+                                </div>
+                            </div>
+                        </Teleport>
+                    </div>
                     <button v-if="canCreate" type="button" class="icon-btn h-[38px] w-[38px] bg-[hsl(var(--primary-app))] text-white" title="Nuova task" aria-label="Nuova task" @click="openCreate({ task_type: 'project' })"><Briefcase class="h-4 w-4" :stroke-width="1.7" /></button>
                     <button v-if="canCreate" type="button" class="icon-btn h-[38px] w-[38px] task-tone task-tone-ongoing border border-amber-200 bg-amber-50 text-amber-700" title="Nuova task continuativa" aria-label="Nuova task continuativa" @click="openCreate({ task_type: 'ongoing' })"><RefreshCw class="h-4 w-4" :stroke-width="1.7" /></button>
                     <button v-if="canCreate" type="button" class="icon-btn h-[38px] w-[38px] task-tone task-tone-meeting border border-violet-200 bg-violet-50 text-violet-700" title="Nuovo meeting" aria-label="Nuovo meeting" @click="openCreate({ task_type: 'meeting', due_time: '09:00' })"><CalendarClock class="h-4 w-4" :stroke-width="1.7" /></button>
