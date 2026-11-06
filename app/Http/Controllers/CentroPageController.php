@@ -209,11 +209,11 @@ class CentroPageController extends Controller
 
         return Inertia::render('Dashboard', [
             'stats' => [
-                'clients' => $visible('clients') && ! $this->isGuest($request) ? DB::table('clients')->count() : 0,
+                'clients' => $visible('clients') && ! $this->isGuest($request) ? DB::table('clients')->whereNull('parent_client_id')->count() : 0,
                 'openTasks' => $visible('tasks') ? DB::table('tasks')->where($taskScope)->where('status', '!=', 'done')->count() : 0,
                 'urgentTasks' => $visible('tasks') ? DB::table('tasks')->where($taskScope)->where('priority', 'urgent')->where('status', '!=', 'done')->count() : 0,
             ],
-            'recentClients' => $visible('clients') && ! $this->isGuest($request) ? DB::table('clients')->latest()->limit(6)->get(['id', 'name', 'email', 'phone', 'created_at']) : collect(),
+            'recentClients' => $visible('clients') && ! $this->isGuest($request) ? DB::table('clients')->whereNull('parent_client_id')->latest()->limit(6)->get(['id', 'name', 'email', 'phone', 'created_at']) : collect(),
             'upcomingTasks' => ! $visible('tasks') ? collect() : DB::table('tasks')
                 ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
                 ->where($taskScope)
@@ -665,7 +665,7 @@ class CentroPageController extends Controller
             $sort = $request->query('sort', 'name_asc');
             if (! in_array($sort, ['name_asc', 'name_desc', 'created_asc', 'created_desc'], true)) $sort = 'name_asc';
             [$field, $direction] = explode('_', $sort);
-            $query = DB::table('clients')->where('active', ! (bool) $request->route('archive'));
+            $query = DB::table('clients')->whereNull('parent_client_id')->where('active', ! (bool) $request->route('archive'));
             if ($search !== '') {
                 $query->where(function ($query) use ($search) {
                     foreach (['name', 'legal_name', 'email', 'vat_number', 'city'] as $field) {
@@ -973,7 +973,7 @@ class CentroPageController extends Controller
                     ->whereIn('id', $this->visibleClientIdsForUser($request->user()->id))
                     ->orderBy('name')
                     ->get(['id', 'name'])
-                : DB::table('clients')->orderBy('name')->get(['id', 'name']),
+                : DB::table('clients')->when(!in_array($section, ['tasks', 'calendar'], true), fn ($query) => $query->whereNull('parent_client_id'))->orderBy('name')->get(['id', 'name', 'parent_client_id']),
             'projects' => DB::table('projects')
                 ->when($this->isGuest($request), fn ($query) => $query
                     ->join('project_followers', 'project_followers.project_id', '=', 'projects.id')
@@ -2592,7 +2592,7 @@ class CentroPageController extends Controller
             'users' => $needsUsers ? $this->userOptions() : [],
             'clients' => ! $needsItems ? [] : ($this->isGuest($request)
                 ? DB::table('clients')->whereIn('id', $this->visibleClientIdsForUser($request->user()->id))->orderBy('name')->get(['id', 'name'])
-                : DB::table('clients')->orderBy('name')->get(['id', 'name'])),
+                : DB::table('clients')->whereNull('parent_client_id')->orderBy('name')->get(['id', 'name'])),
             'credentialCategories' => $this->passwordCredentialCategories(),
             'passwordCategoryFields' => $needsItems ? DB::table('password_category_fields')->orderBy('label')->get(['id', 'category', 'label']) : [],
             'selectedVault' => $selectedVault,
@@ -3182,9 +3182,10 @@ class CentroPageController extends Controller
 
         $related = match ($section) {
             'clients' => [
+                'subclients' => DB::table('clients')->where('parent_client_id', $id)->orderBy('name')->get(['id', 'name']),
                 'projects' => DB::table('projects')->where('client_id', $id)->latest()->get(),
                 'tasks' => DB::table('tasks')
-                    ->where('client_id', $id)
+                    ->where(fn ($query) => $query->where('client_id', $id)->orWhereIn('client_id', DB::table('clients')->where('parent_client_id', $id)->select('id')))
                     ->where(fn ($query) => $query->whereNull('parent_task_id')->orWhereRaw("TRIM(parent_task_id) = ''"))
                     ->latest()
                     ->get(),
@@ -3205,12 +3206,12 @@ class CentroPageController extends Controller
                 'client' => $record->client_id ? DB::table('clients')->where('id', $record->client_id)->first() : null,
                 'projectClients' => $this->isGuest($request)
                     ? DB::table('clients')->where('id', $record->client_id)->get(['id', 'name'])
-                    : DB::table('clients')->orderBy('name')->get(['id', 'name']),
+                    : DB::table('clients')->whereNull('parent_client_id')->orderBy('name')->get(['id', 'name']),
                 'projectUsers' => $this->isGuest($request) ? $this->userOptionsForProject($id) : $this->userOptions(),
                 'users' => $this->isGuest($request) ? $this->userOptionsForProject($id) : $this->userOptions(),
                 'taskClients' => $this->isGuest($request)
                     ? DB::table('clients')->where('id', $record->client_id)->get(['id', 'name'])
-                    : DB::table('clients')->orderBy('name')->get(['id', 'name']),
+                    : DB::table('clients')->orderBy('name')->get(['id', 'name', 'parent_client_id']),
                 'taskProjects' => $this->isGuest($request)
                     ? DB::table('projects')->where('id', $id)->get(['id', 'name'])
                     : DB::table('projects')->orderBy('name')->get(['id', 'name']),
@@ -3254,7 +3255,7 @@ class CentroPageController extends Controller
                     : $this->userOptions(),
                 'taskClients' => $this->isGuest($request)
                     ? DB::table('clients')->where('id', $record->client_id)->get(['id', 'name'])
-                    : DB::table('clients')->orderBy('name')->get(['id', 'name']),
+                    : DB::table('clients')->orderBy('name')->get(['id', 'name', 'parent_client_id']),
                 'taskProjects' => $this->isGuest($request)
                     ? $this->visibleProjectOptionsForUser($request->user()->id)
                     : DB::table('projects')->orderBy('name')->get(['id', 'name']),
@@ -3528,6 +3529,10 @@ class CentroPageController extends Controller
     {
         $section = $request->route('section');
         $this->ensureRoleCanDestroyRecord($request, $section, $id);
+
+        if ($section === 'clients' && DB::table('clients')->where('parent_client_id', $id)->exists()) {
+            return back()->withErrors(['client' => 'Rimuovi prima i sottoclienti collegati.']);
+        }
 
         $task = null;
         if ($section === 'tasks') {
@@ -4130,7 +4135,7 @@ class CentroPageController extends Controller
     private function clientStats(): array
     {
         return [
-            'total' => DB::table('clients')->count(),
+            'total' => DB::table('clients')->whereNull('parent_client_id')->count(),
             'withServices' => DB::table('client_services')->distinct('client_id')->count('client_id'),
             'withOpenTasks' => DB::table('tasks')->where('status', '!=', 'done')->distinct('client_id')->count('client_id'),
         ];
@@ -8745,6 +8750,37 @@ class CentroPageController extends Controller
                 ]);
             }
         });
+    }
+
+    public function storeSubclient(Request $request, string $id): RedirectResponse
+    {
+        $this->ensureCanManageClients($request);
+        DB::table('clients')->where('id', $id)->whereNull('parent_client_id')->exists() || abort(404);
+        $data = $request->validate(['name' => ['required', 'string', 'max:255']]);
+        DB::table('clients')->insert($data + ['id' => (string) str()->uuid(), 'parent_client_id' => $id, 'created_by' => $request->user()->id, 'created_at' => now(), 'updated_at' => now()]);
+        return back()->with('status', 'Sottocliente aggiunto.');
+    }
+
+    public function updateSubclient(Request $request, string $id, string $subclientId): RedirectResponse
+    {
+        $this->ensureCanManageClients($request);
+        DB::table('clients')->where('id', $subclientId)->where('parent_client_id', $id)->exists() || abort(404);
+        $data = $request->validate(['name' => ['required', 'string', 'max:255']]);
+        DB::table('clients')->where('id', $subclientId)->update($data + ['updated_at' => now()]);
+        return back()->with('status', 'Sottocliente aggiornato.');
+    }
+
+    public function destroySubclient(Request $request, string $id, string $subclientId): RedirectResponse
+    {
+        $this->ensureCanManageClients($request);
+        DB::table('clients')->where('id', $subclientId)->where('parent_client_id', $id)->exists() || abort(404);
+        foreach (['tasks', 'projects', 'password_items'] as $table) {
+            if (DB::table($table)->where('client_id', $subclientId)->exists()) {
+                return back()->withErrors(['subclient' => 'Il sottocliente ha elementi collegati: riassegnali prima di eliminarlo.']);
+            }
+        }
+        DB::table('clients')->where('id', $subclientId)->delete();
+        return back()->with('status', 'Sottocliente eliminato.');
     }
 
     public function storeClientContact(Request $request, string $id): RedirectResponse

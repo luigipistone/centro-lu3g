@@ -48,7 +48,7 @@ class ReportSyncController extends Controller
         $this->authorizeSuperadmin($request);
         try {
             $remote = $preview->fetch();
-            $clients = DB::table('clients')->get(['id', 'name', 'vat_number'])->map(fn ($r) => (array) $r)->all();
+            $clients = DB::table('clients')->whereNull('parent_client_id')->get(['id', 'name', 'vat_number'])->map(fn ($r) => (array) $r)->all();
             $services = DB::table('services')->get(['id', 'name'])->map(fn ($r) => (array) $r)->all();
             $links = Schema::hasTable('report_client_links')
                 ? DB::table('report_client_links')->pluck('client_id', 'external_id')->all() : [];

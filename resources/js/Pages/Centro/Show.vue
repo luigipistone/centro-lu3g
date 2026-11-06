@@ -1,4 +1,5 @@
 <script setup>
+import { clientOptions } from '@/utils/clientOptions';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppDateInput from '@/Components/AppDateInput.vue';
 import AppSelect from '@/Components/AppSelect.vue';
@@ -258,9 +259,7 @@ function clientSelectFieldOptions(field) {
 }
 
 function namedOptions(source, emptyOption = null) {
-    const options = (source || []).map((item) => ({ value: item.id, label: item.name || item.email || item.title || item.id }));
-
-    return emptyOption ? [emptyOption, ...options] : options;
+    return clientOptions(source, emptyOption);
 }
 
 function taskDependencyLabel(task) {
@@ -551,6 +550,20 @@ const contactForm = useForm({
     phone: '',
     role: '',
 });
+const subclientForm = useForm({ name: '' });
+const editingSubclient = ref(null);
+function saveSubclient() {
+    const options = { preserveScroll: true, onSuccess: () => { subclientForm.reset(); editingSubclient.value = null; } };
+    if (editingSubclient.value) subclientForm.put(route('clients.subclients.update', [props.record.id, editingSubclient.value]), options);
+    else subclientForm.post(route('clients.subclients.store', props.record.id), options);
+}
+function removeSubclient(client) {
+    openConfirm({
+        title: 'Eliminare questo sottocliente?', description: client.name,
+        keyword: 'ELIMINA', button: 'Elimina', danger: true,
+        action: () => router.delete(route('clients.subclients.destroy', [props.record.id, client.id]), { preserveScroll: true, onFinish: closeConfirm }),
+    });
+}
 const editingContactId = ref(null);
 const contactDrafts = ref({});
 const contactAutosaveStates = ref({});
@@ -4016,6 +4029,33 @@ onUnmounted(() => {
                                 <dd class="mt-1 text-sm text-gray-700 whitespace-pre-line">{{ clientForm.notes || '-' }}</dd>
                             </div>
                         </dl>
+                    </section>
+
+                    <section v-if="!record.parent_client_id" class="surface rounded-md p-5">
+                        <div class="mb-5 flex items-center justify-between">
+                            <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Sottoclienti</h3>
+                            <span class="text-xs text-gray-500">{{ related.subclients?.length || 0 }}</span>
+                        </div>
+                        <form v-if="canEditClient" class="mb-4 flex flex-wrap items-end gap-3" @submit.prevent="saveSubclient">
+                            <div class="min-w-0 flex-1">
+                                <label for="subclient-name" class="block text-sm font-medium text-gray-700">Nome</label>
+                                <input id="subclient-name" v-model="subclientForm.name" class="form-control" maxlength="255" required />
+                                <p v-if="subclientForm.errors.name" class="mt-1 text-xs text-red-600">{{ subclientForm.errors.name }}</p>
+                            </div>
+                            <button type="submit" class="btn btn-primary" :disabled="subclientForm.processing">{{ editingSubclient ? 'Salva' : 'Aggiungi' }}</button>
+                            <button v-if="editingSubclient" type="button" class="btn btn-outline" @click="editingSubclient = null; subclientForm.reset(); subclientForm.clearErrors()">Annulla</button>
+                        </form>
+                        <p v-if="$page.props.errors.subclient" class="mb-3 text-sm text-red-600">{{ $page.props.errors.subclient }}</p>
+                        <div class="divide-y divide-gray-100">
+                            <div v-for="child in related.subclients" :key="child.id" class="flex items-center justify-between gap-3 py-2">
+                                <span class="min-w-0 break-words text-sm font-medium text-gray-900">{{ child.name }}</span>
+                                <div v-if="canEditClient" class="flex shrink-0 items-center gap-1">
+                                    <button type="button" class="icon-btn" title="Modifica sottocliente" aria-label="Modifica sottocliente" @click="editingSubclient = child.id; subclientForm.name = child.name; subclientForm.clearErrors()"><Pencil class="h-4 w-4" /></button>
+                                    <button type="button" class="icon-btn text-red-600" title="Elimina sottocliente" aria-label="Elimina sottocliente" @click="removeSubclient(child)"><Trash2 class="h-4 w-4" /></button>
+                                </div>
+                            </div>
+                        </div>
+                        <p v-if="!related.subclients?.length" class="text-sm text-gray-500">Nessun sottocliente.</p>
                     </section>
 
                     <section class="surface rounded-md p-5">

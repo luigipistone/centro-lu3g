@@ -74,6 +74,9 @@ Route::middleware('auth')->group(function () {
     Route::put('/clients/{id}', [CentroPageController::class, 'update'])->defaults('section', 'clients')->name('clients.update');
     Route::patch('/clients/{id}/active', [CentroPageController::class, 'setClientActive'])->name('clients.active');
     Route::post('/clients/{id}/contacts', [CentroPageController::class, 'storeClientContact'])->name('clients.contacts.store');
+    Route::post('/clients/{id}/subclients', [CentroPageController::class, 'storeSubclient'])->name('clients.subclients.store');
+    Route::put('/clients/{id}/subclients/{subclientId}', [CentroPageController::class, 'updateSubclient'])->name('clients.subclients.update');
+    Route::delete('/clients/{id}/subclients/{subclientId}', [CentroPageController::class, 'destroySubclient'])->name('clients.subclients.destroy');
     Route::put('/clients/{clientId}/contacts/{contactId}', [CentroPageController::class, 'updateClientContact'])->name('clients.contacts.update');
     Route::delete('/clients/{clientId}/contacts/{contactId}', [CentroPageController::class, 'destroyClientContact'])->name('clients.contacts.destroy');
     Route::post('/clients/{clientId}/services/{serviceId}', [CentroPageController::class, 'attachClientService'])->name('clients.services.attach');

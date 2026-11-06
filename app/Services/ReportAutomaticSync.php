@@ -11,7 +11,7 @@ class ReportAutomaticSync
 {
     public function plan(array $remote): array
     {
-        $local = DB::table('clients')->get();
+        $local = DB::table('clients')->whereNull('parent_client_id')->get();
         $links = DB::table('report_client_links')->get();
         $normalize = fn ($v) => mb_strtoupper(preg_replace('/\s+/u', ' ', trim((string) $v)));
         $choices = [];

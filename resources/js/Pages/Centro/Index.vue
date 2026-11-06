@@ -1,4 +1,5 @@
 <script setup>
+import { clientOptions } from '@/utils/clientOptions';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AttendanceReport from './AttendanceReport.vue';
 import AppDateInput from '@/Components/AppDateInput.vue';
@@ -330,6 +331,7 @@ const calendarCommentAutosaveSequences = {};
 let calendarBodyOverflow = '';
 const taskWeekStart = ref(startOfWeek(new Date()));
 const taskSearch = ref('');
+const taskUser = ref('');
 const taskPeriod = ref('all');
 const taskStatus = ref('all');
 const taskPriority = ref('all');
@@ -913,6 +915,7 @@ function optionLabel(field, option) {
 }
 
 function fieldSelectOptions(field, emptyLabel = 'Seleziona') {
+    if (field.type === 'client') return clientOptions(optionsFor(field), field.required ? null : { value: '', label: emptyLabel });
     const options = optionsFor(field).map((option) => ({
         value: option.id,
         label: optionLabel(field, option),
@@ -928,9 +931,7 @@ function objectOptions(source, emptyOption = null) {
 }
 
 function namedOptions(source, emptyOption = null) {
-    const options = source.map((item) => ({ value: item.id, label: item.name || item.email || item.title || item.id }));
-
-    return emptyOption ? [emptyOption, ...options] : options;
+    return clientOptions(source, emptyOption);
 }
 
 const projectTemplateOptions = computed(() => [
@@ -2398,7 +2399,8 @@ const taskRows = computed(() => props.rows.filter((row) => {
     const matchesPriority = taskPriority.value === 'all' || row.priority === taskPriority.value;
     const matchesType = taskType.value === 'all' || (row.task_type || 'task') === taskType.value;
 
-    return matchesPeriod && matchesSearch && matchesStatus && matchesPriority && matchesType;
+    const matchesUser = !taskUser.value || (row.assignee_ids || []).includes(taskUser.value);
+    return matchesPeriod && matchesSearch && matchesStatus && matchesPriority && matchesType && matchesUser;
 }));
 
 function tasksByStatus(status) {
@@ -4128,6 +4130,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                 ></div>
                             </div>
                             <textarea v-else-if="field.type === 'textarea'" v-model="form[field.name]" :rows="section === 'tasks' ? 3 : 4" class="form-control" />
+                            <AppSelect v-else-if="section === 'tasks' && field.type === 'client'" v-model="form[field.name]" :options="clientOptions(clients, { value: '', label: 'Nessun cliente' })" searchable />
                             <div v-else-if="isTaskSearchSelect(field)" class="relative" :data-task-search-field="field.name">
                                 <button
                                     type="button"
@@ -5876,11 +5879,12 @@ function calendarDayStyle(sectionMonth, cell) {
                         </button>
                     </div>
                 </div>
-                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_120px_120px_120px_auto_auto_auto]">
-                    <ClearableSearchInput v-model="taskSearch" class="min-w-0 sm:col-span-2 xl:col-span-1" input-class="mt-0" placeholder="Cerca task, cliente, progetto o servizio..." />
+                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-[minmax(0,1fr)_110px_110px_110px_160px_auto_auto_auto]">
+                    <ClearableSearchInput v-model="taskSearch" class="min-w-0 sm:col-span-2 2xl:col-span-1" input-class="mt-0" placeholder="Cerca task, cliente, progetto o servizio..." />
                     <AppSelect v-model="taskStatus" :options="taskStatusOptions" />
                     <AppSelect v-model="taskPriority" :options="taskPriorityOptions" />
                     <AppSelect v-model="taskType" :options="taskTypeOptions" />
+                    <AppSelect v-model="taskUser" :options="namedOptions(users, { value: '', label: 'Tutti gli utenti' })" searchable aria-label="Filtra per assegnatario" />
                     <button v-if="canCreate" type="button" class="btn btn-primary" @click="openCreate({ task_type: 'project' })"><Briefcase class="h-4 w-4" :stroke-width="1.7" />Task</button>
                     <button v-if="canCreate" type="button" class="btn task-tone task-tone-ongoing border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100" @click="openCreate({ task_type: 'ongoing' })"><RefreshCw class="h-4 w-4" :stroke-width="1.7" />Continuativa</button>
                     <button v-if="canCreate" type="button" class="btn task-tone task-tone-meeting border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100" @click="openCreate({ task_type: 'meeting', due_time: '09:00' })"><CalendarClock class="h-4 w-4" :stroke-width="1.7" />Meeting</button>
