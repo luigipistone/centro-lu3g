@@ -470,6 +470,12 @@ function hiddenRelatedTaskCount() {
     return Math.max(relatedTasksSorted().length - relatedItemsFor('tasks').length, 0);
 }
 
+const clientTaskArchive = computed(() => relatedTasksSorted().sort((first, second) => {
+    const firstDate = first.due_date || first.created_at || '';
+    const secondDate = second.due_date || second.created_at || '';
+    return secondDate.localeCompare(firstDate) || String(first.title || '').localeCompare(String(second.title || ''), 'it');
+}));
+
 function userKpiClass(tone) {
     return {
         blue: 'border-sky-100 bg-sky-50/80 text-sky-700',
@@ -520,6 +526,7 @@ const showAllTaskActivity = ref(false);
 const taskActionMenuOpen = ref(false);
 const taskActionMenuStyle = ref({});
 const clientRelatedTasksExpanded = ref(false);
+const clientTaskArchiveOpen = ref(false);
 const contactForm = useForm({
     first_name: '',
     last_name: '',
@@ -5657,6 +5664,28 @@ onUnmounted(() => {
 
                     <section v-for="name in (section === 'projects' ? ['documents'] : ['projects', 'tasks', 'documents'])" :key="name" v-show="relatedItemsFor(name).length" class="surface rounded-md p-5">
                         <h3 class="mb-3 text-sm font-semibold text-gray-900">{{ relatedSectionLabel(name) }}</h3>
+                        <button
+                            v-if="section === 'clients' && name === 'tasks'"
+                            type="button"
+                            class="mb-3 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:underline"
+                            :aria-expanded="clientTaskArchiveOpen"
+                            aria-controls="client-task-archive"
+                            @click="clientTaskArchiveOpen = !clientTaskArchiveOpen"
+                        >
+                            {{ clientTaskArchiveOpen ? 'Chiudi archivio cliente' : 'Carica archivio cliente' }}
+                        </button>
+                        <div v-if="section === 'clients' && name === 'tasks' && clientTaskArchiveOpen" id="client-task-archive" class="mb-4 divide-y divide-gray-100 border-y border-gray-100">
+                            <component
+                                v-for="task in clientTaskArchive"
+                                :key="`archive-${task.id}`"
+                                :is="canOpenRelatedItem('tasks') ? Link : 'div'"
+                                :href="canOpenRelatedItem('tasks') ? relatedItemHref('tasks', task) : undefined"
+                                class="flex items-start justify-between gap-3 py-2 text-xs text-gray-900 hover:text-indigo-600"
+                            >
+                                <span class="min-w-0 break-words font-medium">{{ task.title }}</span>
+                                <time class="shrink-0 text-gray-500" :datetime="task.due_date || task.created_at" :title="task.due_date ? 'Data di scadenza' : 'Data di creazione'">{{ dateIt(task.due_date || task.created_at) }}</time>
+                            </component>
+                        </div>
                         <div class="space-y-2">
                             <component
                                 v-for="item in relatedItemsFor(name)"
