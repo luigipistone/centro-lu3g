@@ -375,7 +375,7 @@ const taskSearchSelectQueries = ref({
 });
 const taskDescriptionEditor = ref(null);
 const requestedSettingsTab = new URLSearchParams(window.location.search).get('tab');
-const settingsTab = ref(['log', 'sezioni'].includes(requestedSettingsTab) || (['github', 'airmail'].includes(requestedSettingsTab) && isSuperadmin.value) ? requestedSettingsTab : 'personalizzazione');
+const settingsTab = ref(['personalizzazione', 'smtp', 'figma', 'backup', 'ruoli', 'sezioni', 'log', 'gestione'].includes(requestedSettingsTab) || (['github', 'airmail'].includes(requestedSettingsTab) && isSuperadmin.value) ? requestedSettingsTab : 'personalizzazione');
 const eventThemeOptions = [
     { id: 'standard', label: 'Standard' },
     { id: 'halloween', label: 'Halloween' },
@@ -702,6 +702,16 @@ const settingsTabs = [
     ['log', 'Log', FileText],
     ['gestione', 'Servizi', Settings],
 ];
+const settingsGroups = [
+    { id: 'aspetto', label: 'Aspetto', icon: WandSparkles, tabs: ['personalizzazione'] },
+    { id: 'integrazioni', label: 'Integrazioni', icon: PanelsTopLeft, tabs: ['smtp', 'figma', 'github', 'airmail'] },
+    { id: 'accessi', label: 'Accessi', icon: ShieldCheck, tabs: ['ruoli', 'sezioni'] },
+    { id: 'sistema', label: 'Sistema', icon: DatabaseBackup, tabs: ['backup', 'log'] },
+    { id: 'servizi', label: 'Servizi', icon: Settings, tabs: ['gestione'] },
+];
+const settingsGroup = computed(() => settingsGroups.find(group => group.tabs.includes(settingsTab.value)) || settingsGroups[0]);
+const settingsSubtabs = computed(() => settingsTabs.filter(tab => settingsGroup.value.tabs.includes(tab[0])
+    && (!['github', 'airmail'].includes(tab[0]) || isSuperadmin.value)));
 
 function updateSectionVisibility(section) {
     sectionSwitchSaving.value = section.key;
@@ -6104,18 +6114,25 @@ function calendarDayStyle(sectionMonth, cell) {
                     {{ page.props.flash.status }}
                 </div>
 
-                <div class="surface flex flex-wrap gap-2 p-2">
+                <div class="surface flex flex-nowrap gap-1 overflow-x-auto p-2" role="tablist" aria-label="Impostazioni">
                     <button
-                        v-for="tab in settingsTabs.filter(item => !['github', 'airmail'].includes(item[0]) || isSuperadmin)"
-                        :key="tab[0]"
+                        v-for="group in settingsGroups"
+                        :key="group.id"
                         type="button"
-                        :class="['settings-tab flex-none whitespace-nowrap', settingsTab === tab[0] ? 'settings-tab-active' : '']"
-                        @click="settingsTab = tab[0]"
+                        role="tab"
+                        :aria-selected="settingsGroup.id === group.id"
+                        :class="['settings-tab flex-none whitespace-nowrap sm:flex-1 sm:justify-center', settingsGroup.id === group.id ? 'settings-tab-active' : '']"
+                        @click="settingsTab = group.tabs[0]"
                     >
-                        <component :is="tab[2]" class="h-4 w-4" :stroke-width="1.7" />
-                        {{ tab[1] }}
+                        <component :is="group.icon" class="h-4 w-4 shrink-0" :stroke-width="1.7" />
+                        {{ group.label }}
                     </button>
-                    <Link v-if="isSuperadmin" :href="route('settings.report.index')" class="settings-tab flex-none whitespace-nowrap"><RefreshCw class="h-4 w-4" :stroke-width="1.7" />LU3G Report</Link>
+                </div>
+                <div v-if="settingsSubtabs.length > 1" class="flex flex-nowrap items-center gap-2 overflow-x-auto pb-1" aria-label="Sezioni impostazioni">
+                    <button v-for="tab in settingsSubtabs" :key="tab[0]" type="button" :class="['settings-tab flex-none whitespace-nowrap', settingsTab === tab[0] ? 'settings-tab-active' : '']" :aria-pressed="settingsTab === tab[0]" @click="settingsTab = tab[0]">
+                        <component :is="tab[2]" class="h-4 w-4 shrink-0" :stroke-width="1.7" />{{ tab[1] }}
+                    </button>
+                    <Link v-if="settingsGroup.id === 'integrazioni' && isSuperadmin" :href="route('settings.report.index')" class="settings-tab flex-none whitespace-nowrap"><RefreshCw class="h-4 w-4" :stroke-width="1.7" />LU3G Report</Link>
                 </div>
 
                 <section v-if="settingsTab === 'personalizzazione'" class="grid gap-6 lg:grid-cols-[1fr_320px]">
