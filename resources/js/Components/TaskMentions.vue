@@ -99,7 +99,7 @@ onUnmounted(() => {
                 <button v-for="(user, index) in matches" :key="user.id" type="button" role="option" :aria-selected="index === selected" class="field-dropdown-option flex w-full items-center gap-2 px-3 py-2 text-left text-sm" :class="index === selected ? 'bg-indigo-50' : ''" @click="choose(user)">
                     <UserAvatar :user="user" size="sm" /><span class="truncate">{{ user.name || user.email }}</span>
                 </button>
-                <p v-if="!matches.length" class="px-3 py-2 text-sm text-gray-500">{{ loading ? 'Caricamento...' : error ? 'Impossibile caricare gli utenti.' : 'Nessun partecipante trovato' }}</p>
+                <p v-if="!matches.length" class="px-3 py-2 text-sm text-gray-500">{{ loading ? 'Caricamento...' : error ? 'Impossibile caricare gli utenti.' : 'Nessun utente trovato' }}</p>
             </div>
         </div>
     </Teleport>

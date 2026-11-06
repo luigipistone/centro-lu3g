@@ -13,6 +13,21 @@ class TaskMentionsTest extends TestCase
 {
     use RefreshDatabase, ActsAsWorkflowAdmin;
 
+    public function test_internal_users_can_be_mentioned_without_becoming_assignees_or_followers(): void
+    {
+        [$author, $colleague] = User::factory()->count(2)->create()->all();
+        DB::table('user_roles')->insert(['id' => (string) Str::uuid(), 'user_id' => $colleague->id, 'role' => 'editor']);
+        $task = (string) Str::uuid();
+        DB::table('tasks')->insert(['id' => $task, 'title' => 'Shared task', 'task_type' => 'ongoing', 'status' => 'todo', 'priority' => 'medium']);
+        $this->actingAsWorkflowAdmin($author)->getJson("/tasks/{$task}/mention-users")
+            ->assertOk()->assertJsonFragment(['id' => $colleague->id]);
+        $this->post("/tasks/{$task}/comments", ['content' => '<span data-mention-user="'.$colleague->id.'">@Colleague</span>'])
+            ->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('notifications', ['user_id' => $colleague->id, 'task_id' => $task, 'type' => 'task_mention']);
+        $this->assertDatabaseMissing('task_assignees', ['task_id' => $task, 'user_id' => $colleague->id]);
+        $this->assertDatabaseMissing('task_followers', ['task_id' => $task, 'user_id' => $colleague->id]);
+    }
+
     public function test_mentions_notify_participants_once_and_ignore_unauthorized_ids(): void
     {
         [$author, $mentioned, $follower, $outsider] = User::factory()->count(4)->create()->all();

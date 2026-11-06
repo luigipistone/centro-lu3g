@@ -8382,7 +8382,15 @@ class CentroPageController extends Controller
         $this->ensureGuestCanEditTask($request, $id);
         abort_unless(DB::table('tasks')->where('id', $id)->exists(), 404);
         return response()->json($this->userOptions()->filter(fn ($user) => $user->id !== $request->user()->id
-            && $this->isTaskParticipant($id, $user->id))->values());
+            && $this->canMentionTaskUser($id, $user->id))->values());
+    }
+
+    private function canMentionTaskUser(string $taskId, string $userId): bool
+    {
+        if (! DB::table('users')->where('id', $userId)->exists()) return false;
+        $role = (string) (DB::table('user_roles')->where('user_id', $userId)->value('role') ?: 'guest');
+        return app(RolePermissionService::class)->allows($role, 'tasks.view')
+            && ($role !== 'guest' || $this->isTaskParticipant($taskId, $userId));
     }
 
     private function commentMentionIds(string $content): Collection
@@ -8403,7 +8411,7 @@ class CentroPageController extends Controller
     private function notifyCommentPeople(Request $request, string $taskId, string $content, string $type, string $message, string $previous = ''): void
     {
         $mentioned = $this->commentMentionIds($content)->diff($this->commentMentionIds($previous))
-            ->filter(fn ($id) => $id !== $request->user()->id && $this->isTaskParticipant($taskId, $id));
+            ->filter(fn ($id) => $id !== $request->user()->id && $this->canMentionTaskUser($taskId, $id));
         $this->notifyUsers($this->taskNotificationUserIds($taskId)->diff($mentioned)->reject(fn ($id) => $id === $request->user()->id), $request->user()->id, $type, $message, $taskId);
         $title = DB::table('tasks')->where('id', $taskId)->value('title');
         $this->notifyUsers($mentioned, $request->user()->id, 'task_mention', $request->user()->name.' ti ha menzionato in un commento alla task "'.$title.'".', $taskId);
