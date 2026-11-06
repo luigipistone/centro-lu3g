@@ -817,13 +817,13 @@ if (props.selectedGroup) {
                                 <ClearableSearchInput v-model="search" input-class="h-[38px]" placeholder="Cerca password" />
                                 <AppSelect
                                     v-model="activeClientId"
-                                    class="password-filter-control"
+                                    class="app-filter-control"
                                     :options="[{ value: 'all', label: 'Tutti i clienti' }, ...clients.map((client) => ({ value: client.id, label: client.name }))]"
                                     searchable
                                 />
                                 <AppSelect
                                     v-model="activeCategoryFilters"
-                                    class="password-filter-control"
+                                    class="app-filter-control"
                                     :options="categoryFilterOptions"
                                     placeholder="Categorie"
                                     multiple
@@ -1491,11 +1491,6 @@ if (props.selectedGroup) {
 </template>
 
 <style scoped>
-.password-filter-control :deep(.form-control) {
-    height: 38px;
-    min-height: 38px;
-}
-
 .password-length-slider {
     accent-color: hsl(var(--primary-app));
     cursor: pointer;

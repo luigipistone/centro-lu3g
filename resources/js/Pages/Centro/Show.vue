@@ -1,5 +1,6 @@
 <script setup>
 import { clientOptions } from '@/utils/clientOptions';
+import ClientSelect from '@/Components/ClientSelect.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppDateInput from '@/Components/AppDateInput.vue';
 import AppSelect from '@/Components/AppSelect.vue';
@@ -4861,10 +4862,9 @@ onUnmounted(() => {
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Cliente</label>
-                                <AppSelect
+                                <ClientSelect
                                     v-model="taskForm.client_id"
-                                    :options="namedOptions(related.taskClients, { value: '', label: 'Nessun cliente' })"
-                                    searchable
+                                    :clients="related.taskClients"
                                 />
                             </div>
                             <div>
@@ -6172,7 +6172,7 @@ onUnmounted(() => {
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Cliente</label>
-                                    <AppSelect v-model="projectTaskDrawerForm.client_id" :options="namedOptions(related.taskClients, { value: '', label: 'Nessun cliente' })" searchable @change="saveProjectTaskDrawer(0)" />
+                                    <ClientSelect v-model="projectTaskDrawerForm.client_id" :clients="related.taskClients" @change="saveProjectTaskDrawer(0)" />
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Servizio</label>

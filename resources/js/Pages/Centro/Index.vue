@@ -1,5 +1,6 @@
 <script setup>
 import { clientOptions } from '@/utils/clientOptions';
+import ClientSelect from '@/Components/ClientSelect.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AttendanceReport from './AttendanceReport.vue';
 import AppDateInput from '@/Components/AppDateInput.vue';
@@ -4130,7 +4131,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                 ></div>
                             </div>
                             <textarea v-else-if="field.type === 'textarea'" v-model="form[field.name]" :rows="section === 'tasks' ? 3 : 4" class="form-control" />
-                            <AppSelect v-else-if="section === 'tasks' && field.type === 'client'" v-model="form[field.name]" :options="clientOptions(clients, { value: '', label: 'Nessun cliente' })" searchable />
+                            <ClientSelect v-else-if="section === 'tasks' && field.type === 'client'" v-model="form[field.name]" :clients="clients" />
                             <div v-else-if="isTaskSearchSelect(field)" class="relative" :data-task-search-field="field.name">
                                 <button
                                     type="button"
@@ -4744,7 +4745,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Cliente</label>
-                                    <AppSelect v-model="calendarTaskForm.client_id" :options="namedOptions(clients, { value: '', label: 'Nessun cliente' })" searchable @change="saveCalendarTaskInline(0)" />
+                                    <ClientSelect v-model="calendarTaskForm.client_id" :clients="clients" @change="saveCalendarTaskInline(0)" />
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Servizio</label>
@@ -5879,15 +5880,17 @@ function calendarDayStyle(sectionMonth, cell) {
                         </button>
                     </div>
                 </div>
-                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-[minmax(0,1fr)_110px_110px_110px_160px_auto_auto_auto]">
-                    <ClearableSearchInput v-model="taskSearch" class="min-w-0 sm:col-span-2 2xl:col-span-1" input-class="mt-0" placeholder="Cerca task, cliente, progetto o servizio..." />
+                <div class="overflow-x-auto pb-1">
+                <div class="task-filter-bar grid min-w-[760px] items-center gap-2 grid-cols-[minmax(160px,1fr)_110px_100px_110px_140px_38px_38px_38px]">
+                    <ClearableSearchInput v-model="taskSearch" class="min-w-0" input-class="mt-0 h-[38px]" placeholder="Cerca task, cliente, progetto o servizio..." />
                     <AppSelect v-model="taskStatus" :options="taskStatusOptions" />
                     <AppSelect v-model="taskPriority" :options="taskPriorityOptions" />
                     <AppSelect v-model="taskType" :options="taskTypeOptions" />
                     <AppSelect v-model="taskUser" :options="namedOptions(users, { value: '', label: 'Tutti gli utenti' })" searchable aria-label="Filtra per assegnatario" />
-                    <button v-if="canCreate" type="button" class="btn btn-primary" @click="openCreate({ task_type: 'project' })"><Briefcase class="h-4 w-4" :stroke-width="1.7" />Task</button>
-                    <button v-if="canCreate" type="button" class="btn task-tone task-tone-ongoing border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100" @click="openCreate({ task_type: 'ongoing' })"><RefreshCw class="h-4 w-4" :stroke-width="1.7" />Continuativa</button>
-                    <button v-if="canCreate" type="button" class="btn task-tone task-tone-meeting border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100" @click="openCreate({ task_type: 'meeting', due_time: '09:00' })"><CalendarClock class="h-4 w-4" :stroke-width="1.7" />Meeting</button>
+                    <button v-if="canCreate" type="button" class="icon-btn h-[38px] w-[38px] bg-[hsl(var(--primary-app))] text-white" title="Nuova task" aria-label="Nuova task" @click="openCreate({ task_type: 'project' })"><Briefcase class="h-4 w-4" :stroke-width="1.7" /></button>
+                    <button v-if="canCreate" type="button" class="icon-btn h-[38px] w-[38px] task-tone task-tone-ongoing border border-amber-200 bg-amber-50 text-amber-700" title="Nuova task continuativa" aria-label="Nuova task continuativa" @click="openCreate({ task_type: 'ongoing' })"><RefreshCw class="h-4 w-4" :stroke-width="1.7" /></button>
+                    <button v-if="canCreate" type="button" class="icon-btn h-[38px] w-[38px] task-tone task-tone-meeting border border-violet-200 bg-violet-50 text-violet-700" title="Nuovo meeting" aria-label="Nuovo meeting" @click="openCreate({ task_type: 'meeting', due_time: '09:00' })"><CalendarClock class="h-4 w-4" :stroke-width="1.7" /></button>
+                </div>
                 </div>
 
                 <div class="grid gap-4">
