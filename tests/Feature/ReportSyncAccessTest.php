@@ -35,7 +35,9 @@ class ReportSyncAccessTest extends TestCase
             $this->putJson(route('settings.report.update'), ['token' => 'secret'])->assertForbidden();
         }
         $this->actingAs($this->actor('superadmin'))->get(route('settings.report.index'))
-            ->assertInertia(fn (Assert $page) => $page->component('Centro/ReportSync')->where('configured', false));
+            ->assertRedirect(route('settings.index', ['tab' => 'report']));
+        $this->get(route('settings.index', ['tab' => 'report']))
+            ->assertInertia(fn (Assert $page) => $page->component('Centro/Index')->where('reportSettings.configured', false));
     }
 
     public function test_preview_does_not_create_records_or_disclose_secret(): void
@@ -89,7 +91,7 @@ class ReportSyncAccessTest extends TestCase
         $this->assertSame(422, $invalid->getStatusCode(), $invalid->getContent());
         $this->assertSame('replacement', app(ReportSettings::class)->token());
         $this->assertDatabaseCount('report_client_links', 0);
-        $this->get(route('settings.report.index'))->assertDontSee('replacement')
-            ->assertInertia(fn (Assert $page) => $page->where('configured', true));
+        $this->get(route('settings.index', ['tab' => 'report']))->assertDontSee('replacement')
+            ->assertInertia(fn (Assert $page) => $page->where('reportSettings.configured', true));
     }
 }

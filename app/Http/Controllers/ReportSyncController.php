@@ -26,8 +26,7 @@ class ReportSyncController extends Controller
     {
         $this->authorizeSuperadmin($request);
 
-        return Inertia::render('Centro/ReportSync', ['configured' => app(ReportSettings::class)->configured(),
-            'latestRun' => DB::table('report_sync_runs')->orderByDesc('started_at')->first()]);
+        return redirect()->route('settings.index', ['tab' => 'report']);
     }
 
     public function update(Request $request, ReportSettings $settings)

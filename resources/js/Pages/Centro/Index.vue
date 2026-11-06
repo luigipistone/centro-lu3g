@@ -10,6 +10,7 @@ import AppTimeInput from '@/Components/AppTimeInput.vue';
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import TaskMentions from '@/Components/TaskMentions.vue';
+import ReportSyncPanel from '@/Components/ReportSyncPanel.vue';
 import { addDays, daysBetween, movedTaskDates } from '@/utils/calendarTaskDates';
 import {
     ROLE_LABELS,
@@ -99,6 +100,7 @@ const props = defineProps({
     figmaSettings: Object,
     githubSettings: Object,
     airmailSettings: Object,
+    reportSettings: Object,
     backupRuns: Array,
     rolePermissionMatrix: Object,
     sectionAvailability: Array,
@@ -375,7 +377,7 @@ const taskSearchSelectQueries = ref({
 });
 const taskDescriptionEditor = ref(null);
 const requestedSettingsTab = new URLSearchParams(window.location.search).get('tab');
-const settingsTab = ref(['personalizzazione', 'smtp', 'figma', 'backup', 'ruoli', 'sezioni', 'log', 'gestione'].includes(requestedSettingsTab) || (['github', 'airmail'].includes(requestedSettingsTab) && isSuperadmin.value) ? requestedSettingsTab : 'personalizzazione');
+const settingsTab = ref(['personalizzazione', 'smtp', 'figma', 'backup', 'ruoli', 'sezioni', 'log', 'gestione'].includes(requestedSettingsTab) || (['github', 'airmail', 'report'].includes(requestedSettingsTab) && isSuperadmin.value) ? requestedSettingsTab : 'personalizzazione');
 const eventThemeOptions = [
     { id: 'standard', label: 'Standard' },
     { id: 'halloween', label: 'Halloween' },
@@ -696,6 +698,7 @@ const settingsTabs = [
     ['figma', 'Figma', PanelsTopLeft],
     ['github', 'GitHub', GitBranch],
     ['airmail', 'Airmail', Send],
+    ['report', 'LU3G Report', RefreshCw],
     ['backup', 'Backup', DatabaseBackup],
     ['ruoli', 'Ruoli', ShieldCheck],
     ['sezioni', 'Sezioni', PanelsTopLeft],
@@ -704,14 +707,14 @@ const settingsTabs = [
 ];
 const settingsGroups = [
     { id: 'aspetto', label: 'Aspetto', icon: WandSparkles, tabs: ['personalizzazione'] },
-    { id: 'integrazioni', label: 'Integrazioni', icon: PanelsTopLeft, tabs: ['smtp', 'figma', 'github', 'airmail'] },
+    { id: 'integrazioni', label: 'Integrazioni', icon: PanelsTopLeft, tabs: ['smtp', 'figma', 'github', 'airmail', 'report'] },
     { id: 'accessi', label: 'Accessi', icon: ShieldCheck, tabs: ['ruoli', 'sezioni'] },
     { id: 'sistema', label: 'Sistema', icon: DatabaseBackup, tabs: ['backup', 'log'] },
     { id: 'servizi', label: 'Servizi', icon: Settings, tabs: ['gestione'] },
 ];
 const settingsGroup = computed(() => settingsGroups.find(group => group.tabs.includes(settingsTab.value)) || settingsGroups[0]);
 const settingsSubtabs = computed(() => settingsTabs.filter(tab => settingsGroup.value.tabs.includes(tab[0])
-    && (!['github', 'airmail'].includes(tab[0]) || isSuperadmin.value)));
+    && (!['github', 'airmail', 'report'].includes(tab[0]) || isSuperadmin.value)));
 
 function updateSectionVisibility(section) {
     sectionSwitchSaving.value = section.key;
@@ -6132,7 +6135,6 @@ function calendarDayStyle(sectionMonth, cell) {
                     <button v-for="tab in settingsSubtabs" :key="tab[0]" type="button" :class="['settings-tab flex-none whitespace-nowrap', settingsTab === tab[0] ? 'settings-tab-active' : '']" :aria-pressed="settingsTab === tab[0]" @click="settingsTab = tab[0]">
                         <component :is="tab[2]" class="h-4 w-4 shrink-0" :stroke-width="1.7" />{{ tab[1] }}
                     </button>
-                    <Link v-if="settingsGroup.id === 'integrazioni' && isSuperadmin" :href="route('settings.report.index')" class="settings-tab flex-none whitespace-nowrap"><RefreshCw class="h-4 w-4" :stroke-width="1.7" />LU3G Report</Link>
                 </div>
 
                 <section v-if="settingsTab === 'personalizzazione'" class="grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -6370,6 +6372,8 @@ function calendarDayStyle(sectionMonth, cell) {
                         <button type="button" class="btn btn-outline mt-5" :disabled="airmailTestForm.processing || !airmailSettings?.password_saved" @click="testAirmailConnection"><RefreshCw class="h-4 w-4" :class="{ 'animate-spin': airmailTestForm.processing }" :stroke-width="1.7" />{{ airmailTestForm.processing ? 'Verifica...' : 'Testa connessione' }}</button>
                     </div>
                 </section>
+
+                <ReportSyncPanel v-else-if="settingsTab === 'report' && isSuperadmin" :configured="reportSettings?.configured" :latest-run="reportSettings?.latestRun" />
 
                 <section v-else-if="settingsTab === 'backup'" class="grid gap-6 lg:grid-cols-[360px_1fr]">
                     <div class="app-card">

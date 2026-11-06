@@ -1,8 +1,7 @@
 <script setup>
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
-import { Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft, RefreshCw, ChevronLeft, ChevronRight, Save, KeyRound } from '@lucide/vue';
+import { router } from '@inertiajs/vue3';
+import { RefreshCw, ChevronLeft, ChevronRight, Save, KeyRound } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 import axios from 'axios';
 
@@ -30,6 +29,7 @@ async function saveToken() {
     try {
         await axios.put(route('settings.report.update'), { token: token.value.trim() });
         configured.value = true; token.value = ''; message.value = 'Token salvato.';
+        router.reload({ only: ['reportSettings'] });
     } catch (e) { error.value = e.response?.data?.errors?.token?.[0] || 'Salvataggio non riuscito.'; }
     finally { busy.value = ''; }
 }
@@ -41,22 +41,14 @@ async function load() {
 }
 async function synchronize() {
     busy.value = 'sync'; error.value = ''; outcome.value = null;
-    try { outcome.value = (await axios.post(route('settings.report.automatic'))).data; result.value = null; }
+    try { outcome.value = (await axios.post(route('settings.report.automatic'))).data; result.value = null; router.reload({ only: ['reportSettings'] }); }
     catch (e) { error.value = e.response?.data?.message || 'Sincronizzazione non riuscita.'; }
     finally { busy.value = ''; }
 }
 </script>
 
 <template>
-    <Head title="LU3G Report" />
-    <AuthenticatedLayout>
-        <template #header>
-            <div class="flex flex-col gap-1">
-                <Link :href="route('settings.index')" class="inline-flex w-fit items-center gap-2 text-sm font-semibold text-gray-500 hover:text-[hsl(var(--primary-app))]"><ArrowLeft class="h-4 w-4" />Torna alle impostazioni</Link>
-                <h2 class="text-xl font-semibold leading-tight text-gray-800">LU3G Report</h2>
-            </div>
-        </template>
-        <div class="py-8"><div class="mx-auto max-w-[1600px] space-y-5 px-4 sm:px-6 lg:px-8">
+        <div class="space-y-5">
             <form class="app-card" @submit.prevent="saveToken">
                 <h3 class="section-title"><span class="section-icon"><KeyRound class="h-4 w-4" /></span>Connessione LU3G Report</h3>
                 <div class="mt-4 grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
@@ -97,6 +89,5 @@ async function synchronize() {
                 </div>
                 <div class="flex items-center justify-end gap-3 text-sm text-gray-500"><span>{{ page }} / {{ pages }}</span><button class="icon-btn" :disabled="page <= 1" aria-label="Pagina precedente" title="Pagina precedente" @click="page--"><ChevronLeft class="h-4 w-4" /></button><button class="icon-btn" :disabled="page >= pages" aria-label="Pagina successiva" title="Pagina successiva" @click="page++"><ChevronRight class="h-4 w-4" /></button></div>
             </template>
-        </div></div>
-    </AuthenticatedLayout>
+        </div>
 </template>
