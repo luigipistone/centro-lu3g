@@ -2,6 +2,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppDateInput from '@/Components/AppDateInput.vue';
 import AppSelect from '@/Components/AppSelect.vue';
+import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import AppTimeInput from '@/Components/AppTimeInput.vue';
 import DocumentPdfDropzone from '@/Components/DocumentPdfDropzone.vue';
 import DossierAssignedDocuments from '@/Components/DossierAssignedDocuments.vue';
@@ -24,6 +25,7 @@ import {
     Check,
     ChevronDown,
     ChevronLeft,
+    ChevronRight,
     Copy,
     Download,
     ExternalLink,
@@ -528,6 +530,20 @@ const taskActionMenuOpen = ref(false);
 const taskActionMenuStyle = ref({});
 const clientRelatedTasksExpanded = ref(false);
 const clientTaskArchiveOpen = ref(false);
+const clientTaskArchiveSearch = ref('');
+const clientTaskArchivePage = ref(1);
+const clientTaskArchivePageSize = 10;
+const filteredClientTaskArchive = computed(() => {
+    const search = clientTaskArchiveSearch.value.trim().toLocaleLowerCase('it');
+    return clientTaskArchive.value.filter((task) => !search || String(task.title || '').toLocaleLowerCase('it').includes(search));
+});
+const clientTaskArchivePages = computed(() => Math.max(1, Math.ceil(filteredClientTaskArchive.value.length / clientTaskArchivePageSize)));
+const pagedClientTaskArchive = computed(() => filteredClientTaskArchive.value.slice(
+    (clientTaskArchivePage.value - 1) * clientTaskArchivePageSize,
+    clientTaskArchivePage.value * clientTaskArchivePageSize,
+));
+watch(clientTaskArchiveSearch, () => { clientTaskArchivePage.value = 1; });
+watch(clientTaskArchivePages, (pages) => { clientTaskArchivePage.value = Math.min(clientTaskArchivePage.value, pages); });
 const contactForm = useForm({
     first_name: '',
     last_name: '',
@@ -5705,8 +5721,11 @@ onUnmounted(() => {
                             {{ clientTaskArchiveOpen ? 'Chiudi archivio cliente' : 'Carica archivio cliente' }}
                         </button>
                         <div v-if="section === 'clients' && name === 'tasks' && clientTaskArchiveOpen" id="client-task-archive" class="mb-4 divide-y divide-gray-100 border-y border-gray-100">
+                            <div class="py-2">
+                                <ClearableSearchInput v-model="clientTaskArchiveSearch" input-class="mt-0 text-xs" placeholder="Cerca nell'archivio..." aria-label="Cerca in tutte le task completate" />
+                            </div>
                             <component
-                                v-for="task in clientTaskArchive"
+                                v-for="task in pagedClientTaskArchive"
                                 :key="`archive-${task.id}`"
                                 :is="canOpenRelatedItem('tasks') ? Link : 'div'"
                                 :href="canOpenRelatedItem('tasks') ? relatedItemHref('tasks', task) : undefined"
@@ -5715,6 +5734,14 @@ onUnmounted(() => {
                                 <span class="min-w-0 break-words font-medium">{{ task.title }}</span>
                                 <time class="shrink-0 text-gray-500" :datetime="task.due_date || task.created_at" :title="task.due_date ? 'Data di scadenza' : 'Data di creazione'">{{ dateIt(task.due_date || task.created_at) }}</time>
                             </component>
+                            <p v-if="!filteredClientTaskArchive.length" class="py-3 text-xs text-gray-500">Nessuna task trovata.</p>
+                            <div class="flex flex-wrap items-center justify-between gap-2 pt-2 text-xs text-gray-500" aria-live="polite">
+                                <span>{{ filteredClientTaskArchive.length }} task · {{ clientTaskArchivePage }} / {{ clientTaskArchivePages }}</span>
+                                <div v-if="clientTaskArchivePages > 1" class="flex items-center gap-1">
+                                    <button type="button" class="icon-btn" :disabled="clientTaskArchivePage <= 1" title="Pagina precedente" aria-label="Pagina precedente" @click="clientTaskArchivePage--"><ChevronLeft class="h-4 w-4" /></button>
+                                    <button type="button" class="icon-btn" :disabled="clientTaskArchivePage >= clientTaskArchivePages" title="Pagina successiva" aria-label="Pagina successiva" @click="clientTaskArchivePage++"><ChevronRight class="h-4 w-4" /></button>
+                                </div>
+                            </div>
                         </div>
                     </section>
                 </aside>
