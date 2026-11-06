@@ -10,6 +10,7 @@ import AppTimeInput from '@/Components/AppTimeInput.vue';
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import TaskMentions from '@/Components/TaskMentions.vue';
+import DriveAttachments from '@/Components/DriveAttachments.vue';
 import ReportSyncPanel from '@/Components/ReportSyncPanel.vue';
 import { addDays, daysBetween, movedTaskDates } from '@/utils/calendarTaskDates';
 import {
@@ -5106,6 +5107,7 @@ function calendarDayStyle(sectionMonth, cell) {
                             </section>
 
                             <section v-if="calendarTaskForm.id" class="content-card rounded-[var(--radius-sm)] border border-gray-100 bg-gray-50/70 p-4">
+                                <DriveAttachments :key="calendarTaskForm.id" scope="tasks" :entity-id="calendarTaskForm.id" class="mb-6" />
                                 <div class="mb-4 flex items-center gap-4 border-b border-gray-100 pb-3">
                                     <button
                                         type="button"

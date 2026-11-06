@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AiAgencyController;
+use App\Http\Controllers\DriveAttachmentController;
 use App\Http\Controllers\ReportSyncController;
 use App\Http\Controllers\AirmailController;
 use App\Http\Controllers\CentroPageController;
@@ -30,6 +31,13 @@ Route::get('/airmail/{token}/files/{fileId}', [AirmailController::class, 'downlo
 Route::get('/dashboard', [CentroPageController::class, 'dashboard'])->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
+    foreach (['tasks', 'projects'] as $area) {
+        Route::get('/'.$area.'/{id}/drive-attachments', [DriveAttachmentController::class, 'index'])->name($area.'.drive.index');
+        Route::get('/'.$area.'/{id}/drive-folders', [DriveAttachmentController::class, 'folders'])->name($area.'.drive.folders');
+        Route::post('/'.$area.'/{id}/drive-attachments', [DriveAttachmentController::class, 'store'])->name($area.'.drive.store');
+        Route::get('/'.$area.'/{id}/drive-attachments/{fileId}', [DriveAttachmentController::class, 'download'])->name($area.'.drive.download');
+        Route::delete('/'.$area.'/{id}/drive-attachments/{fileId}', [DriveAttachmentController::class, 'destroy'])->name($area.'.drive.destroy');
+    }
     Route::patch('/dashboard/widgets', [CentroPageController::class, 'updateDashboardWidgets'])->name('dashboard.widgets.update');
     Route::patch('/dashboard/widgets/{type}/settings', [CentroPageController::class, 'updateDashboardWidgetSettings'])->name('dashboard.widgets.settings.update');
     Route::patch('/dashboard/note', [CentroPageController::class, 'updateDashboardNote'])->name('dashboard.note.update');

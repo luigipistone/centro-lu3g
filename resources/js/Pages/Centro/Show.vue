@@ -10,6 +10,7 @@ import DocumentPdfDropzone from '@/Components/DocumentPdfDropzone.vue';
 import DossierAssignedDocuments from '@/Components/DossierAssignedDocuments.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import TaskMentions from '@/Components/TaskMentions.vue';
+import DriveAttachments from '@/Components/DriveAttachments.vue';
 import {
     activityText as formatActivityText,
     dateIt,
@@ -4355,11 +4356,10 @@ onUnmounted(() => {
                                         <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Risorse progetto</h3>
                                         <p class="mt-1 text-xs text-gray-500">{{ related.resources?.length || 0 }} file collegati</p>
                                     </div>
-                                    <button type="button" class="btn btn-outline px-3 py-1.5 text-xs" :disabled="projectFileForm.processing" @click="chooseProjectFile('resource')">
+                                    <button type="button" class="btn btn-outline px-3 py-1.5 text-xs" @click="projectWorkspaceTab = 'files'">
                                         <Paperclip class="h-3.5 w-3.5" :stroke-width="1.7" />
                                         Allega
                                     </button>
-                                    <input ref="projectResourceInput" type="file" class="hidden" @change="uploadProjectFileFromInput($event, 'resource')" />
                                 </div>
                                 <div class="space-y-2">
                                     <div v-for="file in related.resources || []" :key="file.id" class="group flex items-center gap-3 rounded-[var(--radius-sm)] bg-white px-3 py-2 text-sm shadow-sm ring-1 ring-gray-100 transition hover:ring-indigo-100">
@@ -4560,21 +4560,7 @@ onUnmounted(() => {
                         </div>
 
                         <div v-else-if="projectWorkspaceTab === 'files'" class="mt-8 space-y-4">
-                            <div
-                                :class="['rounded-md border border-dashed p-8 text-center transition', projectFileDragActive ? 'border-indigo-300 bg-indigo-50/70' : 'border-gray-200 bg-gray-50/70 hover:border-indigo-200 hover:bg-indigo-50/40']"
-                                @dragover.prevent="projectFileDragActive = true"
-                                @dragleave.prevent="projectFileDragActive = false"
-                                @drop.prevent="dropProjectFile"
-                            >
-                                <UploadCloud class="mx-auto h-8 w-8 text-gray-400" :stroke-width="1.6" />
-                                <p class="mt-3 text-sm font-semibold text-gray-800">Trascina qui i file del progetto</p>
-                                <p class="mt-1 text-xs text-gray-500">Oppure selezionali dal tuo computer.</p>
-                                <button type="button" class="btn btn-outline mt-4 px-4 py-2 text-sm" :disabled="projectFileForm.processing" @click="chooseProjectFile('file')">
-                                    <Paperclip class="h-4 w-4" :stroke-width="1.7" />
-                                    Carica file
-                                </button>
-                                <input ref="projectFileInput" type="file" class="hidden" @change="uploadProjectFileFromInput($event, 'file')" />
-                            </div>
+                            <DriveAttachments scope="projects" :entity-id="record.id" />
 
                             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                                 <article v-for="file in related.files || []" :key="file.id" class="group rounded-md border border-gray-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-100 hover:shadow-md">
@@ -4594,9 +4580,6 @@ onUnmounted(() => {
                                     </div>
                                 </article>
                             </div>
-                            <p v-if="!(related.files || []).length" class="rounded-md border border-dashed border-gray-200 bg-white px-4 py-8 text-center text-sm text-gray-500">
-                                Nessun file caricato nel progetto.
-                            </p>
                         </div>
 
                         <div v-else-if="projectWorkspaceTab === 'figma'" class="mt-8 space-y-5">
@@ -5934,6 +5917,7 @@ onUnmounted(() => {
                 </section>
 
                 <section v-if="section === 'tasks'" class="surface rounded-md p-5 lg:col-span-2">
+                    <DriveAttachments :key="record.id" scope="tasks" :entity-id="record.id" class="mb-6" />
                     <div class="mb-4 flex items-center gap-4 border-b border-gray-100 pb-3">
                         <button
                             type="button"
@@ -6429,6 +6413,7 @@ onUnmounted(() => {
                                         Attività
                                     </button>
                                 </div>
+                                <DriveAttachments v-if="projectTaskDrawerTask?.id" :key="projectTaskDrawerTask.id" scope="tasks" :entity-id="projectTaskDrawerTask.id" class="mb-6" />
                                 <div v-if="projectTaskDrawerFeedTab === 'comments'" class="space-y-3">
                                     <form class="space-y-2" @submit.prevent="addProjectDrawerComment">
                                         <div
