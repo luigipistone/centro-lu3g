@@ -61,17 +61,14 @@ class ReportSyncAccessTest extends TestCase
             ->assertStatus(422)->assertDontSee('secret-token');
     }
 
-    public function test_sync_requires_own_unexpired_preview_and_consumes_it(): void
+    public function test_sync_fetches_fresh_data_without_manual_choices(): void
     {
         $actor = $this->actor('superadmin');
-        $snapshot = (string) Str::uuid();
-        $payload = ['snapshot' => $snapshot, 'clients' => ['r' => 'new'], 'areas' => []];
-        $this->actingAs($actor)->postJson(route('settings.report.synchronize'), $payload)->assertStatus(409);
         $client = ['id' => 'r', 'name' => 'Example', 'revision' => 'v1', 'status' => 'inactive', 'servicesComplete' => true, 'activeAreas' => [], 'services' => []];
-        Cache::put('report-preview:'.$actor->id.':'.$snapshot, [$client], 60);
-        $this->postJson(route('settings.report.synchronize'), $payload)->assertOk()->assertJsonPath('created', 1);
+        $this->mock(\App\Services\ReportSyncPreview::class, fn ($mock) => $mock->shouldReceive('fetch')->twice()->andReturn([$client]));
+        $this->actingAs($actor)->postJson(route('settings.report.synchronize'))->assertOk()->assertJsonPath('created', 1);
         $this->assertDatabaseHas('clients', ['name' => 'EXAMPLE', 'active' => false]);
-        $this->postJson(route('settings.report.synchronize'), $payload)->assertStatus(409);
+        $this->postJson(route('settings.report.synchronize'))->assertOk()->assertJsonPath('unchanged', 1);
         $this->assertDatabaseCount('clients', 1);
     }
 

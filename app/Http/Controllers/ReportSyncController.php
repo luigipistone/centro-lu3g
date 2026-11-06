@@ -26,7 +26,8 @@ class ReportSyncController extends Controller
     {
         $this->authorizeSuperadmin($request);
 
-        return Inertia::render('Centro/ReportSync', ['configured' => app(ReportSettings::class)->configured()]);
+        return Inertia::render('Centro/ReportSync', ['configured' => app(ReportSettings::class)->configured(),
+            'latestRun' => DB::table('report_sync_runs')->orderByDesc('started_at')->first()]);
     }
 
     public function update(Request $request, ReportSettings $settings)
@@ -56,6 +57,7 @@ class ReportSyncController extends Controller
             Cache::put('report-preview:'.$request->user()->id.':'.$snapshot, $remote, now()->addMinutes(15));
             return response()->json($preview->build($remote, $clients, $links, $services) + [
                 'snapshot' => $snapshot, 'local_clients' => $clients, 'local_services' => $services,
+                'automatic' => app(\App\Services\ReportAutomaticSync::class)->plan($remote),
                 'area_mappings' => DB::table('report_area_mappings')->whereNotNull('service_id')->pluck('service_id', 'external_id'),
                 'source_statuses' => collect($remote)->pluck('status', 'id'),
                 'profile_changes' => collect($remote)->mapWithKeys(fn ($c) => [$c['id'] => app(ReportSynchronizer::class)->profile($c)]),
@@ -68,32 +70,18 @@ class ReportSyncController extends Controller
         }
     }
 
-    public function synchronize(Request $request, ReportSynchronizer $sync)
+    public function synchronize(Request $request, \App\Services\ReportAutomaticSync $sync)
+    {
+        return $this->automatic($request, $sync);
+    }
+
+    public function automatic(Request $request, \App\Services\ReportAutomaticSync $sync)
     {
         $this->authorizeSuperadmin($request);
-        $validator = Validator::make($request->all(), [
-            'snapshot' => ['required', 'uuid'], 'clients' => ['required', 'array', 'min:1'],
-            'clients.*' => ['required', 'string', 'max:100'], 'areas' => ['present', 'array'],
-            'areas.*' => ['required', 'uuid', 'exists:services,id'],
-        ]);
-        if ($validator->fails()) return response()->json(['message' => 'Selezioni non valide.', 'errors' => $validator->errors()], 422);
-        $lock = Cache::lock('report-sync-execution', 600);
-        if (! $lock->get()) return response()->json(['message' => 'Sincronizzazione gia in corso.'], 409);
         try {
-            $key = 'report-preview:'.$request->user()->id.':'.$request->input('snapshot');
-            $remote = Cache::get($key);
-            if (! is_array($remote)) return response()->json(['message' => 'Anteprima scaduta. Aggiornala prima di procedere.'], 409);
-            if (array_diff(array_keys($request->input('clients')), array_column($remote, 'id'))) {
-                return response()->json(['message' => 'Cliente non presente nell’anteprima.'], 422);
-            }
-            // Execute exactly the reviewed snapshot, never silently replace it with new data.
-            $result = $sync->run($remote, $request->input('clients'), $request->input('areas'), $request->user()->id);
-            Cache::forget($key);
-            return response()->json($result)->header('Cache-Control', 'private, no-store');
+            return response()->json($sync->execute($request->user()->id))->header('Cache-Control', 'private, no-store');
         } catch (Throwable $e) {
-            return response()->json(['message' => 'Sincronizzazione interrotta. Aggiorna l’anteprima e verifica le associazioni.'], 422);
-        } finally {
-            $lock->release();
+            return response()->json(['message' => 'Sincronizzazione non disponibile o gia in corso. Nessuna archiviazione eseguita senza una lettura completa.'], 422);
         }
     }
 }

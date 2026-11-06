@@ -72,7 +72,7 @@ class ReportSynchronizer
         });
         $mappings = DB::table('report_area_mappings')->where('excluded', false)->whereNotNull('service_id')->orderBy('external_id')->pluck('service_id', 'external_id')->all();
         $mappingRevision = hash('sha256', json_encode($mappings));
-        $result = ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'skipped' => 0, 'errors' => []];
+        $result = ['run_id' => $runId, 'created' => 0, 'updated' => 0, 'unchanged' => 0, 'skipped' => 0, 'errors' => []];
         foreach ($clients as $client) {
             $choice = $decisions[$client['id']] ?? null;
             if (! $choice) { $result['skipped']++; continue; }
