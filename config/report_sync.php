@@ -9,7 +9,7 @@ return [
     'max_pages' => 200,
     'excluded_areas' => ['PEC', 'PLUGIN'],
     'profile_fields' => [
-        'name', 'vat_number', 'email', 'phone', 'website',
+        'name', 'legal_name', 'vat_number', 'email', 'phone', 'website',
         'street', 'postal_code', 'city', 'country', 'legal_form',
         'province', 'electronic_invoicing_address',
     ],

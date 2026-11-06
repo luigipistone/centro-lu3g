@@ -89,6 +89,7 @@ const props = defineProps({
     projectTemplates: Array,
     clientStats: Object,
     clientArchive: Boolean,
+    clientPagination: Object,
     projectArchive: Boolean,
     organizationOptions: Array,
     emailSettings: Object,
@@ -340,11 +341,6 @@ const projectStatus = ref('all');
 watch(() => props.projectArchive, () => { projectStatus.value = 'all'; });
 const projectSort = ref(['name_asc', 'name_desc', 'created_asc', 'created_desc'].includes(new URLSearchParams(window.location.search).get('sort')) ? new URLSearchParams(window.location.search).get('sort') : 'created_desc');
 const projectUserIds = ref([]);
-
-watch(clientSort, (sort) => {
-    if (props.section !== 'clients') return;
-    router.get(route(props.clientArchive ? 'clients.archive' : 'clients.index'), { sort }, { only: ['rows'], preserveState: true, preserveScroll: true, replace: true });
-});
 
 watch(projectSort, (sort) => {
     if (props.section !== 'projects') return;
@@ -2419,19 +2415,72 @@ function tasksByStatus(status) {
         });
 }
 
-const clientRows = computed(() => props.rows.filter((row) => {
-    const search = clientSearch.value.trim().toLowerCase();
-    const matchesSearch = !search
-        || (row.name || '').toLowerCase().includes(search)
-        || (row.legal_name || '').toLowerCase().includes(search)
-        || (row.email || '').toLowerCase().includes(search)
-        || (row.vat_number || '').toLowerCase().includes(search)
-        || (row.city || '').toLowerCase().includes(search);
-    const matchesService = clientService.value === 'all'
-        || (row.services || []).some((service) => service.id === clientService.value);
+const clientRows = ref(props.section === 'clients' ? [...props.rows] : []);
+const clientPaging = ref(props.clientPagination || { page: 1, hasMore: false, total: 0 });
+const clientLoading = ref(false);
+const clientLoadError = ref('');
+const clientSentinel = ref(null);
+let clientObserver;
+let clientController;
+let clientTimer;
+let clientGeneration = 0;
 
-    return matchesSearch && matchesService;
-}));
+async function loadClientPage(reset = false) {
+    if (props.section !== 'clients' || (!reset && (clientLoading.value || !clientPaging.value.hasMore))) return;
+    clientController?.abort();
+    const controller = new AbortController();
+    clientController = controller;
+    const generation = ++clientGeneration;
+    clientLoading.value = true;
+    clientLoadError.value = '';
+    try {
+        const params = new URLSearchParams({
+            client_page: '1', page: String(reset ? 1 : clientPaging.value.page + 1),
+            search: clientSearch.value.trim(), service: clientService.value, sort: clientSort.value,
+        });
+        const response = await fetch(route(props.clientArchive ? 'clients.archive' : 'clients.index') + '?' + params, {
+            headers: { Accept: 'application/json' }, signal: controller.signal,
+        });
+        if (!response.ok) throw new Error('request');
+        const data = await response.json();
+        if (generation !== clientGeneration) return;
+        clientRows.value = reset ? data.rows : [...new Map([...clientRows.value, ...data.rows].map(row => [row.id, row])).values()];
+        clientPaging.value = data.pagination;
+    } catch (error) {
+        if (error.name !== 'AbortError' && generation === clientGeneration) clientLoadError.value = 'Caricamento non riuscito. Riprova.';
+    } finally {
+        if (generation === clientGeneration) clientLoading.value = false;
+    }
+}
+watch([clientSearch, clientService, clientSort, () => props.clientArchive], () => {
+    if (props.section !== 'clients') return;
+    clearTimeout(clientTimer);
+    clientController?.abort();
+    clientGeneration++;
+    clientRows.value = [];
+    clientPaging.value = { page: 0, hasMore: true, total: 0 };
+    clientLoading.value = true;
+    clientTimer = setTimeout(() => loadClientPage(true), 250);
+});
+watch(() => props.rows, () => {
+    if (props.section !== 'clients') return;
+    if (clientSearch.value || clientService.value !== 'all' || clientSort.value !== 'created_desc') { loadClientPage(true); return; }
+    clientRows.value = [...props.rows];
+    clientPaging.value = props.clientPagination || { page: 1, hasMore: false, total: props.rows.length };
+});
+watch(clientSentinel, (element) => {
+    clientObserver?.disconnect();
+    if (!element) return;
+    clientObserver = new IntersectionObserver(entries => {
+        if (entries.some(entry => entry.isIntersecting)) loadClientPage();
+    }, { rootMargin: '250px' });
+    clientObserver.observe(element);
+}, { flush: 'post' });
+onUnmounted(() => {
+    clientObserver?.disconnect();
+    clientController?.abort();
+    clearTimeout(clientTimer);
+});
 
 const clientServicesDrag = {
     element: null,
@@ -5796,10 +5845,15 @@ function calendarDayStyle(sectionMonth, cell) {
                             </button>
                         </article>
 
-                        <div v-if="!clientRows.length" class="content-card rounded-md border border-dashed border-gray-300 bg-white px-5 py-12 text-center text-sm text-gray-500 sm:col-span-2 lg:col-span-4">
+                        <div v-if="!clientRows.length && !clientLoading && !clientLoadError" class="content-card rounded-md border border-dashed border-gray-300 bg-white px-5 py-12 text-center text-sm text-gray-500 sm:col-span-2 lg:col-span-4">
                             {{ clientArchive ? 'Nessun cliente archiviato trovato.' : 'Nessun cliente trovato.' }}
                         </div>
                     </section>
+                    <div v-if="clientPaging.hasMore || clientLoading || clientLoadError" ref="clientSentinel" class="flex min-h-12 items-center justify-center gap-3 text-sm text-gray-500">
+                        <span v-if="clientLoading" role="status">Caricamento...</span>
+                        <button v-else class="btn btn-outline" @click="loadClientPage()">{{ clientLoadError || 'Carica altri' }}</button>
+                    </div>
+                    <p v-if="!clientLoading" class="text-center text-xs text-gray-500">{{ clientRows.length }} di {{ clientPaging.total }} clienti</p>
                 </div>
             </div>
         </div>

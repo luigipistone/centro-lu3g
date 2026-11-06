@@ -15,6 +15,28 @@ class ClientArchiveTest extends TestCase
     use ActsAsWorkflowAdmin;
     use RefreshDatabase;
 
+    public function test_scrolling_and_search_cover_all_active_and_archived_clients(): void
+    {
+        $admin = User::factory()->create();
+        foreach ([true, false] as $active) {
+            for ($i = 0; $i < 125; $i++) {
+                DB::table('clients')->insert(['id' => (string) Str::uuid(), 'name' => sprintf('Client %03d', $i),
+                    'legal_name' => $i === 124 ? 'Unique Legal Company' : null, 'active' => $active]);
+            }
+        }
+        foreach (['clients.index', 'clients.archive'] as $route) {
+            $ids = [];
+            for ($page = 1; $page <= 6; $page++) {
+                $response = $this->actingAsWorkflowAdmin($admin)->getJson(route($route, ['client_page' => 1, 'page' => $page, 'sort' => 'name_asc']))->assertOk();
+                $ids = array_merge($ids, array_column($response->json('rows'), 'id'));
+                $response->assertJsonPath('pagination.total', 125);
+            }
+            $this->assertCount(125, array_unique($ids));
+            $this->getJson(route($route, ['client_page' => 1, 'search' => 'unique legal']))
+                ->assertOk()->assertJsonCount(1, 'rows')->assertJsonPath('rows.0.name', 'Client 124');
+        }
+    }
+
     public function test_client_moves_between_active_list_and_archive_without_losing_data(): void
     {
         $admin = User::factory()->create();

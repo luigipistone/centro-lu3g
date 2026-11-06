@@ -625,7 +625,7 @@ class CentroPageController extends Controller
         };
     }
 
-    public function index(Request $request, string $section): Response
+    public function index(Request $request, string $section): Response|\Illuminate\Http\JsonResponse
     {
         if ($section === 'absences') {
             $this->ensureAdmin($request);
@@ -658,8 +658,29 @@ class CentroPageController extends Controller
             ? $guestVisibleTaskIds
             : null;
         $absencePagination = null;
+        $clientPagination = null;
         $absenceTodayRequests = collect();
-        if ($section === 'absences') {
+        if ($section === 'clients') {
+            $search = mb_substr(trim((string) $request->query('search', '')), 0, 255);
+            $sort = $request->query('sort', 'created_desc');
+            if (! in_array($sort, ['name_asc', 'name_desc', 'created_asc', 'created_desc'], true)) $sort = 'created_desc';
+            [$field, $direction] = explode('_', $sort);
+            $query = DB::table('clients')->where('active', ! (bool) $request->route('archive'));
+            if ($search !== '') {
+                $query->where(function ($query) use ($search) {
+                    foreach (['name', 'legal_name', 'email', 'vat_number', 'city'] as $field) {
+                        $query->orWhereRaw('LOWER('.$field.') LIKE ?', ['%'.mb_strtolower($search).'%']);
+                    }
+                });
+            }
+            if ($request->filled('service') && $request->query('service') !== 'all') {
+                $query->whereExists(fn ($q) => $q->selectRaw('1')->from('client_services')
+                    ->whereColumn('client_services.client_id', 'clients.id')->where('service_id', $request->query('service')));
+            }
+            $clientPage = $query->orderBy($field === 'name' ? 'name' : 'created_at', $direction)->orderBy('id')->paginate(24);
+            $rows = $clientPage->getCollection();
+            $clientPagination = ['page' => $clientPage->currentPage(), 'hasMore' => $clientPage->hasMorePages(), 'total' => $clientPage->total()];
+        } elseif ($section === 'absences') {
             $absenceQuery = DB::table('absence_requests')
                 ->leftJoin('users', 'users.id', '=', 'absence_requests.user_id')
                 ->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')
@@ -864,6 +885,9 @@ class CentroPageController extends Controller
 
                 return $row;
             });
+            if ($request->boolean('client_page')) {
+                return response()->json(['rows' => $rows, 'pagination' => $clientPagination])->header('Cache-Control', 'private, no-store');
+            }
         }
 
         if ($section === 'projects') {
@@ -916,6 +940,7 @@ class CentroPageController extends Controller
                 ? DB::table('profiles as p')->join('users as u', 'u.id', '=', 'p.manager_user_id')->distinct()->orderBy('u.name')->get(['u.id', 'u.name']) : [],
             'clientStats' => $section === 'clients' ? $this->clientStats() : null,
             'clientArchive' => $section === 'clients' && (bool) $request->route('archive'),
+            'clientPagination' => $clientPagination,
             'projectArchive' => $section === 'projects' && (bool) $request->route('archive'),
             'organizationOptions' => $section === 'settings' ? DB::table('employee_organization_options')->orderBy('name')->get() : [],
             'emailSettings' => $section === 'settings' ? $this->emailSettingsForView() : null,

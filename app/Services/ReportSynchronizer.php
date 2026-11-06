@@ -16,6 +16,9 @@ class ReportSynchronizer
             $field = data_get($client, 'profile.fields.'.$key);
             return ($field['availability'] ?? null) === 'available' ? ($field['value'] ?? null) : null;
         };
+        if (data_get($client, 'source.type') === 'company') {
+            $result['legal_name'] = $value('name');
+        }
         foreach (['vat_number' => 'vatNumber', 'website' => 'website', 'electronic_invoicing_address' => 'electronicInvoicingAddress'] as $local => $remote) {
             $result[$local] = $value($remote);
         }
@@ -114,7 +117,8 @@ class ReportSynchronizer
             $link = DB::table('report_client_links')->where('id', $linkId)->first();
         }
         $split = filled($client['profileRevision'] ?? null) && filled($client['servicesRevision'] ?? null);
-        $profileChanged = $split ? $link->report_profile_revision !== $client['profileRevision'] : $link->report_revision !== $client['revision'];
+        $profileChanged = ($split ? $link->report_profile_revision !== $client['profileRevision'] : $link->report_revision !== $client['revision'])
+            || (int) $link->profile_mapping_version !== 2;
         $servicesChanged = ($split ? $link->report_services_revision !== $client['servicesRevision'] : $link->report_revision !== $client['revision'])
             || $link->mapping_revision !== $mappingRevision;
         if (! $profileChanged && ! $servicesChanged) return 'unchanged';
@@ -156,6 +160,7 @@ class ReportSynchronizer
         DB::table('report_client_links')->where('id', $link->id)->update([
             'report_revision' => $client['revision'], 'report_profile_revision' => $client['profileRevision'] ?? null,
             'report_services_revision' => $client['servicesRevision'] ?? null, 'mapping_revision' => $mappingRevision,
+            'profile_mapping_version' => 2,
             'native_updated_at' => data_get($client, 'profile.source.nativeUpdatedAt') ? \Carbon\Carbon::parse(data_get($client, 'profile.source.nativeUpdatedAt'))->utc()->toDateTimeString() : $link->native_updated_at,
             'last_synced_at' => now(), 'updated_at' => now(),
         ]);

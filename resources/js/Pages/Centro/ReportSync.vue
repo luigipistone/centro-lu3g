@@ -20,7 +20,7 @@ const rows = computed(() => (result.value?.clients || []).filter(row => row.name
 const pages = computed(() => Math.max(1, Math.ceil(rows.value.length / 25)));
 const visible = computed(() => rows.value.slice((page.value - 1) * 25, page.value * 25));
 watch(search, () => { page.value = 1; });
-const labels = { name: 'Nome', vat_number: 'Partita IVA', email: 'Email', phone: 'Telefono', website: 'Sito web', street: 'Indirizzo', postal_code: 'CAP', city: 'Città', country: 'Paese', legal_form: 'Natura giuridica', province: 'Provincia', electronic_invoicing_address: 'Fatturazione elettronica' };
+const labels = { name: 'Nome', legal_name: 'Ragione sociale', vat_number: 'Partita IVA', email: 'Email', phone: 'Telefono', website: 'Sito web', street: 'Indirizzo', postal_code: 'CAP', city: 'Città', country: 'Paese', legal_form: 'Natura giuridica', province: 'Provincia', electronic_invoicing_address: 'Fatturazione elettronica' };
 function action(row) {
     const choice = result.value?.automatic?.choices[row.external_id];
     return !choice ? 'Da verificare' : choice === 'new' ? 'Nuovo' : 'Collegato';

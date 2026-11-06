@@ -22,6 +22,24 @@ class ReportSynchronizerTest extends TestCase
             'services' => [['id' => 'contract', 'name' => 'Campaigns', 'status' => 'active', 'areas' => [['id' => 'adv', 'name' => 'ADV']]]]];
     }
 
+    public function test_legal_name_backfill_without_upstream_revision_change_and_missing_preserves_value(): void
+    {
+        $actor = User::factory()->create()->id;
+        $client = $this->fixture();
+        $client['activeAreas'] = []; $client['services'] = [];
+        $sync = app(ReportSynchronizer::class);
+        $sync->run([$client], ['remote-1' => 'new'], [], $actor);
+        DB::table('report_client_links')->update(['profile_mapping_version' => 1]);
+        $client['profile']['fields']['name'] = ['availability' => 'available', 'value' => 'Acme Servizi S.r.l.'];
+        $this->assertSame(1, $sync->run([$client], ['remote-1' => 'new'], [], $actor)['updated']);
+        $this->assertDatabaseHas('clients', ['name' => 'ACME', 'legal_name' => 'Acme Servizi S.r.l.']);
+        $this->assertSame(1, $sync->run([$client], ['remote-1' => 'new'], [], $actor)['unchanged']);
+        $client['profileRevision'] = 'p2';
+        $client['profile']['fields']['name'] = ['availability' => 'empty', 'value' => null];
+        $sync->run([$client], ['remote-1' => 'new'], [], $actor);
+        $this->assertDatabaseHas('clients', ['legal_name' => 'Acme Servizi S.r.l.']);
+    }
+
     public function test_revisions_archive_reactivation_and_manual_ownership(): void
     {
         $actor = User::factory()->create()->id;
