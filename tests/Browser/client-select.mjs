@@ -31,6 +31,9 @@ try {
     assert.deepEqual(errors, []);
     await page.locator('#app main > div > button').click();
     await page.getByPlaceholder('Cerca...').fill('Genitore');
+    await page.getByTitle('Comprimi', { exact: true }).click();
+    assert.equal(await page.locator('.field-dropdown-menu').getByRole('button', { name: 'Filiale', exact: true }).count(), 0);
+    await page.getByTitle('Espandi', { exact: true }).click();
     await page.getByRole('button', { name: 'Filiale', exact: true }).click();
     assert.equal(await page.locator('output').textContent(), 'c');
     await page.locator('#app main > div > button').click();

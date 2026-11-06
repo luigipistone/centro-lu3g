@@ -1,7 +1,7 @@
 <script setup>
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import { Check, ChevronDown, ChevronRight } from '@lucide/vue';
-import { computed, nextTick, onMounted, onUnmounted, ref, useAttrs } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, useAttrs, watch } from 'vue';
 
 defineOptions({ inheritAttrs: false });
 
@@ -81,13 +81,22 @@ const filteredOptions = computed(() => {
     if (needle) return normalizedTree.value.flatMap((option) => {
         const parentMatches = String(option.label).toLowerCase().includes(needle);
         const children = parentMatches ? option.children : option.children.filter((child) => String(child.label).toLowerCase().includes(needle));
-        return parentMatches || children.length ? [option, ...children] : [];
+        return parentMatches || children.length ? [option, ...(isGroupExpanded(option) ? children : [])] : [];
     });
 
     return normalizedTree.value.flatMap((option) => [
         option,
         ...(expandedGroups.value.some((value) => String(value) === String(option.value)) ? option.children : []),
     ]);
+});
+
+watch(query, (value) => {
+    const needle = value.trim().toLowerCase();
+    if (!needle) return;
+    expandedGroups.value = normalizedTree.value
+        .filter((option) => option.children.length && (String(option.label).toLowerCase().includes(needle)
+            || option.children.some((child) => String(child.label).toLowerCase().includes(needle))))
+        .map((option) => option.value);
 });
 
 function toggle() {
@@ -247,7 +256,7 @@ onUnmounted(() => {
                         >
                             <span class="truncate">{{ option.label }}</span>
                         </button>
-                        <button v-if="option.children.length && !query" type="button" class="icon-btn h-7 w-7 shrink-0" :title="isGroupExpanded(option) ? 'Comprimi' : 'Espandi'" @click.stop="toggleGroup(option)">
+                        <button v-if="option.children.length" type="button" class="icon-btn h-7 w-7 shrink-0" :aria-expanded="isGroupExpanded(option)" :title="isGroupExpanded(option) ? 'Comprimi' : 'Espandi'" @click.stop="toggleGroup(option)">
                             <ChevronRight :class="['h-4 w-4 transition-transform', isGroupExpanded(option) ? 'rotate-90' : '']" :stroke-width="1.8" />
                         </button>
                         <Check v-if="isSelected(option)" class="h-4 w-4 shrink-0" :stroke-width="1.8" />

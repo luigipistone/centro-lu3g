@@ -5893,7 +5893,7 @@ function calendarDayStyle(sectionMonth, cell) {
                     </div>
                 </div>
                 <div class="overflow-x-auto pb-1">
-                <div class="task-filter-bar grid min-w-[760px] items-center gap-2 grid-cols-[minmax(160px,1fr)_110px_100px_110px_140px_38px_38px_38px]">
+                <div class="task-filter-bar grid min-w-[760px] items-center gap-2 grid-cols-[minmax(120px,1fr)_120px_130px_110px_140px_38px_38px_38px]">
                     <ClearableSearchInput v-model="taskSearch" class="min-w-0" input-class="mt-0 h-[38px]" placeholder="Cerca task, cliente, progetto o servizio..." />
                     <AppSelect v-model="taskStatus" :options="taskStatusOptions" />
                     <AppSelect v-model="taskPriority" :options="taskPriorityOptions" />
