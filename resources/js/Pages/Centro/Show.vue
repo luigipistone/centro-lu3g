@@ -450,9 +450,10 @@ function relatedProjectMetaStyle(project) {
     };
 }
 
-function relatedTasksSorted() {
+function relatedTasksSorted(archived = false) {
     return (props.related.tasks || [])
         .filter((task) => !task.parent_task_id)
+        .filter((task) => props.section !== 'clients' || (archived ? task.status === 'done' : task.status !== 'done'))
         .sort((first, second) => {
             const firstDate = first.due_date || '9999-12-31';
             const secondDate = second.due_date || '9999-12-31';
@@ -470,7 +471,7 @@ function hiddenRelatedTaskCount() {
     return Math.max(relatedTasksSorted().length - relatedItemsFor('tasks').length, 0);
 }
 
-const clientTaskArchive = computed(() => relatedTasksSorted().sort((first, second) => {
+const clientTaskArchive = computed(() => relatedTasksSorted(true).sort((first, second) => {
     const firstDate = first.due_date || first.created_at || '';
     const secondDate = second.due_date || second.created_at || '';
     return secondDate.localeCompare(firstDate) || String(first.title || '').localeCompare(String(second.title || ''), 'it');
@@ -5662,30 +5663,8 @@ onUnmounted(() => {
                         <div v-else class="mt-2 text-sm font-medium text-gray-700">{{ related.project.name }}</div>
                     </section>
 
-                    <section v-for="name in (section === 'projects' ? ['documents'] : ['projects', 'tasks', 'documents'])" :key="name" v-show="relatedItemsFor(name).length" class="surface rounded-md p-5">
+                    <section v-for="name in (section === 'projects' ? ['documents'] : ['projects', 'tasks', 'documents'])" :key="name" v-show="relatedItemsFor(name).length || (section === 'clients' && name === 'tasks' && clientTaskArchive.length)" class="surface rounded-md p-5">
                         <h3 class="mb-3 text-sm font-semibold text-gray-900">{{ relatedSectionLabel(name) }}</h3>
-                        <button
-                            v-if="section === 'clients' && name === 'tasks'"
-                            type="button"
-                            class="mb-3 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:underline"
-                            :aria-expanded="clientTaskArchiveOpen"
-                            aria-controls="client-task-archive"
-                            @click="clientTaskArchiveOpen = !clientTaskArchiveOpen"
-                        >
-                            {{ clientTaskArchiveOpen ? 'Chiudi archivio cliente' : 'Carica archivio cliente' }}
-                        </button>
-                        <div v-if="section === 'clients' && name === 'tasks' && clientTaskArchiveOpen" id="client-task-archive" class="mb-4 divide-y divide-gray-100 border-y border-gray-100">
-                            <component
-                                v-for="task in clientTaskArchive"
-                                :key="`archive-${task.id}`"
-                                :is="canOpenRelatedItem('tasks') ? Link : 'div'"
-                                :href="canOpenRelatedItem('tasks') ? relatedItemHref('tasks', task) : undefined"
-                                class="flex items-start justify-between gap-3 py-2 text-xs text-gray-900 hover:text-indigo-600"
-                            >
-                                <span class="min-w-0 break-words font-medium">{{ task.title }}</span>
-                                <time class="shrink-0 text-gray-500" :datetime="task.due_date || task.created_at" :title="task.due_date ? 'Data di scadenza' : 'Data di creazione'">{{ dateIt(task.due_date || task.created_at) }}</time>
-                            </component>
-                        </div>
                         <div class="space-y-2">
                             <component
                                 v-for="item in relatedItemsFor(name)"
@@ -5714,6 +5693,28 @@ onUnmounted(() => {
                             >
                                 +{{ hiddenRelatedTaskCount() }} task
                             </button>
+                        </div>
+                        <button
+                            v-if="section === 'clients' && name === 'tasks' && clientTaskArchive.length"
+                            type="button"
+                            class="mt-3 mb-3 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:underline"
+                            :aria-expanded="clientTaskArchiveOpen"
+                            aria-controls="client-task-archive"
+                            @click="clientTaskArchiveOpen = !clientTaskArchiveOpen"
+                        >
+                            {{ clientTaskArchiveOpen ? 'Chiudi archivio cliente' : 'Carica archivio cliente' }}
+                        </button>
+                        <div v-if="section === 'clients' && name === 'tasks' && clientTaskArchiveOpen" id="client-task-archive" class="mb-4 divide-y divide-gray-100 border-y border-gray-100">
+                            <component
+                                v-for="task in clientTaskArchive"
+                                :key="`archive-${task.id}`"
+                                :is="canOpenRelatedItem('tasks') ? Link : 'div'"
+                                :href="canOpenRelatedItem('tasks') ? relatedItemHref('tasks', task) : undefined"
+                                class="flex items-start justify-between gap-3 py-2 text-xs text-gray-900 hover:text-indigo-600"
+                            >
+                                <span class="min-w-0 break-words font-medium">{{ task.title }}</span>
+                                <time class="shrink-0 text-gray-500" :datetime="task.due_date || task.created_at" :title="task.due_date ? 'Data di scadenza' : 'Data di creazione'">{{ dateIt(task.due_date || task.created_at) }}</time>
+                            </component>
                         </div>
                     </section>
                 </aside>
