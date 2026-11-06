@@ -662,8 +662,8 @@ class CentroPageController extends Controller
         $absenceTodayRequests = collect();
         if ($section === 'clients') {
             $search = mb_substr(trim((string) $request->query('search', '')), 0, 255);
-            $sort = $request->query('sort', 'created_desc');
-            if (! in_array($sort, ['name_asc', 'name_desc', 'created_asc', 'created_desc'], true)) $sort = 'created_desc';
+            $sort = $request->query('sort', 'name_asc');
+            if (! in_array($sort, ['name_asc', 'name_desc', 'created_asc', 'created_desc'], true)) $sort = 'name_asc';
             [$field, $direction] = explode('_', $sort);
             $query = DB::table('clients')->where('active', ! (bool) $request->route('archive'));
             if ($search !== '') {
@@ -3944,23 +3944,14 @@ class CentroPageController extends Controller
                     ['name' => 'phone', 'label' => 'Telefono', 'type' => 'text'],
                     ['name' => 'vat_number', 'label' => 'Partita IVA', 'type' => 'text'],
                     ['name' => 'tax_code', 'label' => 'Codice fiscale', 'type' => 'text'],
-                    ['name' => 'legal_form', 'label' => 'Natura giuridica', 'type' => 'select', 'options' => ['srl', 'srls', 'spa', 'sas', 'snc', 'ditta_individuale', 'libero_professionista', 'associazione', 'ente_pubblico', 'altro']],
                     ['name' => 'business_sector', 'label' => 'Settore', 'type' => 'select', 'options' => ['ecommerce', 'retail', 'servizi', 'immobiliare', 'turismo', 'ristorazione', 'salute_benessere', 'formazione', 'industria', 'no_profit', 'altro']],
-                    ['name' => 'source', 'label' => 'Sorgente', 'type' => 'select', 'options' => ['passaparola', 'sito_web', 'social', 'campagna_adv', 'evento', 'partner', 'chiamata', 'email', 'altro']],
                     ['name' => 'country', 'label' => 'Paese', 'type' => 'select', 'options' => ['IT', 'SM', 'VA', 'FR', 'DE', 'ES', 'CH', 'AT', 'GB', 'US', 'altro']],
                     ['name' => 'street', 'label' => 'Via', 'type' => 'text'],
                     ['name' => 'street_number', 'label' => 'Numero', 'type' => 'text'],
                     ['name' => 'postal_code', 'label' => 'CAP', 'type' => 'text'],
                     ['name' => 'city', 'label' => 'Citta', 'type' => 'text'],
                     ['name' => 'province', 'label' => 'Provincia', 'type' => 'text'],
-                    ['name' => 'pec', 'label' => 'PEC', 'type' => 'email'],
-                    ['name' => 'sdi_code', 'label' => 'Codice SDI', 'type' => 'text'],
                     ['name' => 'website', 'label' => 'Sito web', 'type' => 'text'],
-                    ['name' => 'iban', 'label' => 'IBAN', 'type' => 'text'],
-                    ['name' => 'bic_swift', 'label' => 'BIC/SWIFT', 'type' => 'text'],
-                    ['name' => 'vat_treatment', 'label' => 'Trattamento IVA', 'type' => 'select', 'options' => ['ordinario', 'split_payment', 'reverse_charge', 'esente', 'non_imponibile', 'fuori_campo', 'forfettario']],
-                    ['name' => 'payment_terms_days', 'label' => 'Termini pagamento', 'type' => 'select', 'options' => [0, 15, 30, 45, 60, 90, 120]],
-                    ['name' => 'is_pa', 'label' => 'Pubblica amministrazione', 'type' => 'checkbox'],
                     ['name' => 'notes', 'label' => 'Note', 'type' => 'textarea'],
                 ],
             ],
@@ -4181,23 +4172,14 @@ class CentroPageController extends Controller
                 'phone' => ['nullable', 'string', 'max:255'],
                 'vat_number' => ['nullable', 'string', 'max:255'],
                 'tax_code' => ['nullable', 'string', 'max:255'],
-                'legal_form' => ['nullable', 'string', 'max:255'],
                 'business_sector' => ['nullable', 'string', 'max:255'],
-                'source' => ['nullable', 'string', 'max:255'],
                 'country' => ['nullable', 'string', 'max:255'],
                 'street' => ['nullable', 'string', 'max:255'],
                 'street_number' => ['nullable', 'string', 'max:255'],
                 'postal_code' => ['nullable', 'string', 'max:255'],
                 'city' => ['nullable', 'string', 'max:255'],
                 'province' => ['nullable', 'string', 'max:255'],
-                'pec' => ['nullable', 'email', 'max:255'],
-                'sdi_code' => ['nullable', 'string', 'max:255'],
                 'website' => ['nullable', 'string', 'max:255'],
-                'iban' => ['nullable', 'string', 'max:255'],
-                'bic_swift' => ['nullable', 'string', 'max:255'],
-                'vat_treatment' => ['nullable', 'string', 'max:255'],
-                'payment_terms_days' => ['nullable', 'integer', 'min:0'],
-                'is_pa' => ['boolean'],
                 'notes' => ['nullable', 'string'],
             ],
             'projects' => [
@@ -4278,10 +4260,6 @@ class CentroPageController extends Controller
 
         if ($section === 'settings') {
             $payload['active'] = $request->boolean('active');
-        }
-
-        if ($section === 'clients') {
-            $payload['is_pa'] = $request->boolean('is_pa');
         }
 
         if ($section === 'tasks') {

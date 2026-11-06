@@ -51,6 +51,10 @@ class ReportSyncPreview
                     throw new RuntimeException('Identificativo Report mancante o duplicato.');
                 }
                 $ids[$id] = true;
+                foreach (['legalType', 'origin', 'pec', 'sdi', 'electronicInvoicingAddress', 'iban', 'bic', 'vatTreatment', 'paymentTerms', 'publicAdministration'] as $field) {
+                    unset($client['profile']['fields'][$field]);
+                }
+                unset($client['profile']['normalized']['legalType']);
                 $clients[] = $client;
             }
             $cursor = $data['page']['nextCursor'];

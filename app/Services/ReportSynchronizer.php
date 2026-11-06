@@ -19,7 +19,7 @@ class ReportSynchronizer
         if (data_get($client, 'source.type') === 'company') {
             $result['legal_name'] = $value('name');
         }
-        foreach (['vat_number' => 'vatNumber', 'website' => 'website', 'electronic_invoicing_address' => 'electronicInvoicingAddress'] as $local => $remote) {
+        foreach (['vat_number' => 'vatNumber', 'website' => 'website'] as $local => $remote) {
             $result[$local] = $value($remote);
         }
         foreach (['email' => ['emails', 'email'], 'phone' => ['telephones', 'number']] as $local => [$key, $part]) {
@@ -39,9 +39,6 @@ class ReportSynchronizer
                     $result['province'] = data_get($region, 'region.value.name');
                 }
             }
-        }
-        if (data_get($client, 'profile.normalized.legalType.availability') === 'available') {
-            $result['legal_form'] = data_get($client, 'profile.normalized.legalType.value.name');
         }
         return array_filter($result, fn ($v) => is_string($v) && trim($v) !== '');
     }

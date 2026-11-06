@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 class AuditStateSnapshot
 {
     private const RECORDS = [
-        'clients' => ['clients', ['is_pa', 'country', 'city', 'payment_terms_days']],
+        'clients' => ['clients', ['country', 'city']],
         'projects' => ['projects', ['client_id', 'service_id', 'status', 'color']],
         'tasks' => ['tasks', ['project_id', 'client_id', 'service_id', 'parent_task_id', 'task_type', 'status', 'priority', 'start_date', 'due_date', 'due_time']],
         'absences' => ['absence_requests', ['type', 'start_date', 'end_date', 'start_time', 'end_time', 'status', 'revocation_requested_at', 'revocation_decision_reason']],

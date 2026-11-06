@@ -48,7 +48,7 @@ function clearFile() {
 }
 
 function downloadTemplate() {
-    const headers = ['Nome', 'Ragione sociale', 'Email', 'Telefono', 'Partita IVA', 'Codice fiscale', 'Natura giuridica', 'Settore', 'Sorgente', 'Paese', 'Via', 'Numero', 'CAP', 'Citta', 'Provincia', 'PEC', 'Codice SDI', 'Sito web', 'IBAN', 'BIC/SWIFT', 'Trattamento IVA', 'Termini pagamento', 'Pubblica amministrazione', 'Note'];
+    const headers = ['Nome', 'Ragione sociale', 'Email', 'Telefono', 'Partita IVA', 'Codice fiscale', 'Settore', 'Paese', 'Via', 'Numero', 'CAP', 'Citta', 'Provincia', 'Sito web', 'Note'];
     const url = URL.createObjectURL(new Blob(['\uFEFF' + headers.join(';') + '\r\n'], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
     link.href = url;

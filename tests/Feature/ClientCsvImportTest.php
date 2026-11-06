@@ -27,7 +27,7 @@ class ClientCsvImportTest extends TestCase
 
         $this->actingAsWorkflowAdmin($admin)->post(route('clients.import.store'), ['file' => $file()])
             ->assertRedirect(route('clients.index'));
-        $this->assertDatabaseHas('clients', ['name' => 'Alfa', 'legal_name' => 'Alfa Srl', 'is_pa' => true]);
+        $this->assertDatabaseHas('clients', ['name' => 'Alfa', 'legal_name' => 'Alfa Srl', 'vat_number' => '12345678901']);
         $this->assertDatabaseCount('clients', 2);
 
         $this->actingAsWorkflowAdmin($admin)->post(route('clients.import.store'), ['file' => $file()])

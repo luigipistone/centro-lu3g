@@ -13,6 +13,17 @@ class ReportSynchronizerTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_removed_profile_fields_are_not_imported(): void
+    {
+        $client = $this->fixture();
+        $client['profile']['fields']['electronicInvoicingAddress'] = ['availability' => 'available', 'value' => 'ABC1234'];
+        $client['profile']['normalized']['legalType'] = ['availability' => 'available', 'value' => ['name' => 'SRL']];
+        $profile = app(ReportSynchronizer::class)->profile($client);
+        $this->assertArrayNotHasKey('legal_form', $profile);
+        $this->assertArrayNotHasKey('electronic_invoicing_address', $profile);
+        $this->assertSame('123', $profile['vat_number']);
+    }
+
     private function fixture(): array
     {
         return ['id' => 'remote-1', 'name' => 'Acme', 'revision' => 'r1', 'profileRevision' => 'p1', 'servicesRevision' => 's1',

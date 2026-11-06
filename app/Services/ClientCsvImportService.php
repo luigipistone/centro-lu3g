@@ -12,13 +12,10 @@ class ClientCsvImportService
     public const COLUMNS = [
         'name' => 'Nome', 'legal_name' => 'Ragione sociale', 'email' => 'Email',
         'phone' => 'Telefono', 'vat_number' => 'Partita IVA', 'tax_code' => 'Codice fiscale',
-        'legal_form' => 'Natura giuridica', 'business_sector' => 'Settore',
-        'source' => 'Sorgente', 'country' => 'Paese', 'street' => 'Via',
+        'business_sector' => 'Settore',
+        'country' => 'Paese', 'street' => 'Via',
         'street_number' => 'Numero', 'postal_code' => 'CAP', 'city' => 'Citta',
-        'province' => 'Provincia', 'pec' => 'PEC', 'sdi_code' => 'Codice SDI',
-        'website' => 'Sito web', 'iban' => 'IBAN', 'bic_swift' => 'BIC/SWIFT',
-        'vat_treatment' => 'Trattamento IVA', 'payment_terms_days' => 'Termini pagamento',
-        'is_pa' => 'Pubblica amministrazione', 'notes' => 'Note',
+        'province' => 'Provincia', 'website' => 'Sito web', 'notes' => 'Note',
     ];
 
     public function preview(UploadedFile $file): array
@@ -65,16 +62,12 @@ class ClientCsvImportService
                     $issues[] = ['line' => $line, 'reason' => 'Nome mancante'];
                     continue;
                 }
-                if (isset($record['is_pa'])) $record['is_pa'] = mb_strtolower($record['is_pa']);
                 $rules = [
                     'name' => ['required', 'string', 'max:255'],
                     'email' => ['nullable', 'email', 'max:255'],
-                    'pec' => ['nullable', 'email', 'max:255'],
-                    'payment_terms_days' => ['nullable', 'integer', 'min:0', 'max:65535'],
-                    'is_pa' => ['nullable', 'in:0,1,si,sì,no,true,false'],
                     'notes' => ['nullable', 'string', 'max:10000'],
                 ];
-                foreach (array_diff(array_keys(self::COLUMNS), ['name', 'email', 'pec', 'payment_terms_days', 'is_pa', 'notes']) as $key) {
+                foreach (array_diff(array_keys(self::COLUMNS), ['name', 'email', 'notes']) as $key) {
                     $rules[$key] = ['nullable', 'string', 'max:255'];
                 }
                 $validator = validator($record, $rules);
@@ -82,8 +75,6 @@ class ClientCsvImportService
                     $issues[] = ['line' => $line, 'reason' => 'Dati non validi: '.implode(', ', array_keys($validator->errors()->messages()))];
                     continue;
                 }
-                if (isset($record['is_pa'])) $record['is_pa'] = in_array($record['is_pa'], ['1', 'si', 'sì', 'true'], true);
-                if (isset($record['payment_terms_days'])) $record['payment_terms_days'] = (int) $record['payment_terms_days'];
                 if ($existing->contains(fn ($client) => $this->matches($record, $client))
                     || collect($records)->contains(fn ($item) => $this->matches($record, (object) $item['data']))) {
                     $issues[] = ['line' => $line, 'reason' => 'Cliente già presente nel file o nel portale'];

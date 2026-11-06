@@ -15,6 +15,23 @@ class ClientArchiveTest extends TestCase
     use ActsAsWorkflowAdmin;
     use RefreshDatabase;
 
+    public function test_default_order_is_alphabetical_and_removed_fields_are_not_available(): void
+    {
+        $admin = User::factory()->create();
+        foreach ([true, false] as $active) {
+            foreach (['Zeta', 'Alfa'] as $name) DB::table('clients')->insert(['id' => (string) Str::uuid(), 'name' => $name, 'active' => $active]);
+        }
+        foreach (['clients.index', 'clients.archive'] as $route) {
+            $this->actingAsWorkflowAdmin($admin)->getJson(route($route, ['client_page' => 1]))
+                ->assertOk()->assertJsonPath('rows.0.name', 'Alfa')->assertJsonPath('rows.1.name', 'Zeta');
+        }
+        foreach (['legal_form', 'source', 'iban', 'sdi_code', 'pec', 'electronic_invoicing_address'] as $field) {
+            $this->assertFalse(\Illuminate\Support\Facades\Schema::hasColumn('clients', $field));
+        }
+        $this->assertTrue(\Illuminate\Support\Facades\Schema::hasColumn('clients', 'vat_number'));
+        $this->assertTrue(\Illuminate\Support\Facades\Schema::hasColumn('clients', 'tax_code'));
+    }
+
     public function test_scrolling_and_search_cover_all_active_and_archived_clients(): void
     {
         $admin = User::factory()->create();

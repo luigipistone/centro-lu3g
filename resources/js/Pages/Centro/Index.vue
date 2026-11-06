@@ -335,7 +335,7 @@ const taskPriority = ref('all');
 const taskType = ref('all');
 const clientSearch = ref('');
 const clientService = ref('all');
-const clientSort = ref(['name_asc', 'name_desc'].includes(new URLSearchParams(window.location.search).get('sort')) ? new URLSearchParams(window.location.search).get('sort') : 'created_desc');
+const clientSort = ref(['name_asc', 'name_desc', 'created_desc'].includes(new URLSearchParams(window.location.search).get('sort')) ? new URLSearchParams(window.location.search).get('sort') : 'name_asc');
 const projectSearch = ref('');
 const projectStatus = ref('all');
 watch(() => props.projectArchive, () => { projectStatus.value = 'all'; });
@@ -538,7 +538,7 @@ const routeBase = computed(() => {
 
 const defaults = computed(() => {
     const base = Object.fromEntries(props.fields.map((field) => {
-        if (field.type === 'checkbox') return [field.name, !['recurring_enabled', 'is_pa'].includes(field.name)];
+        if (field.type === 'checkbox') return [field.name, field.name !== 'recurring_enabled'];
         if (field.name === 'status' && props.section === 'projects') return [field.name, 'active'];
         if (field.name === 'status' && props.section === 'tasks') return [field.name, 'todo'];
         if (field.name === 'priority') return [field.name, 'medium'];
@@ -799,7 +799,6 @@ const auditFieldLabels = {
     due_time: 'Ora scadenza', end_date: 'Data fine', start_time: 'Ora inizio',
     end_time: 'Ora fine', type: 'Tipo', category: 'Categoria', audience: 'Destinatari',
     document_year: 'Anno documento', color: 'Colore', city: 'Città', country: 'Paese',
-    is_pa: 'Pubblica amministrazione', payment_terms_days: 'Termini di pagamento',
 };
 
 function auditFieldLabel(field) {
@@ -909,10 +908,6 @@ function optionsFor(field) {
 }
 
 function optionLabel(field, option) {
-    if (field.name === 'payment_terms_days') {
-        return Number(option.name) === 0 ? 'A vista' : `${option.name} giorni`;
-    }
-
     return displayValue(option.name);
 }
 
@@ -2464,7 +2459,7 @@ watch([clientSearch, clientService, clientSort, () => props.clientArchive], () =
 });
 watch(() => props.rows, () => {
     if (props.section !== 'clients') return;
-    if (clientSearch.value || clientService.value !== 'all' || clientSort.value !== 'created_desc') { loadClientPage(true); return; }
+    if (clientSearch.value || clientService.value !== 'all' || clientSort.value !== 'name_asc') { loadClientPage(true); return; }
     clientRows.value = [...props.rows];
     clientPaging.value = props.clientPagination || { page: 1, hasMore: false, total: props.rows.length };
 });

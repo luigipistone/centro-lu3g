@@ -10,7 +10,6 @@ return [
     'excluded_areas' => ['PEC', 'PLUGIN'],
     'profile_fields' => [
         'name', 'legal_name', 'vat_number', 'email', 'phone', 'website',
-        'street', 'postal_code', 'city', 'country', 'legal_form',
-        'province', 'electronic_invoicing_address',
+        'street', 'postal_code', 'city', 'country', 'province',
     ],
 ];

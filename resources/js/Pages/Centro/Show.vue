@@ -151,12 +151,8 @@ const labels = {
     notes: 'Note',
 };
 const clientSelectOptions = {
-    legal_form: ['srl', 'srls', 'spa', 'sas', 'snc', 'ditta_individuale', 'libero_professionista', 'associazione', 'ente_pubblico', 'altro'],
     business_sector: ['ecommerce', 'retail', 'servizi', 'immobiliare', 'turismo', 'ristorazione', 'salute_benessere', 'formazione', 'industria', 'no_profit', 'altro'],
-    source: ['passaparola', 'sito_web', 'social', 'campagna_adv', 'evento', 'partner', 'chiamata', 'email', 'altro'],
     country: ['IT', 'SM', 'VA', 'FR', 'DE', 'ES', 'CH', 'AT', 'GB', 'US', 'altro'],
-    vat_treatment: ['ordinario', 'split_payment', 'reverse_charge', 'esente', 'non_imponibile', 'fuori_campo', 'forfettario'],
-    payment_terms_days: [0, 15, 30, 45, 60, 90, 120],
 };
 
 const documentStatusOptions = [
@@ -249,10 +245,6 @@ const smartworkingWeekdayOptions = smartworkingDayOptions.filter((option) => opt
 const completionEffectValues = completionEffectOptions.map((option) => option.value);
 
 function clientOptionLabel(field, value) {
-    if (field === 'payment_terms_days') {
-        return Number(value) === 0 ? 'A vista' : `${value} giorni`;
-    }
-
     return displayValue(value);
 }
 
@@ -549,9 +541,7 @@ const clientForm = useForm({
     legal_name: props.record.legal_name || '',
     vat_number: props.record.vat_number || '',
     tax_code: props.record.tax_code || '',
-    legal_form: props.record.legal_form || '',
     business_sector: props.record.business_sector || '',
-    source: props.record.source || '',
     country: props.record.country || 'IT',
     street: props.record.street || '',
     street_number: props.record.street_number || '',
@@ -561,13 +551,6 @@ const clientForm = useForm({
     email: props.record.email || '',
     phone: props.record.phone || '',
     website: props.record.website || '',
-    pec: props.record.pec || '',
-    sdi_code: props.record.sdi_code || '',
-    iban: props.record.iban || '',
-    bic_swift: props.record.bic_swift || '',
-    vat_treatment: props.record.vat_treatment || '',
-    payment_terms_days: props.record.payment_terms_days || '',
-    is_pa: Boolean(props.record.is_pa),
     notes: props.record.notes || '',
 });
 const clientAutosaveState = ref('idle');
@@ -889,7 +872,6 @@ function removeDossierItem(item) {
 function dossierStatus(item) {
     return dossierStatusMeta[item?.status] || dossierStatusMeta.valid;
 }
-const clientFiscalOpen = ref(false);
 const absenceForm = useForm({
     type: props.record.type || 'vacation',
     start_date: props.record.start_date || '',
@@ -1660,9 +1642,7 @@ function clientPayload() {
         legal_name: clientForm.legal_name,
         vat_number: clientForm.vat_number,
         tax_code: clientForm.tax_code,
-        legal_form: clientForm.legal_form,
         business_sector: clientForm.business_sector,
-        source: clientForm.source,
         country: clientForm.country,
         street: clientForm.street,
         street_number: clientForm.street_number,
@@ -1672,13 +1652,6 @@ function clientPayload() {
         email: clientForm.email,
         phone: clientForm.phone,
         website: clientForm.website,
-        pec: clientForm.pec,
-        sdi_code: clientForm.sdi_code,
-        iban: clientForm.iban,
-        bic_swift: clientForm.bic_swift,
-        vat_treatment: clientForm.vat_treatment,
-        payment_terms_days: clientForm.payment_terms_days,
-        is_pa: clientForm.is_pa,
         notes: clientForm.notes,
     };
 }
@@ -3581,9 +3554,7 @@ watch(
         clientForm.legal_name,
         clientForm.vat_number,
         clientForm.tax_code,
-        clientForm.legal_form,
         clientForm.business_sector,
-        clientForm.source,
         clientForm.country,
         clientForm.street,
         clientForm.street_number,
@@ -3593,13 +3564,6 @@ watch(
         clientForm.email,
         clientForm.phone,
         clientForm.website,
-        clientForm.pec,
-        clientForm.sdi_code,
-        clientForm.iban,
-        clientForm.bic_swift,
-        clientForm.vat_treatment,
-        clientForm.payment_terms_days,
-        clientForm.is_pa,
         clientForm.notes,
     ],
     () => saveClientInline(),
@@ -3902,7 +3866,7 @@ onUnmounted(() => {
                         <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
                             <div>
                                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Anagrafica cliente</h3>
-                                <p class="mt-1 text-sm text-gray-500">Dati fiscali, contatti, indirizzo e note si salvano automaticamente.</p>
+                                <p class="mt-1 text-sm text-gray-500">Anagrafica, contatti, indirizzo e note si salvano automaticamente.</p>
                             </div>
                             <div
                                 v-if="clientAutosaveState !== 'idle'"
@@ -3941,18 +3905,12 @@ onUnmounted(() => {
                                         <label class="block text-sm font-medium text-gray-700">Codice fiscale</label>
                                         <input v-model="clientForm.tax_code" class="form-control" />
                                     </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700">Natura giuridica</label>
-                                        <AppSelect v-model="clientForm.legal_form" :options="clientSelectFieldOptions('legal_form')" searchable />
-                                    </div>
+
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Settore</label>
                                         <AppSelect v-model="clientForm.business_sector" :options="clientSelectFieldOptions('business_sector')" searchable />
                                     </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700">Sorgente</label>
-                                        <AppSelect v-model="clientForm.source" :options="clientSelectFieldOptions('source')" searchable />
-                                    </div>
+
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700">Sito web</label>
                                         <input v-model="clientForm.website" class="form-control" />
@@ -4004,50 +3962,8 @@ onUnmounted(() => {
                             </div>
 
                             <div>
-                                <button
-                                    type="button"
-                                    class="mb-3 flex w-full items-center justify-between rounded-[var(--radius-sm)] px-1 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 transition hover:bg-gray-50 hover:text-gray-700"
-                                    :aria-expanded="clientFiscalOpen"
-                                    @click="clientFiscalOpen = !clientFiscalOpen"
-                                >
-                                    <span>Dati fiscali e bancari</span>
-                                    <ChevronDown :class="['h-4 w-4 transition-transform', clientFiscalOpen ? 'rotate-180' : '']" :stroke-width="1.8" />
-                                </button>
-                                <div v-show="clientFiscalOpen" class="grid gap-4 md:grid-cols-2">
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700">PEC</label>
-                                        <input v-model="clientForm.pec" type="email" class="form-control" />
-                                        <div v-if="clientForm.errors.pec" class="mt-1 text-sm text-red-600">{{ clientForm.errors.pec }}</div>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700">Codice SDI</label>
-                                        <input v-model="clientForm.sdi_code" class="form-control" />
-                                    </div>
-                                    <div class="md:col-span-2">
-                                        <label class="block text-sm font-medium text-gray-700">IBAN</label>
-                                        <input v-model="clientForm.iban" class="form-control" />
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700">BIC / SWIFT</label>
-                                        <input v-model="clientForm.bic_swift" class="form-control" />
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700">Trattamento IVA</label>
-                                        <AppSelect v-model="clientForm.vat_treatment" :options="clientSelectFieldOptions('vat_treatment')" searchable />
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700">Termini pagamento</label>
-                                        <AppSelect v-model="clientForm.payment_terms_days" :options="clientSelectFieldOptions('payment_terms_days')" />
-                                    </div>
-                                    <label class="mt-7 flex items-center gap-2 text-sm text-gray-700">
-                                        <input v-model="clientForm.is_pa" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
-                                        Pubblica amministrazione
-                                    </label>
-                                    <div class="md:col-span-2">
-                                        <label class="block text-sm font-medium text-gray-700">Note</label>
-                                        <textarea v-model="clientForm.notes" rows="4" class="form-control"></textarea>
-                                    </div>
-                                </div>
+                                <label class="block text-sm font-medium text-gray-700">Note</label>
+                                <textarea v-model="clientForm.notes" rows="4" class="form-control"></textarea>
                             </div>
                         </div>
                     </section>
@@ -4067,10 +3983,6 @@ onUnmounted(() => {
                                 ['Telefono', clientForm.phone],
                                 ['Sito web', clientForm.website],
                                 ['Città', [clientForm.city, clientForm.province].filter(Boolean).join(', ')],
-                                ['PEC', clientForm.pec],
-                                ['Codice SDI', clientForm.sdi_code],
-                                ['IBAN', clientForm.iban],
-                                ['Trattamento IVA', displayValue(clientForm.vat_treatment)],
                             ]" :key="label" class="rounded-md border border-gray-100 bg-gray-50 px-4 py-3">
                                 <dt class="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{{ label }}</dt>
                                 <dd class="mt-1 min-h-5 text-sm font-medium text-gray-900">{{ value || '-' }}</dd>
