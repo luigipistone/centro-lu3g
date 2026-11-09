@@ -89,6 +89,11 @@ class CommonApiWrites
 
         return DB::transaction(function () use ($r, $resource, $id, $c, $input, $key, $hash) {
             DB::table('api_connections')->where('id', $c->id)->lockForUpdate()->first();
+            // A queued write must see permissions and IDs adopted by earlier writes.
+            $c->refresh();
+            abort_unless($this->access->ownerEnabled($c), 403);
+            $this->access->connection($r, $resource.':write');
+            $this->access->connection($r, $resource.':read');
             if (! $id && $oldKey = DB::table('api_write_keys')->where('connection_id', $c->id)->where('request_key', $key)->first()) {
                 abort_unless(hash_equals($oldKey->request_hash, $hash), 409, 'Chiave già utilizzata con una richiesta diversa.');
 
@@ -226,6 +231,10 @@ class CommonApiWrites
 
         return DB::transaction(function () use ($r, $c, $taskId, $p, $key, $hash) {
             DB::table('api_connections')->where('id', $c->id)->lockForUpdate()->first();
+            $c->refresh();
+            abort_unless($this->access->ownerEnabled($c), 403);
+            $this->access->connection($r, 'comments:write');
+            $this->access->connection($r, 'comments:read');
             abort_unless(app(CommonApiController::class)->query($r, 'tasks')->where('id', $taskId)->lockForUpdate()->exists(), 404);
             if ($old = DB::table('api_write_keys')->where('connection_id', $c->id)->where('request_key', $key)->first()) {
                 abort_unless(hash_equals($old->request_hash, $hash), 409);
