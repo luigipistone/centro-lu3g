@@ -1462,7 +1462,9 @@ function deleteTaskFromDetail() {
         keyword: 'ELIMINA',
         button: 'Elimina',
         danger: true,
+        requireConfirmation: true,
         action: () => router.delete(route('tasks.destroy', props.record.id), {
+            data: { confirmation: confirmText.value },
             preserveScroll: true,
             onFinish: closeConfirm,
         }),
@@ -2359,7 +2361,7 @@ function deleteProjectFromDetail() {
 
 
 function openConfirm(action) {
-    if (isSuperadmin.value && action?.danger && action?.keyword === 'ELIMINA') {
+    if (isSuperadmin.value && action?.danger && action?.keyword === 'ELIMINA' && !action.requireConfirmation) {
         action.action();
         return;
     }
@@ -3140,8 +3142,9 @@ function removeProjectDrawerSubtask(subtask) {
         keyword: 'ELIMINA',
         button: 'Elimina',
         danger: true,
+        requireConfirmation: true,
         action: () => router.delete(route('tasks.destroy', subtask.id), {
-            data: { stay: true },
+            data: { stay: true, confirmation: confirmText.value },
             preserveScroll: true,
             preserveState: true,
             onSuccess: () => {
@@ -3222,8 +3225,9 @@ function removeProjectDrawerTask() {
         keyword: 'ELIMINA',
         button: 'Elimina',
         danger: true,
+        requireConfirmation: true,
         action: () => router.delete(route('tasks.destroy', projectTaskDrawerTask.value.id), {
-            data: { stay: true },
+            data: { stay: true, confirmation: confirmText.value },
             preserveScroll: true,
             preserveState: true,
             onSuccess: closeProjectTaskDrawer,

@@ -41,6 +41,14 @@ class CentroNotificationService
 
     public function notifyUsers(iterable $userIds, ?string $actorId, string $type, string $message, ?string $taskId = null, ?string $companyDocumentId = null, ?string $companyMessageId = null): void
     {
+        // Enrich before dispatch so in-app, push and email carry the same context.
+        foreach (['tasks' => $taskId, 'company_documents' => $companyDocumentId, 'company_messages' => $companyMessageId] as $table => $id) {
+            if (! $id) continue;
+            $title = DB::table($table)->where('id', $id)->value('title');
+            if ($title && ! str_contains($message, '"'.$title.'"')) {
+                $message = rtrim($message, '. ').' — "'.$title.'".';
+            }
+        }
         $now = now();
         $category = $this->categoryForType($type);
 

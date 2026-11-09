@@ -1828,7 +1828,7 @@ function fileSize(value) {
 
 function remove(row, action = null) {
     if (!canDeleteRow(row)) return;
-    if (isSuperadmin.value && props.section !== 'users') {
+    if (isSuperadmin.value && !['users', 'tasks', 'calendar'].includes(props.section)) {
         executeDelete(row, action);
         return;
     }
@@ -1906,6 +1906,7 @@ function executeDelete(row, action = null) {
     }
 
     router.delete(route(`${routeBase.value}.destroy`, row.id), {
+        data: props.section === 'tasks' ? { confirmation: deleteConfirmText.value } : {},
         preserveScroll: true,
         onFinish: cancelDelete,
     });
@@ -3313,7 +3314,7 @@ function removeCalendarSubtask(subtask) {
     const parentTaskId = calendarTaskPanel.value?.id || calendarTaskForm.id;
     remove(subtask, () => {
         router.delete(route('tasks.destroy', subtask.id), {
-            data: { stay: true },
+            data: { stay: true, confirmation: deleteConfirmText.value },
             preserveScroll: true,
             preserveState: true,
             only: ['rows', 'errors', 'flash'],
@@ -3338,9 +3339,9 @@ function removeCalendarTask() {
     if (!calendarTaskForm.id) return;
     calendarTaskActionMenuOpen.value = false;
 
-    remove({ id: calendarTaskForm.id, title: calendarTaskForm.title || 'Task' }, () => {
+    remove({ ...calendarTaskPanel.value, id: calendarTaskForm.id, title: calendarTaskForm.title || 'Task' }, () => {
         router.delete(route('tasks.destroy', calendarTaskForm.id), {
-            data: { stay: true },
+            data: { stay: true, confirmation: deleteConfirmText.value },
             preserveScroll: true,
             preserveState: true,
             only: ['rows', 'errors', 'flash'],

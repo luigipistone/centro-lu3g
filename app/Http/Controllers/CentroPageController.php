@@ -2272,7 +2272,7 @@ class CentroPageController extends Controller
         $paths = DB::table('company_document_versions')->where('company_document_id', $id)->pluck('file_path')->push($document->file_path)->unique();
         Storage::disk('local')->delete($paths->all());
         DB::table('company_documents')->where('id', $id)->delete();
-        $this->notifyUsers($recipients, $request->user()->id, 'company_document_removed', 'Un documento a te destinato è stato rimosso.');
+        $this->notifyUsers($recipients, $request->user()->id, 'company_document_removed', 'Il documento "'.$document->title.'" a te destinato è stato rimosso.');
 
         return back()->with('status', 'Documento eliminato.');
     }
@@ -2467,9 +2467,10 @@ class CentroPageController extends Controller
     public function destroyCompanyMessage(Request $request, string $id): RedirectResponse
     {
         $this->ensureAdmin($request);
+        $title = DB::table('company_messages')->where('id', $id)->value('title');
         $recipients = $this->companyMessageRecipientIds($id);
         DB::table('company_messages')->where('id', $id)->delete();
-        $this->notifyUsers($recipients, $request->user()->id, 'company_message_removed', 'Un messaggio a te destinato è stato rimosso.');
+        $this->notifyUsers($recipients, $request->user()->id, 'company_message_removed', 'Il messaggio "'.$title.'" a te destinato è stato rimosso.');
 
         return back()->with('status', 'Messaggio eliminato.');
     }
@@ -2502,7 +2503,7 @@ class CentroPageController extends Controller
             $this->syncDocumentGroupUsers($groupId, $payload['user_ids'] ?? []);
         });
 
-        $this->notifyUsers($payload['user_ids'], $request->user()->id, 'company_document_group_added', 'Sei stato aggiunto a un gruppo documenti.');
+        $this->notifyUsers($payload['user_ids'], $request->user()->id, 'company_document_group_added', 'Sei stato aggiunto al gruppo documenti "'.$payload['name'].'".');
 
         return redirect()->route('documents.groups')->with('status', 'Gruppo creato.');
     }
@@ -2535,8 +2536,8 @@ class CentroPageController extends Controller
         });
 
         $newUserIds = collect($payload['user_ids']);
-        $this->notifyUsers($newUserIds->diff($oldUserIds), $request->user()->id, 'company_document_group_added', 'Sei stato aggiunto a un gruppo documenti.');
-        $this->notifyUsers($oldUserIds->diff($newUserIds), $request->user()->id, 'company_document_group_removed', 'Il tuo accesso a un gruppo documenti è stato rimosso.');
+        $this->notifyUsers($newUserIds->diff($oldUserIds), $request->user()->id, 'company_document_group_added', 'Sei stato aggiunto al gruppo documenti "'.$payload['name'].'".');
+        $this->notifyUsers($oldUserIds->diff($newUserIds), $request->user()->id, 'company_document_group_removed', 'Il tuo accesso al gruppo documenti "'.$payload['name'].'" è stato rimosso.');
 
         return back()->with('status', 'Gruppo aggiornato.');
     }
@@ -2544,9 +2545,10 @@ class CentroPageController extends Controller
     public function destroyDocumentGroup(Request $request, string $id): RedirectResponse
     {
         $this->ensureAdmin($request);
+        $name = DB::table('document_groups')->where('id', $id)->value('name');
         $userIds = DB::table('document_group_user')->where('document_group_id', $id)->pluck('user_id');
         DB::table('document_groups')->where('id', $id)->delete();
-        $this->notifyUsers($userIds, $request->user()->id, 'company_document_group_removed', 'Un gruppo documenti a cui appartenevi è stato rimosso.');
+        $this->notifyUsers($userIds, $request->user()->id, 'company_document_group_removed', 'Il gruppo documenti "'.$name.'" a cui appartenevi è stato rimosso.');
 
         return back()->with('status', 'Gruppo eliminato.');
     }
@@ -2831,7 +2833,7 @@ class CentroPageController extends Controller
             $this->logPasswordAction($itemId, $request->user()->id, 'created', 'Elemento password creato.');
         });
 
-        $this->notifyUsers($this->passwordItemNotificationUserIds($itemId)->reject(fn ($id) => $id === $request->user()->id), $request->user()->id, 'password_created', 'Una credenziale condivisa è stata aggiunta.');
+        $this->notifyUsers($this->passwordItemNotificationUserIds($itemId)->reject(fn ($id) => $id === $request->user()->id), $request->user()->id, 'password_created', 'La credenziale "'.$payload['title'].'" è stata aggiunta.');
 
         return back()->with('status', 'Password salvata.');
     }
@@ -2930,7 +2932,7 @@ class CentroPageController extends Controller
         });
 
         $recipients = $previousRecipients->merge($this->passwordItemNotificationUserIds($id))->unique()->reject(fn ($userId) => $userId === $request->user()->id);
-        $this->notifyUsers($recipients, $request->user()->id, 'password_updated', $passwordRotated ? 'Una credenziale condivisa è stata ruotata.' : 'Una credenziale condivisa è stata aggiornata.');
+        $this->notifyUsers($recipients, $request->user()->id, 'password_updated', 'La credenziale "'.$payload['title'].'" è stata '.($passwordRotated ? 'ruotata.' : 'aggiornata.'));
 
         return back()->with('status', 'Password aggiornata.');
     }
@@ -2975,7 +2977,7 @@ class CentroPageController extends Controller
         $recipients = $this->passwordItemNotificationUserIds($id)->reject(fn ($userId) => $userId === $request->user()->id);
         $this->logPasswordAction($id, $request->user()->id, 'deleted', 'Elemento password eliminato.');
         DB::table('password_items')->where('id', $id)->delete();
-        $this->notifyUsers($recipients, $request->user()->id, 'password_removed', 'Una credenziale condivisa è stata rimossa.');
+        $this->notifyUsers($recipients, $request->user()->id, 'password_removed', 'La credenziale "'.$item->title.'" è stata rimossa.');
 
         return back()->with('status', 'Password eliminata.');
     }
@@ -3533,6 +3535,7 @@ class CentroPageController extends Controller
     {
         $section = $request->route('section');
         $this->ensureRoleCanDestroyRecord($request, $section, $id);
+        if ($section === 'tasks') $request->validate(['confirmation' => ['required', 'in:ELIMINA']]);
 
         if ($section === 'clients' && DB::table('clients')->where('parent_client_id', $id)->exists()) {
             return back()->withErrors(['client' => 'Rimuovi prima i sottoclienti collegati.']);
@@ -5423,7 +5426,7 @@ class CentroPageController extends Controller
         ]);
 
         if ($request->user()->id !== $id) {
-            $this->notifyUsers([$id], $request->user()->id, 'profile_dossier_updated', 'Il tuo fascicolo personale è stato aggiornato.');
+            $this->notifyUsers([$id], $request->user()->id, 'profile_dossier_updated', 'La voce "'.$payload['title'].'" del tuo fascicolo personale è stata aggiornata.');
         }
 
         return back()->with('status', $replaced ? 'Nuova versione salvata.' : 'Voce aggiunta al fascicolo.');
@@ -5474,7 +5477,7 @@ class CentroPageController extends Controller
         ]);
 
         if ($request->user()->id !== $id) {
-            $this->notifyUsers([$id], $request->user()->id, 'profile_dossier_updated', 'Una voce del tuo fascicolo personale è stata rimossa.');
+            $this->notifyUsers([$id], $request->user()->id, 'profile_dossier_updated', 'La voce "'.$item->title.'" del tuo fascicolo personale è stata rimossa.');
         }
 
         return back()->with('status', 'Voce eliminata dal fascicolo.');
