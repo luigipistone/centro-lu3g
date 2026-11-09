@@ -295,6 +295,13 @@ Route::middleware('auth')->group(function () {
     Route::delete('/users/{id}/physical', [CentroPageController::class, 'physicallyDeleteUser'])->name('users.physical-destroy');
     Route::patch('/users/{id}/status', [CentroPageController::class, 'updateUserStatus'])->name('users.status.update');
     Route::get('/settings', [CentroPageController::class, 'index'])->defaults('section', 'settings')->name('settings.index');
+    Route::get('/settings/api-connections', [\App\Http\Controllers\ApiConnectionController::class, 'index'])->name('settings.api-connections.index');
+    Route::post('/settings/api-connections', [\App\Http\Controllers\ApiConnectionController::class, 'store'])->name('settings.api-connections.store');
+    Route::patch('/settings/api-connections/{id}', [\App\Http\Controllers\ApiConnectionController::class, 'update'])->name('settings.api-connections.update');
+    Route::delete('/settings/api-connections/{id}', [\App\Http\Controllers\ApiConnectionController::class, 'destroy'])->name('settings.api-connections.destroy');
+    Route::post('/settings/api-deliveries/{id}/retry', [\App\Http\Controllers\ApiConnectionController::class, 'retry'])->name('settings.api-deliveries.retry');
+    Route::get('/settings/api-documentation', [\App\Http\Controllers\ApiConnectionController::class, 'documentation'])->name('settings.api-documentation');
+    Route::get('/settings/api-openapi', [\App\Http\Controllers\ApiConnectionController::class, 'openapi'])->name('settings.api-openapi');
     Route::get('/settings/report', [ReportSyncController::class, 'index'])->name('settings.report.index');
     Route::put('/settings/report/token', [ReportSyncController::class, 'update'])->middleware('throttle:10,1')->name('settings.report.update');
     Route::post('/settings/report/preview', [ReportSyncController::class, 'preview'])->middleware('throttle:3,1')->name('settings.report.preview');

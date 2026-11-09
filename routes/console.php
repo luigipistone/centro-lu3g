@@ -15,6 +15,14 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\Console\Command\Command;
 
+Artisan::command('centro:integration-webhooks', function (\App\Services\IntegrationWebhooks $service) {
+    $service->capture();
+    $service->deliver();
+    DB::table('api_request_logs')->where('created_at', '<', now()->subDays(30))->delete();
+    DB::table('api_webhook_deliveries')->whereIn('status', ['delivered', 'cancelled'])->where('updated_at', '<', now()->subDays(30))->delete();
+})->purpose('Sincronizza Page Notes e invia webhook in attesa');
+Schedule::command('centro:integration-webhooks')->everyMinute()->withoutOverlapping(10);
+
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');

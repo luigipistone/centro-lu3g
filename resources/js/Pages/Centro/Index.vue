@@ -12,6 +12,7 @@ import UserAvatar from '@/Components/UserAvatar.vue';
 import TaskMentions from '@/Components/TaskMentions.vue';
 import DriveAttachments from '@/Components/DriveAttachments.vue';
 import ReportSyncPanel from '@/Components/ReportSyncPanel.vue';
+import ApiConnectionsPanel from '@/Components/ApiConnectionsPanel.vue';
 import { addDays, daysBetween, movedTaskDates } from '@/utils/calendarTaskDates';
 import {
     ROLE_LABELS,
@@ -379,7 +380,7 @@ const taskSearchSelectQueries = ref({
 });
 const taskDescriptionEditor = ref(null);
 const requestedSettingsTab = new URLSearchParams(window.location.search).get('tab');
-const settingsTab = ref(['personalizzazione', 'smtp', 'figma', 'backup', 'ruoli', 'sezioni', 'log', 'gestione'].includes(requestedSettingsTab) || (['github', 'airmail', 'report'].includes(requestedSettingsTab) && isSuperadmin.value) ? requestedSettingsTab : 'personalizzazione');
+const settingsTab = ref(['personalizzazione', 'smtp', 'figma', 'backup', 'ruoli', 'sezioni', 'log', 'gestione'].includes(requestedSettingsTab) || (['github', 'airmail', 'report', 'api'].includes(requestedSettingsTab) && isSuperadmin.value) ? requestedSettingsTab : 'personalizzazione');
 const eventThemeOptions = [
     { id: 'standard', label: 'Standard' },
     { id: 'halloween', label: 'Halloween' },
@@ -701,6 +702,7 @@ const settingsTabs = [
     ['github', 'GitHub', GitBranch],
     ['airmail', 'Airmail', Send],
     ['report', 'LU3G Report', RefreshCw],
+    ['api', 'API e webhook', ShieldCheck],
     ['backup', 'Backup', DatabaseBackup],
     ['ruoli', 'Ruoli', ShieldCheck],
     ['sezioni', 'Sezioni', PanelsTopLeft],
@@ -709,14 +711,14 @@ const settingsTabs = [
 ];
 const settingsGroups = [
     { id: 'aspetto', label: 'Aspetto', icon: WandSparkles, tabs: ['personalizzazione'] },
-    { id: 'integrazioni', label: 'Integrazioni', icon: PanelsTopLeft, tabs: ['smtp', 'figma', 'github', 'airmail', 'report'] },
+    { id: 'integrazioni', label: 'Integrazioni', icon: PanelsTopLeft, tabs: ['smtp', 'figma', 'github', 'airmail', 'report', 'api'] },
     { id: 'accessi', label: 'Accessi', icon: ShieldCheck, tabs: ['ruoli', 'sezioni'] },
     { id: 'sistema', label: 'Sistema', icon: DatabaseBackup, tabs: ['backup', 'log'] },
     { id: 'servizi', label: 'Servizi', icon: Settings, tabs: ['gestione'] },
 ];
 const settingsGroup = computed(() => settingsGroups.find(group => group.tabs.includes(settingsTab.value)) || settingsGroups[0]);
 const settingsSubtabs = computed(() => settingsTabs.filter(tab => settingsGroup.value.tabs.includes(tab[0])
-    && (!['github', 'airmail', 'report'].includes(tab[0]) || isSuperadmin.value)));
+    && (!['github', 'airmail', 'report', 'api'].includes(tab[0]) || isSuperadmin.value)));
 
 function updateSectionVisibility(section) {
     sectionSwitchSaving.value = section.key;
@@ -6396,6 +6398,7 @@ function calendarDayStyle(sectionMonth, cell) {
                 </section>
 
                 <ReportSyncPanel v-else-if="settingsTab === 'report' && isSuperadmin" :configured="reportSettings?.configured" :latest-run="reportSettings?.latestRun" />
+                <ApiConnectionsPanel v-else-if="settingsTab === 'api' && isSuperadmin" />
 
                 <section v-else-if="settingsTab === 'backup'" class="grid gap-6 lg:grid-cols-[360px_1fr]">
                     <div class="app-card">
