@@ -11,6 +11,12 @@ const saved = ref('');
 const tab = ref('connections'), busy = ref(false), error = ref(''), token = ref(''), copied = ref(false), show = ref(false), revoke = ref(null), docs = ref('');
 const form = ref({ name: '', site: '', client_id: '', project_id: '', scopes: ['clients:read', 'projects:read', 'tasks:read', 'tasks:write', 'comments:write', 'webhooks:write'], expires_at: new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10) });
 const labels = { 'clients:read': 'Leggi cliente', 'projects:read': 'Leggi progetto', 'tasks:read': 'Leggi attività collegate', 'tasks:write': 'Crea e modifica attività', 'comments:write': 'Aggiungi commenti', 'webhooks:write': 'Gestisci webhook' };
+const generalLabels = { 'clients:read': 'Clienti', 'projects:read': 'Progetti', 'tasks:read': 'Task', 'users:read': 'Utenti', 'absences:read': 'Assenze approvate', 'availability:read': 'Disponibilità e smart working', 'services:read': 'Catalogo servizi', 'webhooks:write': 'Gestisci webhook' };
+const policyLabels = { clients: 'Clienti autorizzati', projects: 'Progetti e relative task', users: 'Persone e relative assenze' };
+form.value.kind = 'general';
+form.value.scopes = Object.keys(generalLabels);
+form.value.access_policy = Object.fromEntries(Object.keys(policyLabels).map(key => [key, { all: false, ids: [] }]));
+watch(() => form.value.kind, kind => { form.value.scopes = Object.keys(kind === 'general' ? generalLabels : labels); });
 const projects = computed(() => data.value.projects.filter(p => p.client_id === form.value.client_id));
 watch(() => form.value.client_id, () => { form.value.project_id = ''; });
 function name(list, id) { return list.find(x => x.id === id)?.name || id; }
@@ -18,7 +24,7 @@ function date(value) { return value ? new Date(value).toLocaleString('it-IT') : 
 function active(c) { return !c.revoked_at && new Date(c.expires_at) > new Date(); }
 function deliveryName(d) { const hook = data.value.webhooks.find(h => h.id === d.webhook_id); return hook ? name(data.value.connections, hook.connection_id) : 'Collegamento rimosso'; }
 const deliveryStatuses = { pending: 'In attesa', delivered: 'Consegnato', failed: 'Non riuscito', cancelled: 'Annullato' };
-async function savePermissions(c) { await run(async () => { await axios.patch(route('settings.api-connections.update', c.id), { scopes: c.scopes }); await load(); saved.value = 'Permessi aggiornati per ' + c.name + '.'; }); }
+async function savePermissions(c) { await run(async () => { await axios.patch(route('settings.api-connections.update', c.id), { scopes: c.scopes, ...(c.kind === 'general' ? { access_policy: c.access_policy } : {}) }); await load(); saved.value = 'Permessi aggiornati per ' + c.name + '.'; }); }
 async function load() { data.value = (await axios.get(route('settings.api-connections.index'))).data; }
 async function run(action) {
     busy.value = true; error.value = ''; saved.value = '';
@@ -37,25 +43,26 @@ onMounted(() => run(load));
             <div class="flex flex-wrap gap-2">
                 <button class="btn" :class="tab === 'connections' ? 'btn-primary' : 'btn-outline'" @click="tab = 'connections'"><KeyRound class="h-4 w-4" />Collegamenti</button>
                 <button class="btn" :class="tab === 'deliveries' ? 'btn-primary' : 'btn-outline'" @click="tab = 'deliveries'"><RefreshCw class="h-4 w-4" />Webhook e accessi</button>
-                <button class="btn" :class="tab === 'docs' ? 'btn-primary' : 'btn-outline'" @click="documentation"><BookOpen class="h-4 w-4" />Documentazione</button>
+                <a class="btn btn-outline" href="/developers" target="_blank" rel="noopener"><BookOpen class="h-4 w-4" />Documentazione API</a>
             </div>
-            <button class="btn btn-primary" :disabled="busy" @click="show = true"><Plus class="h-4 w-4" />Collega sito</button>
+            <button class="btn btn-primary" :disabled="busy" @click="show = true"><Plus class="h-4 w-4" />Nuovo collegamento</button>
         </div>
         <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
         <p v-if="saved" role="status" class="text-sm font-medium text-gray-700">{{ saved }}</p>
         <div v-if="token" class="app-card space-y-3">
             <h3 class="section-title">Token del collegamento</h3>
-            <p class="text-sm">Visibile solo ora. Conservalo nelle impostazioni server del plugin.</p>
+            <p class="text-sm">Visibile solo ora. Conservalo nel backend del software collegato.</p>
             <div class="flex items-center gap-3"><code class="min-w-0 flex-1 break-all">{{ token }}</code><button class="btn btn-outline" title="Copia token" aria-label="Copia token" @click="copy"><component :is="copied ? Check : Copy" class="h-4 w-4" /></button><button class="btn btn-outline" title="Nascondi token" aria-label="Nascondi token" @click="token = ''; copied = false"><X class="h-4 w-4" /></button></div>
         </div>
         <div v-if="tab === 'connections'" class="app-card divide-y divide-gray-200/30">
-            <p v-if="!data.connections.length" class="text-sm text-gray-500">Nessun sito collegato.</p>
+            <p v-if="!data.connections.length" class="text-sm text-gray-500">Nessun collegamento.</p>
             <article v-for="c in data.connections" :key="c.id" class="py-4 first:pt-0 last:pb-0">
                 <div class="flex flex-wrap items-start justify-between gap-3">
-                    <div class="min-w-0"><h3 class="font-semibold break-words">{{ c.name }}</h3><p class="text-sm break-all">{{ c.site }}</p><p class="text-sm text-gray-500">{{ name(data.clients, c.client_id) }} · {{ name(data.projects, c.project_id) }}</p><p class="mt-1 text-xs text-gray-500">{{ c.revoked_at ? 'Revocato' : active(c) ? 'Attivo' : 'Scaduto' }} · Scadenza {{ date(c.expires_at) }} · Ultimo utilizzo {{ date(c.last_used_at) }}</p></div>
+                    <div class="min-w-0"><h3 class="font-semibold break-words">{{ c.name }}</h3><p class="text-sm break-all">{{ c.site }}</p><p class="text-sm text-gray-500">{{ c.kind === 'general' ? 'API comuni' : name(data.clients, c.client_id) + ' · ' + name(data.projects, c.project_id) }}</p><p class="mt-1 text-xs text-gray-500">{{ c.revoked_at ? 'Revocato' : active(c) ? 'Attivo' : 'Scaduto' }} · Scadenza {{ date(c.expires_at) }} · Ultimo utilizzo {{ date(c.last_used_at) }}</p></div>
                     <button v-if="active(c)" class="btn btn-outline" title="Revoca collegamento" aria-label="Revoca collegamento" @click="revoke = c"><Unplug class="h-4 w-4" /></button>
                 </div>
-                <div class="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3"><label v-for="(label, scope) in labels" :key="scope" class="inline-flex items-center gap-2 text-sm"><input v-model="c.scopes" :value="scope" type="checkbox" :disabled="!active(c) || busy" class="rounded border-gray-300" />{{ label }}</label><button v-if="active(c)" class="btn btn-outline" :disabled="busy" title="Salva permessi" aria-label="Salva permessi" @click="savePermissions(c)"><Save class="h-4 w-4" /></button></div>
+                <div class="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3"><label v-for="(label, scope) in (c.kind === 'general' ? generalLabels : labels)" :key="scope" class="inline-flex items-center gap-2 text-sm"><input v-model="c.scopes" :value="scope" type="checkbox" :disabled="!active(c) || busy" class="rounded border-gray-300" />{{ label }}</label><button v-if="active(c)" class="btn btn-outline" :disabled="busy" title="Salva permessi" aria-label="Salva permessi" @click="savePermissions(c)"><Save class="h-4 w-4" /></button></div>
+                <div v-if="c.kind === 'general'" class="mt-5 grid gap-4 md:grid-cols-3"><div v-for="(label, key) in policyLabels" :key="key"><label class="form-label">{{ label }}</label><label class="flex items-center gap-2 mb-2 text-sm"><input v-model="c.access_policy[key].all" type="checkbox" :disabled="!active(c) || busy" />Tutti, anche futuri</label><AppSelect v-if="!c.access_policy[key].all" v-model="c.access_policy[key].ids" multiple searchable :options="data[key] || []" :disabled="!active(c) || busy" placeholder="Nessuno autorizzato" /></div></div>
             </article>
         </div>
         <div v-else-if="tab === 'deliveries'" class="space-y-6">
@@ -66,14 +73,16 @@ onMounted(() => run(load));
             <div class="app-card"><h3 class="section-title">Ultime 50 richieste API</h3><div v-for="l in data.logs" :key="l.id" class="flex flex-wrap gap-3 py-2 text-sm"><span>{{ l.status }}</span><span class="break-all">{{ l.method }} /{{ l.path }}</span><span class="text-gray-500">{{ date(l.created_at) }}</span></div><p v-if="!data.logs.length" class="mt-4 text-sm text-gray-500">Nessuna richiesta.</p></div>
         </div>
         <div v-else class="app-card min-w-0"><div class="mb-5 flex flex-wrap items-center justify-between gap-3"><h3 class="section-title">API v1 · Page Notes</h3><a class="btn btn-outline" :href="route('settings.api-openapi')"><Download class="h-4 w-4" />OpenAPI JSON</a></div><div class="api-docs" v-html="docs" /></div>
-        <Modal :show="show" @close="show = false"><form class="p-6 space-y-5" @submit.prevent="create"><h3 class="section-title">Collega Page Notes</h3>
+        <Modal :show="show" @close="show = false"><form class="p-6 space-y-5" @submit.prevent="create"><h3 class="section-title">Nuovo collegamento API</h3>
+            <div><label class="form-label">Tipo</label><AppSelect v-model="form.kind" :options="[{ value: 'general', label: 'API comuni' }, { value: 'page_notes', label: 'Page Notes (specifico)' }]" /></div>
             <div><label class="form-label" for="api-name">Nome collegamento</label><input id="api-name" v-model="form.name" class="form-control" required maxlength="120" /></div>
             <div><label class="form-label" for="api-site">Sito HTTPS</label><input id="api-site" v-model="form.site" class="form-control" type="url" required /></div>
-            <div><label class="form-label">Cliente</label><AppSelect v-model="form.client_id" :options="data.clients" placeholder="Seleziona cliente" /></div>
-            <div><label class="form-label">Progetto</label><AppSelect v-model="form.project_id" :options="projects" placeholder="Seleziona progetto" /></div>
+            <template v-if="form.kind === 'page_notes'"><div><label class="form-label">Cliente</label><AppSelect v-model="form.client_id" :options="data.clients" placeholder="Seleziona cliente" /></div>
+            <div><label class="form-label">Progetto</label><AppSelect v-model="form.project_id" :options="projects" placeholder="Seleziona progetto" /></div></template>
+            <template v-else><div v-for="(label, key) in policyLabels" :key="key"><label class="form-label">{{ label }}</label><label class="flex items-center gap-2 mb-2 text-sm"><input v-model="form.access_policy[key].all" type="checkbox" />Tutti, anche futuri</label><AppSelect v-if="!form.access_policy[key].all" v-model="form.access_policy[key].ids" multiple searchable :options="data[key] || []" placeholder="Nessuno autorizzato" /></div></template>
             <div><label class="form-label">Scadenza</label><AppDateInput v-model="form.expires_at" /></div>
-            <div class="grid gap-3 sm:grid-cols-2"><label v-for="(label, scope) in labels" :key="scope" class="flex items-center gap-2 text-sm"><input v-model="form.scopes" type="checkbox" :value="scope" class="rounded border-gray-300" />{{ label }}</label></div>
-            <p v-if="error" class="text-sm text-red-600">{{ error }}</p><div class="flex justify-end gap-3"><button type="button" class="btn btn-outline" @click="show = false">Annulla</button><button class="btn btn-primary" :disabled="busy || !form.project_id">Crea collegamento</button></div>
+            <div class="grid gap-3 sm:grid-cols-2"><label v-for="(label, scope) in (form.kind === 'general' ? generalLabels : labels)" :key="scope" class="flex items-center gap-2 text-sm"><input v-model="form.scopes" type="checkbox" :value="scope" class="rounded border-gray-300" />{{ label }}</label></div>
+            <p v-if="error" class="text-sm text-red-600">{{ error }}</p><div class="flex justify-end gap-3"><button type="button" class="btn btn-outline" @click="show = false">Annulla</button><button class="btn btn-primary" :disabled="busy || (form.kind === 'page_notes' && !form.project_id)">Crea collegamento</button></div>
         </form></Modal>
         <Modal :show="Boolean(revoke)" @close="revoke = null"><div class="p-6 space-y-5"><h3 class="section-title">Revoca {{ revoke?.name }}?</h3><p>Il sito non potrà più accedere alle API. Le attività già create resteranno nel Centro.</p><div class="flex justify-end gap-3"><button class="btn btn-outline" @click="revoke = null">Annulla</button><button class="btn btn-primary" :disabled="busy" @click="run(async () => { await axios.delete(route('settings.api-connections.destroy', revoke.id)); revoke = null; await load(); })">Revoca</button></div></div></Modal>
     </section>

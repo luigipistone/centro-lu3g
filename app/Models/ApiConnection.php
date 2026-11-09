@@ -14,7 +14,7 @@ class ApiConnection extends Authenticatable
 
     protected function casts(): array
     {
-        return ['scopes' => 'array', 'expires_at' => 'datetime', 'revoked_at' => 'datetime'];
+        return ['scopes' => 'array', 'access_policy' => 'array', 'expires_at' => 'datetime', 'revoked_at' => 'datetime'];
     }
 
     public function enabled(): bool

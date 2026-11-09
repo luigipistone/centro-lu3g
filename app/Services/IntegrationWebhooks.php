@@ -30,7 +30,7 @@ class IntegrationWebhooks
 
     public function capture(?string $connectionId = null): void
     {
-        ApiConnection::whereNull('revoked_at')->where('expires_at', '>', now())->when($connectionId, fn ($q) => $q->where('id', $connectionId))->each(function ($c) {
+        ApiConnection::where('kind', 'page_notes')->whereNull('revoked_at')->where('expires_at', '>', now())->when($connectionId, fn ($q) => $q->where('id', $connectionId))->each(function ($c) {
             DB::transaction(function () use ($c) {
                 DB::table('api_connections')->where('id', $c->id)->lockForUpdate()->first();
                 $links = DB::table('api_resource_links')->where('connection_id', $c->id)->where('kind', 'subtask')->get();

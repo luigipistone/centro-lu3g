@@ -16,6 +16,9 @@ use App\Http\Controllers\ShortLinkController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
+Route::get('/developers/openapi.json', [\App\Http\Controllers\DeveloperPortalController::class, 'openapi'])->name('developers.openapi');
+Route::get('/developers/{page?}', [\App\Http\Controllers\DeveloperPortalController::class, 'show'])->name('developers.show');
+
 Route::get('/', function () {
     return auth()->check()
         ? redirect()->route('dashboard')

@@ -18,9 +18,12 @@ use Symfony\Component\Console\Command\Command;
 Artisan::command('centro:integration-webhooks', function (\App\Services\IntegrationWebhooks $service) {
     $service->capture();
     $service->deliver();
+    app(\App\Services\CommonApiWebhooks::class)->capture();
+    app(\App\Services\CommonApiWebhooks::class)->deliver();
+    DB::table('api_events')->whereIn('status', ['delivered', 'cancelled'])->where('updated_at', '<', now()->subDays(30))->delete();
     DB::table('api_request_logs')->where('created_at', '<', now()->subDays(30))->delete();
     DB::table('api_webhook_deliveries')->whereIn('status', ['delivered', 'cancelled'])->where('updated_at', '<', now()->subDays(30))->delete();
-})->purpose('Sincronizza Page Notes e invia webhook in attesa');
+})->purpose('Rileva aggiornamenti delle integrazioni e invia webhook in attesa');
 Schedule::command('centro:integration-webhooks')->everyMinute()->withoutOverlapping(10);
 
 Artisan::command('inspire', function () {
