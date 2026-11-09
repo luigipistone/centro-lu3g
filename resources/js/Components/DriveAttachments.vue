@@ -1,7 +1,7 @@
 <script setup>
 import { ref, watch } from 'vue';
 import axios from 'axios';
-import { ArrowLeft, Check, ChevronRight, Download, FileText, Folder, LoaderCircle, Paperclip, Unlink, UploadCloud, X } from '@lucide/vue';
+import { ArrowLeft, Check, ChevronRight, Download, FileText, Folder, FolderPlus, LoaderCircle, Paperclip, Trash2, UploadCloud, X } from '@lucide/vue';
 import Modal from '@/Components/Modal.vue';
 
 const props = defineProps({ scope: { type: String, required: true }, entityId: { type: String, required: true } });
@@ -27,6 +27,9 @@ const currentName = ref('');
 const success = ref('');
 const removing = ref(null);
 const deleting = ref(false);
+const newFolderName = ref('');
+const newFolderOpen = ref(false);
+const creatingFolder = ref(false);
 let version = 0;
 const base = () => `/${props.scope}/${encodeURIComponent(props.entityId)}`;
 const message = (e) => Object.values(e.response?.data?.errors || {}).flat()[0] || 'Operazione non riuscita. Riprova.';
@@ -57,7 +60,7 @@ watch(() => [props.scope, props.entityId], () => {
 }, { immediate: true });
 
 async function browse(target, more = false) {
-    if (browsing.value) return;
+    if (browsing.value || creatingFolder.value) return;
     browsing.value = true;
     folderError.value = '';
     try {
@@ -72,9 +75,22 @@ async function browse(target, more = false) {
     finally { browsing.value = false; }
 }
 function openPicker() {
+    newFolderName.value = ''; newFolderOpen.value = false;
     trail.value = []; folders.value = []; cursor.value = null;
     picker.value = true;
     browse({ id: root.value });
+}
+async function createFolder() {
+    const name = newFolderName.value.trim();
+    if (!name || creatingFolder.value || !trail.value.length) return;
+    creatingFolder.value = true; folderError.value = '';
+    try {
+        const { data } = await axios.post(`${base()}/drive-folders`, { parent: trail.value[trail.value.length - 1].id, name });
+        folder.value = data;
+        picker.value = false;
+        newFolderName.value = ''; newFolderOpen.value = false;
+    } catch (e) { folderError.value = message(e); }
+    finally { creatingFolder.value = false; }
 }
 async function upload(list) {
     if (busy.value || !ready.value || !canUpload.value) return;
@@ -112,7 +128,7 @@ async function upload(list) {
     }
 }
 function drop(event) { dragging.value = false; upload(event.dataTransfer.files); }
-async function unlink() {
+async function deleteFile() {
     deleting.value = true;
     try {
         await axios.delete(`${base()}/drive-attachments/${removing.value.id}`);
@@ -152,12 +168,17 @@ async function unlink() {
                 <FileText class="h-5 w-5 shrink-0 text-gray-400" />
                 <div class="min-w-0 flex-1"><p class="truncate text-sm font-medium text-gray-900" :title="file.name">{{ file.name }}</p><p class="truncate text-xs text-gray-500">{{ size(file.size) }} · {{ file.folder_name }}</p></div>
                 <a :href="`${base()}/drive-attachments/${file.id}`" class="icon-btn h-9 w-9 shrink-0" title="Scarica allegato" aria-label="Scarica allegato"><Download class="h-4 w-4" /></a>
-                <button v-if="canRemove" type="button" class="icon-btn h-9 w-9 shrink-0 text-red-600" title="Scollega allegato" aria-label="Scollega allegato" @click="removing = file"><Unlink class="h-4 w-4" /></button>
+                <button v-if="canRemove" type="button" class="icon-btn h-9 w-9 shrink-0 text-red-600" title="Elimina file" aria-label="Elimina file" @click="removing = file"><Trash2 class="h-4 w-4" /></button>
             </div>
         </div>
-        <Modal :show="picker" @close="picker = false">
+        <Modal :show="picker" :closeable="!creatingFolder" @close="picker = false">
             <div class="space-y-4 p-6">
-                <div class="flex items-center justify-between gap-3"><h3 class="text-lg font-semibold text-gray-900">Cartella Google Drive</h3><button type="button" class="icon-btn h-9 w-9" aria-label="Chiudi" @click="picker = false"><X class="h-5 w-5" /></button></div>
+                <div class="flex items-center justify-between gap-3"><h3 class="text-lg font-semibold text-gray-900">Cartella Google Drive</h3><button type="button" class="icon-btn h-9 w-9" aria-label="Chiudi" :disabled="creatingFolder" @click="picker = false"><X class="h-5 w-5" /></button></div>
+                <button type="button" class="btn btn-outline text-sm" :disabled="browsing || creatingFolder || !trail.length" @click="newFolderOpen = !newFolderOpen"><FolderPlus class="h-4 w-4" />Nuova cartella</button>
+                <form v-if="newFolderOpen" class="space-y-2" @submit.prevent="createFolder">
+                    <label class="block text-sm font-medium text-gray-700">Nome cartella<input v-model="newFolderName" class="form-control mt-2" maxlength="255" required :disabled="creatingFolder" /></label>
+                    <button type="submit" class="btn btn-primary" :disabled="creatingFolder || !newFolderName.trim()"><LoaderCircle v-if="creatingFolder" class="h-4 w-4 animate-spin" />{{ creatingFolder ? 'Creazione…' : 'Crea e seleziona' }}</button>
+                </form>
                 <div class="flex min-w-0 items-center gap-2"><button v-if="trail.length > 1" type="button" class="icon-btn h-9 w-9 shrink-0" :disabled="browsing" title="Cartella superiore" @click="browse(trail[trail.length - 2])"><ArrowLeft class="h-4 w-4" /></button><p class="truncate text-sm font-medium text-gray-700" :title="trail.map(f => f.name).join(' / ')">{{ trail.map(f => f.name).join(' / ') }}</p></div>
                 <p v-if="folderError" class="text-sm text-red-600" role="alert">{{ folderError }}</p>
                 <div class="max-h-72 overflow-y-auto">
@@ -166,11 +187,11 @@ async function unlink() {
                     <p v-else-if="!folders.length && !folderError" class="p-3 text-sm text-gray-500">Nessuna sottocartella.</p>
                     <button v-if="cursor" type="button" class="btn btn-outline mt-2" :disabled="browsing" @click="browse(trail[trail.length - 1], true)">Carica altre cartelle</button>
                 </div>
-                <div class="flex justify-end gap-3"><button type="button" class="btn btn-outline" @click="picker = false">Annulla</button><button type="button" class="btn btn-primary" :disabled="browsing || !trail.length || !!folderError" @click="folder = trail[trail.length - 1]; picker = false">Seleziona cartella</button></div>
+                <div class="flex justify-end gap-3"><button type="button" class="btn btn-outline" :disabled="creatingFolder" @click="picker = false">Annulla</button><button type="button" class="btn btn-primary" :disabled="creatingFolder || browsing || !trail.length || !!folderError" @click="folder = trail[trail.length - 1]; picker = false">Seleziona cartella</button></div>
             </div>
         </Modal>
         <Modal :show="!!removing" max-width="md" :closeable="!deleting" @close="removing = null">
-            <div class="space-y-4 p-6"><h3 class="text-lg font-semibold text-gray-900">Scollegare l'allegato?</h3><p class="break-words text-sm text-gray-600">{{ removing?.name }} verrà rimosso da questa scheda. Il file rimarrà su Google Drive.</p><div class="flex justify-end gap-3"><button type="button" class="btn btn-outline" :disabled="deleting" @click="removing = null">Annulla</button><button type="button" class="btn btn-primary" :disabled="deleting" @click="unlink">{{ deleting ? 'Rimozione…' : 'Scollega' }}</button></div></div>
+            <div class="space-y-4 p-6"><h3 class="text-lg font-semibold text-gray-900">Eliminare il file?</h3><p class="break-words text-sm text-gray-600">{{ removing?.name }} verrà rimosso dagli allegati e spostato nel cestino di Google Drive.</p><div class="flex justify-end gap-3"><button type="button" class="btn btn-outline" :disabled="deleting" @click="removing = null">Annulla</button><button type="button" class="btn btn-primary" :disabled="deleting" @click="deleteFile">{{ deleting ? 'Eliminazione…' : 'Elimina' }}</button></div></div>
         </Modal>
     </section>
 </template>

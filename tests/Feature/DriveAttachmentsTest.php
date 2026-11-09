@@ -37,11 +37,12 @@ class DriveAttachmentsTest extends TestCase
             'https://www.googleapis.com/drive/v3/files/outside*' => Http::response(['id' => 'outside', 'driveId' => 'other', 'mimeType' => 'application/vnd.google-apps.folder', 'capabilities' => ['canAddChildren' => true]]),
             'https://www.googleapis.com/upload/*' => Http::response([], 200, ['Location' => 'https://www.googleapis.com/session/test']),
             'https://www.googleapis.com/session/test' => Http::response(['id' => 'remote-file', 'size' => '5']),
-            'https://www.googleapis.com/drive/v3/files/remote-file*' => Http::response(['id' => 'remote-file', 'driveId' => 'shared', 'capabilities' => ['canDownload' => true]]),
+            'https://www.googleapis.com/drive/v3/files/remote-file*' => fn ($request) => Http::response($request->method() === 'PATCH' ? ['id' => 'remote-file', 'trashed' => true] : ['id' => 'remote-file', 'driveId' => 'shared', 'capabilities' => ['canDownload' => true, 'canTrash' => true]]),
+            'https://www.googleapis.com/drive/v3/files?*' => Http::response(['id' => 'new-folder', 'name' => 'Nuova cartella']),
         ]);
     }
 
-    public function test_task_and_project_uploads_are_stored_on_drive_and_unlinked_only_locally(): void
+    public function test_task_and_project_files_are_trashed_on_drive_before_unlinking(): void
     {
         $this->fakeDrive();
         $this->actingAsWorkflowAdmin(User::factory()->create());
@@ -56,6 +57,51 @@ class DriveAttachmentsTest extends TestCase
             $this->assertDatabaseMissing('drive_attachments', ['id' => $attachment]);
         }
         Http::assertNotSent(fn ($request) => $request->method() === 'DELETE');
+        Http::assertSent(fn ($request) => $request->method() === 'PATCH' && $request['trashed'] === true);
+    }
+
+    public function test_folder_creation_validates_the_parent_and_permissions(): void
+    {
+        $this->fakeDrive();
+        $this->actingAsWorkflowAdmin(User::factory()->create());
+        $id = $this->task();
+        $this->postJson("/tasks/{$id}/drive-folders", ['parent' => 'folder', 'name' => 'Nuova cartella'])->assertCreated()->assertJsonPath('id', 'new-folder');
+        Http::assertSent(fn ($request) => $request->method() === 'POST' && $request['mimeType'] === 'application/vnd.google-apps.folder' && $request['parents'] === ['folder']);
+        $this->postJson("/tasks/{$id}/drive-folders", ['parent' => 'outside', 'name' => 'Non consentita'])->assertUnprocessable();
+        $this->postJson("/tasks/{$id}/drive-folders", ['parent' => 'folder', 'name' => ' '])->assertUnprocessable();
+        $this->actingAs(User::factory()->create())->postJson("/tasks/{$id}/drive-folders", ['parent' => 'folder', 'name' => 'Non consentita'])->assertForbidden();
+    }
+
+    public function test_failed_drive_deletion_keeps_the_attachment(): void
+    {
+        $this->fakeDrive();
+        $this->actingAsWorkflowAdmin(User::factory()->create());
+        $id = $this->task();
+        $this->postJson("/tasks/{$id}/drive-attachments", ['file' => UploadedFile::fake()->createWithContent('a.txt', 'hello'), 'folder' => 'folder'])->assertCreated();
+        $attachment = DB::table('drive_attachments')->value('id');
+        $this->mock(GoogleDriveStorage::class, function ($mock) {
+            $mock->shouldReceive('root')->andReturn('shared');
+            $mock->shouldReceive('trash')->once()->andThrow(new \RuntimeException('Remote failure'));
+        });
+        $this->deleteJson("/tasks/{$id}/drive-attachments/{$attachment}")->assertUnprocessable();
+        $this->assertDatabaseHas('drive_attachments', ['id' => $attachment]);
+    }
+
+    public function test_trash_checks_remote_permissions_and_accepts_already_trashed_files(): void
+    {
+        $this->fakeDrive();
+        Http::fake([
+            'https://www.googleapis.com/drive/v3/files/denied*' => Http::response(['id' => 'denied', 'driveId' => 'shared', 'capabilities' => ['canTrash' => false]]),
+            'https://www.googleapis.com/drive/v3/files/trashed*' => Http::response(['id' => 'trashed', 'driveId' => 'shared', 'trashed' => true]),
+        ]);
+        app(GoogleDriveStorage::class)->trash('trashed');
+        try {
+            app(GoogleDriveStorage::class)->trash('denied');
+            $this->fail('Deletion must require canTrash.');
+        } catch (\Illuminate\Validation\ValidationException $error) {
+            $this->assertArrayHasKey('drive', $error->errors());
+        }
+        Http::assertNotSent(fn ($request) => $request->method() === 'PATCH');
     }
 
     public function test_external_folders_and_upload_failures_do_not_create_records(): void

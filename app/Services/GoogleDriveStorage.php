@@ -52,15 +52,15 @@ class GoogleDriveStorage
         return Http::withToken($this->token())->connectTimeout(10)->timeout(120);
     }
 
-    public function metadata(string $id): array
+    public function metadata(string $id, bool $allowTrashed = false): array
     {
         $response = $this->request()->get(self::API.'/'.rawurlencode($id), [
             'supportsAllDrives' => 'true',
-            'fields' => 'id,name,mimeType,driveId,trashed,capabilities(canAddChildren,canDownload)',
+            'fields' => 'id,name,mimeType,driveId,trashed,capabilities(canAddChildren,canDownload,canTrash)',
         ]);
         if (! $response->successful()) throw new RuntimeException('File o cartella Drive non disponibile.');
         $file = $response->json();
-        if (($file['driveId'] ?? null) !== $this->root() || ($file['trashed'] ?? false)) {
+        if (($file['driveId'] ?? null) !== $this->root() || (! $allowTrashed && ($file['trashed'] ?? false))) {
             throw ValidationException::withMessages(['folder' => 'Seleziona una cartella del Drive aziendale.']);
         }
 
@@ -115,6 +115,31 @@ class GoogleDriveStorage
         }
 
         return $result->json();
+    }
+
+    public function createFolder(string $parent, string $name): array
+    {
+        $this->folder($parent);
+        $response = $this->request()->post(self::API.'?supportsAllDrives=true&fields=id,name', [
+            'name' => $name, 'mimeType' => 'application/vnd.google-apps.folder', 'parents' => [$parent],
+        ]);
+        if (! $response->successful() || ! $response->json('id')) throw new RuntimeException('Creazione cartella non riuscita.');
+
+        return $response->json();
+    }
+
+    public function trash(string $id): void
+    {
+        $file = $this->metadata($id, true);
+        if (($file['mimeType'] ?? '') === 'application/vnd.google-apps.folder') {
+            throw ValidationException::withMessages(['drive' => 'Non puoi eliminare cartelle dagli allegati.']);
+        }
+        if ($file['trashed'] ?? false) return;
+        if (! ($file['capabilities']['canTrash'] ?? false)) {
+            throw ValidationException::withMessages(['drive' => 'L’account collegato non ha il permesso di eliminare questo file su Drive.']);
+        }
+        $response = $this->request()->patch(self::API.'/'.rawurlencode($id).'?supportsAllDrives=true&fields=id,trashed', ['trashed' => true]);
+        if (! $response->successful() || $response->json('trashed') !== true) throw new RuntimeException('Eliminazione Drive non riuscita.');
     }
 
     public function download(string $id)

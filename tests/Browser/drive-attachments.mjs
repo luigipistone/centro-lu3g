@@ -44,10 +44,17 @@ try {
         assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
         await page.screenshot({path:`/tmp/drive-attachments-${width}.png`,fullPage:true});
     }
-    await page.getByRole('button',{name:'Scollega allegato'}).click();
-    await page.getByText('Il file rimarrà su Google Drive.',{exact:false}).waitFor();
-    await page.getByRole('button',{name:'Scollega',exact:true}).click();
+    await page.getByRole('button',{name:'Elimina file',exact:true}).click();
+    await page.getByText('spostato nel cestino di Google Drive.',{exact:false}).waitFor();
+    await page.getByRole('button',{name:'Elimina',exact:true}).click();
     await page.getByRole('link',{name:'Scarica allegato'}).waitFor({state:'detached'});
+    await page.route('**/tasks/test/drive-folders', route => route.fulfill({status:201,json:{id:'created-folder',name:'Cartella nuova'}}));
+    await page.getByRole('button',{name:'Progetto test',exact:true}).click();
+    await page.getByRole('button',{name:'Nuova cartella',exact:true}).click();
+    await page.getByLabel('Nome cartella').fill('Cartella nuova');
+    await page.getByRole('button',{name:'Crea e seleziona',exact:true}).click();
+    await page.locator('dialog[open]').waitFor({state:'hidden'});
+    await page.getByRole('button',{name:'Cartella nuova',exact:true}).waitFor();
     assert.deepEqual(errors,[]);
-    console.log('Drive attachments: folder navigation, upload, list, unlink, desktop/mobile overflow checks passed.');
+    console.log('Drive attachments: folder creation/navigation, upload, delete, desktop/mobile checks passed.');
 } finally { await browser.close(); await server.close(); }

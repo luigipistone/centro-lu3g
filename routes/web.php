@@ -34,6 +34,7 @@ Route::middleware('auth')->group(function () {
     foreach (['tasks', 'projects'] as $area) {
         Route::get('/'.$area.'/{id}/drive-attachments', [DriveAttachmentController::class, 'index'])->name($area.'.drive.index');
         Route::get('/'.$area.'/{id}/drive-folders', [DriveAttachmentController::class, 'folders'])->name($area.'.drive.folders');
+        Route::post('/'.$area.'/{id}/drive-folders', [DriveAttachmentController::class, 'createFolder'])->name($area.'.drive.folders.store');
         Route::post('/'.$area.'/{id}/drive-attachments', [DriveAttachmentController::class, 'store'])->name($area.'.drive.store');
         Route::get('/'.$area.'/{id}/drive-attachments/{fileId}', [DriveAttachmentController::class, 'download'])->name($area.'.drive.download');
         Route::delete('/'.$area.'/{id}/drive-attachments/{fileId}', [DriveAttachmentController::class, 'destroy'])->name($area.'.drive.destroy');

@@ -89,6 +89,14 @@ class DriveAttachmentController extends Controller
         return response()->json(['message' => 'File caricato su Drive.'], 201);
     }
 
+    public function createFolder(Request $request, string $id, GoogleDriveStorage $drive)
+    {
+        $this->access($request, $id, true);
+        $data = $request->validate(['parent' => ['required', 'string', 'max:255'], 'name' => ['required', 'string', 'max:255']]);
+
+        return response()->json($this->drive(fn () => $drive->createFolder($data['parent'], $data['name'])), 201);
+    }
+
     public function download(Request $request, string $id, string $fileId, GoogleDriveStorage $drive)
     {
         $key = $this->access($request, $id);
@@ -106,12 +114,17 @@ class DriveAttachmentController extends Controller
         }, str_replace(["\r", "\n", '/', '\\'], '_', $file->name), ['Content-Type' => 'application/octet-stream', 'Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff']);
     }
 
-    public function destroy(Request $request, string $id, string $fileId)
+    public function destroy(Request $request, string $id, string $fileId, GoogleDriveStorage $drive)
     {
         $key = $this->access($request, $id, true);
-        $deleted = DB::table('drive_attachments')->where($key, $id)->where('id', $fileId)->delete();
-        abort_unless($deleted, 404);
+        $file = DB::table('drive_attachments')->where($key, $id)->where('id', $fileId)->first();
+        abort_unless($file && $file->drive_id === $drive->root(), 404);
+        if (DB::table('drive_attachments')->where('drive_id', $file->drive_id)->where('file_id', $file->file_id)->where('id', '!=', $fileId)->exists()) {
+            throw ValidationException::withMessages(['drive' => 'Il file è collegato anche ad altre schede. Eliminazione bloccata per non rimuovere i loro allegati.']);
+        }
+        $this->drive(fn () => $drive->trash($file->file_id));
+        DB::table('drive_attachments')->where('id', $fileId)->delete();
 
-        return response()->json(['message' => 'Allegato scollegato. Il file resta su Drive.']);
+        return response()->json(['message' => 'File eliminato e spostato nel cestino di Drive.']);
     }
 }
