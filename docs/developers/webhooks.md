@@ -10,7 +10,7 @@ La risposta 201 contiene `data.id` e `data.secret`. Conserva il segreto nel back
 
 ## Eventi
 
-Le risorse `clients`, `projects`, `tasks`, `users`, `absences`, `services` supportano i suffissi `.created`, `.updated`, `.removed`.
+Le risorse `clients`, `projects`, `tasks`, `comments`, `users`, `absences`, `services` supportano i suffissi `.created`, `.updated`, `.removed`. Le modifiche a partecipanti dei progetti, assegnatari e osservatori delle task vengono rilevate anche se il titolo e gli altri campi non cambiano.
 
 Il rilevamento avviene ogni minuto confrontando i dati esposti. Non è un registro di ogni operazione: modifiche intermedie tra due scansioni possono essere accorpate. `removed` indica che una risorsa non è più leggibile nell'elenco (per esempio assenza revocata o utente disattivato), non necessariamente una cancellazione fisica.
 

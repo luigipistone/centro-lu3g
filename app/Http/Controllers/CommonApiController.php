@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\AttendanceService;
 use App\Services\CommonApiAccess;
 use App\Services\CommonApiWebhooks;
+use App\Services\CommonApiWrites;
 use App\Services\IntegrationWebhooks;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -19,13 +20,29 @@ class CommonApiController extends Controller
     public const FIELDS = [
         'clients' => ['id', 'name', 'legal_name', 'active', 'email', 'phone', 'website', 'vat_number', 'tax_code', 'country', 'street', 'street_number', 'postal_code', 'city', 'province', 'created_at', 'updated_at'],
         'projects' => ['id', 'name', 'description', 'client_id', 'service_id', 'status', 'color', 'created_at', 'updated_at'],
-        'tasks' => ['id', 'title', 'description', 'project_id', 'client_id', 'service_id', 'parent_task_id', 'task_type', 'status', 'priority', 'start_date', 'due_date', 'due_time', 'created_at', 'updated_at'],
+        'tasks' => ['id', 'title', 'description', 'project_id', 'client_id', 'service_id', 'parent_task_id', 'task_type', 'status', 'priority', 'start_date', 'due_date', 'due_time', 'location', 'recurring_enabled', 'recurring_interval_value', 'recurring_interval_unit', 'recurring_mode', 'recurring_weekday', 'recurring_month_day', 'created_at', 'updated_at'],
         'users' => ['id', 'name', 'email', 'updated_at'],
         'services' => ['id', 'name', 'color', 'active', 'updated_at'],
         'absences' => ['id', 'user_id', 'start_date', 'end_date', 'start_time', 'end_time', 'status', 'updated_at'],
+        'comments' => ['id', 'task_id', 'user_id', 'content', 'created_at', 'updated_at'],
     ];
 
     public function __construct(private CommonApiAccess $access) {}
+
+    public function store(Request $r, string $resource)
+    {
+        return app(CommonApiWrites::class)->write($r, $resource);
+    }
+
+    public function update(Request $r, string $resource, string $id)
+    {
+        return app(CommonApiWrites::class)->write($r, $resource, $id);
+    }
+
+    public function storeComment(Request $r, string $id)
+    {
+        return app(CommonApiWrites::class)->comment($r, $id);
+    }
 
     public function storeWebhook(Request $r)
     {
@@ -73,7 +90,13 @@ class CommonApiController extends Controller
     {
         abort_unless(isset(self::FIELDS[$resource]), 404);
         $c = $this->access->connection($r, $resource.':read');
-        $q = DB::table($resource === 'absences' ? 'absence_requests' : $resource);
+        $q = DB::table(match ($resource) {
+            'absences' => 'absence_requests', 'comments' => 'task_comments', default => $resource
+        });
+        if ($resource === 'comments') {
+            $tasks = $this->access->constrain(DB::table('tasks'), $c, 'projects', 'project_id')->select('id');
+            $q->whereIn('task_id', $tasks);
+        }
         if (in_array($resource, ['clients', 'projects', 'users'], true)) {
             $this->access->constrain($q, $c, $resource, 'id');
         } elseif ($resource === 'tasks') {
@@ -96,7 +119,7 @@ class CommonApiController extends Controller
         $r->validate(['page' => 'sometimes|integer|min:1', 'per_page' => 'sometimes|integer|between:1,100',
             'search' => 'sometimes|string|max:200', 'updated_since' => 'sometimes|date',
             'active' => 'sometimes|boolean', 'client_id' => 'sometimes|uuid', 'project_id' => 'sometimes|uuid',
-            'user_id' => 'sometimes|uuid', 'status' => 'sometimes|string|max:40', 'date' => 'sometimes|date_format:Y-m-d']);
+            'user_id' => 'sometimes|uuid', 'task_id' => 'sometimes|uuid', 'parent_task_id' => 'sometimes|uuid', 'status' => 'sometimes|string|max:40', 'date' => 'sometimes|date_format:Y-m-d']);
         $q = $this->query($r, $resource);
         if ($r->filled('search') && in_array($resource, ['clients', 'projects', 'users', 'services', 'tasks'], true)) {
             $q->where($resource === 'tasks' ? 'title' : 'name', 'like', '%'.$r->input('search').'%');
@@ -104,7 +127,7 @@ class CommonApiController extends Controller
         if ($r->filled('updated_since')) {
             $q->where('updated_at', '>=', Carbon::parse($r->input('updated_since'))->setTimezone(config('app.timezone'))->toDateTimeString());
         }
-        foreach (['active', 'client_id', 'project_id', 'user_id', 'status'] as $field) {
+        foreach (['active', 'client_id', 'project_id', 'task_id', 'parent_task_id', 'user_id', 'status'] as $field) {
             if ($r->has($field) && in_array($field, self::FIELDS[$resource], true)) {
                 $q->where($field, $r->input($field));
             }
@@ -122,13 +145,31 @@ class CommonApiController extends Controller
         $record = $this->query($r, $resource)->where('id', $id)->first();
         abort_unless($record, 404);
 
-        return response()->json(['data' => $this->serialize($record)]);
+        if ($resource === 'tasks') {
+            $record->assignee_ids = DB::table('task_assignees')->where('task_id', $id)->orderBy('user_id')->pluck('user_id')->all();
+            $record->follower_ids = DB::table('task_followers')->where('task_id', $id)->orderBy('user_id')->pluck('user_id')->all();
+        }
+        if ($resource === 'projects') {
+            $record->user_ids = DB::table('project_followers')->where('project_id', $id)->orderBy('user_id')->pluck('user_id')->all();
+        }
+
+        return response()->json(['data' => $this->serialize($record)])->header('ETag', CommonApiWrites::etag(match ($resource) {
+            'absences' => 'absence_requests', 'comments' => 'task_comments', default => $resource
+        }, $id));
     }
 
     private function serialize(object $record): object
     {
         if (property_exists($record, 'active')) {
             $record->active = (bool) $record->active;
+        }
+        if (property_exists($record, 'recurring_enabled')) {
+            $record->recurring_enabled = (bool) $record->recurring_enabled;
+        }
+        foreach (['recurring_interval_value', 'recurring_weekday', 'recurring_month_day'] as $field) {
+            if (isset($record->$field)) {
+                $record->$field = (int) $record->$field;
+            }
         }
 
         return $record;

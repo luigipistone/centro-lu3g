@@ -49,7 +49,7 @@ class CommonApiTest extends TestCase
     {
         $this->connection();
         $this->getJson('/api/v1/users')->assertOk()->assertJsonCount(0, 'data');
-        $this->postJson('/api/v1/tasks', ['title' => 'No'])->assertForbidden();
+        $this->postJson('/api/v1/tasks/'.Str::uuid().'/subtasks', ['title' => 'No'])->assertForbidden();
         $this->getJson('/api/v1/projects')->assertOk()->assertJsonCount(0, 'data');
     }
 
@@ -69,7 +69,7 @@ class CommonApiTest extends TestCase
         $payload = ['name' => 'Dashboard', 'kind' => 'general', 'site' => 'https://example.com', 'scopes' => ['clients:read'],
             'expires_at' => now()->addMonth()->toDateString(), 'access_policy' => array_fill_keys(['clients', 'projects', 'users'], ['all' => false, 'ids' => []])];
         $this->actingAs($admin)->postJson('/settings/api-connections', $payload)->assertCreated()->assertJsonPath('connection.kind', 'general');
-        $this->postJson('/settings/api-connections', [...$payload, 'scopes' => ['clients:write']])->assertUnprocessable();
+        $this->postJson('/settings/api-connections', [...$payload, 'scopes' => ['users:write']])->assertUnprocessable();
         $this->actingAs(User::factory()->create())->postJson('/settings/api-connections', $payload)->assertForbidden();
     }
 
@@ -79,7 +79,7 @@ class CommonApiTest extends TestCase
             $this->get('/developers/'.$page)->assertOk()->assertSee('Il Centro');
         }
         $spec = $this->getJson('/developers/openapi.json')->assertOk()->json();
-        $this->assertCount(17, $spec['paths']);
+        $this->assertCount(20, $spec['paths']);
         $this->assertSame('3.0.3', $spec['openapi']);
         foreach (CommonApiController::FIELDS as $resource => $fields) {
             $this->assertSame($fields, array_keys($spec['components']['schemas'][$resource]['properties']));

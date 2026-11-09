@@ -3313,7 +3313,7 @@ class CentroPageController extends Controller
         ]);
     }
 
-    public function store(Request $request, string $section): RedirectResponse
+    public function store(Request $request, string $section): RedirectResponse|\Illuminate\Http\JsonResponse
     {
         $this->ensureRoleCanStore($request, $section);
 
@@ -3408,6 +3408,10 @@ class CentroPageController extends Controller
             );
         }
 
+        if ($request->attributes->get('common_api_write')) {
+            return response()->json(['id' => $payload['id']], 201);
+        }
+
         return back()
             ->with('status', 'Creato.')
             ->with('created_id', $payload['id']);
@@ -3426,7 +3430,7 @@ class CentroPageController extends Controller
         return back()->with('status', $data['active'] ? 'Cliente riattivato.' : 'Cliente archiviato.');
     }
 
-    public function update(Request $request, string $id): RedirectResponse
+    public function update(Request $request, string $id): RedirectResponse|\Illuminate\Http\JsonResponse
     {
         $section = $request->route('section');
         if ($section === 'users') {
@@ -3473,6 +3477,9 @@ class CentroPageController extends Controller
             : null;
 
         if ($section === 'tasks' && ($payload['status'] ?? null) === 'done' && $this->taskOpenDependencyCount($id) > 0) {
+            if ($request->attributes->get('common_api_write')) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['status' => 'Completa prima le dipendenze.']);
+            }
             return back()->withErrors(['status' => 'Questa task è bloccata: completa prima le dipendenze.']);
         }
 
@@ -3526,6 +3533,10 @@ class CentroPageController extends Controller
                     $oldProjectFollowers,
                 );
             }
+        }
+
+        if ($request->attributes->get('common_api_write')) {
+            return response()->json(['id' => $id]);
         }
 
         return back()->with('status', 'Aggiornato.');
@@ -8424,7 +8435,7 @@ class CentroPageController extends Controller
         $this->notifyUsers($mentioned, $request->user()->id, 'task_mention', $request->user()->name.' ti ha menzionato in un commento alla task "'.$title.'".', $taskId);
     }
 
-    public function storeTaskComment(Request $request, string $id): RedirectResponse
+    public function storeTaskComment(Request $request, string $id): RedirectResponse|\Illuminate\Http\JsonResponse
     {
         $this->ensureGuestCanEditTask($request, $id);
 
@@ -8435,8 +8446,9 @@ class CentroPageController extends Controller
             'content' => ['required', 'string'],
         ]);
 
+        $commentId = (string) str()->uuid();
         DB::table('task_comments')->insert([
-            'id' => (string) str()->uuid(),
+            'id' => $commentId,
             'task_id' => $id,
             'user_id' => $request->user()->id,
             'content' => $payload['content'],
@@ -8453,6 +8465,10 @@ class CentroPageController extends Controller
             'task_comment',
             $request->user()->name.' ha commentato il task "'.$task->title.'".',
         );
+
+        if ($request->attributes->get('common_api_write')) {
+            return response()->json(['id' => $commentId], 201);
+        }
 
         return back()->with('status', 'Commento aggiunto.');
     }
@@ -9564,6 +9580,18 @@ class CentroPageController extends Controller
 
     private function notifyUsers(iterable $userIds, ?string $actorId, string $type, string $message, ?string $taskId = null, ?string $companyDocumentId = null, ?string $companyMessageId = null): void
     {
+        if (request()->attributes->get('common_api_write') && DB::transactionLevel() > 0) {
+            $recipients = collect($userIds)->all();
+            DB::afterCommit(function () use ($recipients, $actorId, $type, $message, $taskId, $companyDocumentId, $companyMessageId) {
+                try {
+                    app(CentroNotificationService::class)->notifyUsers($recipients, $actorId, $type, $message, $taskId, $companyDocumentId, $companyMessageId);
+                } catch (\Throwable $exception) {
+                    report($exception);
+                }
+            });
+
+            return;
+        }
         app(CentroNotificationService::class)->notifyUsers($userIds, $actorId, $type, $message, $taskId, $companyDocumentId, $companyMessageId);
     }
 

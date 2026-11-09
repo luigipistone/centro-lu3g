@@ -11,12 +11,12 @@ const saved = ref('');
 const tab = ref('connections'), busy = ref(false), error = ref(''), token = ref(''), copied = ref(false), show = ref(false), revoke = ref(null), docs = ref('');
 const form = ref({ name: '', site: '', client_id: '', project_id: '', scopes: ['clients:read', 'projects:read', 'tasks:read', 'tasks:write', 'comments:write', 'webhooks:write'], expires_at: new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10) });
 const labels = { 'clients:read': 'Leggi cliente', 'projects:read': 'Leggi progetto', 'tasks:read': 'Leggi attività collegate', 'tasks:write': 'Crea e modifica attività', 'comments:write': 'Aggiungi commenti', 'webhooks:write': 'Gestisci webhook' };
-const generalLabels = { 'clients:read': 'Clienti', 'projects:read': 'Progetti', 'tasks:read': 'Task', 'users:read': 'Utenti', 'absences:read': 'Assenze approvate', 'availability:read': 'Disponibilità e smart working', 'services:read': 'Catalogo servizi', 'webhooks:write': 'Gestisci webhook' };
+const generalLabels = { 'clients:read': 'Leggi clienti', 'clients:write': 'Crea e modifica clienti', 'projects:read': 'Leggi progetti', 'projects:write': 'Crea e modifica progetti', 'tasks:read': 'Leggi task', 'tasks:write': 'Crea e modifica task', 'comments:read': 'Leggi commenti', 'comments:write': 'Aggiungi commenti', 'users:read': 'Utenti', 'absences:read': 'Assenze approvate', 'availability:read': 'Disponibilità e smart working', 'services:read': 'Catalogo servizi', 'webhooks:write': 'Gestisci webhook' };
 const policyLabels = { clients: 'Clienti autorizzati', projects: 'Progetti e relative task', users: 'Persone e relative assenze' };
 form.value.kind = 'general';
-form.value.scopes = Object.keys(generalLabels);
+form.value.scopes = Object.keys(generalLabels).filter(scope => scope.endsWith(':read'));
 form.value.access_policy = Object.fromEntries(Object.keys(policyLabels).map(key => [key, { all: false, ids: [] }]));
-watch(() => form.value.kind, kind => { form.value.scopes = Object.keys(kind === 'general' ? generalLabels : labels); });
+watch(() => form.value.kind, kind => { form.value.scopes = kind === 'general' ? Object.keys(generalLabels).filter(scope => scope.endsWith(':read')) : Object.keys(labels); });
 const projects = computed(() => data.value.projects.filter(p => p.client_id === form.value.client_id));
 watch(() => form.value.client_id, () => { form.value.project_id = ''; });
 function name(list, id) { return list.find(x => x.id === id)?.name || id; }

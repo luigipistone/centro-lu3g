@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 
 class CommonApiAccess
 {
-    public const SCOPES = ['clients:read', 'projects:read', 'tasks:read', 'users:read', 'absences:read', 'availability:read', 'services:read', 'webhooks:write'];
+    public const SCOPES = ['clients:read', 'clients:write', 'projects:read', 'projects:write', 'tasks:read', 'tasks:write', 'comments:read', 'comments:write', 'users:read', 'absences:read', 'availability:read', 'services:read', 'webhooks:write'];
 
     public function connection(Request $r, string $scope): ApiConnection
     {

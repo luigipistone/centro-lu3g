@@ -20,7 +20,9 @@ class IntegrationApiController extends Controller
     {
         $c = $r->attributes->get('api_connection');
         abort_unless($c instanceof ApiConnection, 401);
-        if ($scope) abort_unless($c->kind === 'page_notes', 403);
+        if ($scope) {
+            abort_unless($c->kind === 'page_notes', 403);
+        }
         if ($scope) {
             abort_unless(in_array($scope, $c->scopes, true) && $r->attributes->get('api_token')->can($scope), 403);
         }
@@ -54,7 +56,9 @@ class IntegrationApiController extends Controller
 
     public function clients(Request $r)
     {
-        if ($r->attributes->get('api_connection')->kind === 'general') return app(CommonApiController::class)->index($r, 'clients');
+        if ($r->attributes->get('api_connection')->kind === 'general') {
+            return app(CommonApiController::class)->index($r, 'clients');
+        }
         $c = $this->connection($r, 'clients:read');
 
         return $this->page($r, DB::table('clients')->where('id', $c->client_id)->where('active', true)->when($r->input('search'), fn ($q, $s) => $q->where('name', 'like', '%'.$s.'%'))->orderBy('id'), fn ($v) => ['id' => $v->id, 'name' => $v->name]);
@@ -62,7 +66,9 @@ class IntegrationApiController extends Controller
 
     public function projects(Request $r)
     {
-        if ($r->attributes->get('api_connection')->kind === 'general') return app(CommonApiController::class)->index($r, 'projects');
+        if ($r->attributes->get('api_connection')->kind === 'general') {
+            return app(CommonApiController::class)->index($r, 'projects');
+        }
         $c = $this->connection($r, 'projects:read');
 
         return $this->page($r, DB::table('projects')->where('id', $c->project_id)->where('client_id', $c->client_id)->orderBy('id'), fn ($v) => ['id' => $v->id, 'name' => $v->name, 'client_id' => $v->client_id, 'status' => $v->status]);
@@ -144,13 +150,19 @@ class IntegrationApiController extends Controller
 
     public function tasks(Request $r)
     {
-        if ($r->attributes->get('api_connection')->kind === 'general') return app(CommonApiController::class)->index($r, 'tasks');
+        if ($r->attributes->get('api_connection')->kind === 'general') {
+            return app(CommonApiController::class)->index($r, 'tasks');
+        }
+
         return $this->page($r, $this->query($this->connection($r, 'tasks:read'), 'task')->orderBy('tasks.id'), fn ($t) => self::payload($t));
     }
 
     public function showTask(Request $r, string $id)
     {
-        if ($r->attributes->get('api_connection')->kind === 'general') return app(CommonApiController::class)->show($r, 'tasks', $id);
+        if ($r->attributes->get('api_connection')->kind === 'general') {
+            return app(CommonApiController::class)->show($r, 'tasks', $id);
+        }
+
         return response()->json(self::payload($this->task($this->connection($r, 'tasks:read'), $id, 'task')));
     }
 
@@ -167,6 +179,10 @@ class IntegrationApiController extends Controller
 
     public function storeTask(Request $r)
     {
+        if ($r->attributes->get('api_connection')->kind === 'general') {
+            return app(CommonApiController::class)->store($r, 'tasks');
+        }
+
         return $this->create($r, null);
     }
 
@@ -292,7 +308,9 @@ class IntegrationApiController extends Controller
 
     public function storeWebhook(Request $r, IntegrationWebhooks $webhooks)
     {
-        if ($r->attributes->get('api_connection')->kind === 'general') return app(CommonApiController::class)->storeWebhook($r);
+        if ($r->attributes->get('api_connection')->kind === 'general') {
+            return app(CommonApiController::class)->storeWebhook($r);
+        }
         $c = $this->connection($r, 'webhooks:write');
         $p = $r->validate(['task_id' => 'required|uuid', 'url' => 'required|url:https|max:1000', 'events' => 'required|array|min:1', 'events.*' => [Rule::in(['subtask.updated', 'comment.created'])]]);
         $this->task($c, $p['task_id'], 'task');
@@ -307,7 +325,9 @@ class IntegrationApiController extends Controller
 
     public function deleteWebhook(Request $r, string $id)
     {
-        if ($r->attributes->get('api_connection')->kind === 'general') return app(CommonApiController::class)->deleteWebhook($r, $id);
+        if ($r->attributes->get('api_connection')->kind === 'general') {
+            return app(CommonApiController::class)->deleteWebhook($r, $id);
+        }
         $c = $this->connection($r, 'webhooks:write');
         abort_unless(DB::table('api_webhooks')->where('id', $id)->where('connection_id', $c->id)->delete(), 404);
 

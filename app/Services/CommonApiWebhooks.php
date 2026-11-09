@@ -69,10 +69,15 @@ class CommonApiWebhooks
                         foreach ($rows as $row) {
                             $key = ['subscription_id' => $hook->id, 'resource' => $resource, 'resource_id' => $row->id];
                             $old = DB::table('api_subscription_snapshots')->where($key)->first();
+                            foreach (match ($resource) {
+                                'tasks' => ['task_assignees', 'task_followers'], 'projects' => ['project_followers'], default => []
+                            } as $table) {
+                                $row->$table = DB::table($table)->where($resource === 'tasks' ? 'task_id' : 'project_id', $row->id)->orderBy('user_id')->pluck('user_id')->all();
+                            }
                             $hash = hash('sha256', json_encode($row));
                             $context = match ($resource) {
                                 'tasks' => ['projects' => $row->project_id], 'absences' => ['users' => $row->user_id],
-                                'services' => [], default => [$resource => $row->id],
+                                'services' => [], 'comments' => ['projects' => DB::table('tasks')->where('id', $row->task_id)->value('project_id')], default => [$resource => $row->id],
                             };
                             $event = "$resource.".($old ? 'updated' : 'created');
                             if ($hook->initialized_at && (! $old || $old->hash !== $hash) && in_array($event, $events, true)) {

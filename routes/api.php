@@ -1,7 +1,7 @@
 <?php
 
-use App\Http\Controllers\IntegrationApiController;
 use App\Http\Controllers\CommonApiController;
+use App\Http\Controllers\IntegrationApiController;
 use App\Http\Middleware\AuthenticateIntegration;
 use Illuminate\Support\Facades\Route;
 
@@ -13,6 +13,9 @@ Route::prefix('v1')->middleware(['throttle:120,1', AuthenticateIntegration::clas
     Route::get('/projects', [IntegrationApiController::class, 'projects']);
     Route::get('/tasks', [IntegrationApiController::class, 'tasks']);
     Route::post('/tasks', [IntegrationApiController::class, 'storeTask']);
+    Route::post('/tasks/{id}/comments', [CommonApiController::class, 'storeComment']);
+    Route::post('/{resource}', [CommonApiController::class, 'store'])->where('resource', 'clients|projects');
+    Route::patch('/{resource}/{id}', [CommonApiController::class, 'update'])->where('resource', 'clients|projects|tasks');
     Route::get('/tasks/{id}', [IntegrationApiController::class, 'showTask']);
     Route::get('/tasks/{id}/subtasks', [IntegrationApiController::class, 'subtasks']);
     Route::post('/tasks/{id}/subtasks', [IntegrationApiController::class, 'storeSubtask']);
@@ -21,6 +24,6 @@ Route::prefix('v1')->middleware(['throttle:120,1', AuthenticateIntegration::clas
     Route::post('/webhooks', [IntegrationApiController::class, 'storeWebhook']);
     Route::get('/webhooks', [CommonApiController::class, 'webhooks']);
     Route::delete('/webhooks/{id}', [IntegrationApiController::class, 'deleteWebhook']);
-    Route::get('/{resource}', [CommonApiController::class, 'index'])->where('resource', 'users|services|absences');
-    Route::get('/{resource}/{id}', [CommonApiController::class, 'show'])->where('resource', 'clients|projects|users|services|absences');
+    Route::get('/{resource}', [CommonApiController::class, 'index'])->where('resource', 'users|services|absences|comments');
+    Route::get('/{resource}/{id}', [CommonApiController::class, 'show'])->where('resource', 'clients|projects|users|services|absences|comments');
 });
