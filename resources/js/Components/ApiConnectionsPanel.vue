@@ -118,7 +118,9 @@ onMounted(() => run(load));
 .connection-status { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; opacity: .65; }
 .connection-status > span { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .connection-status.is-active { color: #15803d; opacity: 1; }
-.connection-editor { padding: 4px 0 0; max-width: 900px; }
+.connection-editor { padding: 12px 0 0; width: 100%; }
+.connection-editor :deep(.api-permissions) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 36px; }
+.connection-editor :deep(fieldset + fieldset) { border-left: 1px solid rgb(127 127 127 / .18); padding-left: 36px; }
 .editor-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 0; margin-top: 16px; border-top: 1px solid rgb(127 127 127 / .18); }
 .api-create { padding: 20px; }
 .api-create header { margin-bottom: 16px; }
@@ -126,6 +128,8 @@ onMounted(() => run(load));
 .api-create :deep(.form-control), .connection-editor :deep(.form-control) { min-height: 38px; padding-top: 8px; padding-bottom: 8px; font-size: 13px; }
 .api-create :deep(.form-label), .connection-editor :deep(.form-label) { display: block; font-size: 12px; margin-bottom: 5px; }
 @media(max-width: 640px) {
+    .connection-editor :deep(.api-permissions) { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+    .connection-editor :deep(fieldset + fieldset) { border-left: 0; padding-left: 0; }
     .connection-row { grid-template-columns: minmax(0, 1fr) auto; gap: 12px; }
     .connection-dates { grid-row: 2; grid-column: 1 / -1; gap: 20px; }
     .api-create { padding: 16px; }

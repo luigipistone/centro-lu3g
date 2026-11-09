@@ -95,6 +95,17 @@ class CommonApiTest extends TestCase
         $this->assertNull(ApiConnection::find($id)->site);
     }
 
+    public function test_connection_expiration_survives_permission_and_usage_updates(): void
+    {
+        $c = $this->connection();
+        $expires = $c->expires_at->toDateTimeString();
+        $this->travel(10)->minutes();
+        $this->actingAs(User::find($c->created_by))->patchJson('/settings/api-connections/'.$c->id, ['scopes' => ['clients:read']])->assertOk();
+        $c->refresh()->update(['last_used_at' => now()]);
+        $this->assertSame($expires, $c->fresh()->expires_at->toDateTimeString());
+        $this->assertTrue($c->fresh()->enabled());
+    }
+
     public function test_documentation_is_public_and_contract_matches_resources(): void
     {
         foreach (array_keys(DeveloperPortalController::GUIDES + DeveloperPortalController::RESOURCES) as $page) {
