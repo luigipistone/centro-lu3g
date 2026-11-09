@@ -737,6 +737,26 @@ class TaskWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_same_day_tasks_can_be_dragged_without_changing_duration(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAsWorkflowAdmin($user);
+        foreach (['project', 'ongoing', 'meeting'] as $type) {
+            $id = (string) Str::uuid();
+            DB::table('tasks')->insert([
+                'id' => $id, 'title' => 'Same day drag', 'priority' => 'medium',
+                'status' => 'todo', 'task_type' => $type,
+                'start_date' => '2026-11-09', 'due_date' => '2026-11-09',
+            ]);
+            $this->patch("/tasks/{$id}/schedule", ['start_date' => null, 'due_date' => '2026-11-10'])
+                ->assertSessionHasNoErrors();
+            $this->assertDatabaseHas('tasks', ['id' => $id, 'start_date' => null, 'due_date' => '2026-11-10']);
+            $this->patch("/tasks/{$id}/schedule", ['start_date' => '2026-11-11', 'due_date' => '2026-11-11'])
+                ->assertSessionHasNoErrors();
+            $this->assertDatabaseHas('tasks', ['id' => $id, 'start_date' => '2026-11-11', 'due_date' => '2026-11-11']);
+        }
+    }
+
     public function test_task_dependencies_block_completion_until_dependency_is_done(): void
     {
         $user = User::factory()->create();

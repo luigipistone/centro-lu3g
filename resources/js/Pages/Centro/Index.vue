@@ -300,6 +300,7 @@ const calendarPeopleMenuStyle = ref({});
 const compactWeekend = ref(true);
 const calendarCreateDate = ref(null);
 const calendarDraggedTask = ref(null);
+const calendarMoveError = ref('');
 const calendarDropDate = ref(null);
 const expandedCalendarDays = ref([]);
 const calendarTaskPanelOpen = ref(false);
@@ -3742,7 +3743,12 @@ function toggleTaskDone(task) {
     });
 }
 
-function startCalendarDrag(task) {
+function startCalendarDrag(task, event) {
+    calendarMoveError.value = '';
+    if (event?.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', task.id);
+    }
     const original = calendarRowsWithOverrides().find((row) => row.id === task.id) || task;
     calendarDraggedTask.value = {
         id: original.id,
@@ -3772,6 +3778,7 @@ function moveCalendarTask(event) {
     const date = calendarDateAtPointer(event);
     const task = calendarDraggedTask.value;
     if (!task || !task.due_date || !date || calendarHolidays.value[date]) {
+        if (date && calendarHolidays.value[date]) calendarMoveError.value = 'Non puoi spostare una task su una festività.';
         endCalendarDrag();
         return;
     }
@@ -3779,6 +3786,7 @@ function moveCalendarTask(event) {
     const payload = movedTaskDates(task, date);
 
     if (Object.keys(calendarHolidays.value).some((holiday) => holiday >= date && holiday <= payload.due_date)) {
+        calendarMoveError.value = 'Lo spostamento includerebbe una festività. Scegli un altro giorno.';
         endCalendarDrag();
         return;
     }
@@ -3790,6 +3798,16 @@ function moveCalendarTask(event) {
 
     router.patch(route('tasks.schedule.update', task.id), payload, {
         preserveScroll: true,
+        onSuccess: () => {
+            // A drawer snapshot must not mask dates just returned by the server.
+            const overrides = { ...calendarRowOverrides.value };
+            delete overrides[task.id];
+            calendarRowOverrides.value = overrides;
+            refreshCalendarTaskPanelFromRows();
+        },
+        onError: (errors) => {
+            calendarMoveError.value = errors.due_date || errors.start_date || 'Spostamento non riuscito. Riprova.';
+        },
         onFinish: endCalendarDrag,
     });
 }
@@ -4378,6 +4396,7 @@ function calendarDayStyle(sectionMonth, cell) {
 
         <div v-if="section === 'calendar'" class="py-8">
             <div class="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
+                <p v-if="calendarMoveError" role="alert" class="mb-4 rounded-[var(--radius-sm)] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{{ calendarMoveError }}</p>
                 <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div class="flex items-center justify-between gap-2 sm:justify-start">
                         <button type="button" class="icon-btn" @click="changeMonth(-1)">
@@ -4565,7 +4584,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                             :title="task.title"
                                             @click="openCalendarTask(task)"
                                             @keydown.enter.prevent="openCalendarTask(task)"
-                                            @dragstart="startCalendarDrag(task)"
+                                            @dragstart="startCalendarDrag(task, $event)"
                                             @dragend="endCalendarDrag"
                                         >
                                             <div class="flex items-start">
