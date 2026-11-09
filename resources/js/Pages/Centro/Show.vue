@@ -629,7 +629,7 @@ const subtaskForm = useForm({
     title: '',
     priority: 'medium',
     due_date: '',
-    assignee_ids: [],
+    assignee_ids: page.props.auth?.user?.id ? [page.props.auth.user.id] : [],
 });
 const subtaskDrafts = ref({});
 const subtaskAutosaveStates = ref({});
@@ -744,7 +744,7 @@ const projectDrawerDependencyToAdd = ref('');
 const projectDrawerShowAllComments = ref(false);
 const projectDrawerShowAllActivity = ref(false);
 const projectDrawerSubtaskForm = useForm({ title: '', priority: 'medium', due_date: '', assignee_ids: [] });
-const projectDrawerCreateSubtaskAssigneeIds = ref([]);
+const projectDrawerCreateSubtaskAssigneeIds = ref(page.props.auth?.user?.id ? [page.props.auth.user.id] : []);
 const projectDrawerCommentForm = useForm({ content: '' });
 const projectDrawerCommentEditor = ref(null);
 const projectTaskActionMenuOpen = ref(false);
@@ -3127,7 +3127,7 @@ function addProjectDrawerSubtask() {
         onSuccess: () => {
             refreshProjectTaskDrawerFromServer(projectTaskDrawerTask.value.id);
             projectDrawerSubtaskForm.reset();
-            projectDrawerCreateSubtaskAssigneeIds.value = [];
+            projectDrawerCreateSubtaskAssigneeIds.value = page.props.auth?.user?.id ? [page.props.auth.user.id] : [];
             subtaskCreateAssigneeMenuOpen.value = false;
         },
     });
@@ -3257,6 +3257,7 @@ function addProjectTask(section) {
         project_id: currentProjectId,
         project_section_id: section.virtual ? '' : section.id,
         client_id: projectForm.client_id || '',
+        assignee_ids: page.props.auth?.user?.id ? [page.props.auth.user.id] : [],
         recurring_enabled: false,
     }, {
         preserveScroll: true,

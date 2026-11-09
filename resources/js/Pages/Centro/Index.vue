@@ -573,7 +573,7 @@ const defaults = computed(() => {
     }));
 
     if (props.section === 'tasks') {
-        base.assignee_ids = [];
+        base.assignee_ids = page.props.auth?.user?.id ? [page.props.auth.user.id] : [];
         base.follower_ids = [];
         base.dependency_ids = [];
         base.dependent_ids = [];
@@ -622,7 +622,7 @@ const calendarSubtaskForm = useForm({
     due_date: '',
     assignee_ids: [],
 });
-const calendarCreateSubtaskAssigneeIds = ref([]);
+const calendarCreateSubtaskAssigneeIds = ref(page.props.auth?.user?.id ? [page.props.auth.user.id] : []);
 const calendarSubtaskAssigneeMenuOpen = ref(null);
 const calendarSubtaskAssigneeMenuStyle = ref({});
 const calendarSubtaskCreateAssigneeMenuOpen = ref(false);
@@ -2990,7 +2990,7 @@ function openCalendarTaskCreate(type, date) {
         recurring_mode: 'fixed',
         recurring_weekday: 1,
         recurring_month_day: 1,
-        assignee_ids: [],
+        assignee_ids: page.props.auth?.user?.id ? [page.props.auth.user.id] : [],
         follower_ids: [],
         dependency_ids: [],
         dependent_ids: [],
@@ -3304,7 +3304,7 @@ function addCalendarSubtask() {
         onSuccess: () => {
             refreshCalendarTaskPanelFromServer(parentTaskId);
             calendarSubtaskForm.reset();
-            calendarCreateSubtaskAssigneeIds.value = [];
+            calendarCreateSubtaskAssigneeIds.value = page.props.auth?.user?.id ? [page.props.auth.user.id] : [];
             calendarSubtaskCreateAssigneeMenuOpen.value = false;
         },
     });
