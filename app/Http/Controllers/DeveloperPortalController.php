@@ -63,6 +63,10 @@ class DeveloperPortalController extends Controller
             $text .= "\nIl dettaglio include anche `user_ids` (partecipanti). `description` è HTML in lettura e testo semplice in scrittura.\n";
         }
 
+        if ($resource === 'users') {
+            $text .= "\n## Avatar\n\n`avatar_url` contiene l’URL assoluto di `GET /api/v1/users/{id}/avatar`, oppure null se non è impostata una foto. Scarica l’immagine con `Authorization: Bearer TOKEN`: valgono lo scope `users:read` e gli stessi ambiti utente. Restituisce il file immagine, non JSON; 404 se la foto manca, l’utente non è attivo o è fuori ambito. Non inserire il token nell’URL. Per una web app usa il backend come proxy; un semplice tag img non invia l’header Bearer.\n";
+        }
+
         return $text;
     }
 
@@ -119,6 +123,8 @@ class DeveloperPortalController extends Controller
 
         $paths['/me']['get']['responses']['200']['content']['application/json']['schema']['properties'] += ['kind' => ['type' => 'string', 'enum' => ['general', 'page_notes']], 'access_policy' => ['type' => 'object', 'nullable' => true]];
 
+        $schemas['users']['properties']['avatar_url'] += ['format' => 'uri', 'description' => 'URL assoluto protetto da Bearer users:read; null senza avatar.'];
+        $paths['/users/{id}/avatar']['get'] = ['operationId' => 'getUserAvatar', 'tags' => ['Utenti'], 'summary' => 'Scarica avatar utente', 'description' => 'Richiede users:read e utente attivo nell’ambito del collegamento. Token nell’header, mai nell’URL. 404 anche se la foto non esiste.', 'parameters' => [['name' => 'id', 'in' => 'path', 'required' => true, 'schema' => ['type' => 'string', 'format' => 'uuid']]], 'responses' => ['200' => ['description' => 'Immagine avatar', 'content' => ['image/*' => ['schema' => ['type' => 'string', 'format' => 'binary']]]]] + $responses];
         $this->writeSpecification($paths, $schemas, $responses);
         $schemas['Error'] = ['type' => 'object', 'required' => ['error'], 'properties' => ['error' => ['type' => 'object', 'required' => ['code', 'message', 'fields'], 'properties' => ['code' => ['type' => 'string'], 'message' => ['type' => 'string'], 'fields' => ['type' => 'object', 'additionalProperties' => ['type' => 'array', 'items' => ['type' => 'string']]]]]]];
         foreach ($paths as &$operations) {

@@ -11,6 +11,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -21,7 +22,7 @@ class CommonApiController extends Controller
         'clients' => ['id', 'name', 'legal_name', 'active', 'email', 'phone', 'website', 'vat_number', 'tax_code', 'country', 'street', 'street_number', 'postal_code', 'city', 'province', 'created_at', 'updated_at'],
         'projects' => ['id', 'name', 'description', 'client_id', 'service_id', 'status', 'color', 'created_at', 'updated_at'],
         'tasks' => ['id', 'title', 'description', 'project_id', 'client_id', 'service_id', 'parent_task_id', 'task_type', 'status', 'priority', 'start_date', 'due_date', 'due_time', 'location', 'recurring_enabled', 'recurring_interval_value', 'recurring_interval_unit', 'recurring_mode', 'recurring_weekday', 'recurring_month_day', 'created_at', 'updated_at'],
-        'users' => ['id', 'name', 'email', 'updated_at'],
+        'users' => ['id', 'name', 'email', 'updated_at', 'avatar_url'],
         'services' => ['id', 'name', 'color', 'active', 'updated_at'],
         'absences' => ['id', 'user_id', 'start_date', 'end_date', 'start_time', 'end_time', 'status', 'updated_at'],
         'comments' => ['id', 'task_id', 'user_id', 'content', 'created_at', 'updated_at'],
@@ -111,7 +112,27 @@ class CommonApiController extends Controller
             $q->where('account_status', 'active');
         }
 
+        if ($resource === 'users') {
+            return $q->select(array_diff(self::FIELDS[$resource], ['avatar_url']))
+                ->selectSub(DB::table('profiles')->select('avatar_url')->whereColumn('user_id', 'users.id')->limit(1), 'avatar_url');
+        }
+
         return $q->select(self::FIELDS[$resource]);
+    }
+
+    public function avatar(Request $r, string $id)
+    {
+        $user = $this->query($r, 'users')->where('id', $id)->first();
+        abort_unless($user && preg_match('~^/(?:storage/)?avatars/([a-zA-Z0-9_.-]+)$~', $user->avatar_url ?? '', $matches), 404);
+        $path = 'avatars/'.$matches[1];
+        foreach (['local', 'public'] as $disk) {
+            if (Storage::disk($disk)->exists($path)) {
+                return response()->file(Storage::disk($disk)->path($path), [
+                    'Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff',
+                ]);
+            }
+        }
+        abort(404);
     }
 
     public function index(Request $r, string $resource)
@@ -160,6 +181,9 @@ class CommonApiController extends Controller
 
     private function serialize(object $record): object
     {
+        if (property_exists($record, 'avatar_url')) {
+            $record->avatar_url = $record->avatar_url ? url('/api/v1/users/'.$record->id.'/avatar') : null;
+        }
         if (property_exists($record, 'active')) {
             $record->active = (bool) $record->active;
         }

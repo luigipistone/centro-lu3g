@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->middleware(['throttle:120,1', AuthenticateIntegration::class])->group(function () {
     Route::get('/me', [IntegrationApiController::class, 'me']);
     Route::get('/availability', [CommonApiController::class, 'availability']);
+    Route::get('/users/{id}/avatar', [CommonApiController::class, 'avatar']);
     Route::post('/connect/revoke', [IntegrationApiController::class, 'revoke']);
     Route::get('/clients', [IntegrationApiController::class, 'clients']);
     Route::get('/projects', [IntegrationApiController::class, 'projects']);

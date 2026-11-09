@@ -106,13 +106,46 @@ class CommonApiTest extends TestCase
         $this->assertTrue($c->fresh()->enabled());
     }
 
+    public function test_user_avatars_require_scope_and_authorized_active_user(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        \Illuminate\Support\Facades\Storage::fake('public');
+        $user = User::factory()->create(['account_status' => 'active']);
+        DB::table('profiles')->insert(['id' => (string) Str::uuid(), 'user_id' => $user->id, 'avatar_url' => '/avatars/test.png']);
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX2kAAAAASUVORK5CYII=');
+        \Illuminate\Support\Facades\Storage::disk('local')->put('avatars/test.png', $png);
+        $url = '/api/v1/users/'.$user->id.'/avatar';
+        $this->getJson($url)->assertUnauthorized();
+        $c = $this->connection(['users' => ['all' => false, 'ids' => [$user->id]]]);
+        $this->getJson('/api/v1/users')->assertJsonPath('data.0.avatar_url', url($url));
+        $this->getJson('/api/v1/users/'.$user->id)->assertJsonPath('data.avatar_url', url($url));
+        $this->get($url)->assertOk()->assertHeader('Content-Type', 'image/png');
+        $c->update(['access_policy' => ['users' => ['all' => false, 'ids' => []]]]);
+        $this->getJson($url)->assertNotFound();
+        $c->update(['access_policy' => ['users' => ['all' => true]], 'scopes' => ['clients:read']]);
+        $this->getJson($url)->assertForbidden();
+        $c->update(['scopes' => CommonApiAccess::SCOPES]);
+        DB::table('users')->where('id', $user->id)->update(['account_status' => 'inactive']);
+        $this->getJson($url)->assertNotFound();
+        DB::table('users')->where('id', $user->id)->update(['account_status' => 'active']);
+        \Illuminate\Support\Facades\Storage::disk('local')->delete('avatars/test.png');
+        $this->getJson($url)->assertNotFound();
+        \Illuminate\Support\Facades\Storage::disk('public')->put('avatars/test.png', $png);
+        $this->get($url)->assertOk()->assertHeader('Content-Type', 'image/png');
+        DB::table('profiles')->where('user_id', $user->id)->update(['avatar_url' => null]);
+        $this->getJson('/api/v1/users/'.$user->id)->assertJsonPath('data.avatar_url', null);
+        $this->getJson($url)->assertNotFound();
+        DB::table('profiles')->where('user_id', $user->id)->update(['avatar_url' => '/avatars/../secret']);
+        $this->getJson($url)->assertNotFound();
+    }
+
     public function test_documentation_is_public_and_contract_matches_resources(): void
     {
         foreach (array_keys(DeveloperPortalController::GUIDES + DeveloperPortalController::RESOURCES) as $page) {
             $this->get('/developers/'.$page)->assertOk()->assertSee('Il Centro');
         }
         $spec = $this->getJson('/developers/openapi.json')->assertOk()->json();
-        $this->assertCount(20, $spec['paths']);
+        $this->assertCount(21, $spec['paths']);
         $this->assertSame('3.0.3', $spec['openapi']);
         foreach (CommonApiController::FIELDS as $resource => $fields) {
             $this->assertSame($fields, array_keys($spec['components']['schemas'][$resource]['properties']));

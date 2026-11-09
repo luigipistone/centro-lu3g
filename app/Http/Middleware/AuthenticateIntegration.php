@@ -31,7 +31,9 @@ class AuthenticateIntegration
         DB::table('api_connections')->where('id', $connection->id)->update(['last_used_at' => now()]);
         PersonalAccessToken::whereKey($token->id)->update(['last_used_at' => now()]);
 
-        return $response->header('Cache-Control', 'no-store');
+        $response->headers->set('Cache-Control', 'private, no-store');
+
+        return $response;
     }
 
     public function terminate(Request $request, $response): void
