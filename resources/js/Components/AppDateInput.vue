@@ -178,7 +178,7 @@ onUnmounted(() => {
             <CalendarDays v-if="variant !== 'token' || !modelValue" class="h-4 w-4 shrink-0 text-gray-400" :stroke-width="1.7" />
         </button>
 
-        <Teleport to="body">
+        <Teleport :to="root?.closest('dialog') || 'body'">
             <div
                 v-if="open"
                 ref="menu"
