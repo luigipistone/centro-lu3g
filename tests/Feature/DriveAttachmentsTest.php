@@ -42,6 +42,78 @@ class DriveAttachmentsTest extends TestCase
         ]);
     }
 
+    public function test_automatic_destination_uses_task_client_or_project_client_and_current_year(): void
+    {
+        $this->actingAsWorkflowAdmin(User::factory()->create());
+        $this->travelTo(\Carbon\Carbon::parse('2026-12-31 23:30:00', 'UTC'));
+        $client = (string) Str::uuid();
+        DB::table('clients')->insert(['id' => $client, 'name' => 'Cliente automatico']);
+        $project = (string) Str::uuid();
+        DB::table('projects')->insert(['id' => $project, 'name' => 'Project', 'status' => 'active', 'client_id' => $client]);
+        $task = $this->task();
+        DB::table('tasks')->where('id', $task)->update(['project_id' => $project]);
+        $this->mock(GoogleDriveStorage::class, function ($mock) {
+            $mock->shouldReceive('root')->andReturn('shared');
+            $mock->shouldReceive('clientFolder')->with('Cliente automatico', '2027')->twice()->andReturn(['id' => 'destination', 'name' => 'CLIENTE AUTOMATICO']);
+            $mock->shouldReceive('upload')->withArgs(fn ($file, $folder) => $folder === 'destination')->twice()->andReturn(['id' => 'file']);
+        });
+        foreach (['tasks' => $task, 'projects' => $project] as $scope => $id) {
+            $this->postJson("/{$scope}/{$id}/drive-attachments", ['file' => UploadedFile::fake()->createWithContent('brief.txt', 'hello')])->assertCreated();
+        }
+        $this->assertDatabaseCount('drive_attachments', 2);
+        $missing = $this->task();
+        $this->postJson("/tasks/{$missing}/drive-attachments", ['file' => UploadedFile::fake()->createWithContent('brief.txt', 'hello')])->assertUnprocessable()->assertJsonValidationErrors('folder');
+    }
+
+    public function test_automatic_folders_search_all_pages_reuse_names_and_create_uppercase(): void
+    {
+        $drive = new class extends GoogleDriveStorage {
+            public array $created = [];
+            public function root(): string { return 'work'; }
+            public function folders(string $parent, ?string $cursor): array {
+                return match (true) {
+                    $parent === 'work' => ['folders' => [['id' => 'year', 'name' => '2026']], 'cursor' => null],
+                    $cursor === null => ['folders' => [['id' => 'other', 'name' => 'OTHER']], 'cursor' => 'next'],
+                    default => ['folders' => [['id' => 'existing', 'name' => '  Acme  ']], 'cursor' => null],
+                };
+            }
+            public function createFolder(string $parent, string $name): array {
+                $this->created[] = [$parent, $name];
+                return ['id' => 'new', 'name' => $name];
+            }
+        };
+        $this->assertSame('existing', $drive->clientFolder('ACME', '2026')['id']);
+        $this->assertSame([], $drive->created);
+        $this->assertSame('NUOVO CLIENTE', $drive->clientFolder('Nuovo cliente', '2026')['name']);
+        $this->assertSame([['year', 'NUOVO CLIENTE']], $drive->created);
+    }
+
+    public function test_duplicate_folder_names_block_automatic_destination(): void
+    {
+        $drive = new class extends GoogleDriveStorage {
+            public function folders(string $parent, ?string $cursor): array {
+                return ['folders' => [['id' => 'one', 'name' => 'ACME'], ['id' => 'two', 'name' => 'acme']], 'cursor' => null];
+            }
+        };
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $drive->findOrCreateFolder('year', 'Acme');
+    }
+
+    public function test_missing_year_and_client_folders_are_created_in_sequence(): void
+    {
+        $drive = new class extends GoogleDriveStorage {
+            public array $created = [];
+            public function root(): string { return 'work'; }
+            public function folders(string $parent, ?string $cursor): array { return ['folders' => [], 'cursor' => null]; }
+            public function createFolder(string $parent, string $name): array {
+                $this->created[] = [$parent, $name];
+                return ['id' => 'new-'.count($this->created), 'name' => $name];
+            }
+        };
+        $this->assertSame('new-2', $drive->clientFolder('Acme', '2027')['id']);
+        $this->assertSame([['work', '2027'], ['new-1', 'ACME']], $drive->created);
+    }
+
     public function test_task_and_project_files_are_trashed_on_drive_before_unlinking(): void
     {
         $this->fakeDrive();

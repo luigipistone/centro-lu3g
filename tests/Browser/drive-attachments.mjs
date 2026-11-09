@@ -15,16 +15,18 @@ const server = await createServer({
 await server.listen();
 const browser = await chromium.launch();
 try {
-    const page = await browser.newPage(); const errors = []; let files = [];
+    const page = await browser.newPage(); const errors = []; let files = []; let uploads = 0;
     page.on('pageerror', e => errors.push(e.message));
     await page.route('**/__test', route => route.fulfill({contentType:'text/html',body:`<meta name="viewport" content="width=device-width, initial-scale=1"><style>${fs.readFileSync('/tmp/centro-drive-build/assets/'+css,'utf8')}</style><div id="app"></div><script type="module" src="/__entry.js"></script>`}));
     await page.route('**/tasks/test/drive-attachments', async route => {
         if (route.request().method() === 'POST') {
-            assert.ok(route.request().postDataBuffer().includes(Buffer.from('folder-child')));
+            const body = route.request().postDataBuffer();
+            if (uploads++ === 0) assert.ok(!body.includes(Buffer.from('name="folder"')));
+            else assert.ok(body.includes(Buffer.from('folder-child')));
             files = [{id:'one',name:'brief.txt',size:5,folder_name:'Progetto test'}];
             return route.fulfill({status:201,json:{message:'ok'}});
         }
-        return route.fulfill({json:{configured:true,root:'root',can_upload:true,can_remove:true,files}});
+        return route.fulfill({json:{configured:true,root:'root',automatic_path:'WORK / 2026 / CLIENTE TEST',can_upload:true,can_remove:true,files}});
     });
     await page.route('**/tasks/test/drive-folders?*', route => {
         const child = new URL(route.request().url()).searchParams.get('parent') === 'folder-child';
@@ -32,7 +34,15 @@ try {
     });
     await page.route('**/tasks/test/drive-attachments/one', route => { files=[]; return route.fulfill({json:{message:'ok'}}); });
     await page.goto(`${server.resolvedUrls.local[0]}__test`);
-    await page.getByRole('button',{name:'Drive aziendale',exact:true}).click();
+    await page.getByRole('button',{name:'WORK / 2026 / CLIENTE TEST',exact:true}).waitFor();
+    await page.locator('input[type=file]').setInputFiles({name:'auto.txt',mimeType:'text/plain',buffer:Buffer.from('hello')});
+    await page.getByText('File salvato su Drive.',{exact:true}).waitFor();
+    for (const width of [1440,390]) {
+        await page.setViewportSize({width,height:900});
+        assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+        await page.screenshot({path:`/tmp/drive-automatic-${width}.png`,fullPage:true});
+    }
+    await page.getByRole('button',{name:'WORK / 2026 / CLIENTE TEST',exact:true}).click();
     await page.getByRole('button',{name:'Progetto test',exact:true}).click();
     await page.getByRole('button',{name:'Seleziona cartella',exact:true}).click();
     await page.locator('dialog[open]').waitFor({state:'hidden'});

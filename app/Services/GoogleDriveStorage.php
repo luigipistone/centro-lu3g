@@ -117,6 +117,39 @@ class GoogleDriveStorage
         return $result->json();
     }
 
+    public function clientFolder(string $client, string $year): array
+    {
+        $yearFolder = $this->findOrCreateFolder($this->root(), $year);
+        return $this->findOrCreateFolder($yearFolder['id'], mb_strtoupper(trim($client)));
+    }
+
+    public function findOrCreateFolder(string $parent, string $name): array
+    {
+        $normalized = mb_strtoupper(trim($name));
+        if ($normalized === '') throw ValidationException::withMessages(['folder' => 'Nome cliente non disponibile. Seleziona una cartella.']);
+
+        // Serialize the lookup and creation across simultaneous Centro uploads.
+        return Cache::lock('drive-folder-'.hash('sha256', $parent.'|'.$normalized), 600)->block(15, function () use ($parent, $name, $normalized) {
+            $matches = [];
+            $cursor = null;
+            $seen = [];
+            do {
+                $page = $this->folders($parent, $cursor);
+                foreach ($page['folders'] as $folder) {
+                    if (mb_strtoupper(trim($folder['name'])) === $normalized) $matches[] = $folder;
+                }
+                $cursor = $page['cursor'];
+                if ($cursor !== null) {
+                    if (isset($seen[$cursor])) throw new RuntimeException('Paginazione Drive non valida.');
+                    $seen[$cursor] = true;
+                }
+            } while ($cursor !== null);
+            if (count($matches) > 1) throw ValidationException::withMessages(['folder' => 'Più cartelle hanno lo stesso nome. Seleziona manualmente la destinazione.']);
+
+            return $matches[0] ?? $this->createFolder($parent, $name);
+        });
+    }
+
     public function createFolder(string $parent, string $name): array
     {
         $this->folder($parent);

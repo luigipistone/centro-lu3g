@@ -58,6 +58,7 @@ class DriveAttachmentController extends Controller
         $role = DB::table('user_roles')->where('user_id', $request->user()->id)->value('role') ?: 'guest';
 
         return response()->json([
+            'automatic_path' => ($name = $this->clientName($request, $id)) ? 'WORK / '.now('Europe/Rome')->format('Y').' / '.mb_strtoupper(trim($name)) : null,
             'configured' => $drive->configured(), 'root' => $drive->root(),
             'can_upload' => $role !== 'guest' && app(RolePermissionService::class)->allows($role, $this->scope($request).'.update'),
             'can_remove' => $role !== 'guest' && app(RolePermissionService::class)->allows($role, $this->scope($request).'.delete'),
@@ -76,8 +77,14 @@ class DriveAttachmentController extends Controller
     public function store(Request $request, string $id, GoogleDriveStorage $drive)
     {
         $key = $this->access($request, $id, true);
-        $data = $request->validate(['file' => ['required', 'file', 'max:20480'], 'folder' => ['required', 'string', 'max:255']]);
-        $folder = $this->drive(fn () => $drive->folder($data['folder']));
+        $data = $request->validate(['file' => ['required', 'file', 'max:20480'], 'folder' => ['nullable', 'string', 'max:255']]);
+        if (! empty($data['folder'])) {
+            $folder = $this->drive(fn () => $drive->folder($data['folder']));
+        } else {
+            $name = $this->clientName($request, $id);
+            if (! $name || trim($name) === '') throw ValidationException::withMessages(['folder' => 'Nessun cliente associato. Seleziona una cartella Drive oppure associa un cliente.']);
+            $folder = $this->drive(fn () => $drive->clientFolder($name, now('Europe/Rome')->format('Y')));
+        }
         $result = $this->drive(fn () => $drive->upload($data['file'], $folder['id']));
         DB::table('drive_attachments')->insert([
             'id' => (string) Str::uuid(), $key => $id, 'uploaded_by' => $request->user()->id,
@@ -87,6 +94,24 @@ class DriveAttachmentController extends Controller
         ]);
 
         return response()->json(['message' => 'File caricato su Drive.'], 201);
+    }
+
+    private function clientName(Request $request, string $id): ?string
+    {
+        $scope = $this->scope($request);
+        $entity = DB::table($scope)->where('id', $id)->first();
+        $seen = [];
+        while ($entity) {
+            $clientId = $entity->client_id;
+            if (! $clientId && $scope === 'tasks' && $entity->project_id) {
+                $clientId = DB::table('projects')->where('id', $entity->project_id)->value('client_id');
+            }
+            if ($clientId) return DB::table('clients')->where('id', $clientId)->value('name');
+            if ($scope !== 'tasks' || ! $entity->parent_task_id || isset($seen[$entity->parent_task_id])) break;
+            $seen[$entity->parent_task_id] = true;
+            $entity = DB::table('tasks')->where('id', $entity->parent_task_id)->first();
+        }
+        return null;
     }
 
     public function createFolder(Request $request, string $id, GoogleDriveStorage $drive)

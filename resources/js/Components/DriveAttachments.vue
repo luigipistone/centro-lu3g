@@ -12,6 +12,7 @@ const ready = ref(false);
 const canUpload = ref(false);
 const canRemove = ref(false);
 const folder = ref(null);
+const automaticPath = ref(null);
 const root = ref('');
 const picker = ref(false);
 const folders = ref([]);
@@ -47,7 +48,7 @@ async function load() {
         canUpload.value = data.can_upload;
         canRemove.value = data.can_remove;
         root.value = data.root;
-        folder.value ||= { id: data.root, name: 'Drive aziendale' };
+        automaticPath.value = data.automatic_path;
     } catch (e) {
         if (seq === version) error.value = message(e);
     } finally {
@@ -101,14 +102,15 @@ async function upload(list) {
         return;
     }
     const url = `${base()}/drive-attachments`;
-    const destination = folder.value.id;
+    const destination = folder.value?.id;
     const entity = props.entityId;
     busy.value = true; error.value = ''; success.value = '';
     let completed = 0;
     try {
         for (const file of queue) {
             currentName.value = file.name; progress.value = 0;
-            const form = new FormData(); form.append('file', file); form.append('folder', destination);
+            const form = new FormData(); form.append('file', file);
+            if (destination) form.append('folder', destination);
             await axios.post(url, form, { onUploadProgress: event => {
                 progress.value = event.total ? Math.min(100, Math.round(event.loaded * 100 / event.total)) : 0;
             } });
@@ -144,7 +146,7 @@ async function deleteFile() {
         <div class="flex flex-wrap items-center justify-between gap-3">
             <h3 class="flex items-center gap-2 text-sm font-semibold text-gray-900"><Paperclip class="h-4 w-4" />Allegati</h3>
             <button v-if="canUpload && ready" type="button" class="btn btn-outline max-w-full text-sm" :disabled="busy" @click="openPicker">
-                <Folder class="h-4 w-4 shrink-0" /><span class="truncate">{{ folder?.name }}</span><ChevronRight class="h-4 w-4 shrink-0" />
+                <Folder class="h-4 w-4 shrink-0" /><span class="truncate" :title="folder?.name || automaticPath">{{ folder?.name || automaticPath || 'Seleziona cartella' }}</span><ChevronRight class="h-4 w-4 shrink-0" />
             </button>
         </div>
         <div v-if="canUpload && ready" class="rounded-[var(--radius-sm)] border border-dashed p-4 text-center transition" :class="dragging ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 bg-gray-50/70'" @dragover.prevent="dragging = true" @dragleave.prevent="dragging = false" @drop.prevent="drop">
@@ -174,6 +176,7 @@ async function deleteFile() {
         <Modal :show="picker" :closeable="!creatingFolder" @close="picker = false">
             <div class="space-y-4 p-6">
                 <div class="flex items-center justify-between gap-3"><h3 class="text-lg font-semibold text-gray-900">Cartella Google Drive</h3><button type="button" class="icon-btn h-9 w-9" aria-label="Chiudi" :disabled="creatingFolder" @click="picker = false"><X class="h-5 w-5" /></button></div>
+                <button v-if="automaticPath" type="button" class="btn btn-outline w-full min-w-0 text-left" :disabled="creatingFolder" @click="folder = null; picker = false"><Folder class="h-4 w-4 shrink-0" /><span class="min-w-0 break-words">Automatico: {{ automaticPath }}</span></button>
                 <button type="button" class="btn btn-outline text-sm" :disabled="browsing || creatingFolder || !trail.length" @click="newFolderOpen = !newFolderOpen"><FolderPlus class="h-4 w-4" />Nuova cartella</button>
                 <form v-if="newFolderOpen" class="space-y-2" @submit.prevent="createFolder">
                     <label class="block text-sm font-medium text-gray-700">Nome cartella<input v-model="newFolderName" class="form-control mt-2" maxlength="255" required :disabled="creatingFolder" /></label>
