@@ -6,7 +6,13 @@ Ogni collegamento usa un token personale di integrazione, separato dall'accesso 
 
 Solo il superadmin può creare collegamenti. Il token viene mostrato una sola volta; il Centro conserva il suo hash. La scadenza è obbligatoria e non può superare un anno.
 
-## Verifica
+## Sito del collegamento
+
+Per i collegamenti API comuni il sito HTTPS è facoltativo: un'app TV o un servizio che legge le API può lasciare il campo vuoto. Non è l'indirizzo della TV e non limita la provenienza delle richieste API.
+
+Il dominio diventa obbligatorio se abiliti `webhooks:write`: identifica il servizio autorizzato a ricevere i webhook. Puoi aggiungerlo successivamente nelle impostazioni del collegamento. I collegamenti Page Notes mantengono il sito obbligatorio.
+
+## Verifica del token
 
 `GET /api/v1/me` restituisce l'identificativo del collegamento, il nome, gli scope e la scadenza. Non restituisce il token.
 

@@ -6,6 +6,7 @@ use App\Models\ApiConnection;
 use App\Services\CommonApiAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -59,6 +60,9 @@ class ApiConnectionController extends Controller
         $this->authorizeAdmin($r);
         $c = ApiConnection::findOrFail($id);
         $p = $r->validate(['scopes' => 'required|array', 'scopes.*' => [Rule::in($c->kind === 'general' ? CommonApiAccess::SCOPES : IntegrationApiController::SCOPES)]]);
+        if ($c->kind === 'general') {
+            $p['site'] = $this->generalSite($r->exists('site') ? $r->input('site') : $c->site, $p['scopes']);
+        }
         if ($c->kind === 'general' && $r->has('access_policy')) {
             $p['access_policy'] = $this->policy($r);
         }
@@ -101,12 +105,10 @@ class ApiConnectionController extends Controller
 
     private function storeGeneral(Request $r)
     {
-        $p = $r->validate(['name' => 'required|string|max:120', 'site' => 'required|url:https|max:500',
+        $p = $r->validate(['name' => 'required|string|max:120',
             'scopes' => 'required|array|min:1', 'scopes.*' => [Rule::in(CommonApiAccess::SCOPES)],
             'expires_at' => 'required|date|after:today|before_or_equal:'.now()->addYear()->toDateString()]);
-        $parts = parse_url($p['site']);
-        abort_if(isset($parts['user']) || isset($parts['pass']) || ($parts['port'] ?? 443) !== 443 || filter_var($parts['host'], FILTER_VALIDATE_IP), 422);
-        $p['site'] = 'https://'.strtolower($parts['host']);
+        $p['site'] = $this->generalSite($r->input('site'), $p['scopes']);
         $p['access_policy'] = $this->policy($r);
 
         return DB::transaction(function () use ($p, $r) {
@@ -114,6 +116,21 @@ class ApiConnectionController extends Controller
 
             return response()->json(['connection' => $c, 'token' => $c->createToken($c->name, $c->scopes, $c->expires_at)->plainTextToken], 201)->header('Cache-Control', 'no-store');
         });
+    }
+
+    private function generalSite(mixed $site, array $scopes): ?string
+    {
+        $validated = Validator::make(['site' => $site], ['site' => [
+            Rule::requiredIf(in_array('webhooks:write', $scopes, true)), 'nullable', 'string', 'url:https', 'max:500',
+            function ($attribute, $value, $fail) {
+                $parts = parse_url($value);
+                if (! $parts || empty($parts['host']) || isset($parts['user']) || isset($parts['pass']) || ($parts['port'] ?? 443) !== 443 || filter_var($parts['host'], FILTER_VALIDATE_IP)) {
+                    $fail('Inserisci un dominio HTTPS valido, senza credenziali e sulla porta 443.');
+                }
+            },
+        ]], ['site.required' => 'Il sito HTTPS è obbligatorio per abilitare i webhook.'])->validate();
+
+        return empty($validated['site']) ? null : 'https://'.strtolower(parse_url($validated['site'], PHP_URL_HOST));
     }
 
     public function retry(Request $r, string $id)

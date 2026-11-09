@@ -73,6 +73,28 @@ class CommonApiTest extends TestCase
         $this->actingAs(User::factory()->create())->postJson('/settings/api-connections', $payload)->assertForbidden();
     }
 
+    public function test_general_site_is_optional_until_webhooks_are_enabled(): void
+    {
+        $c = $this->connection();
+        $this->actingAs(User::find($c->created_by));
+        $payload = ['name' => 'TV', 'kind' => 'general', 'scopes' => ['clients:read'],
+            'expires_at' => now()->addMonth()->toDateString(), 'access_policy' => array_fill_keys(['clients', 'projects', 'users'], ['all' => false, 'ids' => []])];
+        $created = $this->postJson('/settings/api-connections', $payload)->assertCreated()->assertJsonPath('connection.site', null);
+        $id = $created->json('connection.id');
+        $scopes = ['clients:read', 'webhooks:write'];
+        $this->postJson('/settings/api-connections', [...$payload, 'scopes' => $scopes])->assertUnprocessable()->assertJsonValidationErrors('site');
+        $this->patchJson('/settings/api-connections/'.$id, ['scopes' => $scopes])->assertUnprocessable()->assertJsonValidationErrors('site');
+        $this->assertSame(['clients:read'], ApiConnection::find($id)->scopes);
+        foreach (['http://example.com', 'https://127.0.0.1', 'https://user:secret@example.com', 'https://example.com:8080'] as $site) {
+            $this->postJson('/settings/api-connections', [...$payload, 'site' => $site])->assertUnprocessable()->assertJsonValidationErrors('site');
+        }
+        $this->patchJson('/settings/api-connections/'.$id, ['scopes' => $scopes, 'site' => 'https://Example.com/hook'])->assertOk();
+        $this->assertSame('https://example.com', ApiConnection::find($id)->site);
+        $this->patchJson('/settings/api-connections/'.$id, ['scopes' => $scopes, 'site' => null])->assertUnprocessable();
+        $this->patchJson('/settings/api-connections/'.$id, ['scopes' => ['clients:read'], 'site' => null])->assertOk();
+        $this->assertNull(ApiConnection::find($id)->site);
+    }
+
     public function test_documentation_is_public_and_contract_matches_resources(): void
     {
         foreach (array_keys(DeveloperPortalController::GUIDES + DeveloperPortalController::RESOURCES) as $page) {

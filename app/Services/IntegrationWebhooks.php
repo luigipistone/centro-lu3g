@@ -11,11 +11,11 @@ use Illuminate\Validation\ValidationException;
 
 class IntegrationWebhooks
 {
-    public function validateUrl(string $url, string $site): array
+    public function validateUrl(string $url, ?string $site): array
     {
         $p = parse_url($url);
         $host = strtolower($p['host'] ?? '');
-        if (($p['scheme'] ?? '') !== 'https' || $host !== strtolower(parse_url($site, PHP_URL_HOST) ?? '')
+        if (($p['scheme'] ?? '') !== 'https' || $host !== strtolower(parse_url($site ?? '', PHP_URL_HOST) ?? '')
             || isset($p['user']) || isset($p['pass']) || isset($p['fragment']) || ($p['port'] ?? 443) !== 443
             || filter_var($host, FILTER_VALIDATE_IP)) {
             throw ValidationException::withMessages(['url' => 'Usa un URL HTTPS sul dominio del sito collegato, porta 443.']);

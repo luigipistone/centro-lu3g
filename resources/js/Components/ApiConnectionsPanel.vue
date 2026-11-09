@@ -24,7 +24,7 @@ function date(value) { return value ? new Date(value).toLocaleString('it-IT') : 
 function active(c) { return !c.revoked_at && new Date(c.expires_at) > new Date(); }
 function deliveryName(d) { const hook = data.value.webhooks.find(h => h.id === d.webhook_id); return hook ? name(data.value.connections, hook.connection_id) : 'Collegamento rimosso'; }
 const deliveryStatuses = { pending: 'In attesa', delivered: 'Consegnato', failed: 'Non riuscito', cancelled: 'Annullato' };
-async function savePermissions(c) { await run(async () => { await axios.patch(route('settings.api-connections.update', c.id), { scopes: c.scopes, ...(c.kind === 'general' ? { access_policy: c.access_policy } : {}) }); await load(); saved.value = 'Permessi aggiornati per ' + c.name + '.'; }); }
+async function savePermissions(c) { await run(async () => { await axios.patch(route('settings.api-connections.update', c.id), { scopes: c.scopes, ...(c.kind === 'general' ? { access_policy: c.access_policy, site: c.site } : {}) }); await load(); saved.value = 'Permessi aggiornati per ' + c.name + '.'; }); }
 async function load() { data.value = (await axios.get(route('settings.api-connections.index'))).data; }
 async function run(action) {
     busy.value = true; error.value = ''; saved.value = '';
@@ -63,6 +63,7 @@ onMounted(() => run(load));
                 </div>
                 <div class="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3"><label v-for="(label, scope) in (c.kind === 'general' ? generalLabels : labels)" :key="scope" class="inline-flex items-center gap-2 text-sm"><input v-model="c.scopes" :value="scope" type="checkbox" :disabled="!active(c) || busy" class="rounded border-gray-300" />{{ label }}</label><button v-if="active(c)" class="btn btn-outline" :disabled="busy" title="Salva permessi" aria-label="Salva permessi" @click="savePermissions(c)"><Save class="h-4 w-4" /></button></div>
                 <div v-if="c.kind === 'general'" class="mt-5 grid gap-4 md:grid-cols-3"><div v-for="(label, key) in policyLabels" :key="key"><label class="form-label">{{ label }}</label><label class="flex items-center gap-2 mb-2 text-sm"><input v-model="c.access_policy[key].all" type="checkbox" :disabled="!active(c) || busy" />Tutti, anche futuri</label><AppSelect v-if="!c.access_policy[key].all" v-model="c.access_policy[key].ids" multiple searchable :options="data[key] || []" :disabled="!active(c) || busy" placeholder="Nessuno autorizzato" /></div></div>
+                <div v-if="c.kind === 'general'" class="mt-4 max-w-lg"><label :for="'api-site-' + c.id" class="form-label">Sito HTTPS per webhook{{ c.scopes.includes('webhooks:write') ? '' : ' (facoltativo)' }}</label><input :id="'api-site-' + c.id" v-model="c.site" type="url" class="form-control" :disabled="!active(c) || busy" /></div>
             </article>
         </div>
         <div v-else-if="tab === 'deliveries'" class="space-y-6">
@@ -76,7 +77,7 @@ onMounted(() => run(load));
         <Modal :show="show" @close="show = false"><form class="p-6 space-y-5" @submit.prevent="create"><h3 class="section-title">Nuovo collegamento API</h3>
             <div><label class="form-label">Tipo</label><AppSelect v-model="form.kind" :options="[{ value: 'general', label: 'API comuni' }, { value: 'page_notes', label: 'Page Notes (specifico)' }]" /></div>
             <div><label class="form-label" for="api-name">Nome collegamento</label><input id="api-name" v-model="form.name" class="form-control" required maxlength="120" /></div>
-            <div><label class="form-label" for="api-site">Sito HTTPS</label><input id="api-site" v-model="form.site" class="form-control" type="url" required /></div>
+            <div><label class="form-label" for="api-site">{{ form.kind === 'general' ? 'Sito HTTPS per webhook' : 'Sito HTTPS' }}{{ form.kind === 'general' && !form.scopes.includes('webhooks:write') ? ' (facoltativo)' : '' }}</label><input id="api-site" v-model="form.site" class="form-control" type="url" :required="form.kind !== 'general' || form.scopes.includes('webhooks:write')" /></div>
             <template v-if="form.kind === 'page_notes'"><div><label class="form-label">Cliente</label><AppSelect v-model="form.client_id" :options="data.clients" placeholder="Seleziona cliente" /></div>
             <div><label class="form-label">Progetto</label><AppSelect v-model="form.project_id" :options="projects" placeholder="Seleziona progetto" /></div></template>
             <template v-else><div v-for="(label, key) in policyLabels" :key="key"><label class="form-label">{{ label }}</label><label class="flex items-center gap-2 mb-2 text-sm"><input v-model="form.access_policy[key].all" type="checkbox" />Tutti, anche futuri</label><AppSelect v-if="!form.access_policy[key].all" v-model="form.access_policy[key].ids" multiple searchable :options="data[key] || []" placeholder="Nessuno autorizzato" /></div></template>
