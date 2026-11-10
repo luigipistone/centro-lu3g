@@ -4754,7 +4754,7 @@ onUnmounted(() => {
                 </section>
 
                 <section v-if="section === 'tasks'" class="surface rounded-md p-5">
-                    <GoogleMeetingDetails v-if="record.google_event_id" :task="{ ...record, assignee_ids: related.assignees || [] }" :users="related.users || []" />
+                    <GoogleMeetingDetails v-if="record.google_event_id" :key="record.id" :task="{ ...record, assignee_ids: related.assignees || [] }" :users="related.users || []" :clients="related.taskClients || []" :services="related.taskServices || []" />
                     <div v-if="!record.google_event_id" class="mb-5 flex flex-wrap items-center justify-between gap-3">
                         <div>
                             <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Dettagli task</h3>

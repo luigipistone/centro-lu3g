@@ -3439,14 +3439,21 @@ class CentroPageController extends Controller
             return $this->updateUser($request, $id);
         }
         $this->ensureRoleCanUpdateRecord($request, $section, $id);
-        if ($section === 'tasks') $this->ensureTaskNotGoogleManaged($id);
+        $googleManaged = $section === 'tasks' && DB::table('tasks')->where('id', $id)->whereNotNull('google_event_id')->exists();
+        if ($googleManaged) {
+            abort_if(array_diff(array_keys($request->all()), ['client_id', 'service_id', 'priority', '_token', '_method']), 409, 'I dati sincronizzati si modificano in Google Calendar.');
+        }
 
         if (str_starts_with($section, 'updates-')) {
             return $this->updateServiceUpdate($request, $id);
         }
 
-        $payload = $this->validatedPayload($request, $section);
-        if ($section === 'tasks') {
+        $payload = $googleManaged ? $request->validate([
+            'client_id' => ['sometimes', 'nullable', 'uuid', 'exists:clients,id'],
+            'service_id' => ['sometimes', 'nullable', 'uuid', 'exists:services,id'],
+            'priority' => ['sometimes', 'required', Rule::in(['low', 'medium', 'high', 'urgent'])],
+        ]) : $this->validatedPayload($request, $section);
+        if ($section === 'tasks' && ! $googleManaged) {
             $oldSchedule = DB::table('tasks')->where('id', $id)->first(['start_date', 'due_date']);
             if ($oldSchedule && ($oldSchedule->start_date !== ($payload['start_date'] ?? null) || $oldSchedule->due_date !== ($payload['due_date'] ?? null))) {
                 $this->ensureTaskDatesAreWorkingDays($payload);

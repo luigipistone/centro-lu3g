@@ -179,6 +179,29 @@ class GoogleCalendarTest extends TestCase
         $this->putJson('/tasks/'.$id.'/people/assignees', ['user_ids' => []])->assertStatus(409);
     }
 
+    public function test_local_meeting_fields_can_be_changed_and_survive_google_updates(): void
+    {
+        $this->actingAs($this->user());
+        $this->reconcile([$this->event()]);
+        $id = DB::table('tasks')->value('id');
+        $client = (string) Str::uuid(); $service = (string) Str::uuid();
+        DB::table('clients')->insert(['id' => $client, 'name' => 'Cliente']);
+        DB::table('services')->insert(['id' => $service, 'name' => 'Web', 'color' => '#123456', 'active' => true]);
+        $local = ['client_id' => $client, 'service_id' => $service, 'priority' => 'high'];
+        $this->put('/tasks/'.$id, $local)->assertSessionHasNoErrors()->assertRedirect();
+        $this->assertDatabaseHas('tasks', ['id' => $id] + $local);
+        $this->reconcile([$this->event('event1', ['summary' => 'Titolo Google aggiornato'])]);
+        $this->assertDatabaseHas('tasks', ['id' => $id, 'title' => 'Titolo Google aggiornato'] + $local);
+        $this->assertDatabaseCount('task_assignees', 1);
+        $this->put('/tasks/'.$id, ['priority' => 'invalid'])->assertSessionHasErrors('priority');
+        $this->put('/tasks/'.$id, ['client_id' => (string) Str::uuid()])->assertSessionHasErrors('client_id');
+        $this->putJson('/tasks/'.$id, ['priority' => 'low', 'due_date' => '2026-11-20'])->assertStatus(409);
+        $this->assertDatabaseHas('tasks', ['id' => $id] + $local);
+        $this->flushSession();
+        $this->put('/tasks/'.$id, ['client_id' => null, 'service_id' => null])->assertSessionHasNoErrors()->assertRedirect();
+        $this->assertDatabaseHas('tasks', ['id' => $id, 'client_id' => null, 'service_id' => null, 'priority' => 'high']);
+    }
+
     public function test_calendar_selection_validates_access_and_keeps_old_meetings_in_history(): void
     {
         $this->actingAs($this->user()); $this->reconcile([$this->event()]);

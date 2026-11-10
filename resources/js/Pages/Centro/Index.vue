@@ -4749,7 +4749,7 @@ function calendarDayStyle(sectionMonth, cell) {
 
                     <div ref="calendarTaskDrawerBody" class="flex-1 overflow-y-auto px-5 py-5">
                         <div class="space-y-5">
-                            <GoogleMeetingDetails v-if="calendarTaskPanel?.google_event_id" :task="calendarTaskPanel" :users="users" />
+                            <GoogleMeetingDetails v-if="calendarTaskPanel?.google_event_id" :key="calendarTaskPanel.id" :task="calendarTaskPanel" :users="users" :clients="clients" :services="services" />
                             <template v-else>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Titolo</label>
