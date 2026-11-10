@@ -204,6 +204,7 @@ class CentroPageController extends Controller
         $currentWeekStart = now('Europe/Rome')->startOfWeek()->toDateString();
         $currentWeekEnd = now('Europe/Rome')->endOfWeek()->toDateString();
         $taskScope = fn ($query) => $query
+            ->whereNull('tasks.google_cancelled_at')
             ->where(fn ($query) => $query->whereNull('tasks.parent_task_id')->orWhere('tasks.parent_task_id', ''))
             ->when($guestTaskIds !== null, fn ($query) => $query->whereIn('tasks.id', $guestTaskIds));
 
@@ -724,6 +725,7 @@ class CentroPageController extends Controller
             $rows = $this->serviceUpdateRows($config['serviceName']);
         } else {
             $rows = DB::table($config['table'])
+                ->when($config['table'] === 'tasks', fn ($query) => $query->whereNull('tasks.google_cancelled_at'))
                 ->when($section === 'clients', fn ($query) => $query->where('clients.active', ! (bool) $request->route('archive')))
                 ->when($section === 'projects', fn ($query) => $query->where('projects.status', $request->route('archive') ? '=' : '!=', 'archived'))
                 ->when($config['table'] === 'projects', fn ($query) => $query->leftJoin('clients', 'clients.id', '=', 'projects.client_id')->select('projects.*', 'clients.name as client_name'))
@@ -3437,6 +3439,7 @@ class CentroPageController extends Controller
             return $this->updateUser($request, $id);
         }
         $this->ensureRoleCanUpdateRecord($request, $section, $id);
+        if ($section === 'tasks') $this->ensureTaskNotGoogleManaged($id);
 
         if (str_starts_with($section, 'updates-')) {
             return $this->updateServiceUpdate($request, $id);
@@ -3546,6 +3549,7 @@ class CentroPageController extends Controller
     {
         $section = $request->route('section');
         $this->ensureRoleCanDestroyRecord($request, $section, $id);
+        if ($section === 'tasks') $this->ensureTaskNotGoogleManaged($id);
         if ($section === 'tasks') $request->validate(['confirmation' => ['required', 'in:ELIMINA']]);
 
         if ($section === 'clients' && DB::table('clients')->where('parent_client_id', $id)->exists()) {
@@ -4797,6 +4801,7 @@ class CentroPageController extends Controller
         $yearStart = now()->copy()->startOfYear()->toDateString();
 
         $assignedTaskQuery = DB::table('tasks')
+            ->whereNull('tasks.google_cancelled_at')
             ->join('task_assignees', 'task_assignees.task_id', '=', 'tasks.id')
             ->where('task_assignees.user_id', $userId)
             ->where(fn ($query) => $query->whereNull('tasks.parent_task_id')->orWhereRaw("TRIM(tasks.parent_task_id) = ''"));
@@ -7927,6 +7932,7 @@ class CentroPageController extends Controller
     private function taskDependencyOptions(?string $currentTaskId = null): Collection
     {
         return DB::table('tasks')
+            ->whereNull('tasks.google_cancelled_at')
             ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
             ->when($currentTaskId, fn ($query) => $query->where('tasks.id', '!=', $currentTaskId))
             ->where('tasks.status', '!=', 'done')
@@ -8656,6 +8662,7 @@ class CentroPageController extends Controller
     public function syncTaskPeople(Request $request, string $id, string $type): RedirectResponse
     {
         abort_if($this->isGuest($request), 403);
+        if ($type === 'assignees') $this->ensureTaskNotGoogleManaged($id);
 
         DB::table('tasks')->where('id', $id)->exists() || abort(404);
         abort_unless(in_array($type, ['assignees', 'followers'], true), 404);
@@ -9082,9 +9089,15 @@ class CentroPageController extends Controller
         return redirect()->route('tasks.show', $newTaskId)->with('status', 'Task duplicata.');
     }
 
+    private function ensureTaskNotGoogleManaged(string $id): void
+    {
+        abort_if(DB::table('tasks')->where('id', $id)->whereNotNull('google_event_id')->exists(), 409, 'Questo meeting è sincronizzato: modifica o cancella l’appuntamento in Google Calendar.');
+    }
+
     public function updateTaskSchedule(Request $request, string $id): RedirectResponse
     {
         $this->ensureGuestCanEditTask($request, $id);
+        $this->ensureTaskNotGoogleManaged($id);
 
         $task = DB::table('tasks')->where('id', $id)->first();
         abort_if(! $task, 404);

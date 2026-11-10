@@ -5,6 +5,8 @@ use App\Http\Controllers\IntegrationApiController;
 use App\Http\Middleware\AuthenticateIntegration;
 use Illuminate\Support\Facades\Route;
 
+Route::post('/google-calendar/watch', [\App\Http\Controllers\GoogleCalendarController::class, 'watch'])->middleware('throttle:120,1');
+
 Route::prefix('v1')->middleware(['throttle:120,1', AuthenticateIntegration::class])->group(function () {
     Route::get('/me', [IntegrationApiController::class, 'me']);
     Route::get('/availability', [CommonApiController::class, 'availability']);

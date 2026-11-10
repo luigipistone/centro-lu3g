@@ -34,6 +34,16 @@ Route::get('/airmail/{token}/files/{fileId}', [AirmailController::class, 'downlo
 Route::get('/dashboard', [CentroPageController::class, 'dashboard'])->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
+    Route::prefix('settings/google-calendar')->name('settings.google-calendar.')->controller(\App\Http\Controllers\GoogleCalendarController::class)->group(function () {
+        Route::get('/', 'show')->name('show');
+        Route::put('/credentials', 'credentials')->name('credentials');
+        Route::get('/connect', 'connect')->name('connect');
+        Route::get('/callback', 'callback')->name('callback');
+        Route::get('/calendars', 'calendars')->name('calendars');
+        Route::put('/', 'update')->name('update');
+        Route::post('/sync', 'sync')->middleware('throttle:10,1')->name('sync');
+        Route::delete('/', 'disconnect')->name('disconnect');
+    });
     foreach (['tasks', 'projects'] as $area) {
         Route::get('/'.$area.'/{id}/drive-attachments', [DriveAttachmentController::class, 'index'])->name($area.'.drive.index');
         Route::get('/'.$area.'/{id}/drive-folders', [DriveAttachmentController::class, 'folders'])->name($area.'.drive.folders');
