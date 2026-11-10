@@ -187,11 +187,14 @@ class GoogleCalendarTest extends TestCase
         $client = (string) Str::uuid(); $service = (string) Str::uuid();
         DB::table('clients')->insert(['id' => $client, 'name' => 'Cliente']);
         DB::table('services')->insert(['id' => $service, 'name' => 'Web', 'color' => '#123456', 'active' => true]);
-        $local = ['client_id' => $client, 'service_id' => $service, 'priority' => 'high'];
+        $local = ['client_id' => $client, 'service_id' => $service, 'priority' => 'high', 'status' => 'done'];
         $this->put('/tasks/'.$id, $local)->assertSessionHasNoErrors()->assertRedirect();
         $this->assertDatabaseHas('tasks', ['id' => $id] + $local);
         $this->reconcile([$this->event('event1', ['summary' => 'Titolo Google aggiornato'])]);
         $this->assertDatabaseHas('tasks', ['id' => $id, 'title' => 'Titolo Google aggiornato'] + $local);
+        $this->reconcile([]);
+        $this->reconcile([$this->event()]);
+        $this->assertDatabaseHas('tasks', ['id' => $id, 'status' => 'done', 'google_cancelled_at' => null]);
         $this->assertDatabaseCount('task_assignees', 1);
         $this->put('/tasks/'.$id, ['priority' => 'invalid'])->assertSessionHasErrors('priority');
         $this->put('/tasks/'.$id, ['client_id' => (string) Str::uuid()])->assertSessionHasErrors('client_id');

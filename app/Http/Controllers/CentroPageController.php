@@ -3441,7 +3441,7 @@ class CentroPageController extends Controller
         $this->ensureRoleCanUpdateRecord($request, $section, $id);
         $googleManaged = $section === 'tasks' && DB::table('tasks')->where('id', $id)->whereNotNull('google_event_id')->exists();
         if ($googleManaged) {
-            abort_if(array_diff(array_keys($request->all()), ['client_id', 'service_id', 'priority', '_token', '_method']), 409, 'I dati sincronizzati si modificano in Google Calendar.');
+            abort_if(array_diff(array_keys($request->all()), ['client_id', 'service_id', 'priority', 'status', '_token', '_method']), 409, 'I dati sincronizzati si modificano in Google Calendar.');
         }
 
         if (str_starts_with($section, 'updates-')) {
@@ -3449,6 +3449,7 @@ class CentroPageController extends Controller
         }
 
         $payload = $googleManaged ? $request->validate([
+            'status' => ['sometimes', 'required', Rule::in(['todo', 'in_progress', 'in_review', 'done'])],
             'client_id' => ['sometimes', 'nullable', 'uuid', 'exists:clients,id'],
             'service_id' => ['sometimes', 'nullable', 'uuid', 'exists:services,id'],
             'priority' => ['sometimes', 'required', Rule::in(['low', 'medium', 'high', 'urgent'])],

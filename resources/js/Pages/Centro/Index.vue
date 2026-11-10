@@ -4614,7 +4614,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                                         <span :class="['truncate font-medium', task.status === 'done' ? 'line-through opacity-60' : '']">{{ task.title }}</span>
                                                     </div>
                                                     <div class="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-gray-500">
-                                                        <span v-if="task.task_type === 'ongoing'" class="truncate uppercase" :title="[task.client_name, task.service_name].filter(Boolean).join(' · ')">{{ [task.client_name, task.service_name].filter(Boolean).join(' · ') || taskTypeLabel(task.task_type) }}</span>
+                                                        <span v-if="['ongoing', 'meeting'].includes(task.task_type)" class="truncate uppercase" :title="[task.client_name, task.service_name].filter(Boolean).join(' · ')">{{ [task.client_name, task.service_name].filter(Boolean).join(' · ') || taskTypeLabel(task.task_type) }}</span>
                                                         <span v-else class="truncate uppercase">{{ task.project_name || task.service_name || taskTypeLabel(task.task_type) }}</span>
                                                         <span class="inline-flex shrink-0 items-center gap-1 font-semibold text-gray-500">
                                                             <span v-if="calendarPreviewAssignees(task).length" class="relative -top-0.5 inline-flex shrink-0 items-center pl-1" :title="calendarPreviewAssignees(task).map((user) => user.name || user.email).join(', ')">
