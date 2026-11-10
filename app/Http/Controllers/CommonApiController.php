@@ -22,7 +22,8 @@ class CommonApiController extends Controller
         'clients' => ['id', 'name', 'legal_name', 'active', 'email', 'phone', 'website', 'vat_number', 'tax_code', 'country', 'street', 'street_number', 'postal_code', 'city', 'province', 'created_at', 'updated_at'],
         'projects' => ['id', 'name', 'description', 'client_id', 'service_id', 'status', 'color', 'created_at', 'updated_at'],
         'tasks' => ['id', 'title', 'description', 'project_id', 'client_id', 'service_id', 'parent_task_id', 'task_type', 'status', 'priority', 'start_date', 'due_date', 'due_time', 'location', 'recurring_enabled', 'recurring_interval_value', 'recurring_interval_unit', 'recurring_mode', 'recurring_weekday', 'recurring_month_day', 'created_at', 'updated_at'],
-        'users' => ['id', 'name', 'email', 'updated_at', 'avatar_url'],
+        'users' => ['id', 'name', 'email', 'birth_date', 'updated_at', 'avatar_url'],
+        'holidays' => ['id', 'name', 'day', 'end_day', 'recurs_annually', 'created_at', 'updated_at'],
         'services' => ['id', 'name', 'color', 'active', 'updated_at'],
         'absences' => ['id', 'user_id', 'start_date', 'end_date', 'start_time', 'end_time', 'status', 'updated_at'],
         'comments' => ['id', 'task_id', 'user_id', 'content', 'created_at', 'updated_at'],
@@ -92,7 +93,7 @@ class CommonApiController extends Controller
         abort_unless(isset(self::FIELDS[$resource]), 404);
         $c = $this->access->connection($r, $resource.':read');
         $q = DB::table(match ($resource) {
-            'absences' => 'absence_requests', 'comments' => 'task_comments', default => $resource
+            'absences' => 'absence_requests', 'comments' => 'task_comments', 'holidays' => 'attendance_holidays', default => $resource
         });
         if ($resource === 'comments') {
             $tasks = $this->access->constrain(DB::table('tasks'), $c, 'projects', 'project_id')->select('id');
@@ -114,7 +115,8 @@ class CommonApiController extends Controller
         }
 
         if ($resource === 'users') {
-            return $q->select(array_diff(self::FIELDS[$resource], ['avatar_url']))
+            return $q->select(array_diff(self::FIELDS[$resource], ['avatar_url', 'birth_date']))
+                ->selectSub(DB::table('profiles')->select('birth_date')->whereColumn('user_id', 'users.id')->limit(1), 'birth_date')
                 ->selectSub(DB::table('profiles')->select('avatar_url')->whereColumn('user_id', 'users.id')->limit(1), 'avatar_url');
         }
 
@@ -143,11 +145,17 @@ class CommonApiController extends Controller
             'active' => 'sometimes|boolean', 'client_id' => 'sometimes|uuid', 'project_id' => 'sometimes|uuid',
             'user_id' => 'sometimes|uuid', 'task_id' => 'sometimes|uuid', 'parent_task_id' => 'sometimes|uuid', 'status' => 'sometimes|string|max:40', 'date' => 'sometimes|date_format:Y-m-d']);
         $q = $this->query($r, $resource);
-        if ($r->filled('search') && in_array($resource, ['clients', 'projects', 'users', 'services', 'tasks'], true)) {
+        if ($r->filled('search') && in_array($resource, ['clients', 'projects', 'users', 'services', 'tasks', 'holidays'], true)) {
             $q->where($resource === 'tasks' ? 'title' : 'name', 'like', '%'.$r->input('search').'%');
         }
         if ($r->filled('updated_since')) {
-            $q->where('updated_at', '>=', Carbon::parse($r->input('updated_since'))->setTimezone(config('app.timezone'))->toDateTimeString());
+            $since = Carbon::parse($r->input('updated_since'))->setTimezone(config('app.timezone'))->toDateTimeString();
+            $q->where(function ($query) use ($resource, $since) {
+                $query->where('updated_at', '>=', $since);
+                if ($resource === 'users') {
+                    $query->orWhereExists(fn ($profile) => $profile->selectRaw('1')->from('profiles')->whereColumn('profiles.user_id', 'users.id')->where('profiles.updated_at', '>=', $since));
+                }
+            });
         }
         foreach (['active', 'client_id', 'project_id', 'task_id', 'parent_task_id', 'user_id', 'status'] as $field) {
             if ($r->has($field) && in_array($field, self::FIELDS[$resource], true)) {
@@ -176,12 +184,15 @@ class CommonApiController extends Controller
         }
 
         return response()->json(['data' => $this->serialize($record)])->header('ETag', CommonApiWrites::etag(match ($resource) {
-            'absences' => 'absence_requests', 'comments' => 'task_comments', default => $resource
+            'absences' => 'absence_requests', 'comments' => 'task_comments', 'holidays' => 'attendance_holidays', default => $resource
         }, $id));
     }
 
     private function serialize(object $record): object
     {
+        if (property_exists($record, 'recurs_annually')) {
+            $record->recurs_annually = (bool) $record->recurs_annually;
+        }
         if (property_exists($record, 'avatar_url')) {
             $record->avatar_url = $record->avatar_url ? url('/api/v1/users/'.$record->id.'/avatar') : null;
         }

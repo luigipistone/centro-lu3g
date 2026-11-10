@@ -77,7 +77,7 @@ class CommonApiWebhooks
                             $hash = hash('sha256', json_encode($row));
                             $context = match ($resource) {
                                 'tasks' => ['projects' => $row->project_id], 'absences' => ['users' => $row->user_id],
-                                'services' => [], 'comments' => ['projects' => DB::table('tasks')->where('id', $row->task_id)->value('project_id')], default => [$resource => $row->id],
+                                'services', 'holidays' => [], 'comments' => ['projects' => DB::table('tasks')->where('id', $row->task_id)->value('project_id')], default => [$resource => $row->id],
                             };
                             $event = "$resource.".($old ? 'updated' : 'created');
                             if ($hook->initialized_at && (! $old || $old->hash !== $hash) && in_array($event, $events, true)) {

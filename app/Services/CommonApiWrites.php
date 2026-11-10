@@ -27,6 +27,9 @@ class CommonApiWrites
     {
         $record = DB::table($resource)->where('id', $id)->first();
         $relations = [];
+        if ($resource === 'users') {
+            $relations['profile'] = DB::table('profiles')->where('user_id', $id)->first(['birth_date', 'avatar_url']);
+        }
         foreach (match ($resource) {
             'tasks' => ['task_assignees', 'task_followers'], 'projects' => ['project_followers'], default => []
         } as $table) {

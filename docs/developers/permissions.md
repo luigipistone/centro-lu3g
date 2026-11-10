@@ -12,7 +12,8 @@ Uno scope autorizza un'operazione; un ambito stabilisce **su quali dati** può e
 | projects:write | Creare e modificare progetti; richiede anche projects:read |
 | tasks:write | Creare e modificare task e sottoattività; richiede anche tasks:read |
 | comments:write | Aggiungere commenti; richiede comments:read e tasks:read |
-| users:read | Persone selezionate o tutte |
+| users:read | Persone selezionate o tutte, inclusa data di nascita |
+| holidays:read | Festivita configurate nelle impostazioni aziendali |
 | absences:read | Assenze approvate delle persone autorizzate |
 | availability:read | Disponibilità e smart working delle persone autorizzate |
 | services:read | Catalogo dei servizi |

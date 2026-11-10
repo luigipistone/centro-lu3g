@@ -8,7 +8,7 @@ use Illuminate\Support\Str;
 
 class DeveloperPortalController extends Controller
 {
-    public const RESOURCES = ['clients' => 'Clienti', 'projects' => 'Progetti', 'tasks' => 'Task', 'comments' => 'Commenti', 'users' => 'Utenti', 'absences' => 'Assenze', 'services' => 'Servizi'];
+    public const RESOURCES = ['clients' => 'Clienti', 'projects' => 'Progetti', 'tasks' => 'Task', 'comments' => 'Commenti', 'users' => 'Utenti', 'absences' => 'Assenze', 'services' => 'Servizi', 'holidays' => 'Festività'];
 
     public const GUIDES = ['introduction' => 'Introduzione', 'authentication' => 'Autenticazione', 'permissions' => 'Permessi e ambiti', 'writes' => 'Creare e modificare', 'pagination' => 'Paginazione e filtri', 'errors' => 'Errori e limiti', 'availability' => 'Disponibilità e smart working', 'webhooks' => 'Webhook'];
 
@@ -34,7 +34,8 @@ class DeveloperPortalController extends Controller
             'clients' => 'Include clienti attivi e archiviati. Usa `active=1` oppure `active=0` per separarli. Note interne e dati bancari non vengono esposti.',
             'projects' => 'Include i progetti autorizzati in tutti gli stati. Filtra con `client_id` o `status` (`active`, `completed`, `on_hold`, `archived`). Gli ID collegati non autorizzano a leggere automaticamente le relative schede.',
             'tasks' => 'Include task, continuative, meeting e sottoattività dei progetti autorizzati, non solo quelli creati tramite API. `parent_task_id` distingue le sottoattività. Stati: `todo`, `in_progress`, `in_review`, `done`. Filtri: `project_id`, `client_id`, `status`. Per le attività prive di progetto serve l’ambito tutti i progetti.',
-            'users' => 'Solo account attivi autorizzati. Email di lavoro e nome sono inclusi; password, profilo privato, documenti e dati anagrafici personali sono esclusi.',
+            'users' => 'Solo account attivi autorizzati. Include nome, email di lavoro, avatar e `birth_date`: data di nascita in formato YYYY-MM-DD, null se non compilata. Password, documenti e altri dati personali del profilo restano esclusi. Lo scope users:read consente anche la lettura della data di nascita: autorizza solo le persone necessarie.',
+            'holidays' => 'Festività configurate nelle impostazioni del Centro, senza aggiunte automatiche. `day` e `end_day` sono date YYYY-MM-DD; end_day null indica un solo giorno. `recurs_annually` indica la ripetizione ogni anno: le date restituite sono quelle originali configurate, non le occorrenze espanse. Per intervalli a cavallo di Capodanno conserva lo scarto di anno tra inizio e fine. Il 29 febbraio ricorrente vale solo negli anni bisestili. Il permesso holidays:read abilita tutto il catalogo aziendale, indipendentemente dagli ambiti persone. Supporta i webhook holidays.created, holidays.updated e holidays.removed.',
             'absences' => 'Solo richieste approvate delle persone autorizzate. `date=2026-11-09` restituisce quelle che comprendono il giorno. Non include smart working o trasferte. Motivazioni, tipologia medica, note e allegati non vengono esposti. Gli orari null indicano una richiesta senza intervallo orario specificato, non una certificazione di presenza.',
             'services' => 'Catalogo dei servizi del Centro. Lo scope autorizza il catalogo completo, senza esporre le associazioni private dei clienti. Filtra con `active=1` o `active=0`.',
         ];
@@ -78,6 +79,7 @@ class DeveloperPortalController extends Controller
             $properties = [];
             foreach (CommonApiController::FIELDS[$resource] as $field) {
                 $properties[$field] = ['type' => $this->fieldType($field), 'nullable' => $field !== 'id'];
+                if (in_array($field, ['birth_date', 'day', 'end_day'], true)) $properties[$field]['format'] = 'date';
             }
             $schemas[$resource] = ['type' => 'object', 'properties' => $properties, 'required' => ['id']];
             $responses = ['401' => ['description' => 'Token assente, scaduto o revocato'], '403' => ['description' => 'Scope mancante o account proprietario disabilitato'], '404' => ['description' => 'Risorsa inesistente o fuori ambito'], '422' => ['description' => 'Parametri non validi'], '429' => ['description' => 'Limite richieste superato']];
@@ -123,6 +125,8 @@ class DeveloperPortalController extends Controller
 
         $paths['/me']['get']['responses']['200']['content']['application/json']['schema']['properties'] += ['kind' => ['type' => 'string', 'enum' => ['general', 'page_notes']], 'access_policy' => ['type' => 'object', 'nullable' => true]];
 
+        $schemas['users']['properties']['birth_date'] += ['description' => 'Data di nascita YYYY-MM-DD, null se non compilata. Stesso ambito e scope users:read.'];
+        $schemas['holidays']['properties']['recurs_annually'] += ['description' => 'Ricorre annualmente; day/end_day restano le date originali della configurazione, non le occorrenze espanse.'];
         $schemas['users']['properties']['avatar_url'] += ['format' => 'uri', 'description' => 'URL assoluto protetto da Bearer users:read; null senza avatar.'];
         $paths['/users/{id}/avatar']['get'] = ['operationId' => 'getUserAvatar', 'tags' => ['Utenti'], 'summary' => 'Scarica avatar utente', 'description' => 'Richiede users:read e utente attivo nell’ambito del collegamento. Token nell’header, mai nell’URL. 404 anche se la foto non esiste.', 'parameters' => [['name' => 'id', 'in' => 'path', 'required' => true, 'schema' => ['type' => 'string', 'format' => 'uuid']]], 'responses' => ['200' => ['description' => 'Immagine avatar', 'content' => ['image/*' => ['schema' => ['type' => 'string', 'format' => 'binary']]]]] + $responses];
         $this->writeSpecification($paths, $schemas, $responses);
@@ -148,7 +152,7 @@ class DeveloperPortalController extends Controller
     private function fieldType(string $field): string
     {
         return match ($field) {
-            'active', 'recurring_enabled' => 'boolean',
+            'active', 'recurring_enabled', 'recurs_annually' => 'boolean',
             'recurring_interval_value', 'recurring_weekday', 'recurring_month_day' => 'integer',
             default => 'string',
         };

@@ -27,6 +27,6 @@ Route::prefix('v1')->middleware(['throttle:120,1', AuthenticateIntegration::clas
     Route::post('/webhooks', [IntegrationApiController::class, 'storeWebhook']);
     Route::get('/webhooks', [CommonApiController::class, 'webhooks']);
     Route::delete('/webhooks/{id}', [IntegrationApiController::class, 'deleteWebhook']);
-    Route::get('/{resource}', [CommonApiController::class, 'index'])->where('resource', 'users|services|absences|comments');
-    Route::get('/{resource}/{id}', [CommonApiController::class, 'show'])->where('resource', 'clients|projects|users|services|absences|comments');
+    Route::get('/{resource}', [CommonApiController::class, 'index'])->where('resource', 'users|services|absences|comments|holidays');
+    Route::get('/{resource}/{id}', [CommonApiController::class, 'show'])->where('resource', 'clients|projects|users|services|absences|comments|holidays');
 });

@@ -30,6 +30,52 @@ class CommonApiTest extends TestCase
         return $c;
     }
 
+    public function test_holidays_are_paginated_searchable_and_require_their_scope(): void
+    {
+        $id = (string) Str::uuid();
+        DB::table('attendance_holidays')->insert(['id' => $id, 'name' => 'Natale', 'day' => '2025-12-25', 'end_day' => '2025-12-26', 'recurs_annually' => true]);
+        $c = $this->connection();
+        $this->getJson('/api/v1/holidays?per_page=1&search=Natale')->assertOk()->assertJsonPath('data.0.recurs_annually', true)->assertJsonPath('meta.total', 1);
+        $this->getJson('/api/v1/holidays/'.$id)->assertOk()->assertJsonPath('data.day', '2025-12-25')->assertJsonPath('data.end_day', '2025-12-26');
+        $this->getJson('/api/v1/holidays?per_page=101')->assertUnprocessable();
+        $c->update(['scopes' => ['users:read']]);
+        $this->getJson('/api/v1/holidays')->assertForbidden();
+        $this->getJson('/api/v1/holidays/'.$id)->assertForbidden();
+    }
+
+    public function test_birth_date_is_only_exposed_for_authorized_users(): void
+    {
+        $user = User::factory()->create();
+        $other = User::factory()->create();
+        DB::table('profiles')->insert(['id' => (string) Str::uuid(), 'user_id' => $user->id, 'birth_date' => '1996-03-18', 'fiscal_code' => 'PRIVATE']);
+        $this->connection(['users' => ['ids' => [$user->id]]]);
+        $this->getJson('/api/v1/users')->assertOk()->assertJsonPath('data.0.birth_date', '1996-03-18')->assertJsonMissingPath('data.0.fiscal_code');
+        $etag = $this->getJson('/api/v1/users/'.$user->id)->assertOk()->assertJsonPath('data.birth_date', '1996-03-18')->headers->get('ETag');
+        $this->getJson('/api/v1/users/'.$other->id)->assertNotFound();
+        DB::table('users')->where('id', $user->id)->update(['updated_at' => now()->subDays(2)]);
+        DB::table('profiles')->where('user_id', $user->id)->update(['birth_date' => null, 'updated_at' => now()]);
+        $response = $this->getJson('/api/v1/users/'.$user->id)->assertOk()->assertJsonPath('data.birth_date', null);
+        $this->assertNotSame($etag, $response->headers->get('ETag'));
+        $this->getJson('/api/v1/users?updated_since='.urlencode(now()->subDay()->toIso8601String()))->assertOk()->assertJsonPath('data.0.id', $user->id);
+        $this->getJson('/developers/openapi.json')->assertOk()->assertJsonPath('components.schemas.users.properties.birth_date.format', 'date')->assertJsonPath('components.schemas.holidays.properties.recurs_annually.type', 'boolean');
+        $this->get('/developers/holidays')->assertOk();
+    }
+
+    public function test_holiday_webhooks_do_not_require_a_person_or_client_policy(): void
+    {
+        $this->connection();
+        $id = (string) Str::uuid();
+        DB::table('attendance_holidays')->insert(['id' => $id, 'name' => 'Natale', 'day' => '2026-12-25']);
+        $this->mock(IntegrationWebhooks::class, fn ($mock) => $mock->shouldReceive('validateUrl')->andReturn(['example.com', '93.184.216.34']));
+        $this->postJson('/api/v1/webhooks', ['url' => 'https://example.com/holidays', 'events' => ['holidays.updated', 'holidays.removed']])->assertCreated();
+        DB::table('attendance_holidays')->where('id', $id)->update(['name' => 'Chiusura Natale']);
+        app(CommonApiWebhooks::class)->capture();
+        $this->assertDatabaseCount('api_events', 1);
+        DB::table('attendance_holidays')->where('id', $id)->delete();
+        app(CommonApiWebhooks::class)->capture();
+        $this->assertDatabaseCount('api_events', 2);
+    }
+
     public function test_scoped_clients_and_search_across_pages(): void
     {
         $ids = [];
@@ -145,7 +191,7 @@ class CommonApiTest extends TestCase
             $this->get('/developers/'.$page)->assertOk()->assertSee('Il Centro');
         }
         $spec = $this->getJson('/developers/openapi.json')->assertOk()->json();
-        $this->assertCount(21, $spec['paths']);
+        $this->assertCount(23, $spec['paths']);
         $this->assertSame('3.0.3', $spec['openapi']);
         foreach (CommonApiController::FIELDS as $resource => $fields) {
             $this->assertSame($fields, array_keys($spec['components']['schemas'][$resource]['properties']));
