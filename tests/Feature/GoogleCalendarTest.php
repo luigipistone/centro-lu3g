@@ -49,6 +49,18 @@ class GoogleCalendarTest extends TestCase
         $this->assertStringNotContainsString('my-secret', DB::table('audit_logs')->get()->toJson());
     }
 
+    public function test_last_sync_timestamp_is_utc_in_winter_and_summer(): void
+    {
+        config(['app.timezone' => 'Europe/Rome']);
+        $this->actingAs($this->user());
+        foreach (['2026-11-10 14:52:02' => '2026-11-10 13:52:02', '2026-07-10 14:52:02' => '2026-07-10 12:52:02'] as $stored => $utc) {
+            $this->settings(['last_synced_at' => $stored]);
+            $this->getJson('/settings/google-calendar')->assertOk()->assertJsonPath('last_synced_at', $utc);
+        }
+        $this->settings(['last_synced_at' => null]);
+        $this->getJson('/settings/google-calendar')->assertOk()->assertJsonPath('last_synced_at', null);
+    }
+
     public function test_oauth_state_is_single_use_and_offline_read_only(): void
     {
         $this->actingAs($this->user()); $this->settings(['refresh_token' => null]);

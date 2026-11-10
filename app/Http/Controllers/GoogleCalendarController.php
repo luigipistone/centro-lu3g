@@ -35,7 +35,9 @@ class GoogleCalendarController extends Controller
             'connected' => (bool) ($s->refresh_token ?? false), 'enabled' => (bool) ($s->enabled ?? false),
             'calendar_id' => $s->calendar_id ?? '', 'calendar_name' => $s->calendar_name ?? '',
             'import_from' => $s->import_from ?? now()->startOfMonth()->toDateString(), 'months_ahead' => $s->months_ahead ?? 12,
-            'last_synced_at' => $s->last_synced_at ?? null, 'last_error' => $s->last_error ?? null,
+            // The panel interprets this timestamp as UTC; database dates use the app timezone.
+            'last_synced_at' => empty($s->last_synced_at) ? null : \Carbon\CarbonImmutable::parse($s->last_synced_at, config('app.timezone'))->utc()->format('Y-m-d H:i:s'),
+            'last_error' => $s->last_error ?? null,
             'watch_error' => $s->watch_error ?? null, 'summary' => json_decode($s->last_summary ?? 'null', true),
             'pending' => (bool) ($s->enabled ?? false) && (bool) ($s->requested_at ?? false) && ! ($s->last_error ?? null), 'redirect_uri' => route('settings.google-calendar.callback'),
         ]);
