@@ -24,6 +24,26 @@ class ProfileTest extends TestCase
         $response->assertOk();
     }
 
+    public function test_completion_animations_can_be_saved_and_are_shared_with_the_app(): void
+    {
+        $user = User::factory()->create();
+        foreach (['balloons', 'fireworks', 'snow', 'glitch', 'snowfall', 'mario', 'rocket'] as $effect) {
+            $this->actingAs($user)->patch('/profile', [
+                'name' => $user->name,
+                'email' => $user->email,
+                'completion_effect' => $effect,
+            ])->assertSessionHasNoErrors();
+            $this->assertDatabaseHas('profiles', ['user_id' => $user->id, 'completion_effect' => $effect]);
+            $this->get('/profile')->assertInertia(fn ($page) => $page->where('auth.user.completion_effect', $effect));
+        }
+        $this->actingAs($user)->patch('/profile', [
+            'name' => $user->name,
+            'email' => $user->email,
+            'completion_effect' => 'unknown',
+        ])->assertSessionHasErrors('completion_effect');
+        $this->assertDatabaseHas('profiles', ['user_id' => $user->id, 'completion_effect' => 'rocket']);
+    }
+
     public function test_profile_information_can_be_updated(): void
     {
         $user = User::factory()->create();

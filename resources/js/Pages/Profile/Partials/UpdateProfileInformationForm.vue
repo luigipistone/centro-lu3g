@@ -27,6 +27,9 @@ const completionEffectOptions = [
     { value: 'fireworks', label: "Fuochi d'artificio" },
     { value: 'snow', label: 'Nevicata' },
     { value: 'glitch', label: 'Glitch' },
+    { value: 'snowfall', label: 'Nevicata immersiva' },
+    { value: 'mario', label: 'Super Mario' },
+    { value: 'rocket', label: 'Decollo' },
 ];
 const completionEffectValues = completionEffectOptions.map((option) => option.value);
 const currentCompletionEffect = completionEffectValues.includes(profile.completion_effect || user.completion_effect)

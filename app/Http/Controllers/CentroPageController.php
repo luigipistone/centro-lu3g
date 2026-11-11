@@ -4998,7 +4998,7 @@ class CentroPageController extends Controller
             'phone' => ['nullable', 'string', 'max:255'],
             'company_phone' => ['nullable', 'string', 'max:80'],
             'bio' => ['nullable', 'string'],
-            'completion_effect' => ['nullable', Rule::in(['balloons', 'fireworks', 'snow', 'glitch'])],
+            'completion_effect' => ['nullable', Rule::in(['balloons', 'fireworks', 'snow', 'glitch', 'snowfall', 'mario', 'rocket'])],
             'first_name' => ['nullable', 'string', 'max:120'],
             'last_name' => ['nullable', 'string', 'max:120'],
             'fiscal_code' => ['nullable', 'string', 'max:16'],

@@ -6,6 +6,7 @@ import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 import SeasonalArtwork from '@/Components/SeasonalArtwork.vue';
+import PlayfulCompletionEffect from '@/Components/PlayfulCompletionEffect.vue';
 import { isSeasonalTheme } from '@/utils/seasonalArt';
 import { browserNotificationSupport, enableCentroBrowserNotifications, ensureCentroPushSubscription, showCentroBrowserNotification } from '@/utils/browserNotifications';
 import { Link, router, usePage } from '@inertiajs/vue3';
@@ -47,6 +48,7 @@ const collapsedGroups = ref({
 });
 const darkMode = ref(false);
 const completionEffect = ref(null);
+const completionEffectKey = ref(0);
 const SIDEBAR_MIN_WIDTH = 84;
 const SIDEBAR_MAX_WIDTH = 360;
 const SIDEBAR_COLLAPSE_AT = 132;
@@ -198,6 +200,7 @@ function playCompletionEffect(event = null) {
     }
     const effect = event?.detail?.effect || page.props.auth?.user?.completion_effect || 'balloons';
     completionEffect.value = effect;
+    completionEffectKey.value += 1;
     window.clearTimeout(completionEffectTimer);
     completionEffectTimer = window.setTimeout(() => {
         completionEffect.value = null;
@@ -715,7 +718,13 @@ const groups = computed(() => {
         <Teleport to="body">
             <SeasonalArtwork :key="`effect-${page.props.eventTheme}`" mode="effect" />
             <SeasonalArtwork :key="`atmosphere-${page.props.eventTheme}`" mode="atmosphere" />
-            <div v-if="completionEffect" :class="['completion-effect', `completion-effect-${completionEffect}`]" aria-hidden="true">
+            <PlayfulCompletionEffect
+                v-if="['snowfall', 'mario', 'rocket'].includes(completionEffect)"
+                :key="completionEffectKey"
+                :effect="completionEffect"
+                @finished="completionEffect = null"
+            />
+            <div v-else-if="completionEffect" :class="['completion-effect', `completion-effect-${completionEffect}`]" aria-hidden="true">
                 <template v-if="completionEffect === 'balloons'">
                     <span v-for="index in 18" :key="`balloon-${index}`" class="completion-balloon" :style="{ '--i': index }"></span>
                 </template>
