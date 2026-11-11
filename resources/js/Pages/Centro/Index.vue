@@ -3023,6 +3023,7 @@ function openCalendarTaskCreate(type, date) {
 }
 
 function closeCalendarTaskPanel() {
+    if (calendarTaskAutosaveState.value === 'queued') saveCalendarTaskInline(0);
     calendarTaskPanelClosedByUser.value = true;
     calendarTaskPanelOpen.value = false;
     calendarTaskPanel.value = null;
@@ -3506,7 +3507,7 @@ function calendarTaskPayload() {
     };
 }
 
-function saveCalendarTaskInline(delay = AUTOSAVE_IDLE_DELAY) {
+function saveCalendarTaskInline(delay = 300) {
     if (calendarTaskPanel.value?.google_event_id) return;
     if (!String(calendarTaskForm.title || '').trim()) return;
 
@@ -3514,7 +3515,7 @@ function saveCalendarTaskInline(delay = AUTOSAVE_IDLE_DELAY) {
     calendarTaskAutosaveState.value = 'queued';
     calendarTaskAutosaveError.value = '';
 
-    calendarTaskAutosaveTimer = window.setTimeout(() => {
+    const persist = () => {
         const sequence = calendarTaskAutosaveSequence + 1;
         calendarTaskAutosaveSequence = sequence;
         calendarTaskAutosaveState.value = 'saving';
@@ -3592,7 +3593,9 @@ function saveCalendarTaskInline(delay = AUTOSAVE_IDLE_DELAY) {
         } else {
             calendarTaskForm.post(route('tasks.store'), requestOptions);
         }
-    }, autosaveDelay(delay));
+    };
+    if (delay > 0) calendarTaskAutosaveTimer = window.setTimeout(persist, delay);
+    else persist();
 }
 
 function setCalendarTaskType(type) {
@@ -4720,11 +4723,8 @@ function calendarDayStyle(sectionMonth, cell) {
                             </p>
                         </div>
                         <div class="flex shrink-0 items-center gap-2">
-                            <span v-if="calendarTaskAutosaveState !== 'idle'" :class="['rounded-full px-2.5 py-1 text-xs font-semibold', calendarTaskAutosaveState === 'error' ? 'bg-red-50 text-red-700' : calendarTaskAutosaveState === 'saved' ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700']">
-                                <template v-if="calendarTaskAutosaveState === 'queued'">In attesa</template>
-                                <template v-else-if="calendarTaskAutosaveState === 'saving'">Salvataggio</template>
-                                <template v-else-if="calendarTaskAutosaveState === 'saved'">Salvato</template>
-                                <template v-else>{{ calendarTaskAutosaveError || 'Errore' }}</template>
+                            <span v-if="calendarTaskAutosaveState === 'error'" role="alert" class="rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">
+                                {{ calendarTaskAutosaveError || 'Errore' }}
                             </span>
                             <button
                                 v-if="calendarTaskForm.id"

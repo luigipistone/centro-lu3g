@@ -47,8 +47,6 @@ function day(value) { return value ? new Date(value.slice(0, 10) + 'T12:00:00').
                 <AppSelect v-model="form.priority" :options="priorities" @change="save" />
             </div>
         </fieldset>
-        <p v-if="form.processing" role="status" class="text-sm text-gray-500">Salvataggio in corso...</p>
-        <p v-else-if="Object.keys(form.errors).length" role="alert" class="text-sm text-red-600">{{ Object.values(form.errors)[0] }}</p>
-        <p v-else-if="form.recentlySuccessful" role="status" class="text-sm text-gray-500">Salvato</p>
+        <p v-if="Object.keys(form.errors).length" role="alert" class="text-sm text-red-600">{{ Object.values(form.errors)[0] }}</p>
     </section>
 </template>

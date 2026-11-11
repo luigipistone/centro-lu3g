@@ -2961,6 +2961,7 @@ function closeProjectDrawerFloatingMenus() {
 }
 
 function closeProjectTaskDrawer() {
+    if (projectTaskDrawerAutosaveTimer) saveProjectTaskDrawer(0);
     projectTaskDrawerOpen.value = false;
     projectTaskDrawerTask.value = null;
     projectTaskParentStack.value = [];
@@ -3000,10 +3001,11 @@ function runProjectTaskDrawerCommand(command, value = null) {
     saveProjectTaskDrawer();
 }
 
-function saveProjectTaskDrawer(delay = AUTOSAVE_IDLE_DELAY) {
+function saveProjectTaskDrawer(delay = 300) {
     if (!projectTaskDrawerTask.value?.id || !projectTaskDrawerForm.title) return;
     window.clearTimeout(projectTaskDrawerAutosaveTimer);
-    projectTaskDrawerAutosaveTimer = window.setTimeout(() => {
+    const persist = () => {
+        projectTaskDrawerAutosaveTimer = null;
         projectTaskDrawerForm.transform(() => projectTaskDrawerPayload()).put(route('tasks.update', projectTaskDrawerTask.value.id), {
             preserveScroll: true,
             preserveState: true,
@@ -3016,7 +3018,9 @@ function saveProjectTaskDrawer(delay = AUTOSAVE_IDLE_DELAY) {
             },
             onFinish: () => projectTaskDrawerForm.transform((data) => data),
         });
-    }, autosaveDelay(delay));
+    };
+    if (delay > 0) projectTaskDrawerAutosaveTimer = window.setTimeout(persist, delay);
+    else persist();
 }
 
 function projectDrawerComments() {
