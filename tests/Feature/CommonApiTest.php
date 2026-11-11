@@ -236,6 +236,6 @@ class CommonApiTest extends TestCase
         $this->getJson('/api/v1/availability?date=2026-11-09')->assertOk()->assertJsonPath('data.0.status', 'scheduled');
         DB::table('absence_requests')->insert(['id' => (string) Str::uuid(), 'user_id' => $c->created_by, 'type' => 'sickness', 'status' => 'approved', 'start_date' => '2026-11-09', 'end_date' => '2026-11-09', 'notes' => 'PRIVATE']);
         $this->getJson('/api/v1/availability?date=2026-11-09')->assertOk()->assertJsonPath('data.0.status', 'absent')->assertDontSee('PRIVATE')->assertDontSee('sickness');
-        $this->getJson('/api/v1/absences?date=2026-11-09')->assertOk()->assertJsonCount(1, 'data')->assertDontSee('PRIVATE')->assertDontSee('sickness');
+        $this->getJson('/api/v1/absences?date=2026-11-09')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.type', 'sickness')->assertDontSee('PRIVATE');
     }
 }

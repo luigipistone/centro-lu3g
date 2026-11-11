@@ -14,7 +14,7 @@ Uno scope autorizza un'operazione; un ambito stabilisce **su quali dati** può e
 | comments:write | Aggiungere commenti; richiede comments:read e tasks:read |
 | users:read | Persone selezionate o tutte, inclusa data di nascita |
 | holidays:read | Festivita configurate nelle impostazioni aziendali |
-| absences:read | Assenze approvate delle persone autorizzate |
+| absences:read | Assenze approvate delle persone autorizzate, incluso `type` (ferie, permesso, malattia, ritardo, recupero, altro); esclusi note, motivazioni e allegati |
 | availability:read | Disponibilità e smart working delle persone autorizzate |
 | services:read | Catalogo dei servizi |
 | webhooks:write | Sottoscrizioni del collegamento; serve anche lo scope di lettura della risorsa |

@@ -25,7 +25,7 @@ class CommonApiController extends Controller
         'users' => ['id', 'name', 'email', 'birth_date', 'updated_at', 'avatar_url'],
         'holidays' => ['id', 'name', 'day', 'end_day', 'recurs_annually', 'created_at', 'updated_at'],
         'services' => ['id', 'name', 'color', 'active', 'updated_at'],
-        'absences' => ['id', 'user_id', 'start_date', 'end_date', 'start_time', 'end_time', 'status', 'updated_at'],
+        'absences' => ['id', 'user_id', 'type', 'start_date', 'end_date', 'start_time', 'end_time', 'status', 'updated_at'],
         'comments' => ['id', 'task_id', 'user_id', 'content', 'created_at', 'updated_at'],
     ];
 
