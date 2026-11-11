@@ -936,6 +936,21 @@ html.dark [class*="bg-slate-50"] {
     box-shadow: var(--shadow-soft);
 }
 
+html.dark :is(.password-reveal-row, .dashboard-password-reveal-row) {
+    background: hsl(var(--muted)) !important;
+    border-color: hsl(var(--border-soft)) !important;
+    color: hsl(var(--foreground));
+}
+
+html.dark :is(.password-reveal-row, .dashboard-password-reveal-row):is(:hover, :focus-visible):not(:disabled) {
+    background: hsl(var(--primary-app-soft)) !important;
+    border-color: hsl(var(--primary-app) / 0.6) !important;
+}
+
+.password-reveal-row:focus-visible .field-copy-button {
+    opacity: 1;
+}
+
 html.dark .toolbar {
     border-color: hsl(220 22% 28% / 0.72);
     background: hsl(222 26% 14% / 0.94);
