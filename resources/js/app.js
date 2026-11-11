@@ -4,6 +4,7 @@ import '../css/christmas-studio.css';
 import '../css/easter-studio.css';
 import '../css/summer-studio.css';
 import './bootstrap';
+import { descriptionLinks } from './utils/descriptionLinks';
 
 import { createInertiaApp } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
@@ -83,6 +84,7 @@ createInertiaApp({
         return createApp({ render: () => h(App, props) })
             .use(plugin)
             .use(ZiggyVue)
+            .directive('description-links', descriptionLinks)
             .mount(el);
     },
     progress: {

@@ -4358,6 +4358,7 @@ onUnmounted(() => {
                                 </div>
                                 <div
                                     ref="projectDescriptionEditor"
+                                    v-description-links
                                     contenteditable="true"
                                     class="form-control min-h-48 px-4 py-3 wysiwyg-content"
                                     data-placeholder="Descrizione del progetto..."
@@ -5008,6 +5009,7 @@ onUnmounted(() => {
                                 </div>
                                 <div
                                     ref="taskDescriptionEditor"
+                                    v-description-links
                                     class="min-h-[150px] px-4 py-3 text-sm leading-6 text-gray-800 outline-none empty:before:text-gray-400 empty:before:content-[attr(data-placeholder)]"
                                     contenteditable="true"
                                     data-placeholder="Aggiungi una descrizione..."
@@ -6280,6 +6282,7 @@ onUnmounted(() => {
                                     </div>
                                     <div
                                         ref="projectTaskDrawerDescriptionEditor"
+                                        v-description-links
                                         contenteditable="true"
                                         class="min-h-[150px] px-4 py-3 text-sm leading-6 text-gray-800 outline-none empty:before:text-gray-400 empty:before:content-[attr(data-placeholder)] wysiwyg-content"
                                         data-placeholder="Aggiungi una descrizione..."

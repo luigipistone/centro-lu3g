@@ -4204,6 +4204,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                 </div>
                                 <div
                                     ref="taskDescriptionEditor"
+                                    v-description-links
                                     class="min-h-28 px-3 py-2 text-sm leading-6 text-gray-800 outline-none"
                                     contenteditable="true"
                                     data-placeholder="Aggiungi una descrizione..."
@@ -5000,6 +5001,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                     </div>
                                     <div
                                         ref="calendarTaskDescriptionEditor"
+                                        v-description-links
                                         class="min-h-[150px] px-4 py-3 text-sm leading-6 text-gray-800 outline-none empty:before:text-gray-400 empty:before:content-[attr(data-placeholder)]"
                                         contenteditable="true"
                                         data-placeholder="Aggiungi una descrizione..."
