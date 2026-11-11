@@ -302,6 +302,7 @@ const calendarPeopleMenuOpen = ref(false);
 const calendarPeopleMenuStyle = ref({});
 const compactWeekend = ref(true);
 const calendarCreateDate = ref(null);
+const calendarCreateMenuStyle = ref({});
 const calendarDraggedTask = ref(null);
 const calendarMoveError = ref('');
 const calendarDropDate = ref(null);
@@ -3650,11 +3651,26 @@ function setCalendarTaskStatusFromSelect(value) {
     saveCalendarTaskInline(0);
 }
 
-function openCalendarCreateMenu(date) {
+function openCalendarCreateMenu(date, event) {
     if (calendarHolidays.value[date]) return;
     const nextDate = calendarCreateDate.value === date ? null : date;
     if (nextDate) requestFloatingUiClose();
     calendarCreateDate.value = nextDate;
+    if (nextDate) {
+        const rect = event.currentTarget.getBoundingClientRect();
+        const height = 116;
+        calendarCreateMenuStyle.value = {
+            left: `${Math.max(12, Math.min(rect.right - 176, window.innerWidth - 188))}px`,
+            top: `${Math.max(12, rect.bottom + height + 8 <= window.innerHeight - 12 ? rect.bottom + 8 : rect.top - height - 8)}px`,
+            maxHeight: 'calc(100dvh - 24px)',
+        };
+    }
+}
+
+function dismissCalendarCreateMenu(event) {
+    if (event.type === 'keydown' && event.key !== 'Escape') return;
+    if (event.type === 'scroll' && event.target instanceof Element && event.target.closest('[data-calendar-create-menu]')) return;
+    calendarCreateDate.value = null;
 }
 
 function closeCalendarCreateMenuOnOutside(event) {
@@ -3686,6 +3702,9 @@ watch(
 );
 
 onMounted(() => {
+    window.addEventListener('resize', dismissCalendarCreateMenu);
+    document.addEventListener('scroll', dismissCalendarCreateMenu, true);
+    document.addEventListener('keydown', dismissCalendarCreateMenu);
     document.addEventListener('pointerdown', closeCalendarCreateMenuOnOutside, true);
     document.addEventListener('pointerdown', closeCalendarSubtaskAssigneeMenuOnOutside, true);
     document.addEventListener('pointerdown', closeCalendarPeopleMenuOnOutside, true);
@@ -3720,6 +3739,9 @@ watch(
     { immediate: true },
 );
 onUnmounted(() => {
+    window.removeEventListener('resize', dismissCalendarCreateMenu);
+    document.removeEventListener('scroll', dismissCalendarCreateMenu, true);
+    document.removeEventListener('keydown', dismissCalendarCreateMenu);
     if (typeof document !== 'undefined') {
         document.body.style.overflow = calendarBodyOverflow;
     }
@@ -4514,13 +4536,17 @@ function calendarDayStyle(sectionMonth, cell) {
                                             <button
                                                 type="button"
                                                 class="rounded-xl bg-white/58 px-2 py-1 text-[11px] font-semibold text-gray-400 opacity-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] transition hover:bg-indigo-50/90 hover:text-indigo-600 group-hover:opacity-100"
-                                                @click.stop="openCalendarCreateMenu(cell.date)"
+                                                :aria-expanded="calendarCreateDate === cell.date"
+                                                @click.stop="openCalendarCreateMenu(cell.date, $event)"
                                             >
                                                 + crea
                                             </button>
+                                            <Teleport to="body">
                                             <div
                                                 v-if="calendarCreateDate === cell.date"
-                                                class="absolute right-0 top-7 z-20 w-44 overflow-hidden rounded-2xl border border-white bg-white p-1 shadow-[0_20px_55px_rgba(28,42,73,0.16)]"
+                                                data-calendar-create-menu
+                                                :style="calendarCreateMenuStyle"
+                                                class="app-popover fixed z-[7600] w-44 overflow-auto rounded-2xl border border-white bg-white p-1 shadow-[0_20px_55px_rgba(28,42,73,0.16)]"
                                                 @click.stop
                                             >
                                                 <button
@@ -4548,6 +4574,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                                     Meeting
                                                 </button>
                                             </div>
+                                            </Teleport>
                                         </div>
                                         <span v-if="!calendarHolidays[cell.date] && calendarPresenceForDay(cell.date)" class="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500" :title="`${calendarPresenceForDay(cell.date).present} persone presenti`">
                                             <Users class="h-3.5 w-3.5" />{{ calendarPresenceForDay(cell.date).present }}
