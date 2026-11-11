@@ -43,6 +43,9 @@ class HandleInertiaRequests extends Middleware
         $role = $user ? DB::table('user_roles')->where('user_id', $user->id)->value('role') : null;
         $profile = $user ? DB::table('profiles')->where('user_id', $user->id)->first(['avatar_url', 'completion_effect']) : null;
         $completionEffect = $profile?->completion_effect;
+        if ($completionEffect === 'snowfall') {
+            $completionEffect = 'snow';
+        }
         if (! in_array($completionEffect, ['balloons', 'fireworks', 'snow', 'glitch', 'snowfall', 'mario', 'rocket'], true)) {
             $completionEffect = 'balloons';
         }

@@ -5030,7 +5030,7 @@ class CentroPageController extends Controller
                 'phone' => $payload['phone'] ?? null,
                 'company_phone' => $payload['company_phone'] ?? null,
                 'bio' => $payload['bio'] ?? null,
-                'completion_effect' => $payload['completion_effect'] ?? 'balloons',
+                'completion_effect' => ($payload['completion_effect'] ?? null) === 'snowfall' ? 'snow' : ($payload['completion_effect'] ?? 'balloons'),
                 'updated_at' => now(),
                 'created_at' => $previousProfile->created_at ?? now(),
             ],

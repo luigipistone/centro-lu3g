@@ -86,7 +86,7 @@ class ProfileController extends Controller
                 'gender' => $payload['gender'] ?? null,
                 'personal_email' => $payload['personal_email'] ?? null,
                 'residence_place' => $payload['residence_place'] ?? null,
-                'completion_effect' => $payload['completion_effect'] ?? 'balloons',
+                'completion_effect' => ($payload['completion_effect'] ?? null) === 'snowfall' ? 'snow' : ($payload['completion_effect'] ?? 'balloons'),
                 'updated_at' => now(),
                 'created_at' => $existingProfile->created_at ?? now(),
             ],

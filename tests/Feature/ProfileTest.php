@@ -33,8 +33,9 @@ class ProfileTest extends TestCase
                 'email' => $user->email,
                 'completion_effect' => $effect,
             ])->assertSessionHasNoErrors();
-            $this->assertDatabaseHas('profiles', ['user_id' => $user->id, 'completion_effect' => $effect]);
-            $this->get('/profile')->assertInertia(fn ($page) => $page->where('auth.user.completion_effect', $effect));
+            $expected = $effect === 'snowfall' ? 'snow' : $effect;
+            $this->assertDatabaseHas('profiles', ['user_id' => $user->id, 'completion_effect' => $expected]);
+            $this->get('/profile')->assertInertia(fn ($page) => $page->where('auth.user.completion_effect', $expected));
         }
         $this->actingAs($user)->patch('/profile', [
             'name' => $user->name,

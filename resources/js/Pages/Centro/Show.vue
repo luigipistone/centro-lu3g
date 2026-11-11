@@ -241,7 +241,6 @@ const completionEffectOptions = [
     { value: 'fireworks', label: "Fuochi d'artificio" },
     { value: 'snow', label: 'Nevicata' },
     { value: 'glitch', label: 'Glitch' },
-    { value: 'snowfall', label: 'Nevicata immersiva' },
     { value: 'mario', label: 'Super Mario' },
     { value: 'rocket', label: 'Decollo' },
 ];
@@ -813,7 +812,7 @@ const userForm = useForm({
     phone: props.record.phone || '',
     company_phone: props.record.company_phone || '',
     bio: props.record.bio || '',
-    completion_effect: completionEffectValues.includes(props.record.completion_effect) ? props.record.completion_effect : 'balloons',
+    completion_effect: props.record.completion_effect === 'snowfall' ? 'snow' : (completionEffectValues.includes(props.record.completion_effect) ? props.record.completion_effect : 'balloons'),
     smartworking_day: props.record.smartworking_day || 'none',
     first_name: props.record.first_name || String(props.record.name || '').split(' ')[0] || '',
     last_name: props.record.last_name || String(props.record.name || '').split(' ').slice(1).join(' '),

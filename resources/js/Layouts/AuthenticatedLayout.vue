@@ -719,7 +719,7 @@ const groups = computed(() => {
             <SeasonalArtwork :key="`effect-${page.props.eventTheme}`" mode="effect" />
             <SeasonalArtwork :key="`atmosphere-${page.props.eventTheme}`" mode="atmosphere" />
             <PlayfulCompletionEffect
-                v-if="['snowfall', 'mario', 'rocket'].includes(completionEffect)"
+                v-if="['snow', 'snowfall', 'mario', 'rocket'].includes(completionEffect)"
                 :key="completionEffectKey"
                 :effect="completionEffect"
                 @finished="completionEffect = null"
@@ -730,9 +730,6 @@ const groups = computed(() => {
                 </template>
                 <template v-else-if="completionEffect === 'fireworks'">
                     <span v-for="index in 22" :key="`firework-${index}`" class="completion-firework" :style="completionParticleStyle(index, 'firework')"></span>
-                </template>
-                <template v-else-if="completionEffect === 'snow'">
-                    <span v-for="index in 96" :key="`snow-${index}`" class="completion-snowflake" :style="completionParticleStyle(index, 'snow')"></span>
                 </template>
                 <template v-else-if="completionEffect === 'glitch'">
                     <div class="completion-glitch-panel">
