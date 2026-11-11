@@ -4083,7 +4083,7 @@ onUnmounted(() => {
                             <span class="text-xs text-gray-500">{{ related.contacts?.length || 0 }} contatti</span>
                         </div>
 
-                        <form v-if="canEditClient" class="mb-5 grid gap-3 md:grid-cols-6" @submit.prevent="addContact">
+                        <form v-if="canEditClient" class="client-contact-create mb-5 grid gap-3" @submit.prevent="addContact">
                             <input v-model="contactForm.first_name" class="form-control mt-0" placeholder="Nome" required />
                             <input v-model="contactForm.last_name" class="form-control mt-0" placeholder="Cognome" required />
                             <input v-model="contactForm.email" class="form-control mt-0" type="email" placeholder="Email" />
@@ -4092,13 +4092,13 @@ onUnmounted(() => {
                             <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Aggiungi</button>
                         </form>
 
-                        <div v-if="related.contacts?.length" class="overflow-x-auto">
-                            <div class="grid min-w-[760px] grid-cols-[minmax(180px,1.1fr)_minmax(130px,0.8fr)_minmax(190px,1.2fr)_minmax(140px,0.8fr)_80px] gap-3 border-b border-gray-100 px-2 pb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                        <div v-if="related.contacts?.length" class="client-contacts min-w-0">
+                            <div class="client-contact-heading gap-3 border-b border-gray-100 px-2 pb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                                 <span>Nome e cognome</span><span>Ruolo</span><span>Email</span><span>Telefono</span><span class="text-right">Azioni</span>
                             </div>
-                            <div class="min-w-[760px] divide-y divide-gray-100">
+                            <div class="min-w-0 divide-y divide-gray-100">
                             <article v-for="contact in related.contacts" :key="contact.id" class="py-3 first:pt-0 last:pb-0">
-                                <div class="grid grid-cols-[minmax(180px,1.1fr)_minmax(130px,0.8fr)_minmax(190px,1.2fr)_minmax(140px,0.8fr)_80px] items-center gap-3 rounded-[var(--radius-sm)] px-2 py-1 transition hover:bg-gray-50/80">
+                                <div class="client-contact-row grid items-center gap-3 rounded-[var(--radius-sm)] px-2 py-1 transition hover:bg-gray-50/80">
                                     <template v-if="canEditClient && editingContactId === contact.id">
                                         <div class="grid min-w-0 gap-2 sm:grid-cols-2">
                                             <input
@@ -4139,7 +4139,7 @@ onUnmounted(() => {
                                             @input="saveContactInline(contact)"
                                         />
                                         <div class="flex justify-end gap-1"><button type="button" class="icon-btn h-9 w-9" title="Chiudi modifica" @click="editingContactId = null"><Check class="h-4 w-4" :stroke-width="1.7" /></button><button type="button" class="icon-btn h-9 w-9 text-red-600 hover:bg-red-50" title="Elimina referente" @click="removeContact(contact)"><Trash2 class="h-4 w-4" :stroke-width="1.7" /></button></div>
-                                        <div v-if="contactAutosaveStates[contact.id] === 'error'" class="col-span-5 text-[11px] font-medium text-red-600">
+                                        <div v-if="contactAutosaveStates[contact.id] === 'error'" class="client-contact-error text-[11px] font-medium text-red-600">
                                             {{ contactAutosaveErrors[contact.id] || 'Non salvato' }}
                                         </div>
                                     </template>
@@ -6514,3 +6514,50 @@ onUnmounted(() => {
         </div>
     </AuthenticatedLayout>
 </template>
+
+<style scoped>
+.client-contact-create {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+}
+.client-contact-create > *,
+.client-contact-row > *,
+.client-contact-row input {
+    min-width: 0;
+}
+.client-contacts {
+    container-type: inline-size;
+}
+.client-contact-heading {
+    display: none;
+}
+.client-contact-row {
+    grid-template-columns: minmax(0, 1fr) 80px;
+}
+.client-contact-row > :nth-child(-n + 4) {
+    grid-column: 1;
+}
+.client-contact-row > :nth-child(5) {
+    grid-column: 2;
+    grid-row: 1 / span 4;
+    align-self: start;
+}
+.client-contact-row > .truncate {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.client-contact-error {
+    grid-column: 1 / -1;
+}
+@container (min-width: 640px) {
+    .client-contact-heading,
+    .client-contact-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(0, .8fr) minmax(0, 1.2fr) minmax(0, .8fr) 80px;
+    }
+    .client-contact-row > :nth-child(-n + 5) {
+        grid-column: auto;
+        grid-row: auto;
+        align-self: center;
+    }
+}
+</style>
