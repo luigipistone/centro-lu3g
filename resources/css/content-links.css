@@ -1,0 +1,17 @@
+.auto-linked-content a[href] {
+    cursor: pointer;
+    text-underline-offset: 3px;
+    transition: color 150ms ease;
+}
+
+.auto-linked-content a[href]:hover,
+.auto-linked-content a[href]:focus-visible {
+    color: hsl(var(--primary-app-dark)) !important;
+    text-decoration-thickness: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .auto-linked-content a[href] {
+        transition: none;
+    }
+}

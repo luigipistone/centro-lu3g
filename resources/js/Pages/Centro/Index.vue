@@ -5212,6 +5212,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                             class="min-h-[92px] px-4 py-3 text-sm leading-6 text-gray-800 outline-none empty:before:text-gray-400 empty:before:content-[attr(data-placeholder)]"
                                             contenteditable="true"
                                             data-calendar-comment-editor="new"
+                                            v-description-links
                                             data-placeholder="Scrivi un commento..."
                                             @input="updateCalendarCommentFromEditor('new')"
                                             @blur="updateCalendarCommentFromEditor('new')"
@@ -5240,7 +5241,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                                 </button>
                                             </div>
                                         </div>
-                                        <div v-if="calendarEditingCommentId !== comment.id" class="min-h-10 rounded-[var(--radius-sm)] bg-gray-50/70 px-3 py-2 text-sm leading-6 text-gray-700" v-html="comment.content"></div>
+                                        <div v-if="calendarEditingCommentId !== comment.id" v-description-links class="min-h-10 rounded-[var(--radius-sm)] bg-gray-50/70 px-3 py-2 text-sm leading-6 text-gray-700" v-html="comment.content"></div>
                                         <div v-else-if="calendarCommentDrafts[comment.id]" class="overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white/90 shadow-inner">
                                             <div class="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50/80 p-2">
                                                 <button type="button" class="icon-btn h-8 w-8" title="Grassetto" @mousedown.prevent @click="runCalendarCommentEditorCommand(comment.id, 'bold')">
@@ -5267,6 +5268,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                                 class="min-h-[110px] px-4 py-3 text-sm leading-6 text-gray-800 outline-none empty:before:text-gray-400 empty:before:content-[attr(data-placeholder)]"
                                                 contenteditable="true"
                                                 :data-calendar-comment-editor="comment.id"
+                                                v-description-links
                                                 data-placeholder="Commento..."
                                                 @input="saveCalendarCommentInline(comment)"
                                                 @blur="stopEditingCalendarComment(comment)"

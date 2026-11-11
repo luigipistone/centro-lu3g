@@ -39,6 +39,7 @@ export function linkDescription(root) {
 
 export const descriptionLinks = {
     mounted(el) {
+        el.classList.add('auto-linked-content');
         const observer = new MutationObserver(() => {
             if (document.activeElement !== el) refresh();
         });

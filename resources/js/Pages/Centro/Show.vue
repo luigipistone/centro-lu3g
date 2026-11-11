@@ -4547,6 +4547,7 @@ onUnmounted(() => {
                                 </div>
                                 <div
                                     ref="projectMessageEditor"
+                                    v-description-links
                                     contenteditable="true"
                                     class="form-control min-h-28 px-4 py-3 wysiwyg-content bg-white"
                                     data-placeholder="Scrivi un messaggio per il progetto..."
@@ -4568,7 +4569,7 @@ onUnmounted(() => {
                                         <p class="text-xs text-gray-500">{{ dateTimeIt(message.created_at) }}</p>
                                     </div>
                                 </div>
-                                <div class="wysiwyg-content text-sm text-gray-700" v-html="message.content"></div>
+                                <div v-description-links class="wysiwyg-content text-sm text-gray-700" v-html="message.content"></div>
                             </article>
                             <p v-if="!(related.messages || []).length" class="rounded-md border border-dashed border-gray-200 bg-white px-4 py-8 text-center text-sm text-gray-500">
                                 Nessun messaggio nel progetto.
@@ -5980,6 +5981,7 @@ onUnmounted(() => {
                                 class="min-h-[92px] px-4 py-3 text-sm leading-6 text-gray-800 outline-none empty:before:text-gray-400 empty:before:content-[attr(data-placeholder)]"
                                 contenteditable="true"
                                 data-task-comment-editor="new"
+                                v-description-links
                                 data-placeholder="Scrivi un commento..."
                                 @input="updateCommentFromEditor('new')"
                                 @blur="updateCommentFromEditor('new')"
@@ -6002,7 +6004,7 @@ onUnmounted(() => {
                                     </button>
                                 </div>
                             </div>
-                            <div v-if="editingCommentId !== comment.id" class="min-h-10 rounded-[var(--radius-sm)] bg-white/70 px-3 py-2 text-sm leading-6 text-gray-700" v-html="comment.content"></div>
+                            <div v-if="editingCommentId !== comment.id" v-description-links class="min-h-10 rounded-[var(--radius-sm)] bg-white/70 px-3 py-2 text-sm leading-6 text-gray-700" v-html="comment.content"></div>
                             <div v-else-if="commentDrafts[comment.id]" class="overflow-hidden rounded-[var(--radius-sm)] border border-gray-200 bg-white/90 shadow-inner">
                                 <div class="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50/80 p-2">
                                     <button type="button" class="icon-btn h-8 w-8" title="Grassetto" @mousedown.prevent @click="runCommentEditorCommand(comment.id, 'bold')">
@@ -6029,6 +6031,7 @@ onUnmounted(() => {
                                     class="min-h-[110px] px-4 py-3 text-sm leading-6 text-gray-800 outline-none empty:before:text-gray-400 empty:before:content-[attr(data-placeholder)]"
                                     contenteditable="true"
                                     :data-task-comment-editor="comment.id"
+                                    v-description-links
                                     data-placeholder="Commento..."
                                     @input="saveCommentInline(comment)"
                                     @blur="stopEditingComment(comment)"
@@ -6437,6 +6440,7 @@ onUnmounted(() => {
                                     <form class="space-y-2" @submit.prevent="addProjectDrawerComment">
                                         <div
                                             ref="projectDrawerCommentEditor"
+                                            v-description-links
                                             contenteditable="true"
                                             class="form-control min-h-24 px-4 py-3 wysiwyg-content bg-white"
                                             data-placeholder="Scrivi un commento..."
@@ -6448,7 +6452,7 @@ onUnmounted(() => {
                                     </form>
                                     <div v-for="comment in visibleProjectDrawerComments()" :key="`project-drawer-comment-${comment.id}`" class="rounded-[var(--radius-sm)] border border-gray-100 bg-white px-3 py-3 text-sm">
                                         <div class="mb-2 text-xs font-medium text-gray-500">{{ comment.user_name || 'Utente' }} · {{ dateTimeIt(comment.created_at) }}</div>
-                                        <div class="wysiwyg-content text-sm text-gray-700" v-html="comment.content"></div>
+                                        <div v-description-links class="wysiwyg-content text-sm text-gray-700" v-html="comment.content"></div>
                                     </div>
                                     <button v-if="!projectDrawerShowAllComments && projectDrawerComments().length > 3" type="button" class="text-sm font-semibold text-indigo-600" @click="projectDrawerShowAllComments = true">
                                         Mostra i {{ projectDrawerComments().length - 3 }} commenti precedenti

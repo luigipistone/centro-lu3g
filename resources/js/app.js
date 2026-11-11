@@ -3,6 +3,7 @@ import '../css/halloween-studio.css';
 import '../css/christmas-studio.css';
 import '../css/easter-studio.css';
 import '../css/summer-studio.css';
+import '../css/content-links.css';
 import './bootstrap';
 import { descriptionLinks } from './utils/descriptionLinks';
 
