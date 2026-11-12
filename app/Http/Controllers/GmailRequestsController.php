@@ -142,7 +142,7 @@ class GmailRequestsController extends Controller
     public function show(Request $r, string $id)
     {
         $this->authorizeManager($r); $record = DB::table('mail_requests')->find($id); abort_unless($record, 404);
-        return response()->json(['record' => $record, 'internal_emails' => DB::table('users')->pluck('email'),
+        return response()->json(['record' => $record, 'ai_configured' => app(\App\Services\AiAgencyService::class)->isConfigured(), 'internal_emails' => DB::table('users')->pluck('email'),
             'messages' => DB::table('mail_request_messages')->where('request_id', $id)->orderBy('received_at')->get()->map(function ($m) { $m->attachments = json_decode($m->attachments, true); return $m; }),
             'clients' => DB::table('clients')->where('active', true)->orderBy('name')->get(['id', 'name', 'parent_client_id']),
             'projects' => DB::table('projects')->where('status', '!=', 'archived')->orderBy('name')->get(['id', 'name', 'client_id', 'service_id']),
@@ -212,13 +212,28 @@ class GmailRequestsController extends Controller
     public function prepare(Request $r, string $id)
     {
         $this->authorizeManager($r);
-        $data = $r->validate(['message_ids' => 'required|array|min:1', 'message_ids.*' => 'required|uuid|distinct']);
+        $data = $r->validate(['message_ids' => 'required|array|min:1', 'message_ids.*' => 'required|uuid|distinct', 'ai' => 'sometimes|boolean', 'version' => 'required_if:ai,true|integer']);
         $messages = DB::table('mail_request_messages')->where('request_id', $id)->whereIn('id', $data['message_ids'])->whereNull('disposition')->orderBy('received_at')->get();
         abort_unless($messages->count() === count($data['message_ids']), 409, 'Aggiorna la richiesta: messaggi non disponibili.');
+        $draft = ['title' => $messages->last()->subject, 'description' => $messages->pluck('body')->implode("\n\n---\n\n"), 'warnings' => []];
+        if ($r->boolean('ai')) {
+            $record = DB::table('mail_requests')->find($id);
+            abort_unless($record && $record->reviewer_id === $r->user()->id && $record->version === $data['version'], 409, 'Prendi in carico e aggiorna la richiesta prima di preparare con AI.');
+            $limit = 'gmail:ai:'.$r->user()->id;
+            abort_if(\Illuminate\Support\Facades\RateLimiter::tooManyAttempts($limit, 6), 429, 'Troppe proposte AI ravvicinate. Attendi un minuto.');
+            $lock = Cache::lock('gmail:ai:request:'.$id, 90);
+            abort_unless($lock->get(), 409, 'Una proposta AI e gia in preparazione.');
+            try {
+                \Illuminate\Support\Facades\RateLimiter::hit($limit, 60);
+                try { $draft = app(\App\Services\AiAgencyService::class)->mailProposal($messages); }
+                catch (\RuntimeException $e) { abort(422, $e->getMessage()); }
+                $fresh = DB::table('mail_requests')->find($id);
+                abort_unless($fresh && $fresh->version === $record->version && $fresh->reviewer_id === $record->reviewer_id, 409, 'La richiesta e cambiata durante la preparazione. Aggiornala prima di continuare.');
+            } finally { $lock->release(); }
+        }
         $match = app(\App\Services\MailClientMatcher::class)->match($messages, app(CentroPageController::class)->sharedClientSites($r));
         $projects = $match['client_id'] ? DB::table('projects')->where('client_id', $match['client_id'])->where('status', '!=', 'archived')->pluck('id') : collect();
-        return response()->json($match + ['project_id' => $projects->count() === 1 ? $projects->first() : null,
-            'title' => $messages->last()->subject, 'description' => $messages->pluck('body')->implode("\n\n---\n\n")]);
+        return response()->json($match + $draft + ['ai_generated' => $r->boolean('ai'), 'project_id' => $projects->count() === 1 ? $projects->first() : null]);
     }
     public function attachment(Request $r, string $id, string $messageId, int $index)
     {

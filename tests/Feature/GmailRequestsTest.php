@@ -261,4 +261,75 @@ class GmailRequestsTest extends TestCase
         DB::table('password_vaults')->where('id', $vault)->update(['name' => 'Amministrazione']);
         $this->actingAs($this->manager('admin'))->postJson('/requests/'.$id.'/prepare', ['message_ids' => [$mid]])->assertOk()->assertJsonPath('client_id', null);
     }
+
+    public function test_ai_draft_sends_only_selected_text_and_does_not_create_or_handle_tasks(): void
+    {
+        config(['ai-agency.api_key' => 'test-key']);
+        $u = $this->manager(); $c = $this->connection($u);
+        $old = $this->message(); $old['payload']['body']['data'] = base64_encode('UNSELECTED-PRIVATE-MESSAGE');
+        (new GmailRequests)->ingest($c, $old); (new GmailRequests)->ingest($c, $this->message('m2'));
+        $id = DB::table('mail_requests')->value('id'); $mid = DB::table('mail_request_messages')->where('gmail_id', 'm2')->value('id');
+        Http::preventStrayRequests();
+        Http::fake(['api.openai.com/v1/responses' => Http::response(['status' => 'completed', 'usage' => ['input_tokens' => 100, 'output_tokens' => 50],
+            'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => json_encode(['title' => 'Aggiornare i contatti', 'description' => '- Aggiornare i riferimenti nella pagina contatti.', 'warnings' => ['Verificare i nuovi riferimenti.']])]]]]])]);
+        $payload = ['ai' => true, 'version' => 2, 'message_ids' => [$mid]];
+        $this->actingAs($u)->postJson('/requests/'.$id.'/prepare', $payload)->assertConflict();
+        Http::assertNothingSent();
+        $this->postJson('/requests/'.$id.'/claim')->assertOk();
+        $this->postJson('/requests/'.$id.'/prepare', $payload)->assertOk()->assertJsonPath('title', 'Aggiornare i contatti')->assertJsonPath('ai_generated', true)->assertJsonCount(1, 'warnings');
+        Http::assertSent(function ($r) {
+            return $r['store'] === false && !isset($r['tools']) && !str_contains($r['input'], 'UNSELECTED') && !str_contains($r['input'], 'client@example.com') && str_contains($r['input'], 'Aggiornare la pagina contatti.');
+        });
+        $this->assertDatabaseCount('tasks', 0);
+        $this->assertSame(2, DB::table('mail_request_messages')->whereNull('disposition')->count());
+        $this->assertDatabaseHas('mail_requests', ['id' => $id, 'version' => 2]);
+        $this->assertDatabaseCount('gmail_ai_usage', 1);
+    }
+
+    public function test_ai_errors_refusals_and_partial_outputs_do_not_return_a_draft(): void
+    {
+        config(['ai-agency.api_key' => 'test-key']);
+        $u = $this->manager(); $c = $this->connection($u); (new GmailRequests)->ingest($c, $this->message());
+        $id = DB::table('mail_requests')->value('id'); $mid = DB::table('mail_request_messages')->value('id');
+        $this->actingAs($u)->postJson('/requests/'.$id.'/claim')->assertOk();
+        Http::fake(['api.openai.com/v1/responses' => Http::sequence()
+            ->push(['error' => 'secret-provider-details'], 500)
+            ->push(['status' => 'incomplete', 'output' => []])
+            ->push(['status' => 'completed', 'output' => [['type' => 'message', 'content' => [['type' => 'refusal', 'refusal' => 'No']]]]])
+            ->push(['status' => 'completed', 'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => '{"title":"Missing description"}']]]]])]);
+        for ($i=0; $i<4; $i++) {
+            $response = $this->postJson('/requests/'.$id.'/prepare', ['ai' => true, 'version' => 1, 'message_ids' => [$mid]]);
+            $response->assertUnprocessable()->assertJsonMissingPath('title');
+            $this->assertStringNotContainsString('secret-provider-details', $response->getContent());
+        }
+        $this->postJson('/requests/'.$id.'/prepare', ['ai' => false, 'message_ids' => [$mid]])->assertOk()->assertJsonPath('ai_generated', false);
+        $this->assertDatabaseCount('tasks', 0);
+        $this->assertDatabaseHas('mail_request_messages', ['id' => $mid, 'disposition' => null]);
+    }
+
+    public function test_ai_requires_current_version_and_budget_before_calling_provider(): void
+    {
+        config(['ai-agency.api_key' => 'test-key', 'ai-agency.monthly_budget_eur' => 0]);
+        $u = $this->manager(); $c = $this->connection($u); (new GmailRequests)->ingest($c, $this->message());
+        $id = DB::table('mail_requests')->value('id'); $mid = DB::table('mail_request_messages')->value('id');
+        Http::fake();
+        $this->actingAs($u)->postJson('/requests/'.$id.'/claim')->assertOk();
+        $this->postJson('/requests/'.$id.'/prepare', ['ai' => true, 'version' => 0, 'message_ids' => [$mid]])->assertConflict();
+        $this->postJson('/requests/'.$id.'/prepare', ['ai' => true, 'version' => 1, 'message_ids' => [$mid]])->assertUnprocessable();
+        Http::assertNothingSent();
+    }
+
+    public function test_new_email_during_ai_preparation_invalidates_the_proposal(): void
+    {
+        config(['ai-agency.api_key' => 'test-key']);
+        $u = $this->manager(); $c = $this->connection($u); (new GmailRequests)->ingest($c, $this->message());
+        $id = DB::table('mail_requests')->value('id'); $mid = DB::table('mail_request_messages')->value('id');
+        $this->actingAs($u)->postJson('/requests/'.$id.'/claim')->assertOk();
+        Http::fake(['api.openai.com/v1/responses' => function () use ($c) {
+            (new GmailRequests)->ingest($c, $this->message('new-reply'));
+            return Http::response(['status' => 'completed', 'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => '{"title":"Bozza","description":"Modifica","warnings":[]}']]]]]);
+        }]);
+        $this->postJson('/requests/'.$id.'/prepare', ['ai' => true, 'version' => 1, 'message_ids' => [$mid]])->assertConflict()->assertJsonMissingPath('title');
+        $this->assertDatabaseCount('tasks', 0);
+    }
 }

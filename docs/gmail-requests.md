@@ -30,6 +30,20 @@ Non condividere password Gmail. Ogni casella ha un consenso personale e un token
 
 ## Esercizio e sicurezza
 
+### Proposta AI (facoltativa)
+
+Con la connessione OpenAI del Centro configurata, il revisore vede **Prepara con AI**. Usa la chiave cifrata e il modello gia' configurati per Agenzia AI, solo nel backend. Il riconoscimento cliente rimane deterministico e separato dall'AI.
+
+- Vengono inviati a OpenAI esclusivamente oggetto e testo dei messaggi selezionati, nell'ordine di ricezione. Nessun altro messaggio del database, elenco clienti, password, allegato o dato della casella viene aggiunto. Eventuali dati personali gia' nel corpo selezionato fanno parte del testo inviato.
+- L'AI restituisce titolo, descrizione in testo semplice e dubbi da verificare. Non ha strumenti, accesso web o facolta' di scrittura. Le istruzioni presenti nelle email sono trattate come dati, non comandi.
+- Saluti, firme, citazioni ripetute e disclaimer vengono esclusi dalla sintesi secondo le istruzioni al modello. Non e' una garanzia di correttezza semantica: confrontare sempre la bozza con gli originali visibili. I punti non chiari e gli allegati non letti vengono segnalati.
+- Il browser non esegue HTML generato. Titolo e descrizione restano modificabili e soltanto **Approva e crea task** crea la task. Preparare non marca messaggi come elaborati. L'aggiunta a task esistenti continua a usare il testo originale come commento.
+- Rigenerare chiede conferma prima di sostituire titolo/descrizione; non cambia cliente, progetto o altri campi gia' selezionati. Risposte incomplete, rifiuti ed errori lasciano intatta la bozza corrente. Resta disponibile la preparazione senza AI.
+- Responses API con `store: false`, nessun retry automatico. Questo parametro non sostituisce le politiche di conservazione del fornitore. Limite tecnico di 60.000 byte per la selezione, senza troncamento silenzioso; 3.000 token massimi di output e sei tentativi al minuto per revisore. Una sola preparazione simultanea per richiesta.
+- I costi stimati sono conteggiati nel budget mensile AI gia' configurato. La tabella `gmail_ai_usage` conserva solo ID, costo stimato e data, senza contenuti email. Una prenotazione preventiva viene rettificata sui token restituiti dal fornitore; se la risposta non arriva resta prudenzialmente conteggiata. Le tariffe stimate sono quelle configurate per Agenzia AI, non un resoconto di fatturazione OpenAI.
+
+Riferimento formato strutturato: https://developers.openai.com/api/docs/guides/structured-outputs
+
 Comando: `php artisan centro:gmail-requests-sync`, invocato dallo scheduler Laravel ogni minuto con protezione da sovrapposizioni e controllo per casella. Per funzionare richiede il normale cron `schedule:run`.
 
 I token sono cifrati con APP_KEY. OAuth usa state monouso con scadenza e verifica dell'account. Le email sono mostrate come testo, mai HTML eseguibile; nessun contenuto remoto viene caricato. Gli allegati sono serviti come download autenticato, non inline. Non vengono inviate email, modificati messaggi Gmail o creati task in background. Il contenuto importato e' conservato nel database del Centro: includerlo nelle politiche aziendali di accesso, backup e conservazione.
