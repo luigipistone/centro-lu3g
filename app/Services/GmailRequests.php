@@ -58,30 +58,38 @@ class GmailRequests
             if (! in_array($role, ['admin', 'superadmin'], true) || ! DB::table('users')->where('id', $c->user_id)->where('account_status', 'active')->exists()
                 || ! app(RolePermissionService::class)->allows($role ?? '', 'requests.manage')) return;
             // Re-list the label, including old messages labelled today. Message IDs make retries idempotent.
-            $page = null; $seen = []; $started = microtime(true);
+            $page = null; $seen = []; $labelledThreads = []; $started = microtime(true);
             do {
                 if (microtime(true) - $started > 1200) throw new RuntimeException('Lettura da riprendere.');
                 $result = $this->get($c, 'messages', ['labelIds' => [$c->label_id], 'maxResults' => 100] + ($page ? ['pageToken' => $page] : []));
                 foreach ($result['messages'] ?? [] as $item) {
                     if (microtime(true) - $started > 1200) throw new RuntimeException('Lettura da riprendere.');
-                    if (DB::table('mail_request_messages')->where('connection_id', $id)->where('gmail_id', $item['id'])->exists()) continue;
+                    $existing = DB::table('mail_request_messages as m')->join('mail_requests as r', 'r.id', '=', 'm.request_id')
+                        ->where('m.connection_id', $id)->where('m.gmail_id', $item['id'])->value('r.thread_id');
+                    if ($existing) {
+                        $labelledThreads[$existing] = true;
+                        continue;
+                    }
                     $message = $this->get($c, 'messages/'.rawurlencode($item['id']), ['format' => 'full']);
                     if (! in_array($c->label_id, $message['labelIds'] ?? [], true)) continue;
+                    $labelledThreads[$message['threadId']] = true;
                     $this->ingest($c, $message);
                 }
                 $page = $result['nextPageToken'] ?? null;
                 if ($page && isset($seen[$page])) throw new RuntimeException('Paginazione non valida.');
                 if ($page) $seen[$page] = true;
             } while ($page);
-            // Replies do not necessarily inherit the original message's label.
-            foreach (DB::table('mail_requests')->where('connection_id', $id)->cursor() as $request) {
+            // Follow replies only while at least one message in the conversation retains the label.
+            foreach (array_keys($labelledThreads) as $threadId) {
                 if (microtime(true) - $started > 1200) throw new RuntimeException('Lettura da riprendere.');
-                try { $thread = $this->get($c, 'threads/'.rawurlencode($request->thread_id), ['format' => 'full']); }
+                try { $thread = $this->get($c, 'threads/'.rawurlencode($threadId), ['format' => 'full']); }
                 catch (\Illuminate\Http\Client\RequestException $e) {
                     if ($e->response->status() === 404) continue;
                     throw $e;
                 }
-                foreach ($thread['messages'] ?? [] as $message) $this->ingest($c, $message);
+                $messages = $thread['messages'] ?? [];
+                if (! collect($messages)->contains(fn ($message) => in_array($c->label_id, $message['labelIds'] ?? [], true))) continue;
+                foreach ($messages as $message) $this->ingest($c, $message);
             }
             DB::table('gmail_connections')->where('id', $id)->update(['last_synced_at' => now(), 'last_error' => null, 'requested_at' => null]);
         } catch (\Throwable $e) {

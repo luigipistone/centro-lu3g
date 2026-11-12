@@ -164,4 +164,36 @@ class GmailRequestsTest extends TestCase
         $this->getJson('/requests/gmail/labels')->assertOk();
         Http::assertSentCount(2);
     }
+    public function test_removing_label_stops_thread_reads_and_reapplying_resumes_same_request(): void
+    {
+        $c = $this->connection($this->manager());
+        (new GmailRequests)->ingest($c, $this->message());
+        $id = DB::table('mail_requests')->value('id');
+        DB::table('mail_requests')->where('id', $id)->update(['status' => 'converted']);
+        $before = DB::table('mail_requests')->find($id);
+        $reply = $this->message('reply'); $reply['labelIds'] = ['INBOX'];
+        Http::preventStrayRequests();
+        Http::fake(['oauth2.googleapis.com/token' => Http::response(['access_token' => 'access']),
+            'gmail.googleapis.com/gmail/v1/users/me/messages?*' => Http::sequence()->push(['messages' => []])->push(['messages' => [['id' => 'm1']]]),
+            'gmail.googleapis.com/gmail/v1/users/me/threads/t1?*' => Http::response(['messages' => [$this->message(), $reply]])]);
+        (new GmailRequests)->sync($c->id);
+        Http::assertSentCount(2);
+        $this->assertEquals($before, DB::table('mail_requests')->find($id));
+        $this->assertDatabaseCount('mail_request_messages', 1);
+        (new GmailRequests)->sync($c->id);
+        $this->assertDatabaseCount('mail_requests', 1);
+        $this->assertDatabaseCount('mail_request_messages', 2);
+        $this->assertDatabaseHas('mail_requests', ['id' => $id, 'status' => 'converted', 'has_updates' => true]);
+    }
+    public function test_label_removed_during_scan_does_not_import_thread_replies(): void
+    {
+        $c = $this->connection($this->manager()); (new GmailRequests)->ingest($c, $this->message());
+        $old = $this->message(); $old['labelIds'] = ['INBOX'];
+        $reply = $this->message('reply'); $reply['labelIds'] = ['INBOX'];
+        Http::fake(['oauth2.googleapis.com/token' => Http::response(['access_token' => 'access']),
+            'gmail.googleapis.com/gmail/v1/users/me/messages?*' => Http::response(['messages' => [['id' => 'm1']]]),
+            'gmail.googleapis.com/gmail/v1/users/me/threads/t1?*' => Http::response(['messages' => [$old, $reply]])]);
+        (new GmailRequests)->sync($c->id);
+        $this->assertDatabaseCount('mail_request_messages', 1);
+    }
 }
