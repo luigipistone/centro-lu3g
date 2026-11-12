@@ -1,4 +1,5 @@
 <script setup>
+import { matchesSearch } from '@/utils/search';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
@@ -41,7 +42,7 @@ function toggleShare(field, id) {
 }
 const baseFilteredItems = computed(() => (props.items || []).filter(item =>
     (!categoryFilters.value.length || categoryFilters.value.some(id => item.category_ids?.includes(id)))
-    && `${item.title} ${item.url} ${item.description || ''}`.toLocaleLowerCase().includes(search.value.toLocaleLowerCase()),
+    && matchesSearch([item.title, item.url, item.description], search.value),
 ));
 const visibleItems = computed(() => baseFilteredItems.value.filter(item => selected.value === 'all' || item.folder_id === selected.value));
 const featuredItems = computed(() => visibleItems.value.filter(item => item.is_featured));

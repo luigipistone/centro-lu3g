@@ -1,4 +1,5 @@
 <script setup>
+import { matchesSearch } from '@/utils/search';
 import GoogleCalendarPanel from '@/Components/GoogleCalendarPanel.vue';
 import TeamleaderPanel from '@/Components/TeamleaderPanel.vue';
 import SyncedMeetingDetails from '@/Components/SyncedMeetingDetails.vue';
@@ -1148,7 +1149,7 @@ function filteredTaskSearchOptions(field) {
     const options = optionsFor(field);
     if (!query) return options;
 
-    return options.filter((option) => optionLabel(field, option).toLowerCase().includes(query));
+    return options.filter((option) => matchesSearch(optionLabel(field, option), query));
 }
 
 function toggleTaskSearchSelect(field) {
@@ -2039,15 +2040,12 @@ function projectStatusClass(status) {
 
 const projectRows = computed(() => props.rows.filter((row) => {
     const search = projectSearch.value.trim().toLowerCase();
-    const matchesSearch = !search
-        || (row.name || '').toLowerCase().includes(search)
-        || plainText(row.description).toLowerCase().includes(search)
-        || (row.client_name || '').toLowerCase().includes(search);
+    const matchesText = matchesSearch([row.name, plainText(row.description), row.client_name], search);
     const matchesStatus = projectStatus.value === 'all' || row.status === projectStatus.value;
     const matchesUsers = !projectUserIds.value.length
         || projectUserIds.value.every((userId) => (row.follower_ids || []).includes(userId));
 
-    return matchesSearch && matchesStatus && matchesUsers;
+    return matchesText && matchesStatus && matchesUsers;
 }));
 
 const roleLabels = ROLE_LABELS;
@@ -2434,11 +2432,7 @@ const taskRows = computed(() => props.rows.filter((row) => {
     const matchesWeek = dueDate && startDate <= taskWeekEnd.value && dueDate >= taskWeekStart.value;
     const search = taskSearch.value.trim().toLowerCase();
     const matchesPeriod = taskPeriod.value === 'all' || Boolean(search) || matchesWeek;
-    const matchesSearch = !search
-        || (row.title || '').toLowerCase().includes(search)
-        || (row.client_name || '').toLowerCase().includes(search)
-        || (row.project_name || '').toLowerCase().includes(search)
-        || (row.service_name || '').toLowerCase().includes(search);
+    const matchesText = matchesSearch([row.title, row.client_name, row.project_name, row.service_name], search);
     const matchesStatus = taskStatus.value === 'all' || row.status === taskStatus.value;
     const matchesPriority = taskPriority.value === 'all' || row.priority === taskPriority.value;
     const matchesType = taskType.value === 'all' || (row.task_type || 'task') === taskType.value;
@@ -2446,7 +2440,7 @@ const taskRows = computed(() => props.rows.filter((row) => {
     const matchesUser = taskUnassignedOnly.value
         ? !(row.assignee_ids || []).length
         : !taskUserIds.value.length || (row.assignee_ids || []).some((id) => taskUserIds.value.includes(id));
-    return matchesPeriod && matchesSearch && matchesStatus && matchesPriority && matchesType && matchesUser;
+    return matchesPeriod && matchesText && matchesStatus && matchesPriority && matchesType && matchesUser;
 }));
 
 function tasksByStatus(status) {

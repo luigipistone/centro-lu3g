@@ -1,4 +1,5 @@
 <script setup>
+import { matchesSearch } from '@/utils/search';
 import SyncedMeetingDetails from '@/Components/SyncedMeetingDetails.vue';
 import { clientOptions } from '@/utils/clientOptions';
 import ClientSelect from '@/Components/ClientSelect.vue';
@@ -542,7 +543,7 @@ const clientTaskArchivePage = ref(1);
 const clientTaskArchivePageSize = 10;
 const filteredClientTaskArchive = computed(() => {
     const search = clientTaskArchiveSearch.value.trim().toLocaleLowerCase('it');
-    return clientTaskArchive.value.filter((task) => !search || String(task.title || '').toLocaleLowerCase('it').includes(search));
+    return clientTaskArchive.value.filter((task) => matchesSearch(task.title, search));
 });
 const clientTaskArchivePages = computed(() => Math.max(1, Math.ceil(filteredClientTaskArchive.value.length / clientTaskArchivePageSize)));
 const pagedClientTaskArchive = computed(() => filteredClientTaskArchive.value.slice(

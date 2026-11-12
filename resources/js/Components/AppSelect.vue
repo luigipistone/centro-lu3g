@@ -1,4 +1,5 @@
 <script setup>
+import { matchesSearch } from '@/utils/search';
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import { Check, ChevronDown, ChevronRight } from '@lucide/vue';
 import { computed, nextTick, onMounted, onUnmounted, ref, useAttrs, watch } from 'vue';
@@ -79,8 +80,8 @@ const canSearch = computed(() => props.searchable || normalizedOptions.value.len
 const filteredOptions = computed(() => {
     const needle = query.value.trim().toLowerCase();
     if (needle) return normalizedTree.value.flatMap((option) => {
-        const parentMatches = String(option.label).toLowerCase().includes(needle);
-        const children = parentMatches ? option.children : option.children.filter((child) => String(child.label).toLowerCase().includes(needle));
+        const parentMatches = matchesSearch(option.label, needle);
+        const children = parentMatches ? option.children : option.children.filter((child) => matchesSearch(child.label, needle));
         return parentMatches || children.length ? [option, ...(isGroupExpanded(option) ? children : [])] : [];
     });
 
@@ -94,8 +95,8 @@ watch(query, (value) => {
     const needle = value.trim().toLowerCase();
     if (!needle) return;
     expandedGroups.value = normalizedTree.value
-        .filter((option) => option.children.length && (String(option.label).toLowerCase().includes(needle)
-            || option.children.some((child) => String(child.label).toLowerCase().includes(needle))))
+        .filter((option) => option.children.length && (matchesSearch(option.label, needle)
+            || option.children.some((child) => matchesSearch(child.label, needle))))
         .map((option) => option.value);
 });
 

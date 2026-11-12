@@ -1,4 +1,5 @@
 <script setup>
+import { matchesSearch } from '@/utils/search';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import AppDateInput from '@/Components/AppDateInput.vue';
@@ -132,22 +133,18 @@ function documentYear(document) {
 }
 
 function filteredDocumentsForYear(group) {
-    const query = searchableText(search.value.trim());
+    const query = search.value.trim();
     return group.documents.filter((document) => {
         if (selectedCategory.value !== 'all' && (document.category || 'documenti_vari') !== selectedCategory.value) return false;
         if (!query) return true;
-        return searchableText([
+        return matchesSearch([
             document.title,
             document.description,
             document.file_name,
             categoryLabel(document.category),
             documentYear(document),
-        ].join(' ')).includes(query);
+        ], query);
     });
-}
-
-function searchableText(value) {
-    return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
 const displayedDocumentYearGroups = computed(() => selectedCategory.value === 'all' && !search.value.trim()

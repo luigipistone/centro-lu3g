@@ -668,11 +668,7 @@ class CentroPageController extends Controller
             [$field, $direction] = explode('_', $sort);
             $query = DB::table('clients')->whereNull('parent_client_id')->where('active', ! (bool) $request->route('archive'));
             if ($search !== '') {
-                $query->where(function ($query) use ($search) {
-                    foreach (['name', 'legal_name', 'email', 'vat_number', 'city'] as $field) {
-                        $query->orWhereRaw('LOWER('.$field.') LIKE ?', ['%'.mb_strtolower($search).'%']);
-                    }
-                });
+                \App\Support\TextSearch::apply($query, ['name', 'legal_name', 'email', 'phone', 'website', 'vat_number', 'city'], $search);
             }
             if ($request->filled('service') && $request->query('service') !== 'all') {
                 $query->whereExists(fn ($q) => $q->selectRaw('1')->from('client_services')

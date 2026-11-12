@@ -1,4 +1,5 @@
 <script setup>
+import { matchesSearch } from '@/utils/search';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
@@ -154,7 +155,7 @@ const baseFilteredItems = computed(() => {
             const [, category, subcategory] = filter.split('::');
             return item.category === category && item.subcategory === subcategory;
         });
-        const textMatch = !q || String(item.title || '').toLowerCase().includes(q);
+        const textMatch = matchesSearch([item.title, item.username, item.url, item.client_name], q);
 
         return clientMatch && categoryMatch && textMatch;
     });

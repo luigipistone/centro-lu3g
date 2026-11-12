@@ -1,4 +1,5 @@
 <script setup>
+import { matchesSearch } from '@/utils/search';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppDateInput from '@/Components/AppDateInput.vue';
 import AppSelect from '@/Components/AppSelect.vue';
@@ -23,7 +24,7 @@ const modelFileError = ref('');
 
 const selectedItems = computed(() => props.items.filter((item) => item.type === type.value));
 const filteredItems = computed(() => selectedItems.value.flatMap((item) => {
-    if (!`${item.name} ${item.category || ''} ${item.brand || ''}`.toLocaleLowerCase('it').includes(search.value.toLocaleLowerCase('it'))) return [];
+    if (!matchesSearch([item.name, item.category, item.brand], search.value)) return [];
     if (type.value !== 'physical' || !assigneeFilter.value) return [item];
     const units = (item.units || []).filter((unit) => assigneeFilter.value === 'unassigned'
         ? !unit.assigned_user_id : unit.assigned_user_id === assigneeFilter.value);

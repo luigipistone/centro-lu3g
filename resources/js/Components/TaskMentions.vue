@@ -1,4 +1,5 @@
 <script setup>
+import { matchesSearch } from '@/utils/search';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
 
@@ -13,7 +14,7 @@ const error = ref(false);
 let range;
 let editor;
 let loadedId;
-const matches = computed(() => users.value.filter(user => (user.name || user.email || '').toLowerCase().includes(query.value.toLowerCase())));
+const matches = computed(() => users.value.filter(user => matchesSearch([user.name, user.email], query.value)));
 watch(() => props.taskId, () => { open.value = false; users.value = []; loadedId = null; });
 async function inspect(event) {
     const target = event.target.closest?.('[data-task-comment-editor], [data-calendar-comment-editor]');

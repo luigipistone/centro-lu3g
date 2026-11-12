@@ -1,4 +1,5 @@
 <script setup>
+import { matchesSearch } from '@/utils/search';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
@@ -11,7 +12,7 @@ const refreshing = ref(false);
 const isSuperadmin = computed(() => page.props.auth?.user?.role === 'superadmin');
 const downloadError = computed(() => page.props.errors?.github_download);
 const filtered = computed(() => (props.repositories || []).filter(repo =>
-    `${repo.name} ${repo.description || ''}`.toLocaleLowerCase('it').includes(search.value.trim().toLocaleLowerCase('it')),
+    matchesSearch([repo.name, repo.description], search.value),
 ));
 
 function refresh() {

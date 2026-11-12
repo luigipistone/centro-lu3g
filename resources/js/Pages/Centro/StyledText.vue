@@ -1,4 +1,5 @@
 <script setup>
+import { matchesSearch } from '@/utils/search';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { styledTextCategories, styledTextStyles, styleText } from '@/utils/styledText.js';
 import { Head, Link } from '@inertiajs/vue3';
@@ -13,7 +14,7 @@ const copyError = ref('');
 const preview = computed(() => input.value || 'Esempio 123');
 const visibleStyles = computed(() => styledTextStyles.filter(style =>
     (category.value === 'Tutti' || style.category === category.value)
-    && style.label.toLocaleLowerCase('it').includes(search.value.trim().toLocaleLowerCase('it'))));
+    && matchesSearch(style.label, search.value)));
 let copyTimer = null;
 onBeforeUnmount(() => window.clearTimeout(copyTimer));
 

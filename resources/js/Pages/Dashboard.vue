@@ -1,4 +1,5 @@
 <script setup>
+import { matchesSearch } from '@/utils/search';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
@@ -278,7 +279,7 @@ const filteredPasswordItems = computed(() => {
 
     return (props.passwordItems || [])
         .filter((item) => {
-            const textMatch = !q || String(item.title || '').toLowerCase().includes(q);
+            const textMatch = matchesSearch([item.title, item.username, item.url, item.client_name], q);
 
             return textMatch;
         })

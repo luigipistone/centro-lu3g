@@ -1,4 +1,5 @@
 <script setup>
+import { matchesSearch } from '@/utils/search';
 import ClearableSearchInput from '@/Components/ClearableSearchInput.vue';
 import { router } from '@inertiajs/vue3';
 import { RefreshCw, ChevronLeft, ChevronRight, Save, KeyRound } from '@lucide/vue';
@@ -15,7 +16,7 @@ const result = ref(null);
 const outcome = ref(props.latestRun?.result ? JSON.parse(props.latestRun.result) : null);
 const search = ref('');
 const page = ref(1);
-const rows = computed(() => (result.value?.clients || []).filter(row => row.name.toLocaleLowerCase('it').includes(search.value.trim().toLocaleLowerCase('it'))));
+const rows = computed(() => (result.value?.clients || []).filter(row => matchesSearch(row.name, search.value)));
 const pages = computed(() => Math.max(1, Math.ceil(rows.value.length / 25)));
 const visible = computed(() => rows.value.slice((page.value - 1) * 25, page.value * 25));
 watch(search, () => { page.value = 1; });
