@@ -298,6 +298,7 @@ const absenceAutosaveTimers = {};
 const currentCalendarDate = ref(new Date());
 const calendarType = ref('all');
 const calendarUserIds = ref(page.props.auth?.user?.id ? [page.props.auth.user.id] : []);
+const calendarUnassignedOnly = ref(false);
 const calendarPeopleMenu = ref(null);
 const calendarPeopleMenuOpen = ref(false);
 const calendarPeopleMenuStyle = ref({});
@@ -2132,6 +2133,7 @@ function projectUsers(project) {
 const selectedCalendarFilterUsers = computed(() => (props.users || []).filter((user) => calendarUserIds.value.includes(user.id)));
 
 const calendarPeopleFilterLabel = computed(() => {
+    if (calendarUnassignedOnly.value) return 'Non assegnate';
     if (!calendarUserIds.value.length) return 'Tutte le persone';
     if (calendarUserIds.value.length === 1) {
         const user = selectedCalendarFilterUsers.value[0];
@@ -2142,6 +2144,7 @@ const calendarPeopleFilterLabel = computed(() => {
 });
 
 function toggleCalendarUserFilter(userId) {
+    calendarUnassignedOnly.value = false;
     const current = [...calendarUserIds.value];
     const index = current.indexOf(userId);
     if (index >= 0) {
@@ -2688,6 +2691,7 @@ function attendanceEventLabel(event) {
 }
 function calendarAttendanceForDay(date) {
     if (calendarHolidays.value[date]) return [];
+    if (calendarUnassignedOnly.value) return [];
     return (attendanceCalendarByDay.value[date] || []).filter((event) => event.type !== 'presence_summary' && (!calendarUserIds.value.length || calendarUserIds.value.includes(event.user_id)));
 }
 function calendarPresenceForDay(date) {
@@ -3944,6 +3948,7 @@ function tasksForDay(date) {
             return (row.task_type || 'task') === calendarType.value;
         })
         .filter((row) => {
+            if (calendarUnassignedOnly.value) return !(row.assignee_ids || []).length;
             if (!calendarUserIds.value.length) return true;
             const people = [...(row.assignee_ids || []), ...(row.follower_ids || [])];
 
@@ -4477,6 +4482,10 @@ function calendarDayStyle(sectionMonth, cell) {
                                         :style="calendarPeopleMenuStyle"
                                         @click.stop
                                     >
+                                        <label class="mb-3 flex items-center gap-2 text-sm font-medium text-gray-700">
+                                            <input v-model="calendarUnassignedOnly" type="checkbox" class="rounded border-gray-300 text-[hsl(var(--primary-app))] focus:ring-[hsl(var(--primary-app))]" @change="calendarUserIds = []" />
+                                            Non assegnate
+                                        </label>
                                         <div class="people-avatar-picker max-h-64">
                                             <button
                                                 v-for="user in users"
@@ -4491,6 +4500,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                                 <UserAvatar :user="user" size="md" />
                                             </button>
                                         </div>
+                                        <button v-if="calendarUserIds.length || calendarUnassignedOnly" type="button" class="mt-2 text-xs font-semibold text-indigo-600" @click="calendarUserIds = []; calendarUnassignedOnly = false">Azzera filtro</button>
                                     </div>
                                 </div>
                             </Teleport>
