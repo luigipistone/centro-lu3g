@@ -1,5 +1,6 @@
 <script setup>
 import GoogleCalendarPanel from '@/Components/GoogleCalendarPanel.vue';
+import TeamleaderPanel from '@/Components/TeamleaderPanel.vue';
 import GoogleMeetingDetails from '@/Components/GoogleMeetingDetails.vue';
 import { clientOptions } from '@/utils/clientOptions';
 import ClientSelect from '@/Components/ClientSelect.vue';
@@ -385,7 +386,7 @@ const taskSearchSelectQueries = ref({
 });
 const taskDescriptionEditor = ref(null);
 const requestedSettingsTab = new URLSearchParams(window.location.search).get('tab');
-const settingsTab = ref(['personalizzazione', 'smtp', 'figma', 'backup', 'ruoli', 'sezioni', 'log', 'gestione'].includes(requestedSettingsTab) || (['github', 'airmail', 'report', 'api', 'google-calendar'].includes(requestedSettingsTab) && isSuperadmin.value) ? requestedSettingsTab : 'personalizzazione');
+const settingsTab = ref(['personalizzazione', 'smtp', 'figma', 'backup', 'ruoli', 'sezioni', 'log', 'gestione'].includes(requestedSettingsTab) || (['github', 'airmail', 'report', 'api', 'google-calendar', 'teamleader'].includes(requestedSettingsTab) && isSuperadmin.value) ? requestedSettingsTab : 'personalizzazione');
 const eventThemeOptions = [
     { id: 'standard', label: 'Standard' },
     { id: 'halloween', label: 'Halloween' },
@@ -705,6 +706,7 @@ const settingsTabs = [
     ['smtp', 'SMTP', Mail],
     ['figma', 'Figma', PanelsTopLeft],
     ['google-calendar', 'Google Calendar', CalendarDays],
+    ['teamleader', 'Teamleader', CalendarDays],
     ['github', 'GitHub', GitBranch],
     ['airmail', 'Airmail', Send],
     ['report', 'LU3G Report', RefreshCw],
@@ -717,14 +719,14 @@ const settingsTabs = [
 ];
 const settingsGroups = [
     { id: 'aspetto', label: 'Aspetto', icon: WandSparkles, tabs: ['personalizzazione'] },
-    { id: 'integrazioni', label: 'Integrazioni', icon: PanelsTopLeft, tabs: ['smtp', 'figma', 'google-calendar', 'github', 'airmail', 'report', 'api'] },
+    { id: 'integrazioni', label: 'Integrazioni', icon: PanelsTopLeft, tabs: ['smtp', 'figma', 'google-calendar', 'teamleader', 'github', 'airmail', 'report', 'api'] },
     { id: 'accessi', label: 'Accessi', icon: ShieldCheck, tabs: ['ruoli', 'sezioni'] },
     { id: 'sistema', label: 'Sistema', icon: DatabaseBackup, tabs: ['backup', 'log'] },
     { id: 'servizi', label: 'Servizi', icon: Settings, tabs: ['gestione'] },
 ];
 const settingsGroup = computed(() => settingsGroups.find(group => group.tabs.includes(settingsTab.value)) || settingsGroups[0]);
 const settingsSubtabs = computed(() => settingsTabs.filter(tab => settingsGroup.value.tabs.includes(tab[0])
-    && (!['github', 'airmail', 'report', 'api', 'google-calendar'].includes(tab[0]) || isSuperadmin.value)));
+    && (!['github', 'airmail', 'report', 'api', 'google-calendar', 'teamleader'].includes(tab[0]) || isSuperadmin.value)));
 
 function updateSectionVisibility(section) {
     sectionSwitchSaving.value = section.key;
@@ -6448,6 +6450,7 @@ function calendarDayStyle(sectionMonth, cell) {
                 <ReportSyncPanel v-else-if="settingsTab === 'report' && isSuperadmin" :configured="reportSettings?.configured" :latest-run="reportSettings?.latestRun" />
                 <ApiConnectionsPanel v-else-if="settingsTab === 'api' && isSuperadmin" />
                 <GoogleCalendarPanel v-else-if="settingsTab === 'google-calendar' && isSuperadmin" />
+                <TeamleaderPanel v-else-if="settingsTab === 'teamleader' && isSuperadmin" />
 
                 <section v-else-if="settingsTab === 'backup'" class="grid gap-6 lg:grid-cols-[360px_1fr]">
                     <div class="app-card">

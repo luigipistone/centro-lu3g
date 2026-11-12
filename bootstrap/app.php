@@ -50,6 +50,7 @@ return Application::configure(basePath: dirname(__DIR__))
         });
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*')
+                || ($request->is('settings/teamleader', 'settings/teamleader/*') && $request->expectsJson())
                 || ($request->routeIs('tasks.drive.*', 'projects.drive.*', 'settings.api-*') && $request->expectsJson()),
         );
     })->create();

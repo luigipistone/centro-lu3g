@@ -34,6 +34,14 @@ Route::get('/airmail/{token}/files/{fileId}', [AirmailController::class, 'downlo
 Route::get('/dashboard', [CentroPageController::class, 'dashboard'])->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
+    Route::prefix('settings/teamleader')->name('settings.teamleader.')->controller(\App\Http\Controllers\TeamleaderController::class)->group(function () {
+        Route::get('/', 'show');
+        Route::put('/credentials', 'credentials');
+        Route::get('/connect', 'connect');
+        Route::get('/callback', 'callback')->name('callback');
+        Route::post('/simulate', 'simulate')->middleware('throttle:120,1');
+        Route::delete('/', 'disconnect');
+    });
     Route::prefix('settings/google-calendar')->name('settings.google-calendar.')->controller(\App\Http\Controllers\GoogleCalendarController::class)->group(function () {
         Route::get('/', 'show')->name('show');
         Route::put('/credentials', 'credentials')->name('credentials');
