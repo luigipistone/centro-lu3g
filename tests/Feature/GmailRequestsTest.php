@@ -152,4 +152,16 @@ class GmailRequestsTest extends TestCase
         (new GmailRequests)->sync($c->id);
         Http::assertNothingSent();
     }
+    public function test_google_rate_limit_preserves_label_and_pauses_sync(): void
+    {
+        $u = $this->manager(); $c = $this->connection($u);
+        DB::table('gmail_connections')->where('id', $c->id)->update(['label_name' => 'Invia al Centro']);
+        Http::fake(['oauth2.googleapis.com/token' => Http::response(['access_token' => 'access']),
+            'gmail.googleapis.com/*' => Http::response(['error' => ['errors' => [['reason' => 'rateLimitExceeded']]]], 403)]);
+        $this->actingAs($u)->getJson('/requests/gmail/labels')->assertOk()->assertJsonPath('labels.0.label', 'Invia al Centro')->assertJsonStructure(['warning']);
+        $this->assertTrue(GmailRequests::coolingDown($c->id));
+        (new GmailRequests)->sync($c->id);
+        $this->getJson('/requests/gmail/labels')->assertOk();
+        Http::assertSentCount(2);
+    }
 }

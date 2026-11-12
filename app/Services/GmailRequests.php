@@ -14,6 +14,22 @@ class GmailRequests
     public const SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
     private ?string $token = null;
 
+    public static function limited(\Throwable $e): bool
+    {
+        return $e instanceof \Illuminate\Http\Client\RequestException && ($e->response->status() === 429
+            || in_array($e->response->json('error.errors.0.reason'), ['rateLimitExceeded', 'userRateLimitExceeded', 'quotaExceeded'], true));
+    }
+
+    public static function coolingDown(string $id): bool
+    {
+        return Cache::has('gmail:cooldown:'.$id);
+    }
+
+    public static function pause(string $id): void
+    {
+        Cache::put('gmail:cooldown:'.$id, true, now()->addMinutes(5));
+    }
+
     public function exchange(array $grant): array
     {
         $s = DB::table('gmail_settings')->first();
@@ -32,6 +48,7 @@ class GmailRequests
 
     public function sync(string $id): void
     {
+        if (self::coolingDown($id)) return;
         $lock = Cache::lock('gmail:'.$id, 1500);
         if (! $lock->get()) return;
         try {
@@ -67,8 +84,11 @@ class GmailRequests
                 foreach ($thread['messages'] ?? [] as $message) $this->ingest($c, $message);
             }
             DB::table('gmail_connections')->where('id', $id)->update(['last_synced_at' => now(), 'last_error' => null, 'requested_at' => null]);
-        } catch (\Throwable) {
-            DB::table('gmail_connections')->where('id', $id)->update(['last_synced_at' => now(), 'last_error' => 'Importazione non completata. Verifica collegamento ed etichetta; i messaggi acquisiti sono conservati e il controllo verra ripetuto.']);
+        } catch (\Throwable $e) {
+            if (self::limited($e)) self::pause($id);
+            DB::table('gmail_connections')->where('id', $id)->update(['last_synced_at' => now(), 'last_error' => self::limited($e)
+                ? 'Google ha limitato temporaneamente le richieste. Il Centro riprovera automaticamente fra 5 minuti. Non serve ricollegare Gmail; le email importate sono conservate.'
+                : 'Importazione non completata. Verifica collegamento ed etichetta; i messaggi acquisiti sono conservati e il controllo verra ripetuto.']);
         } finally { $lock->release(); }
     }
 

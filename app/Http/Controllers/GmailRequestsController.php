@@ -86,8 +86,21 @@ class GmailRequestsController extends Controller
     public function labels(Request $r)
     {
         $this->authorizeManager($r); $c = $this->connection($r); abort_unless($c?->refresh_token, 422);
-        try { return response()->json(['labels' => collect((new GmailRequests)->get($c, 'labels')['labels'] ?? [])->where('type', 'user')->map(fn ($l) => ['value' => $l['id'], 'label' => $l['name']])->values()]); }
-        catch (\Throwable) { abort(422, 'Impossibile leggere le etichette. Ricollega Gmail.'); }
+        $key = 'gmail:labels:'.$c->id;
+        if ($cached = Cache::get($key)) return response()->json(['labels' => $cached]);
+        $fallback = $c->label_id ? [['value' => $c->label_id, 'label' => $c->label_name]] : [];
+        if (GmailRequests::coolingDown($c->id)) return response()->json(['labels' => $fallback, 'warning' => 'Google ha limitato temporaneamente le richieste. Attendi 5 minuti; non serve ricollegare Gmail.']);
+        try {
+            $labels = collect((new GmailRequests)->get($c, 'labels')['labels'] ?? [])->where('type', 'user')->map(fn ($l) => ['value' => $l['id'], 'label' => $l['name']])->values()->all();
+            Cache::put($key, $labels, now()->addMinute());
+            return response()->json(['labels' => $labels]);
+        } catch (\Throwable $e) {
+            if (GmailRequests::limited($e)) {
+                GmailRequests::pause($c->id);
+                return response()->json(['labels' => $fallback, 'warning' => 'Google ha limitato temporaneamente le richieste. Attendi 5 minuti; non serve ricollegare Gmail.']);
+            }
+            abort(422, 'Etichette non disponibili. Riprova tra poco; se il problema persiste verifica il collegamento Gmail.');
+        }
     }
     public function update(Request $r)
     {

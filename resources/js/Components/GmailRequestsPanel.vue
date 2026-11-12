@@ -7,7 +7,12 @@ const state = ref({}); const labels = ref([]); const secret = ref(''); const err
 async function run(action) { busy.value = true; error.value = ''; feedback.value = ''; try { await action(); } catch (e) { error.value = e.response?.data?.message || 'Operazione non riuscita.'; } finally { busy.value = false; } }
 async function load() {
     state.value = (await axios.get('/requests/gmail')).data;
-    if (state.value.connected) labels.value = (await axios.get('/requests/gmail/labels')).data.labels;
+    if (state.value.connected) {
+        labels.value = state.value.label_id ? [{value:state.value.label_id,label:state.value.label_name}] : [];
+        const result = (await axios.get('/requests/gmail/labels')).data;
+        labels.value = result.labels;
+        feedback.value = result.warning || '';
+    }
 }
 onMounted(() => run(load));
 function credentials() { run(async () => { state.value = (await axios.put('/requests/gmail/credentials', {client_id:state.value.client_id,client_secret:secret.value})).data; secret.value=''; feedback.value='Credenziali salvate.'; }); }
