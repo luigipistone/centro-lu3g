@@ -315,6 +315,7 @@ Prepara in italiano una bozza di task a partire SOLO dalle email selezionate nel
 Restituisci titolo breve e concreto (massimo 180 caratteri), descrizione chiara in testo semplice con punti operativi, e warnings (elenco di dubbi da verificare). Non usare HTML. Conserva URL e testi esatti da sostituire quando rilevanti. Elimina saluti, firme, disclaimer e duplicazioni della cronologia citata; non trattare le vecchie citazioni come nuove richieste. Se le email si correggono, usa la richiesta piu recente nell'ordine fornito, segnalando conflitti non risolti.
 Non inventare modifiche, scadenze, priorita, cliente, assegnatari, contenuti degli allegati o dettagli non presenti. Se sono citati allegati necessari segnala che non sono stati analizzati. Non affermare che le modifiche sono gia state eseguite. Se ci sono solo ringraziamenti o conferme senza azioni, usa titolo "Messaggio senza nuove modifiche", descrizione "Non emergono nuove modifiche operative dai messaggi selezionati." e segnala la verifica nei warnings. La bozza sara sempre verificata da una persona prima di creare la task.
 PROMPT;
+        $instructions .= "\nRestituisci anche subtasks: elenco di titoli operativi (massimo 255 caratteri ciascuno). Se i messaggi contengono elenchi puntati o numerati di attivita distinte, trasformali in sottoattivita, una per azione, senza duplicati. Non trasformare saluti, esempi, opzioni alternative o dubbi in attivita. Se non ci sono elenchi operativi usa []. Conserva nella descrizione tutti i dettagli necessari alle sottoattivita. Non aggiungere passaggi di controllo, pubblicazione o altre azioni non richieste.";
         $maxOutput = 3000;
         $reserved = $this->estimatedCost($this->estimateTokens($input.$instructions), $maxOutput, 0);
         $lock = \Illuminate\Support\Facades\Cache::lock('gmail:ai:budget', 90);
@@ -331,8 +332,8 @@ PROMPT;
                     'input' => $input, 'max_output_tokens' => $maxOutput,
                     'text' => ['format' => ['type' => 'json_schema', 'name' => 'mail_task_proposal', 'strict' => true,
                         'schema' => ['type' => 'object', 'additionalProperties' => false,
-                            'properties' => ['title' => ['type' => 'string'], 'description' => ['type' => 'string'], 'warnings' => ['type' => 'array', 'items' => ['type' => 'string']]],
-                            'required' => ['title', 'description', 'warnings']]]],
+                            'properties' => ['title' => ['type' => 'string'], 'description' => ['type' => 'string'], 'warnings' => ['type' => 'array', 'items' => ['type' => 'string']], 'subtasks' => ['type' => 'array', 'items' => ['type' => 'string']]],
+                            'required' => ['title', 'description', 'warnings', 'subtasks']]]],
                 ])->throw()->json();
             if (isset($response['usage']['input_tokens'], $response['usage']['output_tokens'])) {
                 DB::table('gmail_ai_usage')->where('id', $usageId)->update(['estimated_cost_eur' => $this->estimatedCost((int) $response['usage']['input_tokens'], (int) $response['usage']['output_tokens'], 0)]);
@@ -343,6 +344,7 @@ PROMPT;
             $draft = json_decode($content->firstWhere('type', 'output_text')['text'] ?? '', true, 512, JSON_THROW_ON_ERROR);
             $valid = \Illuminate\Support\Facades\Validator::make(is_array($draft) ? $draft : [], [
                 'title' => 'required|string|max:255', 'description' => 'required|string|max:20000', 'warnings' => 'present|array|max:20', 'warnings.*' => 'string|max:2000',
+                'subtasks' => 'present|array', 'subtasks.*' => 'required|string|max:255',
             ]);
             throw_if($valid->fails(), RuntimeException::class);
             return $valid->validated();

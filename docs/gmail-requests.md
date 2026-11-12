@@ -32,6 +32,9 @@ Non condividere password Gmail. Ogni casella ha un consenso personale e un token
 
 ### Proposta AI (facoltativa)
 
+La creazione parte come continuativa, senza progetto; il revisore puo scegliere una task di progetto, per cui il progetto resta obbligatorio. Gli assegnatari usano il selettore con avatar.
+Gli elenchi operativi delle email possono produrre sottoattivita nella bozza AI: il revisore puo modificarle, aggiungerle o rimuoverle. Solo la conferma crea madre e figlie nella stessa transazione, usando il flusso ordinario delle sottoattivita. Le figlie ereditano cliente, servizio, tipo, priorita e assegnatari; non ricevono scadenze inventate. Collegare a una task esistente continua ad aggiungere solo un commento.
+
 Con la connessione OpenAI del Centro configurata, il revisore vede **Prepara con AI**. Usa la chiave cifrata e il modello gia' configurati per Agenzia AI, solo nel backend. Il riconoscimento cliente rimane deterministico e separato dall'AI.
 
 - Vengono inviati a OpenAI esclusivamente oggetto e testo dei messaggi selezionati, nell'ordine di ricezione. Nessun altro messaggio del database, elenco clienti, password, allegato o dato della casella viene aggiunto. Eventuali dati personali gia' nel corpo selezionato fanno parte del testo inviato.

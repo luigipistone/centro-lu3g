@@ -106,7 +106,7 @@ class GmailRequestsTest extends TestCase
         $client = (string) Str::uuid(); $project = (string) Str::uuid();
         DB::table('clients')->insert(['id' => $client, 'name' => 'CLIENTE', 'active' => true]);
         DB::table('projects')->insert(['id' => $project, 'name' => 'Sito web', 'client_id' => $client, 'status' => 'active', 'color' => '#ffffff']);
-        $payload = ['version' => 1, 'message_ids' => DB::table('mail_request_messages')->pluck('id')->all(), 'action' => 'create', 'title' => 'Modifica', 'client_id' => $client, 'project_id' => $project, 'priority' => 'medium', 'assignee_ids' => [$u->id]];
+        $payload = ['version' => 1, 'message_ids' => DB::table('mail_request_messages')->pluck('id')->all(), 'action' => 'create', 'task_type' => 'task', 'title' => 'Modifica', 'client_id' => $client, 'project_id' => $project, 'priority' => 'medium', 'assignee_ids' => [$u->id]];
         $this->actingAs($u)->postJson('/requests/'.$id.'/resolve', $payload)->assertConflict();
         $this->postJson('/requests/'.$id.'/claim')->assertOk();
         $this->actingAs($this->manager())->postJson('/requests/'.$id.'/claim')->assertConflict();
@@ -119,6 +119,34 @@ class GmailRequestsTest extends TestCase
         $this->assertDatabaseHas('task_assignees', ['user_id' => $u->id]);
         $this->assertDatabaseHas('mail_requests', ['id' => $id, 'status' => 'converted']);
     }
+    public function test_default_continuativa_creates_reviewed_subtasks_atomically_without_project(): void
+    {
+        $u = $this->manager(); $c = $this->connection($u);
+        (new GmailRequests)->ingest($c, $this->message());
+        $id = DB::table('mail_requests')->value('id');
+        $client = (string) Str::uuid();
+        DB::table('clients')->insert(['id' => $client, 'name' => 'CLIENTE', 'active' => true]);
+        $this->actingAs($u)->postJson('/requests/'.$id.'/claim')->assertOk();
+        $payload = ['version' => 1, 'message_ids' => DB::table('mail_request_messages')->pluck('id')->all(), 'action' => 'create',
+            'title' => 'Modifiche', 'client_id' => $client, 'priority' => 'high', 'assignee_ids' => [$u->id], 'subtasks' => ['Telefono', '']];
+        $this->postJson('/requests/'.$id.'/resolve', $payload)->assertUnprocessable();
+        $this->assertDatabaseCount('tasks', 0);
+        $this->assertDatabaseHas('mail_requests', ['id' => $id, 'version' => 1]);
+        $payload['subtasks'] = ['Telefono corretto', 'Aggiornare indirizzo'];
+        $parent = $this->postJson('/requests/'.$id.'/resolve', $payload)->assertOk()->json('task_id');
+        $this->assertDatabaseCount('tasks', 3);
+        $this->assertDatabaseHas('tasks', ['id' => $parent, 'task_type' => 'ongoing', 'project_id' => null, 'client_id' => $client]);
+        foreach ($payload['subtasks'] as $title) {
+            $child = DB::table('tasks')->where('parent_task_id', $parent)->where('title', $title)->first();
+            $this->assertNotNull($child);
+            $this->assertSame('ongoing', $child->task_type);
+            $this->assertSame('high', $child->priority);
+            $this->assertDatabaseHas('task_assignees', ['task_id' => $child->id, 'user_id' => $u->id]);
+        }
+        $this->postJson('/requests/'.$id.'/resolve', $payload)->assertConflict();
+        $this->assertDatabaseCount('tasks', 3);
+    }
+
     public function test_html_is_text_and_attachments_are_metadata_only(): void
     {
         $c = $this->connection($this->manager()); $m = $this->message();
@@ -271,12 +299,12 @@ class GmailRequestsTest extends TestCase
         $id = DB::table('mail_requests')->value('id'); $mid = DB::table('mail_request_messages')->where('gmail_id', 'm2')->value('id');
         Http::preventStrayRequests();
         Http::fake(['api.openai.com/v1/responses' => Http::response(['status' => 'completed', 'usage' => ['input_tokens' => 100, 'output_tokens' => 50],
-            'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => json_encode(['title' => 'Aggiornare i contatti', 'description' => '- Aggiornare i riferimenti nella pagina contatti.', 'warnings' => ['Verificare i nuovi riferimenti.']])]]]]])]);
+            'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => json_encode(['title' => 'Aggiornare i contatti', 'description' => '- Aggiornare i riferimenti nella pagina contatti.', 'warnings' => ['Verificare i nuovi riferimenti.'], 'subtasks' => ['Aggiornare i contatti']])]]]]])]);
         $payload = ['ai' => true, 'version' => 2, 'message_ids' => [$mid]];
         $this->actingAs($u)->postJson('/requests/'.$id.'/prepare', $payload)->assertConflict();
         Http::assertNothingSent();
         $this->postJson('/requests/'.$id.'/claim')->assertOk();
-        $this->postJson('/requests/'.$id.'/prepare', $payload)->assertOk()->assertJsonPath('title', 'Aggiornare i contatti')->assertJsonPath('ai_generated', true)->assertJsonCount(1, 'warnings');
+        $this->postJson('/requests/'.$id.'/prepare', $payload)->assertOk()->assertJsonPath('title', 'Aggiornare i contatti')->assertJsonPath('ai_generated', true)->assertJsonCount(1, 'warnings')->assertJsonPath('subtasks.0', 'Aggiornare i contatti');
         Http::assertSent(function ($r) {
             return $r['store'] === false && !isset($r['tools']) && !str_contains($r['input'], 'UNSELECTED') && !str_contains($r['input'], 'client@example.com') && str_contains($r['input'], 'Aggiornare la pagina contatti.');
         });
@@ -327,7 +355,7 @@ class GmailRequestsTest extends TestCase
         $this->actingAs($u)->postJson('/requests/'.$id.'/claim')->assertOk();
         Http::fake(['api.openai.com/v1/responses' => function () use ($c) {
             (new GmailRequests)->ingest($c, $this->message('new-reply'));
-            return Http::response(['status' => 'completed', 'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => '{"title":"Bozza","description":"Modifica","warnings":[]}']]]]]);
+            return Http::response(['status' => 'completed', 'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => '{"title":"Bozza","description":"Modifica","warnings":[],"subtasks":[]}']]]]]);
         }]);
         $this->postJson('/requests/'.$id.'/prepare', ['ai' => true, 'version' => 1, 'message_ids' => [$mid]])->assertConflict()->assertJsonMissingPath('title');
         $this->assertDatabaseCount('tasks', 0);

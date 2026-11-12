@@ -148,7 +148,7 @@ class GmailRequestsController extends Controller
             'projects' => DB::table('projects')->where('status', '!=', 'archived')->orderBy('name')->get(['id', 'name', 'client_id', 'service_id']),
             'services' => DB::table('services')->orderBy('name')->get(['id', 'name']),
             'tasks' => DB::table('tasks')->whereNull('google_cancelled_at')->whereNull('teamleader_cancelled_at')->orderByDesc('created_at')->get(['id', 'title']),
-            'users' => DB::table('users')->where('account_status', 'active')->orderBy('name')->get(['id', 'name']),
+            'users' => DB::table('users')->leftJoin('profiles', 'profiles.user_id', '=', 'users.id')->where('users.account_status', 'active')->orderBy('users.name')->get(['users.id', 'users.name', 'profiles.avatar_url']),
         ]);
     }
     public function claim(Request $r, string $id)
@@ -174,18 +174,30 @@ class GmailRequestsController extends Controller
             abort_unless($messages->count() === count($data['message_ids']), 409, 'Uno dei messaggi non e disponibile o e gia stato elaborato.');
             $task = null;
             if ($data['action'] === 'create') {
+                $r->merge(['task_type' => $r->input('task_type', 'ongoing')]);
                 $payload = $r->validate(['title' => 'required|string|max:255', 'description' => 'nullable|string', 'client_id' => 'required|uuid|exists:clients,id',
-                    'project_id' => 'required|uuid|exists:projects,id', 'service_id' => 'nullable|uuid|exists:services,id', 'priority' => 'required|in:low,medium,high,urgent',
+                    'task_type' => 'required|in:ongoing,task', 'project_id' => 'required_if:task_type,task|nullable|uuid|exists:projects,id', 'service_id' => 'nullable|uuid|exists:services,id', 'priority' => 'required|in:low,medium,high,urgent',
+                    'subtasks' => 'sometimes|array', 'subtasks.*' => 'required|string|max:255',
                     'start_date' => 'nullable|date_format:Y-m-d', 'due_date' => 'nullable|date_format:Y-m-d', 'assignee_ids' => 'required|array|min:1', 'assignee_ids.*' => 'uuid|exists:users,id']);
                 $client = DB::table('clients')->find($payload['client_id']);
-                $project = DB::table('projects')->find($payload['project_id']);
-                abort_unless($client->active && $project->status !== 'archived' && in_array($project->client_id, [$client->id, $client->parent_client_id], true), 422, 'Il progetto deve appartenere al cliente selezionato.');
-                $sub = Request::create('/tasks', 'POST', $payload + ['task_type' => 'task', 'status' => 'todo']);
+                abort_unless($client->active, 422, 'Seleziona un cliente attivo.');
+                if ($payload['task_type'] === 'task') {
+                    $project = DB::table('projects')->find($payload['project_id']);
+                    abort_unless($project->status !== 'archived' && in_array($project->client_id, [$client->id, $client->parent_client_id], true), 422, 'Il progetto deve appartenere al cliente selezionato.');
+                } else { $payload['project_id'] = null; }
+                $subtasks = $payload['subtasks'] ?? [];
+                unset($payload['subtasks']);
+                $sub = Request::create('/tasks', 'POST', $payload + ['status' => 'todo']);
                 $sub->setUserResolver(fn () => $r->user()); $sub->setLaravelSession($r->session());
                 $sub->attributes->set('common_api_write', true);
                 $response = app(CentroPageController::class)->store($sub, 'tasks');
                 abort_unless($response instanceof \Illuminate\Http\JsonResponse && $response->status() === 201, 422, 'Creazione non riuscita.');
                 $task = $response->getData(true)['id'];
+                foreach ($subtasks as $title) {
+                    $child = Request::create('/tasks/'.$task.'/subtasks', 'POST', ['title' => $title, 'priority' => $payload['priority'], 'assignee_ids' => $payload['assignee_ids']]);
+                    $child->setUserResolver(fn () => $r->user()); $child->setLaravelSession($r->session());
+                    app(CentroPageController::class)->storeSubtask($child, $task);
+                }
             } elseif ($data['action'] === 'link') {
                 abort_unless($data['task_id'] ?? null, 422, 'Seleziona una task.');
                 $role = DB::table('user_roles')->where('user_id', $r->user()->id)->value('role');
@@ -215,7 +227,7 @@ class GmailRequestsController extends Controller
         $data = $r->validate(['message_ids' => 'required|array|min:1', 'message_ids.*' => 'required|uuid|distinct', 'ai' => 'sometimes|boolean', 'version' => 'required_if:ai,true|integer']);
         $messages = DB::table('mail_request_messages')->where('request_id', $id)->whereIn('id', $data['message_ids'])->whereNull('disposition')->orderBy('received_at')->get();
         abort_unless($messages->count() === count($data['message_ids']), 409, 'Aggiorna la richiesta: messaggi non disponibili.');
-        $draft = ['title' => $messages->last()->subject, 'description' => $messages->pluck('body')->implode("\n\n---\n\n"), 'warnings' => []];
+        $draft = ['title' => $messages->last()->subject, 'description' => $messages->pluck('body')->implode("\n\n---\n\n"), 'warnings' => [], 'subtasks' => []];
         if ($r->boolean('ai')) {
             $record = DB::table('mail_requests')->find($id);
             abort_unless($record && $record->reviewer_id === $r->user()->id && $record->version === $data['version'], 409, 'Prendi in carico e aggiorna la richiesta prima di preparare con AI.');
