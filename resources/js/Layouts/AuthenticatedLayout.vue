@@ -330,6 +330,7 @@ onUnmounted(() => {
 const groups = computed(() => {
     const sectionForRoute = (name) => ({
         'clients.index': 'clients', 'projects.index': 'projects', 'tasks.index': 'tasks',
+        'requests.index': 'requests',
         'calendar.index': 'calendar', 'documents.index': 'documents', 'passwords.index': 'passwords', 'favorites.index': 'favorites', 'tools.index': 'tools',
         'absences.index': 'absences', 'users.index': 'users',
         'modules.index': 'modules', 'inventory.index': 'inventory', 'ai-agency.index': 'ai_agency',
@@ -351,6 +352,7 @@ const groups = computed(() => {
                 permitted('clients.index', 'Clienti', Users, 'clients.view'),
                 permitted('projects.index', 'Progetti', Briefcase, 'projects.view'),
                 permitted('tasks.index', 'Task', CheckSquare, 'tasks.view'),
+                permitted('requests.index', 'Richieste clienti', Mail, 'requests.manage'),
                 permitted('calendar.index', 'Calendario', Calendar, 'calendar.view'),
                 permitted('documents.index', 'Documenti', FileText, 'documents.view'),
                 permitted('passwords.index', 'Password', KeyRound, 'passwords.view'),

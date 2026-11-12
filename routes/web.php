@@ -34,6 +34,21 @@ Route::get('/airmail/{token}/files/{fileId}', [AirmailController::class, 'downlo
 Route::get('/dashboard', [CentroPageController::class, 'dashboard'])->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
+    Route::prefix('requests')->name('requests.')->controller(\App\Http\Controllers\GmailRequestsController::class)->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::get('/gmail', 'settings')->name('gmail.settings');
+        Route::put('/gmail/credentials', 'credentials');
+        Route::get('/gmail/connect', 'connect');
+        Route::get('/gmail/callback', 'callback')->name('gmail.callback');
+        Route::get('/gmail/labels', 'labels');
+        Route::put('/gmail', 'update');
+        Route::post('/gmail/sync', 'sync')->middleware('throttle:10,1');
+        Route::delete('/gmail', 'disconnect');
+        Route::get('/{id}', 'show')->whereUuid('id')->name('show');
+        Route::post('/{id}/claim', 'claim')->whereUuid('id');
+        Route::post('/{id}/resolve', 'resolve')->whereUuid('id')->middleware('throttle:20,1');
+        Route::get('/{id}/messages/{messageId}/attachments/{index}', 'attachment')->whereUuid('id')->whereUuid('messageId')->whereNumber('index');
+    });
     Route::prefix('settings/teamleader')->name('settings.teamleader.')->controller(\App\Http\Controllers\TeamleaderController::class)->group(function () {
         Route::get('/', 'show');
         Route::put('/credentials', 'credentials');

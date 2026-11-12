@@ -22,6 +22,7 @@ class RolePermissionService
             ['group' => 'Progetti', 'key' => 'projects.update', 'label' => 'Modificare progetti'],
             ['group' => 'Progetti', 'key' => 'projects.delete', 'label' => 'Eliminare progetti'],
             ['group' => 'Task', 'key' => 'tasks.view', 'label' => 'Visualizzare task'],
+            ['group' => 'Richieste clienti', 'key' => 'requests.manage', 'label' => 'Collegare Gmail e revisionare le richieste condivise', 'managerOnly' => true],
             ['group' => 'Task', 'key' => 'tasks.create', 'label' => 'Creare task'],
             ['group' => 'Task', 'key' => 'tasks.update', 'label' => 'Modificare task'],
             ['group' => 'Task', 'key' => 'tasks.delete', 'label' => 'Eliminare task'],
