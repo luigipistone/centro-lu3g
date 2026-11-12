@@ -20,6 +20,11 @@ try {
         await page.getByText('21 meeting', { exact: true }).waitFor();
         await page.getByRole('button', { name: 'Pagina successiva' }).click();
         await page.getByText('2 / 2', { exact: true }).waitFor();
+        await page.getByRole('checkbox', { name: 'Sincronizzazione automatica ogni 5 minuti' }).check();
+        await page.getByRole('button', { name: 'Salva', exact: true }).click();
+        await page.getByText('Impostazioni salvate.').waitFor();
+        await page.getByRole('button', { name: 'Sincronizza ora', exact: true }).click();
+        await page.getByRole('button', { name: 'In attesa...', exact: true }).waitFor();
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
         await page.screenshot({ path: '/tmp/centro-teamleader-' + width + '.png', fullPage: true });
         await page.getByRole('button', { name: 'Scollega Teamleader', exact: true }).click();

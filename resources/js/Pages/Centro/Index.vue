@@ -1,7 +1,7 @@
 <script setup>
 import GoogleCalendarPanel from '@/Components/GoogleCalendarPanel.vue';
 import TeamleaderPanel from '@/Components/TeamleaderPanel.vue';
-import GoogleMeetingDetails from '@/Components/GoogleMeetingDetails.vue';
+import SyncedMeetingDetails from '@/Components/SyncedMeetingDetails.vue';
 import { clientOptions } from '@/utils/clientOptions';
 import ClientSelect from '@/Components/ClientSelect.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -1850,7 +1850,7 @@ function remove(row, action = null) {
 }
 
 function canDeleteRow(row) {
-    if (row?.google_event_id) return false;
+    if (row?.google_event_id || row?.teamleader_meeting_id) return false;
     const permission = sectionPermission('delete');
     if (!permission || !hasPermission(permission)) return false;
     if (props.section === 'tasks' || props.section === 'calendar') {
@@ -3514,7 +3514,7 @@ function calendarTaskPayload() {
 }
 
 function saveCalendarTaskInline(delay = 300) {
-    if (calendarTaskPanel.value?.google_event_id) return;
+    if (calendarTaskPanel.value?.google_event_id || calendarTaskPanel.value?.teamleader_meeting_id) return;
     if (!String(calendarTaskForm.title || '').trim()) return;
 
     window.clearTimeout(calendarTaskAutosaveTimer);
@@ -3783,7 +3783,7 @@ function toggleTaskDone(task) {
 }
 
 function startCalendarDrag(task, event) {
-    if (task.google_event_id) { event?.preventDefault(); return; }
+    if (task.google_event_id || task.teamleader_meeting_id) { event?.preventDefault(); return; }
     calendarMoveError.value = '';
     if (event?.dataTransfer) {
         event.dataTransfer.effectAllowed = 'move';
@@ -4626,7 +4626,7 @@ function calendarDayStyle(sectionMonth, cell) {
                                             :style="calendarTaskBarStyle(sectionMonth, cell, task)"
                                             role="link"
                                             tabindex="0"
-                                            :draggable="!task.google_event_id"
+                                            :draggable="!task.google_event_id && !task.teamleader_meeting_id"
                                             :title="task.title"
                                             @click="openCalendarTask(task)"
                                             @keydown.enter.prevent="openCalendarTask(task)"
@@ -4783,7 +4783,7 @@ function calendarDayStyle(sectionMonth, cell) {
 
                     <div ref="calendarTaskDrawerBody" class="flex-1 overflow-y-auto px-5 py-5">
                         <div class="space-y-5">
-                            <GoogleMeetingDetails v-if="calendarTaskPanel?.google_event_id" :key="calendarTaskPanel.id" :task="calendarTaskPanel" :users="users" :clients="clients" :services="services" />
+                            <SyncedMeetingDetails v-if="calendarTaskPanel?.google_event_id || calendarTaskPanel?.teamleader_meeting_id" :key="calendarTaskPanel.id" :task="calendarTaskPanel" :users="users" :clients="clients" :services="services" />
                             <template v-else>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Titolo</label>

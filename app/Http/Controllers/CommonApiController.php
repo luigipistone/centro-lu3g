@@ -102,7 +102,7 @@ class CommonApiController extends Controller
         if (in_array($resource, ['clients', 'projects', 'users'], true)) {
             $this->access->constrain($q, $c, $resource, 'id');
         } elseif ($resource === 'tasks') {
-            $q->whereNull('google_cancelled_at');
+            $q->whereNull('google_cancelled_at')->whereNull('teamleader_cancelled_at');
             // Projectless meetings require an explicit all-projects grant.
             $this->access->constrain($q, $c, 'projects', 'project_id');
         } elseif ($resource === 'absences') {

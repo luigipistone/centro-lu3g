@@ -40,6 +40,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/connect', 'connect');
         Route::get('/callback', 'callback')->name('callback');
         Route::post('/simulate', 'simulate')->middleware('throttle:120,1');
+        Route::put('/', 'update');
+        Route::post('/sync', 'sync')->middleware('throttle:10,1');
         Route::delete('/', 'disconnect');
     });
     Route::prefix('settings/google-calendar')->name('settings.google-calendar.')->controller(\App\Http\Controllers\GoogleCalendarController::class)->group(function () {

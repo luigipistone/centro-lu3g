@@ -18,7 +18,7 @@ class TeamleaderController extends Controller
     }
     private function locked(callable $callback)
     {
-        $lock = Cache::lock('centro:teamleader', 600);
+        $lock = Cache::lock(\App\Services\TeamleaderSync::LOCK, 1800);
         abort_unless($lock->get(), 409, 'Teamleader occupato. Riprova tra poco.');
         try { return $callback(); } finally { $lock->release(); }
     }
@@ -28,6 +28,10 @@ class TeamleaderController extends Controller
         $s = DB::table('teamleader_settings')->find(1);
         return response()->json(['client_id' => $s?->client_id ?? '', 'has_secret' => (bool) $s?->client_secret,
             'connected' => (bool) $s?->refresh_token, 'connection_id' => $s?->connection_id,
+            'enabled' => (bool) $s?->enabled, 'import_from' => $s?->import_from ?? now('Europe/Rome')->toDateString(), 'months_ahead' => $s?->months_ahead ?? 12,
+            'last_synced_at' => $s?->last_synced_at ? \Carbon\CarbonImmutable::parse($s->last_synced_at, config('app.timezone'))->toIso8601String() : null,
+            'last_error' => $s?->last_error, 'summary' => json_decode($s?->last_summary ?? 'null', true),
+            'pending' => (bool) $s?->requested_at && ! $s?->last_error,
             'redirect_uri' => route('settings.teamleader.callback')]);
     }
     public function credentials(Request $r)
@@ -67,6 +71,7 @@ class TeamleaderController extends Controller
                 $s = DB::table('teamleader_settings')->find(1);
                 abort_unless($s && $s->connection_id === $state['connection'], 409);
                 $api->exchange($s, ['grant_type' => 'authorization_code', 'code' => $r->query('code'), 'redirect_uri' => route('settings.teamleader.callback')]);
+                DB::table('teamleader_settings')->where('id', 1)->update(['connected_by' => $r->user()->id]);
             });
         } catch (\Throwable) {
             return redirect('/settings?tab=teamleader')->with('status', 'Collegamento non riuscito. Verifica credenziali e URI di reindirizzamento.');
@@ -77,7 +82,7 @@ class TeamleaderController extends Controller
     {
         $this->authorized($r);
         return $this->locked(function () use ($r) {
-            DB::table('teamleader_settings')->where('id', 1)->update(['access_token' => null, 'refresh_token' => null, 'expires_at' => null, 'connection_id' => (string) Str::uuid(), 'updated_at' => now()]);
+            DB::table('teamleader_settings')->where('id', 1)->update(['access_token' => null, 'refresh_token' => null, 'expires_at' => null, 'enabled' => false, 'requested_at' => null, 'connection_id' => (string) Str::uuid(), 'updated_at' => now()]);
             $r->session()->forget('teamleader_oauth');
             return $this->show($r);
         });
@@ -114,6 +119,26 @@ class TeamleaderController extends Controller
                 }
                 return response()->json(['rows' => $rows, 'has_more' => count($meetings) === 20, 'read_only' => true]);
             } catch (RuntimeException $e) { return response()->json(['message' => $e->getMessage()], 502); }
+        });
+    }
+
+    public function update(Request $r)
+    {
+        $this->authorized($r);
+        $data = $r->validate(['enabled' => 'required|boolean', 'import_from' => 'required|date_format:Y-m-d', 'months_ahead' => 'required|integer|in:3,6,12,24']);
+        return $this->locked(function () use ($r, $data) {
+            abort_unless(DB::table('teamleader_settings')->where('id', 1)->whereNotNull('refresh_token')->exists(), 422, 'Collega prima Teamleader.');
+            DB::table('teamleader_settings')->where('id', 1)->update($data + ['connected_by' => $r->user()->id, 'requested_at' => $data['enabled'] ? now() : null, 'last_error' => null, 'updated_at' => now()]);
+            return $this->show($r);
+        });
+    }
+    public function sync(Request $r)
+    {
+        $this->authorized($r);
+        return $this->locked(function () use ($r) {
+            abort_unless(DB::table('teamleader_settings')->where('id', 1)->where('enabled', true)->whereNotNull('refresh_token')->exists(), 422, 'Abilita prima la sincronizzazione.');
+            DB::table('teamleader_settings')->where('id', 1)->update(['requested_at' => now(), 'last_error' => null]);
+            return $this->show($r);
         });
     }
 }

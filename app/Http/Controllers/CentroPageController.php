@@ -204,7 +204,7 @@ class CentroPageController extends Controller
         $currentWeekStart = now('Europe/Rome')->startOfWeek()->toDateString();
         $currentWeekEnd = now('Europe/Rome')->endOfWeek()->toDateString();
         $taskScope = fn ($query) => $query
-            ->whereNull('tasks.google_cancelled_at')
+            ->whereNull('tasks.google_cancelled_at')->whereNull('tasks.teamleader_cancelled_at')
             ->where(fn ($query) => $query->whereNull('tasks.parent_task_id')->orWhere('tasks.parent_task_id', ''))
             ->when($guestTaskIds !== null, fn ($query) => $query->whereIn('tasks.id', $guestTaskIds));
 
@@ -725,7 +725,7 @@ class CentroPageController extends Controller
             $rows = $this->serviceUpdateRows($config['serviceName']);
         } else {
             $rows = DB::table($config['table'])
-                ->when($config['table'] === 'tasks', fn ($query) => $query->whereNull('tasks.google_cancelled_at'))
+                ->when($config['table'] === 'tasks', fn ($query) => $query->whereNull('tasks.google_cancelled_at')->whereNull('tasks.teamleader_cancelled_at'))
                 ->when($section === 'clients', fn ($query) => $query->where('clients.active', ! (bool) $request->route('archive')))
                 ->when($section === 'projects', fn ($query) => $query->where('projects.status', $request->route('archive') ? '=' : '!=', 'archived'))
                 ->when($config['table'] === 'projects', fn ($query) => $query->leftJoin('clients', 'clients.id', '=', 'projects.client_id')->select('projects.*', 'clients.name as client_name'))
@@ -3439,22 +3439,22 @@ class CentroPageController extends Controller
             return $this->updateUser($request, $id);
         }
         $this->ensureRoleCanUpdateRecord($request, $section, $id);
-        $googleManaged = $section === 'tasks' && DB::table('tasks')->where('id', $id)->whereNotNull('google_event_id')->exists();
-        if ($googleManaged) {
-            abort_if(array_diff(array_keys($request->all()), ['client_id', 'service_id', 'priority', 'status', '_token', '_method']), 409, 'I dati sincronizzati si modificano in Google Calendar.');
+        $externallyManaged = $section === 'tasks' && DB::table('tasks')->where('id', $id)->where(fn ($q) => $q->whereNotNull('google_event_id')->orWhereNotNull('teamleader_meeting_id'))->exists();
+        if ($externallyManaged) {
+            abort_if(array_diff(array_keys($request->all()), ['client_id', 'service_id', 'priority', 'status', '_token', '_method']), 409, 'I dati sincronizzati si modificano nel servizio di origine del meeting.');
         }
 
         if (str_starts_with($section, 'updates-')) {
             return $this->updateServiceUpdate($request, $id);
         }
 
-        $payload = $googleManaged ? $request->validate([
+        $payload = $externallyManaged ? $request->validate([
             'status' => ['sometimes', 'required', Rule::in(['todo', 'in_progress', 'in_review', 'done'])],
             'client_id' => ['sometimes', 'nullable', 'uuid', 'exists:clients,id'],
             'service_id' => ['sometimes', 'nullable', 'uuid', 'exists:services,id'],
             'priority' => ['sometimes', 'required', Rule::in(['low', 'medium', 'high', 'urgent'])],
         ]) : $this->validatedPayload($request, $section);
-        if ($section === 'tasks' && ! $googleManaged) {
+        if ($section === 'tasks' && ! $externallyManaged) {
             $oldSchedule = DB::table('tasks')->where('id', $id)->first(['start_date', 'due_date']);
             if ($oldSchedule && ($oldSchedule->start_date !== ($payload['start_date'] ?? null) || $oldSchedule->due_date !== ($payload['due_date'] ?? null))) {
                 $this->ensureTaskDatesAreWorkingDays($payload);
@@ -4809,7 +4809,7 @@ class CentroPageController extends Controller
         $yearStart = now()->copy()->startOfYear()->toDateString();
 
         $assignedTaskQuery = DB::table('tasks')
-            ->whereNull('tasks.google_cancelled_at')
+            ->whereNull('tasks.google_cancelled_at')->whereNull('tasks.teamleader_cancelled_at')
             ->join('task_assignees', 'task_assignees.task_id', '=', 'tasks.id')
             ->where('task_assignees.user_id', $userId)
             ->where(fn ($query) => $query->whereNull('tasks.parent_task_id')->orWhereRaw("TRIM(tasks.parent_task_id) = ''"));
@@ -7940,7 +7940,7 @@ class CentroPageController extends Controller
     private function taskDependencyOptions(?string $currentTaskId = null): Collection
     {
         return DB::table('tasks')
-            ->whereNull('tasks.google_cancelled_at')
+            ->whereNull('tasks.google_cancelled_at')->whereNull('tasks.teamleader_cancelled_at')
             ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
             ->when($currentTaskId, fn ($query) => $query->where('tasks.id', '!=', $currentTaskId))
             ->where('tasks.status', '!=', 'done')
@@ -9099,7 +9099,7 @@ class CentroPageController extends Controller
 
     private function ensureTaskNotGoogleManaged(string $id): void
     {
-        abort_if(DB::table('tasks')->where('id', $id)->whereNotNull('google_event_id')->exists(), 409, 'Questo meeting è sincronizzato: modifica o cancella l’appuntamento in Google Calendar.');
+        abort_if(DB::table('tasks')->where('id', $id)->where(fn ($q) => $q->whereNotNull('google_event_id')->orWhereNotNull('teamleader_meeting_id'))->exists(), 409, 'Questo meeting è sincronizzato: modifica o cancella l’appuntamento nel servizio di origine.');
     }
 
     public function updateTaskSchedule(Request $request, string $id): RedirectResponse

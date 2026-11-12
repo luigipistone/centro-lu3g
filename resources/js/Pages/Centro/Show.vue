@@ -1,5 +1,5 @@
 <script setup>
-import GoogleMeetingDetails from '@/Components/GoogleMeetingDetails.vue';
+import SyncedMeetingDetails from '@/Components/SyncedMeetingDetails.vue';
 import { clientOptions } from '@/utils/clientOptions';
 import ClientSelect from '@/Components/ClientSelect.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -95,7 +95,7 @@ function setClientActive() {
 const canEditProject = computed(() => hasPermission('projects.update'));
 const canDeleteProject = computed(() => hasPermission('projects.delete'));
 const canDeleteCurrentTask = computed(() => {
-    if (props.record?.google_event_id) return false;
+    if (props.record?.google_event_id || props.record?.teamleader_meeting_id) return false;
     if (!hasPermission('tasks.delete')) return false;
     if (!isEditor.value) return true;
 
@@ -103,7 +103,7 @@ const canDeleteCurrentTask = computed(() => {
 });
 
 function canDeleteTaskRecord(task) {
-    if (task?.google_event_id) return false;
+    if (task?.google_event_id || task?.teamleader_meeting_id) return false;
     if (!hasPermission('tasks.delete')) return false;
     if (!isEditor.value) return true;
 
@@ -1346,7 +1346,7 @@ function taskPayload() {
 }
 
 function saveTaskInline(delay = AUTOSAVE_IDLE_DELAY) {
-    if (props.record.google_event_id) return;
+    if (props.record.google_event_id || props.record.teamleader_meeting_id) return;
     if (props.section !== 'tasks') return;
 
     window.clearTimeout(taskAutosaveTimer);
@@ -4762,8 +4762,8 @@ onUnmounted(() => {
                 </section>
 
                 <section v-if="section === 'tasks'" class="surface rounded-md p-5">
-                    <GoogleMeetingDetails v-if="record.google_event_id" :key="record.id" :task="{ ...record, assignee_ids: related.assignees || [] }" :users="related.users || []" :clients="related.taskClients || []" :services="related.taskServices || []" />
-                    <div v-if="!record.google_event_id" class="mb-5 flex flex-wrap items-center justify-between gap-3">
+                    <SyncedMeetingDetails v-if="record.google_event_id || record.teamleader_meeting_id" :key="record.id" :task="{ ...record, assignee_ids: related.assignees || [] }" :users="related.users || []" :clients="related.taskClients || []" :services="related.taskServices || []" />
+                    <div v-if="!record.google_event_id && !record.teamleader_meeting_id" class="mb-5 flex flex-wrap items-center justify-between gap-3">
                         <div>
                             <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Dettagli task</h3>
                             <p class="mt-1 text-sm text-gray-500">Ogni campo si salva automaticamente mentre lavori.</p>
@@ -4784,7 +4784,7 @@ onUnmounted(() => {
                         </div>
                     </div>
 
-                    <div v-if="!record.google_event_id" class="space-y-5">
+                    <div v-if="!record.google_event_id && !record.teamleader_meeting_id" class="space-y-5">
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Titolo</label>
                             <input v-model="taskForm.title" class="form-control" required />

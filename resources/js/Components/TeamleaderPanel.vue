@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import axios from 'axios';
 import AppDateInput from '@/Components/AppDateInput.vue';
+import AppSelect from '@/Components/AppSelect.vue';
 import Modal from '@/Components/Modal.vue';
 import { CalendarDays, Link2, RefreshCw, Save, Unplug, Copy, Check, ChevronLeft, ChevronRight } from '@lucide/vue';
 
@@ -11,10 +12,16 @@ const today = new Date();
 const localDate = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const from = ref(localDate(today)), to = ref(localDate(new Date(today.getFullYear(), today.getMonth() + 1, today.getDate())));
 const rows = ref([]), complete = ref(false), page = ref(1), period = ref('');
+const draft = ref({ enabled: false, import_from: '', months_ahead: 12 });
 const visible = computed(() => rows.value.slice((page.value - 1) * 20, page.value * 20));
 const matched = computed(() => rows.value.filter(r => r.assignees.length && !r.unmatched.length).length);
-let disposed = false, timer;
-async function load() { data.value = (await axios.get(base)).data; }
+let disposed = false, timer, poll;
+async function load(reset = false) {
+    data.value = (await axios.get(base)).data;
+    if (reset) draft.value = { enabled: data.value.enabled, import_from: data.value.import_from, months_ahead: data.value.months_ahead };
+}
+async function saveSync() { await axios.put(base, draft.value); await load(true); message.value = 'Impostazioni salvate.'; }
+async function requestSync() { await axios.post(base + '/sync'); await load(); }
 async function action(fn) {
     busy.value = true; error.value = ''; message.value = '';
     try { await fn(); } catch (e) { error.value = Object.values(e.response?.data?.errors || {}).flat()[0] || e.response?.data?.message || e.message || 'Operazione non riuscita.'; }
@@ -43,15 +50,15 @@ async function simulate() {
 async function disconnect() { await axios.delete(base); confirmDisconnect.value = false; rows.value = []; complete.value = false; period.value = ''; await load(); }
 async function copy() { await navigator.clipboard.writeText(data.value.redirect_uri); copied.value = true; timer = setTimeout(() => copied.value = false, 2000); }
 function date(value) { return new Date(value).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Rome' }); }
-onMounted(() => action(load));
-onUnmounted(() => { disposed = true; clearTimeout(timer); });
+onMounted(() => action(async () => { await load(true); poll = setInterval(() => { if (!busy.value && data.value?.connected) load().catch(() => {}); }, 10000); }));
+onUnmounted(() => { disposed = true; clearTimeout(timer); clearInterval(poll); });
 </script>
 
 <template>
     <section class="app-card p-5 sm:p-6 space-y-5 min-w-0">
         <header class="flex flex-wrap items-center justify-between gap-3">
             <h3 class="flex items-center gap-2 text-lg font-semibold text-gray-900"><CalendarDays class="h-5 w-5 text-primary" />Teamleader</h3>
-            <span class="text-sm text-gray-500">{{ data?.connected ? 'Collegato · Solo simulazione' : 'Non collegato' }}</span>
+            <span class="text-sm text-gray-500">{{ data?.connected ? (data.enabled ? 'Sincronizzazione attiva' : 'Collegato · In pausa') : 'Non collegato' }}</span>
         </header>
         <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
         <p v-if="message" role="status" class="text-sm text-emerald-600">{{ message }}</p>
@@ -65,6 +72,14 @@ onUnmounted(() => { disposed = true; clearTimeout(timer); });
             <div class="flex flex-wrap gap-3"><button class="btn btn-outline" :disabled="busy"><Save class="h-4 w-4" />Salva credenziali</button><a v-if="data.has_secret && !busy" :href="`${base}/connect`" class="btn btn-primary"><Link2 class="h-4 w-4" />Collega Teamleader</a></div>
         </form>
         <template v-else>
+            <form class="space-y-4 border-b border-gray-200 pb-5" @submit.prevent="action(saveSync)">
+                <div class="grid gap-4 sm:grid-cols-2"><div><label class="block text-sm font-medium text-gray-700">Importa dal</label><AppDateInput v-model="draft.import_from" /></div><div><label class="block text-sm font-medium text-gray-700">Orizzonte futuro</label><AppSelect v-model="draft.months_ahead" :options="[{value:3,label:'3 mesi'},{value:6,label:'6 mesi'},{value:12,label:'12 mesi'},{value:24,label:'24 mesi'}]" /></div></div>
+                <label class="flex items-center gap-3 text-sm font-medium text-gray-700"><input v-model="draft.enabled" type="checkbox" class="rounded border-gray-300 text-primary focus:ring-primary" />Sincronizzazione automatica ogni 5 minuti</label>
+                <div class="flex flex-wrap gap-3"><button class="btn btn-primary" :disabled="busy"><Save class="h-4 w-4" />Salva</button><button type="button" class="btn btn-outline" :disabled="busy || !data.enabled || data.pending" @click="action(requestSync)"><RefreshCw :class="['h-4 w-4', data.pending ? 'animate-spin' : '']" />{{ data.pending ? 'In attesa...' : 'Sincronizza ora' }}</button></div>
+                <p v-if="data.last_error" role="alert" class="text-sm text-red-600">{{ data.last_error }}</p>
+                <div class="text-sm text-gray-500 space-y-2"><p>Ultimo controllo: {{ data.last_synced_at ? date(data.last_synced_at) : 'Non ancora eseguito' }}</p><p v-if="data.summary">{{ data.summary.created }} creati · {{ data.summary.updated }} aggiornati · {{ data.summary.unchanged }} invariati · {{ data.summary.cancelled }} rimossi dal calendario</p><details v-if="data.summary?.unmatched?.length"><summary>Email non associate ({{ data.summary.unmatched.length }})</summary><p v-for="email in data.summary.unmatched" :key="email" class="break-all">{{ email }}</p></details></div>
+            </form>
+            <h4 class="font-semibold text-gray-900">Simulazione senza modifiche</h4>
             <form class="space-y-4" @submit.prevent="action(simulate)">
                 <fieldset :disabled="busy" class="grid gap-4 sm:grid-cols-2">
                     <div><label class="block text-sm font-medium text-gray-700">Dal</label><AppDateInput v-model="from" /></div>

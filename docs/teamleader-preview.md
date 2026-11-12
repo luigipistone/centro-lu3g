@@ -1,9 +1,9 @@
-# Teamleader: collegamento e simulazione
+# Teamleader: collegamento, simulazione e sincronizzazione
 
 Disponibile ai soli superadmin in Impostazioni > Integrazioni > Teamleader.
-Questa fase non crea, aggiorna o elimina task. Non registra webhook e non avvia
-sincronizzazioni automatiche. Le richieste POST verso meetings.list/users.info
-sono letture secondo il contratto API Teamleader.
+Il comando Esegui simulazione non crea, aggiorna o elimina task.
+La sincronizzazione automatica e' distinta e abilitabile con il relativo switch.
+Le chiamate remote sono sempre di sola lettura: nessuna modifica viene inviata a Teamleader.
 
 ## Configurazione
 
@@ -14,6 +14,9 @@ sono letture secondo il contratto API Teamleader.
    https://centro.lu3g.com/settings/teamleader/callback
 4. Inserire Client ID e Client secret nel pannello, salvare e collegare Teamleader.
 5. Autorizzare l'accesso, scegliere il periodo e premere Esegui simulazione.
+6. Per importare, scegliere Importa dal e Orizzonte futuro, abilitare la
+   sincronizzazione automatica e salvare. Sincronizza ora richiede un controllo
+   al prossimo passaggio dello scheduler (normalmente entro un minuto).
 
 I nomi dei permessi nel portale vanno verificati nella schermata di creazione:
 non sono imposti parametri scope inventati nell'URL OAuth.
@@ -33,7 +36,35 @@ prima di attivare una futura importazione serve stabilire la fonte autorevole.
 Una lettura interrotta e' indicata come parziale, non come simulazione completata.
 La paginazione Teamleader non garantisce uno snapshot: duplicati durante la
 lettura interrompono la simulazione e richiedono una nuova lettura.
-I risultati restano solo nel browser, non sono un archivio persistente.
+I risultati della simulazione restano solo nel browser, non sono un archivio persistente.
+
+## Sincronizzazione automatica
+
+Lo scheduler esegue centro:teamleader-sync ogni minuto; il comando interroga
+Teamleader ogni 5 minuti, oppure quando viene richiesto un controllo manuale.
+Non dipende dall'apertura del browser e non usa webhook. Le cancellazioni non sono
+quindi istantanee. Il periodo iniziale resta fisso; l'orizzonte futuro avanza.
+
+Identita' persistente: account Teamleader + ID meeting, con indice univoco.
+Tutte le pagine vengono lette prima di scrivere. Per un meeting importato che
+non compare nell'elenco viene chiamato meetings.info: se esiste viene aggiornato
+anche quando spostato fuori periodo; soltanto HTTP 404 conferma la rimozione.
+Errori di rete, 403, 429, 5xx o risposte incomplete interrompono il ciclo senza
+applicare modifiche parziali. Il limite di tempo di sicurezza interrompe l'intera
+lettura, non tronca l'elenco. Un cambio di account richiede revisione esplicita,
+non cancella i meeting appartenenti al precedente account.
+
+Titolo, descrizione, date, durata e assegnatari seguono Teamleader.
+Cliente (precompilato alla creazione se riconosciuto), servizio, priorita' e stato
+sono locali al Centro. Lo stato iniziale segue open/done; i controlli successivi
+non riaprono un meeting completato nel Centro. La modifica dei dati sincronizzati
+e l'eliminazione manuale sono bloccate anche nel backend.
+
+La cancellazione imposta teamleader_cancelled_at: l'elemento sparisce dagli
+elenchi attivi, dal calendario e dalle liste API, conservando storico e allegati.
+Se ricompare con lo stesso ID viene ripristinato senza duplicarlo. Il primo
+caricamento non invia notifiche in massa; le variazioni successive notificano
+assegnatari e follower tramite un outbox persistente con retry.
 
 ## Sicurezza
 

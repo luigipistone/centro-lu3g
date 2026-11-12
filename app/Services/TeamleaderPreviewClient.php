@@ -25,9 +25,9 @@ class TeamleaderPreviewClient
         ]);
     }
 
-    public function read(string $method, array $payload): array
+    public function read(string $method, array $payload): ?array
     {
-        if (! in_array($method, ['meetings.list', 'users.info'], true)) throw new RuntimeException('Operazione non consentita.');
+        if (! in_array($method, ['meetings.list', 'meetings.info', 'users.info', 'users.me'], true)) throw new RuntimeException('Operazione non consentita.');
         $s = DB::table('teamleader_settings')->find(1);
         if (! $s?->refresh_token) throw new RuntimeException('Collega prima Teamleader.');
         if (! $s->access_token || ! $s->expires_at || now()->addMinute()->gte($s->expires_at)) {
@@ -35,6 +35,7 @@ class TeamleaderPreviewClient
             $s = DB::table('teamleader_settings')->find(1);
         }
         $response = Http::withToken(Crypt::decryptString($s->access_token))->connectTimeout(10)->timeout(25)->post('https://api.focus.teamleader.eu/'.$method, $payload);
+        if ($method === 'meetings.info' && $response->status() === 404) return null;
         if (! $response->successful() || ! is_array($response->json('data'))) {
             throw new RuntimeException('Lettura Teamleader non riuscita (HTTP '.$response->status().'). Verifica autorizzazioni o riprova.');
         }

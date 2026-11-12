@@ -16,6 +16,7 @@ use Illuminate\Support\Str;
 use Symfony\Component\Console\Command\Command;
 
 Schedule::command('centro:google-calendar-sync')->everyMinute()->withoutOverlapping(30)->runInBackground();
+Schedule::command('centro:teamleader-sync')->everyMinute()->withoutOverlapping(30)->runInBackground();
 
 Artisan::command('centro:integration-webhooks', function (\App\Services\IntegrationWebhooks $service) {
     $service->capture();
