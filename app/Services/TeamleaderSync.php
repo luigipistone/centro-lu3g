@@ -113,7 +113,10 @@ class TeamleaderSync
             $existing = DB::table('tasks')->where('teamleader_account_id', $account)->lockForUpdate()->get()->keyBy('teamleader_meeting_id');
             foreach ($projected as $externalId => [$values, $assignees, $client, $status]) {
                 $old = $existing->get($externalId);
-                if ($old && $old->teamleader_revision === $values['teamleader_revision'] && ! $old->teamleader_cancelled_at) { $result['unchanged']++; continue; }
+                $complete = $old && $status === 'done' && $old->status !== 'done';
+                if ($old && ! $complete && $old->teamleader_revision === $values['teamleader_revision'] && ! $old->teamleader_cancelled_at) { $result['unchanged']++; continue; }
+                // Remote completion is authoritative; remote open never resets local status.
+                if ($complete) $values['status'] = 'done';
                 $id = $old->id ?? (string) Str::uuid();
                 $previous = $old ? DB::table('task_assignees')->where('task_id', $id)->pluck('user_id')->all() : [];
                 if ($old) DB::table('tasks')->where('id', $id)->update($values + ['updated_at' => now()]);
@@ -122,7 +125,7 @@ class TeamleaderSync
                 DB::table('task_assignees')->where('task_id', $id)->delete();
                 foreach ($assignees as $person) DB::table('task_assignees')->insert(['id' => (string) Str::uuid(), 'task_id' => $id, 'user_id' => $person, 'created_at' => now(), 'updated_at' => now()]);
                 $result[$old ? 'updated' : 'created']++;
-                if ($s->last_snapshot_at) $this->notice($id, array_merge($previous, $assignees), $old ? 'Meeting aggiornato da Teamleader' : 'Nuovo meeting da Teamleader');
+                if ($s->last_snapshot_at) $this->notice($id, array_merge($previous, $assignees), $complete ? 'Meeting completato su Teamleader' : ($old ? 'Meeting aggiornato da Teamleader' : 'Nuovo meeting da Teamleader'));
             }
             foreach (array_unique($cancelled) as $externalId) {
                 $old = $existing->get($externalId);

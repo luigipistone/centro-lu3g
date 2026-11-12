@@ -59,6 +59,23 @@ class TeamleaderSyncTest extends TestCase
         $this->assertDatabaseHas('tasks', ['id' => $task->id, 'teamleader_cancelled_at' => null, 'status' => 'done']);
         $this->assertDatabaseCount('tasks', 1);
     }
+    public function test_remote_completion_updates_unchanged_meeting_and_never_reopens_it(): void
+    {
+        $s = $this->setupConnection(); $sync = new TeamleaderSync;
+        $sync->reconcile($s, 'account', [$this->meeting()], $this->people(), []);
+        $s = DB::table('teamleader_settings')->find(1);
+        $id = DB::table('tasks')->value('id');
+        DB::table('tasks')->where('id', $id)->update(['priority' => 'high']);
+        $this->assertSame(1, $sync->reconcile($s, 'account', [$this->meeting(['status' => 'done'])], $this->people(), [])['updated']);
+        $this->assertDatabaseHas('tasks', ['id' => $id, 'status' => 'done', 'priority' => 'high']);
+        $this->assertDatabaseHas('teamleader_notices', ['task_id' => $id, 'message' => 'Meeting completato su Teamleader']);
+        $this->assertSame(1, $sync->reconcile($s, 'account', [$this->meeting(['status' => 'done'])], $this->people(), [])['unchanged']);
+        $this->assertDatabaseCount('teamleader_notices', 1);
+        $this->assertSame(1, $sync->reconcile($s, 'account', [$this->meeting()], $this->people(), [])['unchanged']);
+        $sync->reconcile($s, 'account', [$this->meeting(['title' => 'Nuovo titolo'])], $this->people(), []);
+        $this->assertDatabaseHas('tasks', ['id' => $id, 'status' => 'done', 'title' => 'Nuovo titolo', 'priority' => 'high']);
+    }
+
     public function test_missing_meeting_is_verified_and_moved_meeting_is_not_deleted(): void
     {
         $s = $this->setupConnection(); $sync = new TeamleaderSync;

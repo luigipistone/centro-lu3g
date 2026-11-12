@@ -56,8 +56,10 @@ non cancella i meeting appartenenti al precedente account.
 
 Titolo, descrizione, date, durata e assegnatari seguono Teamleader.
 Cliente (precompilato alla creazione se riconosciuto), servizio, priorita' e stato
-sono locali al Centro. Lo stato iniziale segue open/done; i controlli successivi
-non riaprono un meeting completato nel Centro. La modifica dei dati sincronizzati
+sono modificabili nel Centro. Lo stato iniziale segue open/done; una chiusura su
+Teamleader imposta Fatto anche nel Centro, anche se gli altri dati sono invariati.
+Uno stato open su Teamleader non riapre mai un meeting completato nel Centro.
+Cliente, servizio e priorita' restano locali. La modifica dei dati sincronizzati
 e l'eliminazione manuale sono bloccate anche nel backend.
 
 La cancellazione imposta teamleader_cancelled_at: l'elemento sparisce dagli
