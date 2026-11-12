@@ -24,9 +24,11 @@ try {
         page.on('pageerror',e=>errors.push(e.message));
         await page.route('**/requests/gmail',r=>r.fulfill({json:{admin:true,configured:true,connected:true,email:'manager@example.com',label_id:'Label_1',enabled:true,redirect_uri:'https://centro.lu3g.com/requests/gmail/callback'}}));
         await page.route('**/requests/gmail/labels',r=>r.fulfill({json:{labels:[{value:'Label_1',label:'Invia al Centro'}]}}));
+        await page.route('**/requests/r/prepare',r=>r.fulfill({json:{title:'Aggiornamento pagina contatti',description:'Buongiorno, aggiornate i riferimenti nella pagina contatti. Grazie!',client_id:'c',project_id:'p',candidates:[{id:'c',name:'CLIENTE',reason:'Email del cliente o referente'}]}}));
         await page.route('**/__gmail-test',r=>r.fulfill({contentType:'text/html',body:'<div id="app"></div><script type="module" src="/__gmail.js"></script>'}));
         await page.goto(server.resolvedUrls.local[0]+'__gmail-test');
         await page.getByText('Proposta da verificare').waitFor();
+        await page.getByRole('button',{name:'Prepara proposta (1)',exact:true}).click();
         await page.getByRole('button',{name:'Approva e crea task'}).waitFor();
         await page.waitForTimeout(1000);
         await page.screenshot({path:'/tmp/gmail-requests-'+width+'.png',fullPage:true});

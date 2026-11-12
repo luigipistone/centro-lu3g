@@ -14,7 +14,7 @@ let timeout;
 function reload(){router.get('/requests',{search:search.value,status:status.value,...(mine.value?{mine:1}:{})},{preserveState:true,preserveScroll:true,replace:true});}
 watch([search,status,mine],()=>{clearTimeout(timeout);timeout=setTimeout(reload,300);}); onUnmounted(()=>clearTimeout(timeout));
 async function open(id){loading.value=true;error.value='';try{selected.value=(await axios.get(`/requests/${id}`)).data;}catch(e){error.value=e.response?.data?.message || 'Richiesta non disponibile.';}finally{loading.value=false;}}
-function resolved(){selected.value=null;reload();}
+function resolved(){if(selected.value) open(selected.value.record.id);reload();}
 const labels={pending:'Da verificare',converted:'Elaborata',discarded:'Scartata'};
 </script>
 <template>

@@ -106,7 +106,7 @@ class GmailRequestsTest extends TestCase
         $client = (string) Str::uuid(); $project = (string) Str::uuid();
         DB::table('clients')->insert(['id' => $client, 'name' => 'CLIENTE', 'active' => true]);
         DB::table('projects')->insert(['id' => $project, 'name' => 'Sito web', 'client_id' => $client, 'status' => 'active', 'color' => '#ffffff']);
-        $payload = ['version' => 1, 'action' => 'create', 'title' => 'Modifica', 'client_id' => $client, 'project_id' => $project, 'priority' => 'medium', 'assignee_ids' => [$u->id]];
+        $payload = ['version' => 1, 'message_ids' => DB::table('mail_request_messages')->pluck('id')->all(), 'action' => 'create', 'title' => 'Modifica', 'client_id' => $client, 'project_id' => $project, 'priority' => 'medium', 'assignee_ids' => [$u->id]];
         $this->actingAs($u)->postJson('/requests/'.$id.'/resolve', $payload)->assertConflict();
         $this->postJson('/requests/'.$id.'/claim')->assertOk();
         $this->actingAs($this->manager())->postJson('/requests/'.$id.'/claim')->assertConflict();
@@ -195,5 +195,70 @@ class GmailRequestsTest extends TestCase
             'gmail.googleapis.com/gmail/v1/users/me/threads/t1?*' => Http::response(['messages' => [$old, $reply]])]);
         (new GmailRequests)->sync($c->id);
         $this->assertDatabaseCount('mail_request_messages', 1);
+    }
+
+    public function test_incremental_selection_ignore_append_and_duplicate_protection(): void
+    {
+        $u = $this->manager(); $c = $this->connection($u); $service = new GmailRequests;
+        $service->ingest($c, $this->message()); $service->ingest($c, $this->message('m2'));
+        $id = DB::table('mail_requests')->value('id');
+        $first = DB::table('mail_request_messages')->where('gmail_id', 'm1')->value('id');
+        $second = DB::table('mail_request_messages')->where('gmail_id', 'm2')->value('id');
+        $this->actingAs($u)->postJson('/requests/'.$id.'/claim')->assertOk();
+        $this->postJson('/requests/'.$id.'/resolve', ['version' => 2, 'action' => 'discard', 'message_ids' => [$first]])->assertOk();
+        $this->assertDatabaseHas('mail_request_messages', ['id' => $second, 'disposition' => null]);
+        $task = (string) Str::uuid();
+        DB::table('tasks')->insert(['id' => $task, 'title' => 'Esistente', 'task_type' => 'meeting', 'status' => 'done', 'priority' => 'medium']);
+        $payload = ['version' => 3, 'action' => 'link', 'task_id' => $task, 'message_ids' => [$second]];
+        $this->postJson('/requests/'.$id.'/resolve', $payload)->assertOk();
+        $this->postJson('/requests/'.$id.'/resolve', $payload)->assertConflict();
+        $this->assertDatabaseCount('task_comments', 1);
+        $this->assertDatabaseHas('tasks', ['id' => $task, 'status' => 'done']);
+        $this->assertDatabaseHas('mail_request_messages', ['id' => $second, 'task_id' => $task, 'disposition' => 'linked']);
+        $service->ingest($c, $this->message('m3'));
+        $third = DB::table('mail_request_messages')->where('gmail_id', 'm3')->value('id');
+        $this->postJson('/requests/'.$id.'/prepare', ['message_ids' => [$third]])->assertOk()->assertJsonPath('description', 'Aggiornare la pagina contatti.');
+        $this->postJson('/requests/'.$id.'/prepare', ['message_ids' => [$second]])->assertConflict();
+        $this->postJson('/requests/'.$id.'/resolve', ['version' => 5, 'action' => 'discard', 'message_ids' => [$third]])->assertOk();
+        $this->assertDatabaseHas('mail_requests', ['id' => $id, 'task_id' => $task, 'status' => 'converted']);
+    }
+
+    public function test_prepare_matches_exact_email_then_unique_domain_and_leaves_ambiguities_empty(): void
+    {
+        $u = $this->manager(); $c = $this->connection($u); (new GmailRequests)->ingest($c, $this->message());
+        $id = DB::table('mail_requests')->value('id'); $mid = DB::table('mail_request_messages')->value('id');
+        $client = (string) Str::uuid();
+        DB::table('clients')->insert(['id' => $client, 'name' => 'Cliente', 'active' => true, 'email' => 'other@example.com']);
+        $this->actingAs($u)->postJson('/requests/'.$id.'/prepare', ['message_ids' => [$mid]])->assertOk()->assertJsonPath('client_id', $client)->assertJsonPath('candidates.0.reason', 'Dominio del mittente');
+        DB::table('clients')->insert(['id' => (string) Str::uuid(), 'name' => 'Altro', 'active' => true, 'email' => 'second@example.com']);
+        $this->postJson('/requests/'.$id.'/prepare', ['message_ids' => [$mid]])->assertOk()->assertJsonPath('client_id', null)->assertJsonCount(2, 'candidates');
+        DB::table('clients')->where('id', $client)->update(['email' => 'client@example.com']);
+        $this->postJson('/requests/'.$id.'/prepare', ['message_ids' => [$mid]])->assertOk()->assertJsonPath('client_id', $client)->assertJsonPath('candidates.0.reason', 'Email del cliente o referente');
+        $this->postJson('/requests/'.Str::uuid().'/prepare', ['message_ids' => [$mid]])->assertConflict();
+    }
+
+    public function test_generic_domains_are_not_client_evidence(): void
+    {
+        $id = (string) Str::uuid();
+        DB::table('clients')->insert(['id' => $id, 'name' => 'Cliente', 'active' => true, 'email' => 'someone@gmail.com', 'website' => 'https://drive.google.com/example']);
+        $result = (new \App\Services\MailClientMatcher)->match([(object) ['sender' => 'other@gmail.com', 'body' => 'https://drive.google.com/example']], collect());
+        $this->assertNull($result['client_id']);
+    }
+
+    public function test_matching_uses_only_allowed_shared_site_metadata_not_personal_vaults(): void
+    {
+        $u = $this->manager(); $other = $this->manager(); $c = $this->connection($u);
+        $m = $this->message(); $m['payload']['body']['data'] = base64_encode('Aggiornare https://exclusive.example.org/contatti');
+        (new GmailRequests)->ingest($c, $m);
+        $id = DB::table('mail_requests')->value('id'); $mid = DB::table('mail_request_messages')->value('id');
+        $client = (string) Str::uuid(); $vault = (string) Str::uuid();
+        DB::table('clients')->insert(['id' => $client, 'name' => 'Cliente', 'active' => true]);
+        DB::table('password_vaults')->insert(['id' => $vault, 'name' => 'Personale', 'visibility' => 'personal', 'created_by' => $other->id, 'color' => '#ffffff']);
+        DB::table('password_items')->insert(['id' => Str::uuid(), 'password_vault_id' => $vault, 'client_id' => $client, 'title' => 'Sito', 'url' => 'https://exclusive.example.org', 'encrypted_password' => 'INVALID-CIPHERTEXT-NOT-TO-BE-READ', 'created_by' => $other->id]);
+        $this->actingAs($u)->postJson('/requests/'.$id.'/prepare', ['message_ids' => [$mid]])->assertOk()->assertJsonPath('client_id', null);
+        DB::table('password_vaults')->where('id', $vault)->update(['visibility' => 'shared']);
+        $this->postJson('/requests/'.$id.'/prepare', ['message_ids' => [$mid]])->assertOk()->assertJsonPath('client_id', $client)->assertJsonMissingPath('url')->assertJsonMissingPath('encrypted_password');
+        DB::table('password_vaults')->where('id', $vault)->update(['name' => 'Amministrazione']);
+        $this->actingAs($this->manager('admin'))->postJson('/requests/'.$id.'/prepare', ['message_ids' => [$mid]])->assertOk()->assertJsonPath('client_id', null);
     }
 }

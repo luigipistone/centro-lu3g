@@ -134,14 +134,15 @@ class GmailRequestsController extends Controller
             ->leftJoin('users as reviewer', 'reviewer.id', '=', 'mr.reviewer_id')->select('mr.*', 'u.name as manager_name', 'reviewer.name as reviewer_name');
         if ($r->query('mine')) $q->where('gc.user_id', $r->user()->id);
         $status = $r->query('status', 'pending');
-        if (in_array($status, ['pending', 'converted', 'discarded'], true)) $q->where('mr.status', $status);
+        if ($status === 'pending') $q->whereExists(fn ($m) => $m->selectRaw('1')->from('mail_request_messages')->whereColumn('request_id', 'mr.id')->whereNull('disposition'));
+        elseif (in_array($status, ['converted', 'discarded'], true)) $q->where('mr.status', $status);
         TextSearch::apply($q, ['mr.subject', 'mr.sender', 'u.name'], mb_substr((string) $r->query('search', ''), 0, 255));
         return Inertia::render('Centro/MailRequests', ['requests' => $q->orderByDesc('mr.updated_at')->paginate(20)->withQueryString(), 'filters' => $r->only('search', 'status', 'mine')]);
     }
     public function show(Request $r, string $id)
     {
         $this->authorizeManager($r); $record = DB::table('mail_requests')->find($id); abort_unless($record, 404);
-        return response()->json(['record' => $record,
+        return response()->json(['record' => $record, 'internal_emails' => DB::table('users')->pluck('email'),
             'messages' => DB::table('mail_request_messages')->where('request_id', $id)->orderBy('received_at')->get()->map(function ($m) { $m->attachments = json_decode($m->attachments, true); return $m; }),
             'clients' => DB::table('clients')->where('active', true)->orderBy('name')->get(['id', 'name', 'parent_client_id']),
             'projects' => DB::table('projects')->where('status', '!=', 'archived')->orderBy('name')->get(['id', 'name', 'client_id', 'service_id']),
@@ -163,16 +164,14 @@ class GmailRequestsController extends Controller
     public function resolve(Request $r, string $id)
     {
         $this->authorizeManager($r);
-        $data = $r->validate(['version' => 'required|integer', 'action' => 'required|in:create,link,discard,reviewed', 'task_id' => 'nullable|uuid|exists:tasks,id']);
+        $data = $r->validate(['version' => 'required|integer', 'action' => 'required|in:create,link,discard', 'task_id' => 'nullable|uuid|exists:tasks,id',
+            'message_ids' => 'required|array|min:1', 'message_ids.*' => 'required|uuid|distinct']);
         $taskId = DB::transaction(function () use ($r, $id, $data) {
             $item = DB::table('mail_requests')->lockForUpdate()->find($id); abort_unless($item, 404);
             abort_unless($item->reviewer_id === $r->user()->id, 409, 'Prendi prima in carico la richiesta.');
             abort_unless($item->version === $data['version'], 409, 'Sono arrivate nuove email. Riapri la richiesta prima di confermare.');
-            if ($data['action'] === 'reviewed') {
-                DB::table('mail_requests')->where('id', $id)->update(['has_updates' => false]);
-                return $item->task_id;
-            }
-            abort_unless($item->status === 'pending', 409, 'Richiesta gia elaborata.');
+            $messages = DB::table('mail_request_messages')->where('request_id', $id)->whereIn('id', $data['message_ids'])->whereNull('disposition')->orderBy('received_at')->lockForUpdate()->get();
+            abort_unless($messages->count() === count($data['message_ids']), 409, 'Uno dei messaggi non e disponibile o e gia stato elaborato.');
             $task = null;
             if ($data['action'] === 'create') {
                 $payload = $r->validate(['title' => 'required|string|max:255', 'description' => 'nullable|string', 'client_id' => 'required|uuid|exists:clients,id',
@@ -192,11 +191,34 @@ class GmailRequestsController extends Controller
                 $role = DB::table('user_roles')->where('user_id', $r->user()->id)->value('role');
                 abort_unless(app(RolePermissionService::class)->allows($role ?? '', 'tasks.update'), 403);
                 $task = $data['task_id'];
+                abort_unless(DB::table('tasks')->where('id', $task)->whereNull('google_cancelled_at')->whereNull('teamleader_cancelled_at')->exists(), 422, 'La task e stata cancellata dalla fonte.');
+                $content = $messages->map(fn ($m) => '<p><strong>'.e($m->subject).'</strong><br>'.e($m->sender).' · '.e($m->received_at).'<br>'.nl2br(e($m->body)).'</p>')->implode('');
+                $sub = Request::create('/tasks/'.$task.'/comments', 'POST', ['content' => $content]);
+                $sub->setUserResolver(fn () => $r->user()); $sub->setLaravelSession($r->session());
+                $sub->attributes->set('common_api_write', true);
+                app(CentroPageController::class)->storeTaskComment($sub, $task);
             }
-            DB::table('mail_requests')->where('id', $id)->update(['task_id' => $task, 'status' => $data['action'] === 'discard' ? 'discarded' : 'converted', 'has_updates' => false, 'updated_at' => now()]);
+            DB::table('mail_request_messages')->whereIn('id', $messages->pluck('id'))->update([
+                'disposition' => $data['action'] === 'discard' ? 'ignored' : 'linked', 'task_id' => $task,
+                'handled_by' => $r->user()->id, 'handled_at' => now(), 'updated_at' => now(),
+            ]);
+            $pending = DB::table('mail_request_messages')->where('request_id', $id)->whereNull('disposition')->exists();
+            $linked = $task ?: $item->task_id;
+            DB::table('mail_requests')->where('id', $id)->update(['task_id' => $linked, 'status' => $pending ? 'pending' : ($linked ? 'converted' : 'discarded'), 'has_updates' => $pending, 'version' => $item->version + 1, 'updated_at' => now()]);
             return $task;
         });
         return response()->json(['task_id' => $taskId]);
+    }
+    public function prepare(Request $r, string $id)
+    {
+        $this->authorizeManager($r);
+        $data = $r->validate(['message_ids' => 'required|array|min:1', 'message_ids.*' => 'required|uuid|distinct']);
+        $messages = DB::table('mail_request_messages')->where('request_id', $id)->whereIn('id', $data['message_ids'])->whereNull('disposition')->orderBy('received_at')->get();
+        abort_unless($messages->count() === count($data['message_ids']), 409, 'Aggiorna la richiesta: messaggi non disponibili.');
+        $match = app(\App\Services\MailClientMatcher::class)->match($messages, app(CentroPageController::class)->sharedClientSites($r));
+        $projects = $match['client_id'] ? DB::table('projects')->where('client_id', $match['client_id'])->where('status', '!=', 'archived')->pluck('id') : collect();
+        return response()->json($match + ['project_id' => $projects->count() === 1 ? $projects->first() : null,
+            'title' => $messages->last()->subject, 'description' => $messages->pluck('body')->implode("\n\n---\n\n")]);
     }
     public function attachment(Request $r, string $id, string $messageId, int $index)
     {

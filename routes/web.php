@@ -47,6 +47,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/{id}', 'show')->whereUuid('id')->name('show');
         Route::post('/{id}/claim', 'claim')->whereUuid('id');
         Route::post('/{id}/resolve', 'resolve')->whereUuid('id')->middleware('throttle:20,1');
+        Route::post('/{id}/prepare', 'prepare')->whereUuid('id')->middleware('throttle:30,1');
         Route::get('/{id}/messages/{messageId}/attachments/{index}', 'attachment')->whereUuid('id')->whereUuid('messageId')->whereNumber('index');
     });
     Route::prefix('settings/teamleader')->name('settings.teamleader.')->controller(\App\Http\Controllers\TeamleaderController::class)->group(function () {

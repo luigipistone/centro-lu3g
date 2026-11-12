@@ -6273,6 +6273,14 @@ class CentroPageController extends Controller
         });
     }
 
+    public function sharedClientSites(Request $request): Collection
+    {
+        if (! app(\App\Services\RolePermissionService::class)->allows($this->currentUserRole($request), 'passwords.view')) return collect();
+        return $this->passwordItemsQuery($request)
+            ->whereIn('password_vault_id', DB::table('password_vaults')->where('visibility', 'shared')->select('id'))
+            ->whereNotNull('client_id')->get(['client_id', 'url']);
+    }
+
     private function passwordItemsQuery(Request $request)
     {
         $query = DB::table('password_items');
