@@ -342,6 +342,7 @@ let calendarBodyOverflow = '';
 const taskWeekStart = ref(startOfWeek(new Date()));
 const taskSearch = ref('');
 const taskUserIds = ref(page.props.auth?.user?.id ? [page.props.auth.user.id] : []);
+const taskUnassignedOnly = ref(false);
 const taskUserFilterOpen = ref(false);
 const taskUserFilterStyle = ref({});
 function toggleTaskUserFilter(event) {
@@ -351,6 +352,7 @@ function toggleTaskUserFilter(event) {
     taskUserFilterOpen.value = nextOpen;
 }
 function toggleTaskFilterUser(id) {
+    taskUnassignedOnly.value = false;
     taskUserIds.value = taskUserIds.value.includes(id) ? taskUserIds.value.filter((value) => value !== id) : [...taskUserIds.value, id];
 }
 const taskPeriod = ref('week');
@@ -2436,7 +2438,9 @@ const taskRows = computed(() => props.rows.filter((row) => {
     const matchesPriority = taskPriority.value === 'all' || row.priority === taskPriority.value;
     const matchesType = taskType.value === 'all' || (row.task_type || 'task') === taskType.value;
 
-    const matchesUser = !taskUserIds.value.length || (row.assignee_ids || []).some((id) => taskUserIds.value.includes(id));
+    const matchesUser = taskUnassignedOnly.value
+        ? !(row.assignee_ids || []).length
+        : !taskUserIds.value.length || (row.assignee_ids || []).some((id) => taskUserIds.value.includes(id));
     return matchesPeriod && matchesSearch && matchesStatus && matchesPriority && matchesType && matchesUser;
 }));
 
@@ -5980,18 +5984,22 @@ function calendarDayStyle(sectionMonth, cell) {
                     <AppSelect v-model="taskType" :options="taskTypeOptions" />
                     <div class="min-w-0">
                         <button type="button" class="form-control mt-0 flex items-center justify-between gap-2 text-left" :aria-expanded="taskUserFilterOpen" @click.stop="toggleTaskUserFilter($event)">
-                            <span class="truncate">Utenti{{ taskUserIds.length ? ` (${taskUserIds.length})` : '' }}</span>
+                            <span class="truncate">{{ taskUnassignedOnly ? 'Non assegnate' : `Utenti${taskUserIds.length ? ` (${taskUserIds.length})` : ''}` }}</span>
                             <ChevronDown class="h-4 w-4 shrink-0 text-gray-400" />
                         </button>
                         <Teleport to="body">
                             <div v-if="taskUserFilterOpen" class="fixed inset-0 z-[7600] bg-transparent" @click.self="taskUserFilterOpen = false" @keydown.esc="taskUserFilterOpen = false">
                                 <div class="app-popover field-dropdown-menu fixed w-80 max-w-[calc(100vw-2rem)] p-3" :style="taskUserFilterStyle" @click.stop>
+                                    <label class="mb-3 flex cursor-pointer items-center gap-2 border-b border-gray-100 pb-3 text-sm font-medium text-gray-700">
+                                        <input v-model="taskUnassignedOnly" type="checkbox" class="rounded border-gray-300 text-[hsl(var(--primary-app))] focus:ring-[hsl(var(--primary-app))]" @change="taskUserIds = []" />
+                                        Non assegnate
+                                    </label>
                                     <div class="people-avatar-picker max-h-64">
                                         <button v-for="user in users" :key="`task-filter-${user.id}`" type="button" :class="personAvatarClass(taskUserIds.includes(user.id))" :aria-pressed="taskUserIds.includes(user.id)" :aria-label="user.name || user.email" :title="user.name || user.email" @click="toggleTaskFilterUser(user.id)">
                                             <UserAvatar :user="user" size="md" />
                                         </button>
                                     </div>
-                                    <button v-if="taskUserIds.length" type="button" class="mt-2 text-xs font-semibold text-indigo-600" @click="taskUserIds = []">Azzera filtro</button>
+                                    <button v-if="taskUserIds.length || taskUnassignedOnly" type="button" class="mt-2 text-xs font-semibold text-indigo-600" @click="taskUserIds = []; taskUnassignedOnly = false">Azzera filtro</button>
                                 </div>
                             </div>
                         </Teleport>
