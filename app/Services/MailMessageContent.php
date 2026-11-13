@@ -45,6 +45,7 @@ final class MailMessageContent
 
     private static function withoutFooter(string $text): string
     {
+        $text = self::withoutSignatureBlocks($text);
         // Remove only recognizable footer paragraphs, not arbitrary occurrences of legal words.
         $paragraphs = preg_split('/\n[\t ]*\n/', $text);
         $kept = [];
@@ -84,5 +85,52 @@ final class MailMessageContent
             || (bool) preg_match('/^[\p{L}\p{N} &.\x{0027}-]{1,70}\s+(?:S\.?R\.?L\.?|S\.?P\.?A\.?|Ltd\.?|LLC)$/iu', $line)
             || filter_var($line, FILTER_VALIDATE_EMAIL) !== false
             || (bool) preg_match('/^(?:CEO|CTO|Founder|Co-founder|Managing Director|Account Manager|Project Manager|Responsabile commerciale|Amministratore delegato)$/iu', $line);
+    }
+
+    private static function withoutSignatureBlocks(string $text): string
+    {
+        $lines = explode("\n", $text);
+        for ($i = 0; $i < count($lines); $i++) {
+            $first = self::footerKind(trim($lines[$i]));
+            if (!in_array($first, ['identity', 'image', 'address'], true)) continue;
+            $previous = $i - 1;
+            while ($previous >= 0 && trim($lines[$previous]) === '') $previous--;
+            if ($previous >= 0 && str_ends_with(trim($lines[$previous]), ':')) {
+                // Contact details explicitly introduced by the message can be requested copy.
+                while ($i + 1 < count($lines) && self::footerKind(trim($lines[$i + 1])) !== null) $i++;
+                continue;
+            }
+            $kinds = [];
+            $end = $i;
+            while ($end < count($lines) && ($kind = self::footerKind(trim($lines[$end]))) !== null) {
+                $kinds[$kind] = true;
+                $end++;
+            }
+            // A logo/name alone is not a signature: require independent contact evidence.
+            $contacts = count(array_intersect(array_keys($kinds), ['phone', 'email', 'web', 'tax']));
+            if ($contacts < 2 || (!isset($kinds['address']) && !isset($kinds['role']))) continue;
+            for ($j = $i; $j < $end; $j++) $lines[$j] = '';
+            $i = $end - 1;
+        }
+        return implode("\n", $lines);
+    }
+
+    private static function footerKind(string $line): ?string
+    {
+        if ($line === '' || preg_match('/^[_-]{3,}$/', $line)) return 'blank';
+        if (preg_match('/^(?:\[(?:image:|cid:)[^\]]+\]\s*(?:<https?:\/\/[^>]+>\s*)?)+$/iu', $line)) return 'image';
+        if (preg_match('/^(?:\[Interfaz de usuario gráfica, Aplicación|LEGAL\s*\/\s*DISCLAIMER|è direzione\.)/iu', $line)) return 'boilerplate';
+        if (preg_match('/^(?:\+\s*\d[\d\s().-]{6,}|(?:t|m|tel|telefono|cell|mobile|fax)[.:]\s*\+?\d.*)$/iu', $line)) return 'phone';
+        if (filter_var($line, FILTER_VALIDATE_EMAIL)) return 'email';
+        if (preg_match('/^(?:PI|P\.?\s*IVA)\s*:\s*[\d ]+$/iu', $line)) return 'tax';
+        if (preg_match('~https?://(?:[^/]+\.)?(?:transfernow\.net|swisstransfer\.com|wetransfer\.com|drive\.google\.com|dropbox\.com)/~iu', $line)) return null;
+        if (preg_match('/^(?:<?https?:\/\/|www\.)\S+(?:\s*\[image:[^\]]+\])*(?:\s*[·|])?$/iu', $line)
+            || preg_match('/^(?:Web: visita il nostro sito|Social: Facebook|LinkedIn\s*<|Instagram\s*$)/iu', $line)) return 'web';
+        if (preg_match('/^(?:(?:Via|Viale|Piazza|Corso|Palazzo)\s+[^\n]{1,100}\d[^\n]*|\d{5}\s+[\p{L}\s().-]+|[\p{L} ]+\s+Strada\s+\d+,?)$/iu', $line)) return 'address';
+        if (preg_match('/^(?:(?:Senior |Junior )?(?:Brand |Account |Project |Marketing & Communication )?Manager(?: MHC)?|Photographer & Videomaker|CEO(?: & Business Developer)?|Amministratore|Responsabile commerciale)$/iu', $line)) return 'role';
+        if (preg_match('/^(?:[\p{Lu}][\p{L}\x{2019}\x{0027}-]+)(?:\s+[\p{Lu}][\p{L}\x{2019}\x{0027}-]+){0,3}$/u', $line)
+            || preg_match('/^[\p{L}\p{N} &.\x{0027}-]{1,70}\s+(?:S\.?R\.?L\.?|S\.?P\.?A\.?|Ltd\.?|LLC)$/iu', $line)
+            || $line === 'LU3G') return 'identity';
+        return null;
     }
 }
