@@ -158,6 +158,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/projects/{id}/figma-design-system/apply', [FigmaIntegrationController::class, 'applyDesignSystem'])->name('projects.figma-design-system.apply');
     Route::delete('/projects/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'projects')->name('projects.destroy');
     Route::get('/tasks', [CentroPageController::class, 'index'])->defaults('section', 'tasks')->name('tasks.index');
+    Route::get('/tasks/live-data', [CentroPageController::class, 'index'])->defaults('section', 'tasks')->name('tasks.live-data');
+    Route::post('/tasks/realtime/auth', [\App\Http\Controllers\CalendarRealtimeController::class, 'authenticate'])->name('tasks.realtime.auth');
     Route::post('/tasks', [CentroPageController::class, 'store'])->defaults('section', 'tasks')->name('tasks.store');
     Route::get('/tasks/{id}/snapshot', [CentroPageController::class, 'taskSnapshot'])->name('tasks.snapshot');
     Route::get('/tasks/{id}', [CentroPageController::class, 'show'])->defaults('section', 'tasks')->name('tasks.show');

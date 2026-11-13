@@ -45,6 +45,9 @@ class EnforceRolePermissions
         if (Str::startsWith($name, 'profile.absences.')) {
             return 'absences.request';
         }
+        if ($name === 'tasks.realtime.auth') {
+            return 'tasks.view';
+        }
         if ($name === '' || Str::startsWith($name, ['profile.', 'notifications.', 'push.', 'push-subscriptions.'])) {
             return null;
         }

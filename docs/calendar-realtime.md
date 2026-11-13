@@ -1,5 +1,10 @@
 # Calendario in tempo reale
 
+Anche la pagina Task usa lo stesso canale di invalidazione, con endpoint
+/tasks/live-data e /tasks/realtime/auth protetti da tasks.view e dalla
+disponibilita della sezione. Non richiede permessi sul calendario ne di
+scrittura. Filtri, ricerca, periodo e vista restano locali e invariati.
+
 Reverb mantiene una connessione WebSocket privata con i calendari aperti.
 Il server invia un'invalidazione senza dati personali dopo le scritture
 confermate su task, assegnazioni, follower, dipendenze, commenti e relativi

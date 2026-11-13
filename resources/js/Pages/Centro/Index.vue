@@ -2428,7 +2428,8 @@ function saveDraftField(row, field) {
     saveServiceUpdateInline(row, { [field]: value || null });
 }
 
-const taskRows = computed(() => props.rows.filter((row) => {
+const taskLiveRows = ref(null);
+const taskRows = computed(() => (taskLiveRows.value ?? props.rows).filter((row) => {
     if (row.parent_task_id !== null && row.parent_task_id !== undefined && row.parent_task_id !== '') return false;
 
     const dueDate = parseDateOnly(row.due_date);
@@ -2916,6 +2917,10 @@ const calendarRealtimeState = useCalendarRealtime(
     props,
     () => Boolean(calendarDraggedTask.value) || ['queued', 'saving'].includes(calendarTaskAutosaveState.value),
     (rows) => {
+        if (props.section === 'tasks') {
+            taskLiveRows.value = rows;
+            return;
+        }
         calendarLiveRows.value = rows;
         calendarRowOverrides.value = {};
     },
@@ -3703,6 +3708,7 @@ function closeCalendarCreateMenuOnOutside(event) {
 watch(
     () => props.rows,
     (rows) => {
+        taskLiveRows.value = null;
         calendarLiveRows.value = null;
         refreshCalendarTaskPanelFromRows(calendarRowsWithOverrides(rows));
     },
@@ -5982,6 +5988,9 @@ function calendarDayStyle(sectionMonth, cell) {
 
         <div v-else-if="section === 'tasks'" class="py-8">
             <div class="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
+                <p v-if="['reconnecting', 'unavailable'].includes(calendarRealtimeState)" role="status" class="text-sm text-amber-700">
+                    {{ calendarRealtimeState === 'unavailable' ? 'Aggiornamento in tempo reale non disponibile. Ricarica la pagina per riconnetterti.' : 'Riconnessione alle task in corso...' }}
+                </p>
                 <div class="surface flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Task</p>

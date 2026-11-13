@@ -26,7 +26,7 @@ export function useCalendarRealtime(props, busy, apply) {
         controller?.abort();
         controller = new AbortController();
         try {
-            const { data } = await axios.get(route('calendar.live-data'), {
+            const { data } = await axios.get(route(props.section + '.live-data'), {
                 signal: controller.signal, headers: { Accept: 'application/json' },
             });
             if (stopped) return;
@@ -51,7 +51,7 @@ export function useCalendarRealtime(props, busy, apply) {
     watch(() => props.rows, () => { if (socket) invalidate(); });
     onMounted(() => {
         const config = props.calendarRealtime;
-        if (props.section !== 'calendar' || !config?.enabled || !config.key) return;
+        if (!['calendar', 'tasks'].includes(props.section) || !config?.enabled || !config.key) return;
         state.value = 'connecting';
         socket = new Pusher(config.key, {
             cluster: 'mt1', wsHost: config.host, wsPort: config.port, wssPort: config.port,
@@ -59,7 +59,7 @@ export function useCalendarRealtime(props, busy, apply) {
             channelAuthorization: {
                 customHandler: async ({ socketId, channelName }, callback) => {
                     try {
-                        const { data } = await axios.post(route('calendar.realtime.auth'), {
+                        const { data } = await axios.post(route(props.section + '.realtime.auth'), {
                             socket_id: socketId, channel_name: channelName,
                         });
                         callback(null, data);

@@ -6,7 +6,7 @@ createApp({
         const rows = ref([]), busy = ref(false), draft = ref('Bozza non salvata');
         window.setBusy = value => { busy.value = value; };
         const state = useCalendarRealtime({
-            section: 'calendar', rows: [],
+            section: new URLSearchParams(location.search).get('section') || 'calendar', rows: [],
             calendarRealtime: { enabled: true, key: 'test-key', host: '127.0.0.1',
                 port: Number(new URLSearchParams(location.search).get('port')), tls: false },
         }, () => busy.value, value => { rows.value = value; });

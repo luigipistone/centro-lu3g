@@ -902,12 +902,12 @@ class CentroPageController extends Controller
             });
         }
 
-        if ($request->routeIs('calendar.live-data')) {
+        if ($request->routeIs('calendar.live-data', 'tasks.live-data')) {
             return response()->json(['rows' => $rows])->header('Cache-Control', 'no-store');
         }
 
         return Inertia::render('Centro/Index', [
-            'calendarRealtime' => $section === 'calendar' ? config('calendar-realtime') : null,
+            'calendarRealtime' => in_array($section, ['calendar', 'tasks'], true) ? config('calendar-realtime') : null,
             ...$config,
             'rows' => $rows,
             'absencePagination' => $absencePagination,

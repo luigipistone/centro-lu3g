@@ -41,12 +41,12 @@ try {
     browser = await chromium.launch({ headless: true });
     const pages = await Promise.all([browser.newPage(), browser.newPage()]);
     const errors = [];
-    for (const page of pages) {
+    for (const [index, page] of pages.entries()) {
         page.on('console', message => { if (message.type() === 'error') console.error(message.text()); });
         page.on('response', response => { if (response.status() >= 400) console.error(response.status(), response.url()); });
         page.on('websocket', ws => { ws.on('socketerror', error => console.error(error)); });
         page.on('pageerror', error => errors.push(error.message));
-        await page.goto('http://127.0.0.1:' + server.httpServer.address().port + '/tests/Browser/fixtures/calendar-realtime.html?port=' + port);
+        await page.goto('http://127.0.0.1:' + server.httpServer.address().port + '/tests/Browser/fixtures/calendar-realtime.html?port=' + port + '&section=' + (index ? 'tasks' : 'calendar'));
         await page.waitForFunction(() => document.querySelector('#state').textContent === 'connected').catch(async error => {
             console.error(await page.locator('body').innerText()); throw error;
         });

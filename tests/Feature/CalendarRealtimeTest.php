@@ -31,6 +31,13 @@ class CalendarRealtimeTest extends TestCase
         DB::table('role_permissions')->where('role', 'editor')->where('permission', 'calendar.view')->update(['allowed' => false]);
         $this->postJson('/calendar/realtime/auth', $payload)->assertForbidden();
         $this->getJson('/calendar/live-data')->assertForbidden();
+        DB::table('role_permissions')->where('role', 'editor')->where('permission', 'tasks.view')->update(['allowed' => true]);
+        DB::table('role_permissions')->where('role', 'editor')->whereIn('permission', ['tasks.create', 'tasks.update'])->update(['allowed' => false]);
+        $this->postJson('/tasks/realtime/auth', $payload)->assertOk()->assertJsonStructure(['auth']);
+        $this->getJson('/tasks/live-data')->assertOk()->assertJsonStructure(['rows']);
+        DB::table('role_permissions')->where('role', 'editor')->where('permission', 'tasks.view')->update(['allowed' => false]);
+        $this->postJson('/tasks/realtime/auth', $payload)->assertForbidden();
+        $this->getJson('/tasks/live-data')->assertForbidden();
     }
 
     public function test_coalesces_committed_writes_and_ignores_reads(): void
