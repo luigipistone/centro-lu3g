@@ -323,7 +323,9 @@ class GmailRequestsTest extends TestCase
         config(['ai-agency.api_key' => 'test-key']);
         $u = $this->manager(); $c = $this->connection($u);
         $old = $this->message(); $old['payload']['body']['data'] = base64_encode('UNSELECTED-PRIVATE-MESSAGE');
-        (new GmailRequests)->ingest($c, $old); (new GmailRequests)->ingest($c, $this->message('m2'));
+        $reply = $this->message('m2');
+        $reply['payload']['body']['data'] = base64_encode("Aggiornare la pagina contatti.\n\nIl 12 novembre Mario ha scritto:\nUNSELECTED-QUOTED-HISTORY");
+        (new GmailRequests)->ingest($c, $old); (new GmailRequests)->ingest($c, $reply);
         $id = DB::table('mail_requests')->value('id'); $mid = DB::table('mail_request_messages')->where('gmail_id', 'm2')->value('id');
         Http::preventStrayRequests();
         Http::fake(['api.openai.com/v1/responses' => Http::response(['status' => 'completed', 'usage' => ['input_tokens' => 100, 'output_tokens' => 50],
@@ -332,6 +334,9 @@ class GmailRequestsTest extends TestCase
         $this->actingAs($u)->postJson('/requests/'.$id.'/prepare', $payload)->assertConflict();
         Http::assertNothingSent();
         $this->postJson('/requests/'.$id.'/claim')->assertOk();
+        $this->getJson('/requests/'.$id)->assertOk()->assertJsonPath('messages.1.body', 'Aggiornare la pagina contatti.');
+        $this->postJson('/requests/'.$id.'/prepare', ['message_ids' => [$mid]])->assertOk()->assertJsonPath('description', 'Aggiornare la pagina contatti.');
+        $this->assertStringContainsString('UNSELECTED-QUOTED-HISTORY', DB::table('mail_request_messages')->where('id', $mid)->value('body'));
         $this->postJson('/requests/'.$id.'/prepare', $payload)->assertOk()->assertJsonPath('title', 'Aggiornare i contatti')->assertJsonPath('ai_generated', true)->assertJsonCount(1, 'warnings')->assertJsonPath('subtasks.0', 'Aggiornare i contatti');
         Http::assertSent(function ($r) {
             return $r['store'] === false && !isset($r['tools']) && !str_contains($r['input'], 'UNSELECTED') && !str_contains($r['input'], 'client@example.com') && str_contains($r['input'], 'Aggiornare la pagina contatti.');

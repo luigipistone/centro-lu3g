@@ -143,7 +143,7 @@ class GmailRequestsController extends Controller
     {
         $this->authorizeManager($r); $record = DB::table('mail_requests')->find($id); abort_unless($record, 404);
         return response()->json(['record' => $record, 'ai_configured' => app(\App\Services\AiAgencyService::class)->isConfigured(), 'internal_emails' => DB::table('users')->pluck('email'),
-            'messages' => DB::table('mail_request_messages')->where('request_id', $id)->orderBy('received_at')->get()->map(function ($m) { $m->attachments = json_decode($m->attachments, true); return $m; }),
+            'messages' => DB::table('mail_request_messages')->where('request_id', $id)->orderBy('received_at')->get()->map(function ($m) { $m->attachments = json_decode($m->attachments, true); $m->body = \App\Services\MailMessageContent::current($m->body); return $m; }),
             'clients' => DB::table('clients')->where('active', true)->orderBy('name')->get(['id', 'name', 'parent_client_id']),
             'projects' => DB::table('projects')->where('status', '!=', 'archived')->orderBy('name')->get(['id', 'name', 'client_id', 'service_id']),
             'services' => DB::table('services')->orderBy('name')->get(['id', 'name']),
@@ -204,7 +204,7 @@ class GmailRequestsController extends Controller
                 abort_unless(app(RolePermissionService::class)->allows($role ?? '', 'tasks.update'), 403);
                 $task = $data['task_id'];
                 abort_unless(DB::table('tasks')->where('id', $task)->whereNull('google_cancelled_at')->whereNull('teamleader_cancelled_at')->exists(), 422, 'La task e stata cancellata dalla fonte.');
-                $content = $messages->map(fn ($m) => '<p><strong>'.e($m->subject).'</strong><br>'.e($m->sender).' · '.e($m->received_at).'<br>'.nl2br(e($m->body)).'</p>')->implode('');
+                $content = $messages->map(fn ($m) => '<p><strong>'.e($m->subject).'</strong><br>'.e($m->sender).' · '.e($m->received_at).'<br>'.nl2br(e(\App\Services\MailMessageContent::current($m->body))).'</p>')->implode('');
                 $sub = Request::create('/tasks/'.$task.'/comments', 'POST', ['content' => $content]);
                 $sub->setUserResolver(fn () => $r->user()); $sub->setLaravelSession($r->session());
                 $sub->attributes->set('common_api_write', true);
@@ -227,6 +227,7 @@ class GmailRequestsController extends Controller
         $data = $r->validate(['message_ids' => 'required|array|min:1', 'message_ids.*' => 'required|uuid|distinct', 'ai' => 'sometimes|boolean', 'version' => 'required_if:ai,true|integer']);
         $messages = DB::table('mail_request_messages')->where('request_id', $id)->whereIn('id', $data['message_ids'])->whereNull('disposition')->orderBy('received_at')->get();
         abort_unless($messages->count() === count($data['message_ids']), 409, 'Aggiorna la richiesta: messaggi non disponibili.');
+        $messages->each(function ($message) { $message->body = \App\Services\MailMessageContent::current($message->body); });
         $draft = ['title' => $messages->last()->subject, 'description' => $messages->pluck('body')->implode("\n\n---\n\n"), 'warnings' => [], 'subtasks' => []];
         if ($r->boolean('ai')) {
             $record = DB::table('mail_requests')->find($id);
