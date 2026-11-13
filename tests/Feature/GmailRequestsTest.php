@@ -61,9 +61,37 @@ class GmailRequestsTest extends TestCase
         (new GmailRequests)->sync($c->id);
         $this->assertDatabaseCount('mail_request_messages', 3); $this->assertDatabaseCount('mail_requests', 1);
         $this->assertNull(DB::table('gmail_connections')->value('last_error'));
-        Http::assertSent(fn ($r) => ($r['pageToken'] ?? null) === 'next' && $r['labelIds'] === ['Label_1']);
+        Http::assertSent(function ($r) {
+            parse_str(parse_url($r->url(), PHP_URL_QUERY), $query);
+            return ($query['pageToken'] ?? null) === 'next' && ($query['labelIds'] ?? null) === 'Label_1';
+        });
         $this->assertDatabaseCount('tasks', 0);
     }
+    public function test_existing_conversation_recovers_all_individual_messages_for_selection(): void
+    {
+        $u = $this->manager(); $c = $this->connection($u);
+        (new GmailRequests)->ingest($c, $this->message());
+        $messages = [$this->message()];
+        for ($i = 2; $i <= 12; $i++) {
+            $message = $this->message('m'.$i); $message['labelIds'] = ['INBOX'];
+            $message['payload']['body']['data'] = base64_encode('Richiesta numero '.$i);
+            $messages[] = $message;
+        }
+        Http::preventStrayRequests();
+        Http::fake(['oauth2.googleapis.com/token' => Http::response(['access_token' => 'access']),
+            'gmail.googleapis.com/gmail/v1/users/me/messages?*' => Http::response(['messages' => [['id' => 'm1']]]),
+            'gmail.googleapis.com/gmail/v1/users/me/threads/t1?*' => Http::response(['messages' => $messages])]);
+        (new GmailRequests)->sync($c->id);
+        (new GmailRequests)->sync($c->id);
+        $this->assertDatabaseCount('mail_request_messages', 12);
+        $this->assertDatabaseCount('mail_requests', 1);
+        $this->assertDatabaseCount('tasks', 0);
+        $id = DB::table('mail_requests')->value('id');
+        $mid = DB::table('mail_request_messages')->where('gmail_id', 'm7')->value('id');
+        $this->actingAs($u)->getJson('/requests/'.$id)->assertOk()->assertJsonCount(12, 'messages');
+        $this->postJson('/requests/'.$id.'/prepare', ['message_ids' => [$mid]])->assertOk()->assertJsonPath('description', 'Richiesta numero 7');
+    }
+
     public function test_failed_sync_retains_imported_messages_and_reports_error(): void
     {
         $c = $this->connection($this->manager());

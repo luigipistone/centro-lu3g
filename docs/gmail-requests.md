@@ -32,6 +32,10 @@ Non condividere password Gmail. Ogni casella ha un consenso personale e un token
 
 ### Proposta AI (facoltativa)
 
+Le email della conversazione sono numerate e selezionabili separatamente, con mittente, data, anteprima e contenuto completo espandibile. "Solo questa" seleziona una singola email; la preparazione riceve esclusivamente gli ID selezionati. Le citazioni contenute nel testo originale restano visibili come parte dell'email, non come nuovi messaggi autonomi.
+
+La lettura Gmail usa `labelIds=ID` per la singola etichetta: non passare un array PHP, che genera `labelIds[0]` e puo far ignorare il filtro. La verifica dell'etichetta sui messaggi e sul thread resta obbligatoria.
+
 La creazione parte come continuativa, senza progetto; il revisore puo scegliere una task di progetto, per cui il progetto resta obbligatorio. Gli assegnatari usano il selettore con avatar.
 Gli elenchi operativi delle email possono produrre sottoattivita nella bozza AI: il revisore puo modificarle, aggiungerle o rimuoverle. Solo la conferma crea madre e figlie nella stessa transazione, usando il flusso ordinario delle sottoattivita. Le figlie ereditano cliente, servizio, tipo, priorita e assegnatari; non ricevono scadenze inventate. Collegare a una task esistente continua ad aggiungere solo un commento.
 

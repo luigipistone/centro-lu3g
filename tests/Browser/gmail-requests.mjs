@@ -14,6 +14,7 @@ const server=await createServer({configFile:false,plugins:[vue(),{
         import '@/../css/app.css';
         const data={record:{id:'r',subject:'Aggiornamento pagina contatti',reviewer_id:'u',version:1,status:'pending'},messages:[{id:'m',subject:'Aggiornamento pagina contatti',sender:'cliente@example.com',body:'Buongiorno, aggiornate i riferimenti nella pagina contatti. Grazie!',received_at:'12/11/2026',attachments:[{name:'brief.pdf'}]}],clients:[{id:'c',name:'CLIENTE'}],projects:[{id:'p',name:'Sito web',client_id:'c'}],services:[],users:[{id:'u',name:'Manager'}],tasks:[]};
         data.ai_configured=true;
+        data.messages.unshift({id:'older',subject:'Prima richiesta',sender:'cliente@example.com',body:'Aggiornare il logo.',received_at:'2026-11-11 09:00:00',attachments:[]});
         const Demo={render(){return h('main',{class:'mx-auto max-w-[1440px] space-y-6 p-5'},[h(Panel),h(Review,{data})])}};
         createInertiaApp({page:{component:'Demo',props:{auth:{user:{id:'u'}}},url:'/',version:'1'},resolve:()=>Demo,setup({el,App,props,plugin}){createApp({render:()=>h(App,props)}).use(plugin).mount(el)}});
     `;}
@@ -29,7 +30,12 @@ try {
         await page.route('**/__gmail-test',r=>r.fulfill({contentType:'text/html',body:'<div id="app"></div><script type="module" src="/__gmail.js"></script>'}));
         await page.goto(server.resolvedUrls.local[0]+'__gmail-test');
         await page.getByText('Proposta da verificare').waitFor();
+        await page.getByRole('button',{name:'Seleziona solo email 1',exact:true}).click();
+        assert.equal(await page.getByRole('checkbox',{name:'Seleziona email 1',exact:true}).isChecked(),true);
+        assert.equal(await page.getByRole('checkbox',{name:'Seleziona email 2',exact:true}).isChecked(),false);
+        const preparation=page.waitForRequest(r=>r.url().endsWith('/requests/r/prepare'));
         await page.getByRole('button',{name:'Prepara proposta (1)',exact:true}).click();
+        assert.deepEqual((await preparation).postDataJSON().message_ids,['older']);
         await page.getByRole('button',{name:'Approva e crea task'}).waitFor();
         await page.getByRole('button',{name:'Prepara con AI',exact:true}).click();
         await page.getByText('Sostituire titolo, descrizione e sottoattività attuali?',{exact:false}).waitFor();

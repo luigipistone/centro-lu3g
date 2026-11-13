@@ -42,6 +42,12 @@ function prepare(ai=false,confirmed=false){
 }
 function chooseClient(){form.value.project_id='';form.value.service_id='';}
 function chooseProject(){form.value.service_id=props.data.projects.find(p=>p.id===form.value.project_id)?.service_id || '';}
+function selectMessages(ids){selected.value=ids;prepared.value=false;replaceMode.value=null;discardConfirm.value=false;}
+function messageDate(value){
+    if(!value) return '';
+    const date=new Date(/Z$|[+-]\d\d:\d\d$/.test(value)?value:value.replace(' ','T')+'Z');
+    return Number.isNaN(date.getTime())?value:new Intl.DateTimeFormat('it-IT',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Rome'}).format(date);
+}
 </script>
 <template>
     <div class="space-y-4">
@@ -51,12 +57,15 @@ function chooseProject(){form.value.service_id=props.data.projects.find(p=>p.id=
         <p v-if="error" role="alert" class="text-sm text-red-600">{{error}}</p>
         <div class="grid items-start gap-6 xl:grid-cols-2">
             <section class="surface min-w-0 p-5">
-                <h3 class="mb-4 flex flex-wrap items-center gap-2 font-semibold text-gray-900">Messaggi <span class="text-sm text-gray-500">{{pending.length}} da verificare</span></h3>
-                <article v-for="m in data.messages" :key="m.id" class="border-b border-gray-200 py-4 first:pt-0 last:border-0">
-                    <label v-if="!m.disposition" class="flex items-start gap-3 text-sm font-semibold text-gray-900"><input v-model="selected" type="checkbox" :value="m.id" :disabled="!mine || busy" class="mt-1" @change="prepared=false" /><span class="break-words min-w-0">{{m.subject}}</span></label>
+                <h3 class="mb-3 flex flex-wrap items-center gap-2 font-semibold text-gray-900">Email della conversazione <span class="text-sm text-gray-500">{{data.messages.length}} totali · {{pending.length}} da verificare</span></h3>
+                <div v-if="pending.length" class="mb-4 flex flex-wrap items-center gap-3 text-sm text-gray-600"><span role="status">{{selected.length}} {{selected.length===1?'selezionata':'selezionate'}}</span><button type="button" class="btn btn-outline" :disabled="!mine || busy" @click="selectMessages(pending.map(m=>m.id))">Seleziona tutte</button><button type="button" class="btn btn-outline" :disabled="!mine || busy || !selected.length" @click="selectMessages([])">Deseleziona</button></div>
+                <article v-for="(m,index) in data.messages" :key="m.id" :data-message-id="m.id" :class="['mb-3 rounded-lg border p-4 last:mb-0',selected.includes(m.id)?'border-indigo-300 bg-indigo-50/30':'border-gray-200']">
+                    <div class="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500"><span>Email {{index+1}} · {{messageDate(m.received_at)}}</span><button v-if="!m.disposition" type="button" class="font-semibold text-indigo-600 hover:underline" :aria-label="`Seleziona solo email ${index+1}`" :disabled="!mine || busy" @click="selectMessages([m.id])">Solo questa</button></div>
+                    <label v-if="!m.disposition" class="flex items-start gap-3 text-sm font-semibold text-gray-900"><input v-model="selected" type="checkbox" :value="m.id" :aria-label="`Seleziona email ${index+1}`" :disabled="!mine || busy" class="mt-1" @change="selectMessages([...selected])" /><span class="break-words min-w-0">{{m.subject}}</span></label>
                     <div v-else class="text-sm text-gray-500">{{m.disposition==='ignored' ? 'Ignorato' : 'Elaborato'}} <a v-if="m.task_id" :href="`/tasks/${m.task_id}`" class="text-blue-600 hover:underline">Apri task</a></div>
-                    <div class="mt-1 break-all text-xs text-gray-500">{{m.sender}} · {{m.received_at}}</div>
-                    <details class="mt-3" :open="selected.includes(m.id)"><summary class="cursor-pointer text-sm text-gray-500">Contenuto originale</summary><pre class="mt-3 whitespace-pre-wrap break-words font-sans text-sm text-gray-700" style="overflow-wrap:anywhere">{{m.body}}</pre>
+                    <div class="mt-1 break-all text-xs text-gray-500">{{m.sender}}</div>
+                    <p class="mt-2 line-clamp-2 break-words text-sm text-gray-700" style="overflow-wrap:anywhere">{{m.body}}</p>
+                    <details class="mt-3"><summary class="cursor-pointer text-sm text-gray-500">Leggi email completa</summary><pre class="mt-3 whitespace-pre-wrap break-words font-sans text-sm text-gray-700" style="overflow-wrap:anywhere">{{m.body}}</pre>
                         <div class="mt-3 flex flex-wrap gap-2"><a v-for="(a,i) in m.attachments" :key="i" :href="`/requests/${data.record.id}/messages/${m.id}/attachments/${i}`" class="btn btn-outline max-w-full text-sm"><Download class="h-4 w-4 shrink-0" /><span class="truncate">{{a.name}}</span></a></div>
                     </details>
                 </article>

@@ -61,7 +61,8 @@ class GmailRequests
             $page = null; $seen = []; $labelledThreads = []; $started = microtime(true);
             do {
                 if (microtime(true) - $started > 1200) throw new RuntimeException('Lettura da riprendere.');
-                $result = $this->get($c, 'messages', ['labelIds' => [$c->label_id], 'maxResults' => 100] + ($page ? ['pageToken' => $page] : []));
+                // A PHP array becomes labelIds[0], which Gmail ignores. One label uses the scalar query key.
+                $result = $this->get($c, 'messages', ['labelIds' => $c->label_id, 'maxResults' => 100] + ($page ? ['pageToken' => $page] : []));
                 foreach ($result['messages'] ?? [] as $item) {
                     if (microtime(true) - $started > 1200) throw new RuntimeException('Lettura da riprendere.');
                     $existing = DB::table('mail_request_messages as m')->join('mail_requests as r', 'r.id', '=', 'm.request_id')
