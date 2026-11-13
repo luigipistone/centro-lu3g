@@ -30,11 +30,15 @@ try {
         await page.route('**/__gmail-test',r=>r.fulfill({contentType:'text/html',body:'<div id="app"></div><script type="module" src="/__gmail.js"></script>'}));
         await page.goto(server.resolvedUrls.local[0]+'__gmail-test');
         await page.getByText('Proposta da verificare').waitFor();
-        await page.getByRole('button',{name:'Seleziona solo email 1',exact:true}).click();
+        await page.getByRole('button',{name:'Deseleziona',exact:true}).click();
+        await page.getByRole('checkbox',{name:'Seleziona email 1',exact:true}).check();
+        await page.getByRole('button',{name:'Leggi email 1',exact:true}).click();
+        assert.equal(await page.getByRole('button',{name:'Riduci email 1',exact:true}).getAttribute('aria-expanded'),'true');
+        await page.getByRole('button',{name:'Riduci email 1',exact:true}).click();
         assert.equal(await page.getByRole('checkbox',{name:'Seleziona email 1',exact:true}).isChecked(),true);
         assert.equal(await page.getByRole('checkbox',{name:'Seleziona email 2',exact:true}).isChecked(),false);
         const preparation=page.waitForRequest(r=>r.url().endsWith('/requests/r/prepare'));
-        await page.getByRole('button',{name:'Prepara proposta (1)',exact:true}).click();
+        await page.getByRole('button',{name:'Prepara manualmente',exact:true}).click();
         assert.deepEqual((await preparation).postDataJSON().message_ids,['older']);
         await page.getByRole('button',{name:'Approva e crea task'}).waitFor();
         await page.getByRole('button',{name:'Prepara con AI',exact:true}).click();

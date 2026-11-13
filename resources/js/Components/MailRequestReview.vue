@@ -13,6 +13,8 @@ const pending=computed(()=>props.data.messages.filter(m=>!m.disposition));
 const incoming=pending.value.filter(m=>!(props.data.internal_emails || []).some(e=>e.toLowerCase()===m.sender.toLowerCase()));
 const selected=ref((incoming.length ? incoming : pending.value).slice(-1).map(m=>m.id));
 const prepared=ref(false); const candidates=ref([]);
+const expandedMessages=ref([]);
+function toggleMessage(id){expandedMessages.value=expandedMessages.value.includes(id)?expandedMessages.value.filter(v=>v!==id):[...expandedMessages.value,id];}
 const aiGenerated=ref(false); const aiLoading=ref(false); const warnings=ref([]); const replaceMode=ref(null);
 const form=ref({title:props.data.record.subject,description:'',task_type:'ongoing',subtasks:[],client_id:'',project_id:'',service_id:'',priority:'medium',start_date:'',due_date:'',assignee_ids:[page.props.auth.user.id],task_id:props.data.record.task_id || ''});
 const peopleOpen=ref(false); const peopleRoot=ref(null);
@@ -60,21 +62,24 @@ function messageDate(value){
                 <h3 class="mb-3 flex flex-wrap items-center gap-2 font-semibold text-gray-900">Email della conversazione <span class="text-sm text-gray-500">{{data.messages.length}} totali · {{pending.length}} da verificare</span></h3>
                 <div v-if="pending.length" class="mb-4 flex flex-wrap items-center gap-3 text-sm text-gray-600"><span role="status">{{selected.length}} {{selected.length===1?'selezionata':'selezionate'}}</span><button type="button" class="btn btn-outline" :disabled="!mine || busy" @click="selectMessages(pending.map(m=>m.id))">Seleziona tutte</button><button type="button" class="btn btn-outline" :disabled="!mine || busy || !selected.length" @click="selectMessages([])">Deseleziona</button></div>
                 <article v-for="(m,index) in data.messages" :key="m.id" :data-message-id="m.id" :class="['mb-3 rounded-lg border p-4 last:mb-0',selected.includes(m.id)?'border-indigo-300 bg-indigo-50/30':'border-gray-200']">
-                    <div class="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500"><span>Email {{index+1}} · {{messageDate(m.received_at)}}</span><button v-if="!m.disposition" type="button" class="font-semibold text-indigo-600 hover:underline" :aria-label="`Seleziona solo email ${index+1}`" :disabled="!mine || busy" @click="selectMessages([m.id])">Solo questa</button></div>
-                    <label v-if="!m.disposition" class="flex items-start gap-3 text-sm font-semibold text-gray-900"><input v-model="selected" type="checkbox" :value="m.id" :aria-label="`Seleziona email ${index+1}`" :disabled="!mine || busy" class="mt-1" @change="selectMessages([...selected])" /><span class="break-words min-w-0">{{m.subject}}</span></label>
-                    <div v-else class="text-sm text-gray-500">{{m.disposition==='ignored' ? 'Ignorato' : 'Elaborato'}} <a v-if="m.task_id" :href="`/tasks/${m.task_id}`" class="text-blue-600 hover:underline">Apri task</a></div>
-                    <div class="mt-1 break-all text-xs text-gray-500">{{m.sender}}</div>
-                    <p class="mt-2 line-clamp-2 break-words text-sm text-gray-700" style="overflow-wrap:anywhere">{{m.body}}</p>
-                    <details class="mt-3"><summary class="cursor-pointer text-sm text-gray-500">Leggi email completa</summary><pre class="mt-3 whitespace-pre-wrap break-words font-sans text-sm text-gray-700" style="overflow-wrap:anywhere">{{m.body}}</pre>
+                    <div class="flex items-center gap-3">
+                        <input v-if="!m.disposition" v-model="selected" type="checkbox" :value="m.id" :aria-label="`Seleziona email ${index+1}`" :disabled="!mine || busy" @change="selectMessages([...selected])" />
+                        <Check v-else class="h-4 w-4 shrink-0 text-gray-400" :aria-label="m.disposition==='ignored'?'Ignorata':'Elaborata'" :title="m.disposition==='ignored'?'Ignorata':'Elaborata'" />
+                        <time class="min-w-0 flex-1 text-xs text-gray-500">{{messageDate(m.received_at)}}</time>
+                        <button type="button" class="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current" :aria-label="`${expandedMessages.includes(m.id)?'Riduci':'Leggi'} email ${index+1}`" :title="expandedMessages.includes(m.id)?'Riduci':'Leggi di più'" :aria-expanded="expandedMessages.includes(m.id)" :aria-controls="`email-body-${m.id}`" @click="toggleMessage(m.id)"><ChevronDown :class="['h-4 w-4 transition-transform duration-200 motion-reduce:transition-none',expandedMessages.includes(m.id)?'rotate-180':'']" :stroke-width="1.7" /></button>
+                    </div>
+                    <p v-if="!expandedMessages.includes(m.id)" class="mt-2 line-clamp-2 break-words text-sm text-gray-700" style="overflow-wrap:anywhere">{{m.body}}</p>
+                    <div v-if="expandedMessages.includes(m.id)" :id="`email-body-${m.id}`"><pre class="mt-2 whitespace-pre-wrap break-words font-sans text-sm text-gray-700" style="overflow-wrap:anywhere">{{m.body}}</pre>
                         <div class="mt-3 flex flex-wrap gap-2"><a v-for="(a,i) in m.attachments" :key="i" :href="`/requests/${data.record.id}/messages/${m.id}/attachments/${i}`" class="btn btn-outline max-w-full text-sm"><Download class="h-4 w-4 shrink-0" /><span class="truncate">{{a.name}}</span></a></div>
-                    </details>
+                        <a v-if="m.task_id" :href="`/tasks/${m.task_id}`" class="mt-2 inline-block text-sm text-blue-600 hover:underline">Apri task</a>
+                    </div>
                 </article>
             </section>
             <section v-if="pending.length" class="surface min-w-0 p-5">
                 <h3 class="mb-4 font-semibold text-gray-900">Proposta da verificare</h3>
                 <div class="mb-5 flex flex-wrap items-center gap-3">
                     <button v-if="data.ai_configured" class="btn btn-primary" :disabled="!mine || busy || !selected.length" @click="prepare(true)"><LoaderCircle v-if="aiLoading" class="h-4 w-4 animate-spin" /><Sparkles v-else class="h-4 w-4" />{{aiLoading ? 'Preparazione AI...' : 'Prepara con AI'}}</button>
-                    <button :class="['btn',data.ai_configured ? 'btn-outline' : 'btn-primary']" :disabled="!mine || busy || !selected.length" @click="prepare(false)">Prepara proposta ({{selected.length}})</button><button class="btn btn-outline" :disabled="!mine || busy || !selected.length" @click="discardConfirm=!discardConfirm">Ignora selezionati</button>
+                    <button :class="['btn',data.ai_configured ? 'btn-outline' : 'btn-primary']" :disabled="!mine || busy || !selected.length" @click="prepare(false)">Prepara manualmente</button><button class="btn btn-outline" :disabled="!mine || busy || !selected.length" @click="discardConfirm=!discardConfirm">Ignora selezionati</button>
                 </div>
                 <div v-if="replaceMode!==null" class="mb-4 flex flex-wrap items-center gap-3 text-sm text-gray-700">Sostituire titolo, descrizione e sottoattività attuali?<button class="btn btn-outline" :disabled="busy" @click="prepare(replaceMode,true)">Conferma</button><button class="btn btn-outline" @click="replaceMode=null">Annulla</button></div>
                 <p v-if="aiLoading" role="status" class="mb-4 text-sm text-gray-500">Elaborazione dei messaggi selezionati...</p>

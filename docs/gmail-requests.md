@@ -32,7 +32,7 @@ Non condividere password Gmail. Ogni casella ha un consenso personale e un token
 
 ### Proposta AI (facoltativa)
 
-Le email della conversazione sono numerate e selezionabili separatamente, con mittente, data, anteprima e contenuto completo espandibile. "Solo questa" seleziona una singola email; la preparazione riceve esclusivamente gli ID selezionati. Le citazioni contenute nel testo originale restano visibili come parte dell'email, non come nuovi messaggi autonomi.
+Le email della conversazione sono selezionabili separatamente tramite checkbox, con data, anteprima e freccia per espandere il contenuto completo. Le azioni sono "Prepara con AI", "Prepara manualmente" e "Ignora selezionati"; la preparazione riceve esclusivamente gli ID selezionati. Le citazioni contenute nel testo originale restano visibili come parte dell'email, non come nuovi messaggi autonomi.
 
 La lettura Gmail usa `labelIds=ID` per la singola etichetta: non passare un array PHP, che genera `labelIds[0]` e puo far ignorare il filtro. La verifica dell'etichetta sui messaggi e sul thread resta obbligatoria.
 
