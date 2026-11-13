@@ -12,7 +12,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(\App\Services\CalendarRealtime::class);
     }
 
     /**
@@ -21,5 +21,11 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Vite::prefetch(concurrency: 3);
+        $realtime = $this->app->make(\App\Services\CalendarRealtime::class);
+        \Illuminate\Support\Facades\DB::listen($realtime->observe(...));
+        $this->app->terminating($realtime->flush(...));
+        \Illuminate\Support\Facades\Event::listen(
+            \Illuminate\Queue\Events\JobProcessed::class, fn () => $realtime->flush(),
+        );
     }
 }

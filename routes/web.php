@@ -175,6 +175,8 @@ Route::middleware('auth')->group(function () {
     Route::put('/tasks/{id}/dependencies', [CentroPageController::class, 'syncTaskDependencies'])->name('tasks.dependencies.sync');
     Route::delete('/tasks/{id}', [CentroPageController::class, 'destroy'])->defaults('section', 'tasks')->name('tasks.destroy');
     Route::get('/calendar', [CentroPageController::class, 'index'])->defaults('section', 'calendar')->name('calendar.index');
+    Route::get('/calendar/live-data', [CentroPageController::class, 'index'])->defaults('section', 'calendar')->name('calendar.live-data');
+    Route::post('/calendar/realtime/auth', [\App\Http\Controllers\CalendarRealtimeController::class, 'authenticate'])->name('calendar.realtime.auth');
     Route::get('/calendar/attendance', [CentroPageController::class, 'calendarAttendance'])->name('calendar.attendance');
     Route::get('/absences', [CentroPageController::class, 'index'])->defaults('section', 'absences')->name('absences.index');
     Route::get('/absences/reports/export', [CentroPageController::class, 'exportAttendanceReport'])->name('absences.reports.export');

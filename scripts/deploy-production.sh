@@ -82,6 +82,9 @@ deploy() {
     "$PHP_BIN" artisan up
     MAINTENANCE_ENABLED=0
 
+    # Reverb is a long-running process; its supervisor starts the new code.
+    "$PHP_BIN" artisan reverb:restart || log 'WARNING: unable to restart realtime service'
+
     local scheduler_entry="* * * * * cd $APP_DIR && $PHP_BIN artisan schedule:run >> /dev/null 2>&1 # centro-lu3g-scheduler"
     local video_worker_entry="* * * * * cd $APP_DIR && flock -n /tmp/centro-lu3g-video.lock $PHP_BIN artisan queue:work video --queue=videos --once --timeout=1800 --tries=1 --no-interaction >> storage/logs/video-worker.log 2>&1 # centro-lu3g-video-worker"
     if command -v crontab >/dev/null 2>&1; then

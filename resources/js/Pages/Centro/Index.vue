@@ -82,6 +82,7 @@ import {
     X,
 } from '@lucide/vue';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { useCalendarRealtime } from '@/composables/useCalendarRealtime';
 
 const props = defineProps({
     section: String,
@@ -90,6 +91,7 @@ const props = defineProps({
     columns: Array,
     fields: Array,
     rows: Array,
+    calendarRealtime: Object,
     absencePagination: Object,
     absenceTodayRequests: Array,
     clients: Array,
@@ -2909,7 +2911,17 @@ function openCalendarTask(task, options = {}) {
     refreshCalendarTaskDescriptionEditor();
 }
 
-function calendarRowsWithOverrides(rows = props.rows) {
+const calendarLiveRows = ref(null);
+const calendarRealtimeState = useCalendarRealtime(
+    props,
+    () => Boolean(calendarDraggedTask.value) || ['queued', 'saving'].includes(calendarTaskAutosaveState.value),
+    (rows) => {
+        calendarLiveRows.value = rows;
+        calendarRowOverrides.value = {};
+    },
+);
+
+function calendarRowsWithOverrides(rows = calendarLiveRows.value ?? props.rows) {
     return (rows || []).map((row) => {
         const override = calendarRowOverrides.value[row.id];
 
@@ -3691,6 +3703,7 @@ function closeCalendarCreateMenuOnOutside(event) {
 watch(
     () => props.rows,
     (rows) => {
+        calendarLiveRows.value = null;
         refreshCalendarTaskPanelFromRows(calendarRowsWithOverrides(rows));
     },
 );
@@ -4438,6 +4451,9 @@ function calendarDayStyle(sectionMonth, cell) {
 
         <div v-if="section === 'calendar'" class="py-8">
             <div class="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
+                <p v-if="['reconnecting', 'unavailable'].includes(calendarRealtimeState)" role="status" class="mb-3 text-sm text-amber-700">
+                    {{ calendarRealtimeState === 'unavailable' ? 'Aggiornamento in tempo reale non disponibile. Ricarica la pagina per riconnetterti.' : 'Riconnessione al calendario in corso...' }}
+                </p>
                 <p v-if="calendarMoveError" role="alert" class="mb-4 rounded-[var(--radius-sm)] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{{ calendarMoveError }}</p>
                 <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div class="flex items-center justify-between gap-2 sm:justify-start">
