@@ -51,6 +51,8 @@ Con la connessione OpenAI del Centro configurata, il revisore vede **Prepara con
 
 Riferimento formato strutturato: https://developers.openai.com/api/docs/guides/structured-outputs
 
+Il filtro condiviso rimuove anche saluti di chiusura, righe di firma riconoscibili dopo il saluto/separatore, diciture mobile e paragrafi di disclaimer standard italiani/inglesi prima della visualizzazione e dell'invio all'AI. Mantiene i postscript e le righe non riconosciute come firma; contatti e URL fuori dalla firma non vengono rimossi. Gli originali restano nel database. Firme libere e disclaimer non standard possono richiedere verifica: il filtro non interpreta semanticamente ogni frase come richiesta o firma.
+
 Comando: `php artisan centro:gmail-requests-sync`, invocato dallo scheduler Laravel ogni minuto con protezione da sovrapposizioni e controllo per casella. Per funzionare richiede il normale cron `schedule:run`.
 
 I token sono cifrati con APP_KEY. OAuth usa state monouso con scadenza e verifica dell'account. Le email sono mostrate come testo, mai HTML eseguibile; nessun contenuto remoto viene caricato. Gli allegati sono serviti come download autenticato, non inline. Non vengono inviate email, modificati messaggi Gmail o creati task in background. Il contenuto importato e' conservato nel database del Centro: includerlo nelle politiche aziendali di accesso, backup e conservazione.

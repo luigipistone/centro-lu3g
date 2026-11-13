@@ -324,7 +324,7 @@ class GmailRequestsTest extends TestCase
         $u = $this->manager(); $c = $this->connection($u);
         $old = $this->message(); $old['payload']['body']['data'] = base64_encode('UNSELECTED-PRIVATE-MESSAGE');
         $reply = $this->message('m2');
-        $reply['payload']['body']['data'] = base64_encode("Aggiornare la pagina contatti.\n\nIl 12 novembre Mario ha scritto:\nUNSELECTED-QUOTED-HISTORY");
+        $reply['payload']['body']['data'] = base64_encode("Aggiornare la pagina contatti.\n\nCordiali saluti,\nMario Rossi\nTel: SIGNATURE-PRIVATE\n\nQuesto messaggio contiene informazioni riservate. DISCLAIMER-PRIVATE\n\nIl 12 novembre Mario ha scritto:\nUNSELECTED-QUOTED-HISTORY");
         (new GmailRequests)->ingest($c, $old); (new GmailRequests)->ingest($c, $reply);
         $id = DB::table('mail_requests')->value('id'); $mid = DB::table('mail_request_messages')->where('gmail_id', 'm2')->value('id');
         Http::preventStrayRequests();
@@ -339,7 +339,7 @@ class GmailRequestsTest extends TestCase
         $this->assertStringContainsString('UNSELECTED-QUOTED-HISTORY', DB::table('mail_request_messages')->where('id', $mid)->value('body'));
         $this->postJson('/requests/'.$id.'/prepare', $payload)->assertOk()->assertJsonPath('title', 'Aggiornare i contatti')->assertJsonPath('ai_generated', true)->assertJsonCount(1, 'warnings')->assertJsonPath('subtasks.0', 'Aggiornare i contatti');
         Http::assertSent(function ($r) {
-            return $r['store'] === false && !isset($r['tools']) && !str_contains($r['input'], 'UNSELECTED') && !str_contains($r['input'], 'client@example.com') && str_contains($r['input'], 'Aggiornare la pagina contatti.');
+            return $r['store'] === false && !isset($r['tools']) && !str_contains($r['input'], 'UNSELECTED') && !str_contains($r['input'], 'SIGNATURE-PRIVATE') && !str_contains($r['input'], 'DISCLAIMER-PRIVATE') && !str_contains($r['input'], 'Mario Rossi') && !str_contains($r['input'], 'client@example.com') && str_contains($r['input'], 'Aggiornare la pagina contatti.');
         });
         $this->assertDatabaseCount('tasks', 0);
         $this->assertSame(2, DB::table('mail_request_messages')->whereNull('disposition')->count());

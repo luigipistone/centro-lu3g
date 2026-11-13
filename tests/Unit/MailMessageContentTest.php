@@ -7,6 +7,28 @@ use PHPUnit\Framework\TestCase;
 
 class MailMessageContentTest extends TestCase
 {
+    public function test_removes_signature_and_disclaimer_but_preserves_postscript(): void
+    {
+        $body = "Aggiornare il logo.\n\nCordiali saluti,\nMario Rossi\nAccount Manager\nTel: 123456\nwww.example.com\nmario@example.com\n\nQuesto messaggio contiene informazioni riservate.\nNon divulgarlo.\nP.S.: Aggiornare anche il footer.";
+        $clean = MailMessageContent::current($body);
+        $this->assertSame("Aggiornare il logo.\n\nP.S.: Aggiornare anche il footer.", $clean);
+        $this->assertSame($clean, MailMessageContent::current($clean));
+    }
+
+    public function test_preserves_instructions_and_contact_details_outside_signature(): void
+    {
+        $body = "Questo messaggio contiene le modifiche richieste.\nTel: 123456\nwww.example.com\n\nModificare la privacy policy e il disclaimer.\nGrazie, aggiornate anche il menu.";
+        $this->assertSame($body, MailMessageContent::current($body));
+        $this->assertSame("Aggiornare logo\nAggiornare anche il menu", MailMessageContent::current("Aggiornare logo\nGrazie\nMario Rossi\nAggiornare anche il menu"));
+    }
+
+    public function test_english_signature_mobile_footer_and_empty_content(): void
+    {
+        $this->assertSame('Update logo', MailMessageContent::current("Update logo\nBest regards,\nJane Smith\nCEO\n\nThis email is confidential.\nDo not disclose.\n\nSent from my iPhone"));
+        $this->assertSame('', MailMessageContent::current("Cordiali saluti\nMario Rossi"));
+        $this->assertSame('Nuovo', MailMessageContent::current("Nuovo\nInviato dal mio iPhone"));
+    }
+
     public function test_removes_italian_and_english_history(): void
     {
         foreach (["Il 12 novembre Mario ha scritto:", "On Thu, Nov 12, Mario wrote:"] as $header) {
