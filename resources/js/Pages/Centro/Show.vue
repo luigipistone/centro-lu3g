@@ -3002,10 +3002,14 @@ function runProjectTaskDrawerCommand(command, value = null) {
     saveProjectTaskDrawer();
 }
 
-function saveProjectTaskDrawer(delay = 300) {
-    if (!projectTaskDrawerTask.value?.id || !projectTaskDrawerForm.title) return;
+function saveProjectTaskDrawer(delay = AUTOSAVE_IDLE_DELAY) {
     window.clearTimeout(projectTaskDrawerAutosaveTimer);
+    if (!projectTaskDrawerTask.value?.id || !String(projectTaskDrawerForm.title || '').trim()) return;
     const persist = () => {
+        if (projectTaskDrawerForm.processing) {
+            projectTaskDrawerAutosaveTimer = window.setTimeout(persist, 150);
+            return;
+        }
         projectTaskDrawerAutosaveTimer = null;
         projectTaskDrawerForm.transform(() => projectTaskDrawerPayload()).put(route('tasks.update', projectTaskDrawerTask.value.id), {
             preserveScroll: true,

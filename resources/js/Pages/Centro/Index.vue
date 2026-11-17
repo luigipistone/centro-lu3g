@@ -3530,15 +3530,23 @@ function calendarTaskPayload() {
     };
 }
 
-function saveCalendarTaskInline(delay = 300) {
+function saveCalendarTaskInline(delay = AUTOSAVE_IDLE_DELAY) {
+    window.clearTimeout(calendarTaskAutosaveTimer);
+    calendarTaskAutosaveTimer = null;
     if (calendarTaskPanel.value?.google_event_id || calendarTaskPanel.value?.teamleader_meeting_id) return;
     if (!String(calendarTaskForm.title || '').trim()) return;
 
-    window.clearTimeout(calendarTaskAutosaveTimer);
     calendarTaskAutosaveState.value = 'queued';
     calendarTaskAutosaveError.value = '';
 
     const persist = () => {
+        // Wait for the creation response and its ID before sending further edits.
+        if (calendarTaskForm.processing) {
+            calendarTaskAutosaveTimer = window.setTimeout(persist, 150);
+            return;
+        }
+        if (!String(calendarTaskForm.title || '').trim()) return;
+        calendarTaskAutosaveTimer = null;
         const sequence = calendarTaskAutosaveSequence + 1;
         calendarTaskAutosaveSequence = sequence;
         calendarTaskAutosaveState.value = 'saving';
@@ -3590,7 +3598,7 @@ function saveCalendarTaskInline(delay = 300) {
                         follower_ids: [...(calendarTaskForm.follower_ids || [])],
                     });
                 }
-                calendarTaskAutosaveState.value = 'saved';
+                calendarTaskAutosaveState.value = calendarTaskAutosaveTimer ? 'queued' : 'saved';
                 window.setTimeout(() => {
                     if (calendarTaskAutosaveState.value === 'saved') {
                         calendarTaskAutosaveState.value = 'idle';
