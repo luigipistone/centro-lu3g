@@ -54,7 +54,7 @@ Artisan::command('report:sync', function (\App\Services\ReportAutomaticSync $syn
     }
 })->purpose('Sincronizza automaticamente clienti e servizi Report');
 
-Schedule::command('report:sync')->dailyAt('06:00')->timezone('Europe/Rome')->withoutOverlapping(20);
+Schedule::command('report:sync')->everyFifteenMinutes()->timezone('Europe/Rome')->withoutOverlapping(20);
 
 Artisan::command('centro:notify-dossier-expiries', function (EmployeeDossierExpiryService $service) {
     $this->info($service->sendDueReminders().' promemoria del fascicolo inviati.');
