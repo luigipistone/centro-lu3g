@@ -1082,13 +1082,13 @@ watch(
                                         <span class="text-xs font-semibold uppercase tracking-wide text-gray-400">Assenti</span>
                                         <span class="rounded-full bg-rose-50 px-2 py-0.5 text-xs font-bold text-rose-600">{{ dashboardTodayAbsences.length }}</span>
                                     </div>
-                                    <div class="mt-2 flex max-h-20 min-h-8 flex-wrap items-center gap-1.5 overflow-y-auto">
+                                    <div class="mt-2 flex max-h-20 min-h-8 flex-wrap items-center gap-1.5 overflow-y-auto p-0.5">
                                         <Link
                                             v-for="row in dashboardTodayAbsences"
                                             :key="`dashboard-absence-${row.id}`"
                                             :href="route('absences.show', row.id)"
                                             :title="`${row.user_name || row.user_email} · ${absenceTypeLabel(row.type)}${absenceExtraInfo(row) ? ` · ${absenceExtraInfo(row)}` : ''}`"
-                                            class="rounded-full transition hover:-translate-y-0.5 hover:ring-2 hover:ring-indigo-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                                            class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full leading-none transition-shadow hover:ring-2 hover:ring-indigo-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                                         >
                                             <UserAvatar :user="{ name: row.user_name, email: row.user_email, avatar_url: row.user_avatar_url }" size="xs" />
                                         </Link>
