@@ -111,6 +111,13 @@ function can(permission) {
     return isSuperadmin.value || permissions.value.includes(permission);
 }
 
+function navigationActive(name) {
+    if (['ai-agency.index', 'modules.index'].includes(name)) {
+        return route().current('ai-agency.*') || route().current('modules.*');
+    }
+    return route().current(name) || (name === 'tools.index' && route().current('tools.*'));
+}
+
 function isGroupOpen(group) {
     return !group.collapsible || !collapsedGroups.value[group.label];
 }
@@ -377,9 +384,9 @@ const groups = computed(() => {
             links: compact([
                 permitted('notifications.index', 'Notifiche', Bell),
                 permitted('users.index', 'Utenti', UserCog, 'users.view'),
-                permitted('modules.index', 'Moduli', PackageOpen, 'modules.view'),
+                permitted('ai-agency.index', 'Agenzia AI', WandSparkles, 'ai_agency.view')
+                    || permitted('modules.index', 'Agenzia AI', WandSparkles, 'modules.view'),
                 permitted('inventory.index', 'Inventario', Boxes, 'inventory.view'),
-                permitted('ai-agency.index', 'Agenzia AI', WandSparkles, 'ai_agency.view'),
                 permitted('settings.index', 'Impostazioni', Settings, 'settings.manage'),
             ]),
         },
@@ -516,7 +523,7 @@ const groups = computed(() => {
                             v-for="[name, label, icon] in group.links"
                             :key="name"
                             :href="route(name)"
-                            :class="['nav-link', sidebarCollapsed ? 'justify-center px-0' : '', (route().current(name) || (name === 'tools.index' && route().current('tools.*'))) ? 'nav-link-active' : '']"
+                            :class="['nav-link', sidebarCollapsed ? 'justify-center px-0' : '', navigationActive(name) ? 'nav-link-active' : '']"
                             :title="sidebarCollapsed ? label : undefined"
                         >
                             <component :is="icon" class="h-[18px] w-[18px]" :stroke-width="1.6" />
@@ -671,7 +678,7 @@ const groups = computed(() => {
                                     v-for="[name, label] in group.links"
                                     :key="name"
                                     :href="route(name)"
-                                    :active="route().current(name) || (name === 'tools.index' && route().current('tools.*'))"
+                                    :active="navigationActive(name)"
                                     @click="showingNavigationDropdown = false"
                                 >
                                     {{ label }}

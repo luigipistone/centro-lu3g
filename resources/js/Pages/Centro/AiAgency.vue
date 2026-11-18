@@ -1,5 +1,6 @@
 <script setup>
 import AppSelect from '@/Components/AppSelect.vue';
+import AiAgencyTabs from '@/Components/AiAgencyTabs.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ArrowRight, BrainCircuit, CircleAlert, Euro, Plus, Sparkles } from '@lucide/vue';
@@ -53,6 +54,7 @@ function saveConfiguration() {
                     <span class="text-gray-500">disponibili questo mese</span>
                 </div>
             </div>
+            <AiAgencyTabs active="analysis" />
         </template>
 
         <div class="py-8">

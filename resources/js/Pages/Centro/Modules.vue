@@ -1,5 +1,6 @@
 <script setup>
 import AppSelect from '@/Components/AppSelect.vue';
+import AiAgencyTabs from '@/Components/AiAgencyTabs.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
@@ -302,14 +303,14 @@ function confirmDelete() {
 </script>
 
 <template>
-    <Head title="Moduli" />
+    <Head title="Agenzia AI · Moduli" />
 
     <AuthenticatedLayout>
         <template #header>
             <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                 <div class="min-w-0">
                     <button v-if="selectedFolder" type="button" class="mb-1 inline-flex items-center gap-1 text-sm font-semibold text-gray-500 transition hover:text-[hsl(var(--primary-app))]" @click="closeFolder"><ChevronLeft class="h-4 w-4" :stroke-width="1.7" /> Torna alle cartelle</button>
-                    <h2 class="text-xl font-semibold leading-tight text-gray-800">Moduli</h2>
+                    <h2 class="text-xl font-semibold leading-tight text-gray-800">Agenzia AI</h2>
                     <p class="mt-1 text-sm text-gray-500">Cartelle operative con regole, input richiesti, output e agenti abilitati.</p>
                 </div>
                 <div class="flex flex-wrap gap-2">
@@ -323,6 +324,7 @@ function confirmDelete() {
                     </button>
                 </div>
             </div>
+            <AiAgencyTabs active="modules" />
         </template>
 
         <div class="py-8">
