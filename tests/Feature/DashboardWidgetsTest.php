@@ -11,6 +11,42 @@ class DashboardWidgetsTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_upcoming_tasks_are_personal_even_for_superadmins(): void
+    {
+        $user = User::factory()->create();
+        $other = User::factory()->create();
+        $ids = [];
+        foreach (['mine', 'other', 'unassigned', 'done', 'cancelled', 'outside_week'] as $kind) {
+            $id = $ids[$kind] = (string) str()->uuid();
+            DB::table('tasks')->insert([
+                'id' => $id,
+                'title' => $kind,
+                'status' => $kind === 'done' ? 'done' : 'todo',
+                'due_date' => $kind === 'outside_week' ? now('Europe/Rome')->addWeeks(2)->toDateString() : now('Europe/Rome')->toDateString(),
+                'google_cancelled_at' => $kind === 'cancelled' ? now() : null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            if ($kind !== 'unassigned') {
+                DB::table('task_assignees')->insert([
+                    'id' => (string) str()->uuid(),
+                    'task_id' => $id,
+                    'user_id' => $kind === 'other' ? $other->id : $user->id,
+                ]);
+            }
+        }
+
+        foreach (['editor', 'admin', 'superadmin'] as $role) {
+            DB::table('user_roles')->where('user_id', $user->id)->delete();
+            DB::table('user_roles')->insert(['id' => (string) str()->uuid(), 'user_id' => $user->id, 'role' => $role]);
+            $this->actingAs($user)->get('/dashboard')->assertOk()->assertInertia(fn ($page) => $page
+                ->component('Dashboard')
+                ->has('upcomingTasks', 1)
+                ->where('upcomingTasks.0.id', $ids['mine'])
+            );
+        }
+    }
+
     public function test_user_can_save_dashboard_widget_layout(): void
     {
         $user = User::factory()->create();

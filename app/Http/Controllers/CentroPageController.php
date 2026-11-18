@@ -218,6 +218,7 @@ class CentroPageController extends Controller
             'upcomingTasks' => ! $visible('tasks') ? collect() : DB::table('tasks')
                 ->leftJoin('clients', 'clients.id', '=', 'tasks.client_id')
                 ->where($taskScope)
+                ->whereIn('tasks.id', DB::table('task_assignees')->select('task_id')->where('user_id', $request->user()->id))
                 ->where('tasks.status', '!=', 'done')
                 ->whereNotNull('tasks.due_date')
                 ->whereBetween('tasks.due_date', [$currentWeekStart, $currentWeekEnd])
